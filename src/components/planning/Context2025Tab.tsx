@@ -26,16 +26,17 @@ const growthData = revenueData.map((item, index) => {
 });
 
 const indicators = [
-  { name: "CPMQL", description: "Custo por MQL - quanto custa gerar um lead qualificado através de marketing", icon: Target },
-  { name: "PMRR", description: "Custo por reunião marcada - investimento para cada reunião agendada pelo SDR", icon: Users },
-  { name: "CAC", description: "Custo de Aquisição de Cliente - soma de tráfego, time comercial e ferramentas dividido por novos clientes", icon: DollarSign },
-  { name: "LT", description: "Lifetime - tempo médio que um cliente permanece ativo na base", icon: TrendingUp },
-  { name: "Revenue Churn", description: "Volume de MRR perdido - receita recorrente que deixamos de receber por cancelamentos", icon: DollarSign },
-  { name: "Logo Churn", description: "Quantidade de clientes perdidos - número de logos que saíram da base", icon: Users },
-  { name: "LTV/CAC", description: "Relação entre valor do cliente ao longo do tempo e custo para adquiri-lo", icon: Target },
-  { name: "ROI", description: "Retorno sobre investimento - quanto a empresa ganha para cada real investido", icon: Trophy },
-  { name: "Novo MRR", description: "Conquista de MRR no ano - nova receita recorrente adicionada", icon: TrendingUp },
-  { name: "TCV", description: "Total Contract Value - valor total dos contratos assinados", icon: Building2 },
+  { name: "CPMQL", value: "R$ 472,72", description: "Custo por MQL - quanto custa gerar um lead qualificado através de marketing", icon: Target },
+  { name: "CPRR", value: "R$ 1.347,48", description: "Custo por reunião realizada - investimento para cada reunião agendada pelo SDR", icon: Users },
+  { name: "CAC", value: "R$ 9.537,17", description: "Custo de Aquisição de Cliente - soma de tráfego, time comercial e ferramentas dividido por novos clientes", icon: DollarSign },
+  { name: "CPV", value: "R$ 6.517,05", description: "Custo por Venda - investimento total para converter uma venda", icon: DollarSign },
+  { name: "LT", value: "7 meses", description: "Lifetime - tempo médio que um cliente permanece ativo na base", icon: TrendingUp },
+  { name: "Revenue Churn", value: "R$ 418.959", subtitle: "19%", description: "Volume de MRR perdido - receita recorrente que deixamos de receber por cancelamentos", icon: DollarSign, negative: true },
+  { name: "Logo Churn", value: "42 clientes", description: "Quantidade de clientes perdidos - número de logos que saíram da base", icon: Users, negative: true },
+  { name: "LTV/CAC", value: "3.99x", description: "Relação entre valor do cliente ao longo do tempo e custo para adquiri-lo", icon: Target },
+  { name: "ROI", value: "2.31x", description: "Retorno sobre investimento - quanto a empresa ganha para cada real investido", icon: Trophy },
+  { name: "Novo MRR", value: "R$ 883.928", description: "Conquista de MRR no ano - nova receita recorrente adicionada", icon: TrendingUp },
+  { name: "TCV", value: "R$ 13.2M", description: "Total Contract Value - valor total dos contratos assinados", icon: Building2 },
 ];
 
 const formatCurrency = (value: number) => {
@@ -219,14 +220,20 @@ export function Context2025Tab() {
           <Target className="h-6 w-6 text-primary" />
           Nossos Indicadores em 2025
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {indicators.map((indicator, index) => (
-            <Card key={indicator.name} className="glass-card hover:shadow-lg transition-all duration-300 group" style={{ animationDelay: `${index * 50}ms` }}>
+            <Card key={indicator.name} className={`glass-card hover:shadow-lg transition-all duration-300 group ${indicator.negative ? 'border-destructive/30' : ''}`} style={{ animationDelay: `${index * 50}ms` }}>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <indicator.icon className="h-4 w-4 text-primary" />
+                  <indicator.icon className={`h-4 w-4 ${indicator.negative ? 'text-destructive' : 'text-primary'}`} />
                   <span className="font-display font-semibold text-sm">{indicator.name}</span>
                 </div>
+                <p className={`font-display text-2xl font-bold mb-1 ${indicator.negative ? 'text-destructive' : 'text-foreground'}`}>
+                  {indicator.value}
+                </p>
+                {indicator.subtitle && (
+                  <Badge variant={indicator.negative ? "destructive" : "secondary"} className="mb-2">{indicator.subtitle}</Badge>
+                )}
                 <p className="text-xs text-muted-foreground leading-relaxed">{indicator.description}</p>
               </CardContent>
             </Card>
