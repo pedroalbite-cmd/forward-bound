@@ -38,11 +38,11 @@ const quarterlyAverages = [
 
 // Sales Funnel Data
 const funnelData = [
-  { stage: "MQL", description: "Marketing Qualified Lead (>200k mês)", percent: "—%" },
-  { stage: "Reunião Marcada", description: "Agendamentos confirmados", percent: "—%" },
-  { stage: "Reunião Realizada", description: "Reuniões efetivamente realizadas", percent: "—%" },
-  { stage: "Proposta Enviada", description: "Propostas comerciais enviadas", percent: "—%" },
-  { stage: "Venda", description: "Contratos fechados", percent: "—%" },
+  { stage: "MQL", description: "Marketing Qualified Lead (>200k mês)", percent: "43%", label: "Lead → MQL" },
+  { stage: "Reunião Marcada", description: "Agendamentos confirmados", percent: "49%", label: "MQL → RM" },
+  { stage: "Reunião Realizada", description: "Reuniões efetivamente realizadas", percent: "72%", label: "RM → RR" },
+  { stage: "Proposta Enviada", description: "Propostas comerciais enviadas", percent: "88%", label: "RR → Prop" },
+  { stage: "Venda", description: "Contratos fechados", percent: "24%", label: "Prop → Venda" },
 ];
 
 const indicators = [
@@ -323,9 +323,11 @@ export function Context2025Tab() {
                 );
               })}
             </div>
-            <p className="text-center text-sm text-muted-foreground mt-4">
-              * Percentuais de conversão entre etapas a serem preenchidos
-            </p>
+            <div className="flex justify-center mt-6">
+              <Badge className="bg-primary/20 text-primary border-primary/30">
+                Conversão MQL → Venda: 7%
+              </Badge>
+            </div>
           </CardContent>
         </Card>
       </div>
