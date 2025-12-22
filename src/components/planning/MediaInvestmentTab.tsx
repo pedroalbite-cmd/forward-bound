@@ -8,6 +8,12 @@ import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, Ba
 // MRR Base - receita recorrente já existente
 const MRR_BASE = 700000;
 
+// Churn mensal de 6%
+const CHURN_MENSAL = 0.06;
+
+// Ticket médio ajustado
+const TICKET_MEDIO = 17000;
+
 // Indicadores de 2025 (base para projeção)
 const indicators2025 = {
   cpmql: 472.72,
@@ -39,7 +45,7 @@ const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "
 const funnelMetrics = {
   modeloAtual: {
     name: "Modelo Atual",
-    ticketMedio: 15000,
+    ticketMedio: TICKET_MEDIO, // R$ 17k
     leadToMql: 0.43,
     mqlToRm: 0.49,
     rmToRr: 0.72,
@@ -157,25 +163,46 @@ const o2TaxMonthly = calculateMonthlyValuesSmooth(quarterlyTotals.o2Tax, 120000)
 const oxyHackerMonthly = calculateFromUnits(oxyHackerUnits, 54000);
 const franquiaMonthly = calculateFromUnits(franquiaUnits, 140000);
 
-// Calcula receita líquida a vender (descontando MRR base para Modelo Atual)
-function calculateNetRevenueToSell(monthlyRevenue: Record<string, number>, mrrBase: number): Record<string, number> {
+// Calcula MRR com churn mensal de 6%
+function calculateMrrWithChurn(mrrInicial: number, churnRate: number): Record<string, number> {
+  const result: Record<string, number> = {};
+  let mrrAtual = mrrInicial;
+  
+  months.forEach(month => {
+    // Aplicar churn ANTES do mês (o MRR decai mês a mês)
+    mrrAtual = mrrAtual * (1 - churnRate);
+    result[month] = mrrAtual;
+  });
+  
+  return result;
+}
+
+// MRR após churn para cada mês
+const mrrAposChurn = calculateMrrWithChurn(MRR_BASE, CHURN_MENSAL);
+
+// Calcula receita líquida a vender (descontando MRR após churn)
+function calculateNetRevenueToSell(
+  monthlyRevenue: Record<string, number>, 
+  mrrComChurn: Record<string, number>
+): Record<string, number> {
   const result: Record<string, number> = {};
   months.forEach(month => {
-    // Se o faturamento do mês é maior que o MRR base, precisamos vender a diferença
-    const difference = monthlyRevenue[month] - mrrBase;
+    // Precisa vender: meta - MRR restante após churn
+    const difference = monthlyRevenue[month] - mrrComChurn[month];
     result[month] = Math.max(0, difference);
   });
   return result;
 }
 
-// Receita líquida a vender para Modelo Atual (desconta MRR base)
-const modeloAtualNetToSell = calculateNetRevenueToSell(modeloAtualMonthly, MRR_BASE);
+// Receita líquida a vender para Modelo Atual (desconta MRR com churn)
+const modeloAtualNetToSell = calculateNetRevenueToSell(modeloAtualMonthly, mrrAposChurn);
 
-// Reverse funnel calculation - usando CAC como base de investimento
+// Reverse funnel calculation - usando CPV (custo por venda) como base de investimento
 interface FunnelData {
   month: string;
   faturamentoMeta: number;
   faturamentoVender: number;
+  mrrBase: number;
   vendas: number;
   propostas: number;
   rrs: number;
@@ -189,12 +216,14 @@ function calculateReverseFunnel(
   monthlyRevenue: Record<string, number>,
   netRevenueToSell: Record<string, number> | null,
   metrics: typeof funnelMetrics.modeloAtual,
-  mrrBase: number = 0
+  mrrComChurn: Record<string, number> | null = null,
+  useCpv: boolean = false
 ): FunnelData[] {
   return months.map(month => {
     const faturamentoMeta = monthlyRevenue[month];
     // Se temos receita líquida para vender, usa ela; senão, usa o faturamento total
     const faturamentoVender = netRevenueToSell ? netRevenueToSell[month] : faturamentoMeta;
+    const mrrBaseAtual = mrrComChurn ? mrrComChurn[month] : 0;
     
     const vendas = faturamentoVender / metrics.ticketMedio;
     const propostas = vendas / metrics.propToVenda;
@@ -202,13 +231,14 @@ function calculateReverseFunnel(
     const rms = rrs / metrics.rmToRr;
     const mqls = rms / metrics.mqlToRm;
     const leads = mqls / metrics.leadToMql;
-    // Investimento baseado em CAC (custo por venda)
-    const investimento = vendas * metrics.cac;
+    // Investimento baseado em CPV (custo por venda) para Modelo Atual, ou CAC para outras BUs
+    const investimento = useCpv ? vendas * indicators2025.cpv : vendas * metrics.cac;
     
     return {
       month,
       faturamentoMeta,
       faturamentoVender,
+      mrrBase: mrrBaseAtual,
       vendas: Math.ceil(vendas),
       propostas: Math.ceil(propostas),
       rrs: Math.ceil(rrs),
@@ -291,15 +321,33 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBas
             <Badge variant="outline" className="text-xs">
               CPMQL: {formatCurrency(metrics.cpmql)}
             </Badge>
-            <Badge variant="outline" className="text-xs">
-              CAC: {formatCurrency(metrics.cac)}
-            </Badge>
+            {showMrrBase ? (
+              <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
+                CPV: {formatCurrency(indicators2025.cpv)}
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs">
+                CAC: {formatCurrency(metrics.cac)}
+              </Badge>
+            )}
+            {showMrrBase && (
+              <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/30">
+                Churn: {(CHURN_MENSAL * 100).toFixed(0)}%/mês
+              </Badge>
+            )}
           </div>
         </div>
         {showMrrBase && (
-          <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
-            <Info className="h-4 w-4" />
-            <span>MRR Base: {formatCurrency(mrrBase)}/mês - Investimento apenas para vender a diferença da meta</span>
+          <div className="mt-2 flex flex-col gap-2 text-sm text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2">
+              <Info className="h-4 w-4" />
+              <span>MRR Base Inicial: {formatCurrency(mrrBase)} — com churn de {(CHURN_MENSAL * 100).toFixed(0)}%/mês, decai ao longo do ano</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-destructive">MRR Final (Dez): {formatCurrency(mrrAposChurn["Dez"])}</span>
+              <span>•</span>
+              <span>Investimento calculado com CPV de {formatCurrency(indicators2025.cpv)}</span>
+            </div>
           </div>
         )}
       </CardHeader>
@@ -335,6 +383,7 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBas
               <TableRow>
                 <TableHead className="w-14">Mês</TableHead>
                 <TableHead className="text-right">Meta</TableHead>
+                {showMrrBase && <TableHead className="text-right">MRR Base</TableHead>}
                 {showMrrBase && <TableHead className="text-right">A Vender</TableHead>}
                 <TableHead className="text-right">Vendas</TableHead>
                 <TableHead className="text-right">Propostas</TableHead>
@@ -355,6 +404,9 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBas
                     </TableCell>
                     <TableCell className="text-right font-medium">{formatCompact(data.faturamentoMeta)}</TableCell>
                     {showMrrBase && (
+                      <TableCell className="text-right text-muted-foreground">{formatCompact(data.mrrBase)}</TableCell>
+                    )}
+                    {showMrrBase && (
                       <TableCell className="text-right text-amber-600 font-medium">{formatCompact(data.faturamentoVender)}</TableCell>
                     )}
                     <TableCell className="text-right">{data.vendas}</TableCell>
@@ -370,6 +422,7 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBas
               <TableRow className="bg-muted/50 font-bold">
                 <TableCell>Total</TableCell>
                 <TableCell className="text-right">{formatCompact(totalFaturamentoMeta)}</TableCell>
+                {showMrrBase && <TableCell className="text-right text-muted-foreground">—</TableCell>}
                 {showMrrBase && <TableCell className="text-right text-amber-600">{formatCompact(totalFaturamentoVender)}</TableCell>}
                 <TableCell className="text-right">{totalVendas}</TableCell>
                 <TableCell className="text-right">{funnelData.reduce((s, d) => s + d.propostas, 0)}</TableCell>
@@ -389,12 +442,12 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBas
 
 export function MediaInvestmentTab() {
   // Calculate funnel data for each BU
-  // Modelo Atual usa MRR base - só precisa vender a diferença
-  const modeloAtualFunnel = calculateReverseFunnel(modeloAtualMonthly, modeloAtualNetToSell, funnelMetrics.modeloAtual, MRR_BASE);
-  // Outras BUs não têm MRR base
-  const o2TaxFunnel = calculateReverseFunnel(o2TaxMonthly, null, funnelMetrics.o2Tax);
-  const oxyHackerFunnel = calculateReverseFunnel(oxyHackerMonthly, null, funnelMetrics.oxyHacker);
-  const franquiaFunnel = calculateReverseFunnel(franquiaMonthly, null, funnelMetrics.franquia);
+  // Modelo Atual usa MRR base com churn e CPV para investimento
+  const modeloAtualFunnel = calculateReverseFunnel(modeloAtualMonthly, modeloAtualNetToSell, funnelMetrics.modeloAtual, mrrAposChurn, true);
+  // Outras BUs não têm MRR base, usam CAC
+  const o2TaxFunnel = calculateReverseFunnel(o2TaxMonthly, null, funnelMetrics.o2Tax, null, false);
+  const oxyHackerFunnel = calculateReverseFunnel(oxyHackerMonthly, null, funnelMetrics.oxyHacker, null, false);
+  const franquiaFunnel = calculateReverseFunnel(franquiaMonthly, null, funnelMetrics.franquia, null, false);
 
   // Calculate totals
   const totalInvestimento = 
@@ -473,7 +526,16 @@ export function MediaInvestmentTab() {
               ROI Médio: {overallROI.toFixed(1)}x
             </Badge>
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
-              MRR Base: {formatCurrency(MRR_BASE)}/mês
+              MRR Base: {formatCurrency(MRR_BASE)}
+            </Badge>
+            <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
+              Churn: {(CHURN_MENSAL * 100).toFixed(0)}%/mês
+            </Badge>
+            <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
+              Ticket: {formatCurrency(TICKET_MEDIO)}
+            </Badge>
+            <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
+              CPV: {formatCurrency(indicators2025.cpv)}
             </Badge>
           </div>
         </div>
