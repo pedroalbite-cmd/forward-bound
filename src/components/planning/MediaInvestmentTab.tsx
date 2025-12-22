@@ -5,10 +5,11 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3, Info } from "lucide-react";
 
-// MRR Base - ajustado para que Janeiro tenha R$ 400k a vender
-// Meta Jan ≈ R$ 1.21M, então MRR após churn deve ser ~R$ 810k
-// Com churn de 6%, MRR inicial = 810k / 0.94 ≈ 862k
-const MRR_BASE = 862000;
+// MRR Base - receita recorrente já existente
+const MRR_BASE = 700000;
+
+// Valor a vender inicial em Janeiro (fixo)
+const VALOR_VENDER_INICIAL = 400000;
 
 // Churn mensal de 6%
 const CHURN_MENSAL = 0.06;
@@ -169,13 +170,14 @@ const oxyHackerMonthly = calculateFromUnits(oxyHackerUnits, 54000);
 const franquiaMonthly = calculateFromUnits(franquiaUnits, 140000);
 
 // Calcula MRR dinâmico considerando:
-// 1. Churn mensal de 6% sobre MRR base
-// 2. 25% das vendas do mês anterior são adicionadas ao MRR base
+// 1. Valor a vender inicial fixo em Janeiro (R$ 400k)
+// 2. Churn mensal de 6% sobre MRR base
+// 3. 25% das vendas do mês anterior são adicionadas ao MRR base
 function calculateMrrDynamicWithRetention(
   mrrInicial: number, 
   churnRate: number, 
   retencaoRate: number,
-  monthlyRevenue: Record<string, number>,
+  valorVenderInicial: number,
   ticketMedio: number
 ): { mrrPorMes: Record<string, number>; vendasPorMes: Record<string, number>; revenueToSell: Record<string, number> } {
   const mrrPorMes: Record<string, number> = {};
@@ -196,8 +198,17 @@ function calculateMrrDynamicWithRetention(
     // Guarda o MRR do mês
     mrrPorMes[month] = mrrAtual;
     
-    // 3. Calcula quanto precisa vender (meta - MRR atual)
-    const aVender = Math.max(0, monthlyRevenue[month] - mrrAtual);
+    // 3. Para Janeiro, usa o valor a vender inicial fixo; demais meses calculam normalmente
+    let aVender: number;
+    if (index === 0) {
+      // Janeiro: valor fixo de R$ 400k
+      aVender = valorVenderInicial;
+    } else {
+      // Demais meses: aumenta proporcionalmente (crescimento mensal)
+      // Base: valor inicial + crescimento de ~8% ao mês composto
+      const crescimentoMensal = 1.08;
+      aVender = valorVenderInicial * Math.pow(crescimentoMensal, index);
+    }
     revenueToSell[month] = aVender;
     
     // 4. Calcula vendas do mês atual (para usar no próximo mês)
@@ -214,7 +225,7 @@ const mrrDynamic = calculateMrrDynamicWithRetention(
   MRR_BASE, 
   CHURN_MENSAL, 
   RETENCAO_VENDAS,
-  modeloAtualMonthly,
+  VALOR_VENDER_INICIAL,
   TICKET_MEDIO
 );
 
