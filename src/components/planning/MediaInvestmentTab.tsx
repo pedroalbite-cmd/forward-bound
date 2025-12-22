@@ -3,7 +3,27 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3 } from "lucide-react";
+import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3, Info } from "lucide-react";
+
+// MRR Base - receita recorrente já existente
+const MRR_BASE = 700000;
+
+// Indicadores de 2025 (base para projeção)
+const indicators2025 = {
+  cpmql: 472.72,
+  cprr: 1347.48,
+  cac: 9537.17,
+  cpv: 6517.05,
+  lt: 7, // lifetime em meses
+  revenueChurn: 418959.46,
+  revenueChurnRate: 0.19,
+  logoChurn: 42,
+  logoChurnRate: 0.37,
+  ltvCac: 3.99,
+  roi: 2.31,
+  novoMrr: 883928.03,
+  tcv: 13218976.08,
+};
 
 // Quarterly totals from Goals2026Tab
 const quarterlyTotals = {
@@ -15,7 +35,7 @@ const quarterlyTotals = {
 
 const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-// Funnel metrics per BU
+// Funnel metrics per BU - atualizado com indicadores de 2025
 const funnelMetrics = {
   modeloAtual: {
     name: "Modelo Atual",
@@ -25,7 +45,9 @@ const funnelMetrics = {
     rmToRr: 0.72,
     rrToProp: 0.88,
     propToVenda: 0.24,
-    cpl: 80,
+    cpmql: indicators2025.cpmql, // Custo por MQL de 2025
+    cprr: indicators2025.cprr, // Custo por RR de 2025
+    cac: indicators2025.cac, // CAC de 2025
     color: "hsl(var(--primary))",
     icon: <Building2 className="h-5 w-5 text-primary" />,
   },
@@ -37,7 +59,9 @@ const funnelMetrics = {
     rmToRr: 0.65,
     rrToProp: 0.80,
     propToVenda: 0.20,
-    cpl: 120,
+    cpmql: 600, // Estimativa para nicho tributário
+    cprr: 1800,
+    cac: 12000,
     color: "hsl(var(--warning))",
     icon: <DollarSign className="h-5 w-5 text-warning" />,
   },
@@ -49,7 +73,9 @@ const funnelMetrics = {
     rmToRr: 0.60,
     rrToProp: 0.75,
     propToVenda: 0.15,
-    cpl: 200,
+    cpmql: 800, // Estimativa para tech/consultoria
+    cprr: 2500,
+    cac: 18000,
     color: "hsl(var(--accent))",
     icon: <Rocket className="h-5 w-5 text-accent-foreground" />,
   },
@@ -61,7 +87,9 @@ const funnelMetrics = {
     rmToRr: 0.55,
     rrToProp: 0.70,
     propToVenda: 0.18,
-    cpl: 350,
+    cpmql: 1200, // Franquias têm CAC mais alto
+    cprr: 4000,
+    cac: 25000,
     color: "hsl(var(--secondary))",
     icon: <Users className="h-5 w-5 text-secondary-foreground" />,
   },
@@ -129,10 +157,25 @@ const o2TaxMonthly = calculateMonthlyValuesSmooth(quarterlyTotals.o2Tax, 120000)
 const oxyHackerMonthly = calculateFromUnits(oxyHackerUnits, 54000);
 const franquiaMonthly = calculateFromUnits(franquiaUnits, 140000);
 
-// Reverse funnel calculation
+// Calcula receita líquida a vender (descontando MRR base para Modelo Atual)
+function calculateNetRevenueToSell(monthlyRevenue: Record<string, number>, mrrBase: number): Record<string, number> {
+  const result: Record<string, number> = {};
+  months.forEach(month => {
+    // Se o faturamento do mês é maior que o MRR base, precisamos vender a diferença
+    const difference = monthlyRevenue[month] - mrrBase;
+    result[month] = Math.max(0, difference);
+  });
+  return result;
+}
+
+// Receita líquida a vender para Modelo Atual (desconta MRR base)
+const modeloAtualNetToSell = calculateNetRevenueToSell(modeloAtualMonthly, MRR_BASE);
+
+// Reverse funnel calculation - usando CAC como base de investimento
 interface FunnelData {
   month: string;
-  faturamento: number;
+  faturamentoMeta: number;
+  faturamentoVender: number;
   vendas: number;
   propostas: number;
   rrs: number;
@@ -144,21 +187,28 @@ interface FunnelData {
 
 function calculateReverseFunnel(
   monthlyRevenue: Record<string, number>,
-  metrics: typeof funnelMetrics.modeloAtual
+  netRevenueToSell: Record<string, number> | null,
+  metrics: typeof funnelMetrics.modeloAtual,
+  mrrBase: number = 0
 ): FunnelData[] {
   return months.map(month => {
-    const faturamento = monthlyRevenue[month];
-    const vendas = faturamento / metrics.ticketMedio;
+    const faturamentoMeta = monthlyRevenue[month];
+    // Se temos receita líquida para vender, usa ela; senão, usa o faturamento total
+    const faturamentoVender = netRevenueToSell ? netRevenueToSell[month] : faturamentoMeta;
+    
+    const vendas = faturamentoVender / metrics.ticketMedio;
     const propostas = vendas / metrics.propToVenda;
     const rrs = propostas / metrics.rrToProp;
     const rms = rrs / metrics.rmToRr;
     const mqls = rms / metrics.mqlToRm;
     const leads = mqls / metrics.leadToMql;
-    const investimento = leads * metrics.cpl;
+    // Investimento baseado em CAC (custo por venda)
+    const investimento = vendas * metrics.cac;
     
     return {
       month,
-      faturamento,
+      faturamentoMeta,
+      faturamentoVender,
       vendas: Math.ceil(vendas),
       propostas: Math.ceil(propostas),
       rrs: Math.ceil(rrs),
@@ -213,36 +263,49 @@ interface BUInvestmentTableProps {
   funnelData: FunnelData[];
   color: string;
   metrics: typeof funnelMetrics.modeloAtual;
+  showMrrBase?: boolean;
+  mrrBase?: number;
 }
 
-function BUInvestmentTable({ title, icon, funnelData, color, metrics }: BUInvestmentTableProps) {
+function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBase = false, mrrBase = 0 }: BUInvestmentTableProps) {
   const totalInvestimento = funnelData.reduce((sum, d) => sum + d.investimento, 0);
-  const totalFaturamento = funnelData.reduce((sum, d) => sum + d.faturamento, 0);
-  const roi = totalFaturamento / totalInvestimento;
+  const totalFaturamentoMeta = funnelData.reduce((sum, d) => sum + d.faturamentoMeta, 0);
+  const totalFaturamentoVender = funnelData.reduce((sum, d) => sum + d.faturamentoVender, 0);
+  const roi = totalFaturamentoVender / totalInvestimento;
   const totalLeads = funnelData.reduce((sum, d) => sum + d.leads, 0);
   const totalVendas = funnelData.reduce((sum, d) => sum + d.vendas, 0);
+  const totalMqls = funnelData.reduce((sum, d) => sum + d.mqls, 0);
 
   return (
     <Card className="glass-card">
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             {icon}
             <CardTitle className="font-display">{title}</CardTitle>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Badge variant="outline" className="text-xs">
               Ticket: {formatCurrency(metrics.ticketMedio)}
             </Badge>
             <Badge variant="outline" className="text-xs">
-              CPL: {formatCurrency(metrics.cpl)}
+              CPMQL: {formatCurrency(metrics.cpmql)}
+            </Badge>
+            <Badge variant="outline" className="text-xs">
+              CAC: {formatCurrency(metrics.cac)}
             </Badge>
           </div>
         </div>
+        {showMrrBase && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
+            <Info className="h-4 w-4" />
+            <span>MRR Base: {formatCurrency(mrrBase)}/mês - Investimento apenas para vender a diferença da meta</span>
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="bg-muted/50 rounded-lg p-4 text-center">
             <p className="text-sm text-muted-foreground">Investimento Total</p>
             <p className="text-xl font-display font-bold text-primary">{formatCompact(totalInvestimento)}</p>
@@ -250,6 +313,10 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics }: BUInvest
           <div className="bg-muted/50 rounded-lg p-4 text-center">
             <p className="text-sm text-muted-foreground">ROI Projetado</p>
             <p className="text-xl font-display font-bold text-emerald-600">{roi.toFixed(1)}x</p>
+          </div>
+          <div className="bg-muted/50 rounded-lg p-4 text-center">
+            <p className="text-sm text-muted-foreground">MQLs Necessários</p>
+            <p className="text-xl font-display font-bold">{formatNumber(totalMqls)}</p>
           </div>
           <div className="bg-muted/50 rounded-lg p-4 text-center">
             <p className="text-sm text-muted-foreground">Leads Necessários</p>
@@ -267,7 +334,8 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics }: BUInvest
             <TableHeader>
               <TableRow>
                 <TableHead className="w-14">Mês</TableHead>
-                <TableHead className="text-right">Faturamento</TableHead>
+                <TableHead className="text-right">Meta</TableHead>
+                {showMrrBase && <TableHead className="text-right">A Vender</TableHead>}
                 <TableHead className="text-right">Vendas</TableHead>
                 <TableHead className="text-right">Propostas</TableHead>
                 <TableHead className="text-right">RRs</TableHead>
@@ -285,7 +353,10 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics }: BUInvest
                     <TableCell>
                       <Badge variant="outline" className="w-12 justify-center">{data.month}</Badge>
                     </TableCell>
-                    <TableCell className="text-right font-medium">{formatCompact(data.faturamento)}</TableCell>
+                    <TableCell className="text-right font-medium">{formatCompact(data.faturamentoMeta)}</TableCell>
+                    {showMrrBase && (
+                      <TableCell className="text-right text-amber-600 font-medium">{formatCompact(data.faturamentoVender)}</TableCell>
+                    )}
                     <TableCell className="text-right">{data.vendas}</TableCell>
                     <TableCell className="text-right">{data.propostas}</TableCell>
                     <TableCell className="text-right">{data.rrs}</TableCell>
@@ -298,12 +369,13 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics }: BUInvest
               })}
               <TableRow className="bg-muted/50 font-bold">
                 <TableCell>Total</TableCell>
-                <TableCell className="text-right">{formatCompact(totalFaturamento)}</TableCell>
+                <TableCell className="text-right">{formatCompact(totalFaturamentoMeta)}</TableCell>
+                {showMrrBase && <TableCell className="text-right text-amber-600">{formatCompact(totalFaturamentoVender)}</TableCell>}
                 <TableCell className="text-right">{totalVendas}</TableCell>
                 <TableCell className="text-right">{funnelData.reduce((s, d) => s + d.propostas, 0)}</TableCell>
                 <TableCell className="text-right">{funnelData.reduce((s, d) => s + d.rrs, 0)}</TableCell>
                 <TableCell className="text-right">{funnelData.reduce((s, d) => s + d.rms, 0)}</TableCell>
-                <TableCell className="text-right">{funnelData.reduce((s, d) => s + d.mqls, 0)}</TableCell>
+                <TableCell className="text-right">{totalMqls}</TableCell>
                 <TableCell className="text-right">{formatNumber(totalLeads)}</TableCell>
                 <TableCell className="text-right text-lg text-primary">{formatCurrency(totalInvestimento)}</TableCell>
               </TableRow>
@@ -317,10 +389,12 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics }: BUInvest
 
 export function MediaInvestmentTab() {
   // Calculate funnel data for each BU
-  const modeloAtualFunnel = calculateReverseFunnel(modeloAtualMonthly, funnelMetrics.modeloAtual);
-  const o2TaxFunnel = calculateReverseFunnel(o2TaxMonthly, funnelMetrics.o2Tax);
-  const oxyHackerFunnel = calculateReverseFunnel(oxyHackerMonthly, funnelMetrics.oxyHacker);
-  const franquiaFunnel = calculateReverseFunnel(franquiaMonthly, funnelMetrics.franquia);
+  // Modelo Atual usa MRR base - só precisa vender a diferença
+  const modeloAtualFunnel = calculateReverseFunnel(modeloAtualMonthly, modeloAtualNetToSell, funnelMetrics.modeloAtual, MRR_BASE);
+  // Outras BUs não têm MRR base
+  const o2TaxFunnel = calculateReverseFunnel(o2TaxMonthly, null, funnelMetrics.o2Tax);
+  const oxyHackerFunnel = calculateReverseFunnel(oxyHackerMonthly, null, funnelMetrics.oxyHacker);
+  const franquiaFunnel = calculateReverseFunnel(franquiaMonthly, null, funnelMetrics.franquia);
 
   // Calculate totals
   const totalInvestimento = 
@@ -330,10 +404,10 @@ export function MediaInvestmentTab() {
     franquiaFunnel.reduce((s, d) => s + d.investimento, 0);
 
   const totalFaturamento = 
-    modeloAtualFunnel.reduce((s, d) => s + d.faturamento, 0) +
-    o2TaxFunnel.reduce((s, d) => s + d.faturamento, 0) +
-    oxyHackerFunnel.reduce((s, d) => s + d.faturamento, 0) +
-    franquiaFunnel.reduce((s, d) => s + d.faturamento, 0);
+    modeloAtualFunnel.reduce((s, d) => s + d.faturamentoMeta, 0) +
+    o2TaxFunnel.reduce((s, d) => s + d.faturamentoMeta, 0) +
+    oxyHackerFunnel.reduce((s, d) => s + d.faturamentoMeta, 0) +
+    franquiaFunnel.reduce((s, d) => s + d.faturamentoMeta, 0);
 
   const overallROI = totalFaturamento / totalInvestimento;
 
@@ -389,7 +463,7 @@ export function MediaInvestmentTab() {
           </Badge>
           <h2 className="font-display text-4xl font-bold mb-4">Planejamento de Mídia</h2>
           <p className="text-primary-foreground/80 max-w-2xl">
-            Cálculo de investimento baseado em funil reverso: partindo do faturamento desejado, calculamos leads, MQLs e investimento necessário.
+            Cálculo de investimento baseado em funil reverso. <strong>MRR Base: {formatCurrency(MRR_BASE)}</strong> — investimento apenas para vender a diferença da meta mensal.
           </p>
           <div className="flex flex-wrap gap-4 mt-6">
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
@@ -398,9 +472,74 @@ export function MediaInvestmentTab() {
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
               ROI Médio: {overallROI.toFixed(1)}x
             </Badge>
+            <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
+              MRR Base: {formatCurrency(MRR_BASE)}/mês
+            </Badge>
           </div>
         </div>
       </div>
+
+      {/* Indicadores 2025 - Referência */}
+      <Card className="glass-card border-amber-500/30 bg-amber-500/5">
+        <CardHeader>
+          <CardTitle className="font-display flex items-center gap-2">
+            <Info className="h-5 w-5 text-amber-500" />
+            Indicadores de Referência 2025 (Modelo Atual)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div className="text-center p-3 bg-background/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">CPMQL</p>
+              <p className="text-lg font-bold">{formatCurrency(indicators2025.cpmql)}</p>
+            </div>
+            <div className="text-center p-3 bg-background/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">CPRR</p>
+              <p className="text-lg font-bold">{formatCurrency(indicators2025.cprr)}</p>
+            </div>
+            <div className="text-center p-3 bg-background/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">CAC</p>
+              <p className="text-lg font-bold">{formatCurrency(indicators2025.cac)}</p>
+            </div>
+            <div className="text-center p-3 bg-background/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">CPV</p>
+              <p className="text-lg font-bold">{formatCurrency(indicators2025.cpv)}</p>
+            </div>
+            <div className="text-center p-3 bg-background/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">LT (meses)</p>
+              <p className="text-lg font-bold">{indicators2025.lt}</p>
+            </div>
+            <div className="text-center p-3 bg-background/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">LTV/CAC</p>
+              <p className="text-lg font-bold">{indicators2025.ltvCac.toFixed(2)}</p>
+            </div>
+            <div className="text-center p-3 bg-background/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">ROI</p>
+              <p className="text-lg font-bold">{indicators2025.roi.toFixed(2)}</p>
+            </div>
+            <div className="text-center p-3 bg-background/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">Revenue Churn</p>
+              <p className="text-lg font-bold text-destructive">{(indicators2025.revenueChurnRate * 100).toFixed(0)}%</p>
+            </div>
+            <div className="text-center p-3 bg-background/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">Logo Churn</p>
+              <p className="text-lg font-bold text-destructive">{(indicators2025.logoChurnRate * 100).toFixed(0)}%</p>
+            </div>
+            <div className="text-center p-3 bg-background/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">Novo MRR 2025</p>
+              <p className="text-lg font-bold text-emerald-600">{formatCurrency(indicators2025.novoMrr)}</p>
+            </div>
+            <div className="text-center p-3 bg-background/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">TCV 2025</p>
+              <p className="text-lg font-bold">{formatCompact(indicators2025.tcv)}</p>
+            </div>
+            <div className="text-center p-3 bg-background/50 rounded-lg">
+              <p className="text-xs text-muted-foreground">MRR Base 2026</p>
+              <p className="text-lg font-bold text-primary">{formatCurrency(MRR_BASE)}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Consolidated View */}
       <div>
@@ -505,7 +644,9 @@ export function MediaInvestmentTab() {
                   <TableRow>
                     <TableHead>BU</TableHead>
                     <TableHead className="text-center">Ticket Médio</TableHead>
-                    <TableHead className="text-center">CPL</TableHead>
+                    <TableHead className="text-center">CPMQL</TableHead>
+                    <TableHead className="text-center">CPRR</TableHead>
+                    <TableHead className="text-center">CAC</TableHead>
                     <TableHead className="text-center">Lead→MQL</TableHead>
                     <TableHead className="text-center">MQL→RM</TableHead>
                     <TableHead className="text-center">RM→RR</TableHead>
@@ -526,7 +667,9 @@ export function MediaInvestmentTab() {
                           </div>
                         </TableCell>
                         <TableCell className="text-center">{formatCurrency(metrics.ticketMedio)}</TableCell>
-                        <TableCell className="text-center">{formatCurrency(metrics.cpl)}</TableCell>
+                        <TableCell className="text-center">{formatCurrency(metrics.cpmql)}</TableCell>
+                        <TableCell className="text-center">{formatCurrency(metrics.cprr)}</TableCell>
+                        <TableCell className="text-center">{formatCurrency(metrics.cac)}</TableCell>
                         <TableCell className="text-center">{(metrics.leadToMql * 100).toFixed(0)}%</TableCell>
                         <TableCell className="text-center">{(metrics.mqlToRm * 100).toFixed(0)}%</TableCell>
                         <TableCell className="text-center">{(metrics.rmToRr * 100).toFixed(0)}%</TableCell>
@@ -557,6 +700,8 @@ export function MediaInvestmentTab() {
             funnelData={modeloAtualFunnel}
             color={funnelMetrics.modeloAtual.color}
             metrics={funnelMetrics.modeloAtual}
+            showMrrBase={true}
+            mrrBase={MRR_BASE}
           />
 
           <BUInvestmentTable
