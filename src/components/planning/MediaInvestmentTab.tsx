@@ -204,7 +204,8 @@ function calculateReverseFunnel(
 ): FunnelData[] {
   let investimentoAnterior = 0;
   
-  return months.map(month => {
+  // Primeiro, calcula todos os dados originais (incluindo investimentos)
+  const dadosOriginais = months.map(month => {
     const faturamentoVender = netRevenueToSell[month];
     const mrrBaseAtual = mrrComChurn ? mrrComChurn[month] : 0;
     const faturamentoMeta = metasMensais ? metasMensais[month] : (mrrBaseAtual + faturamentoVender);
@@ -235,6 +236,21 @@ function calculateReverseFunnel(
       mqls: Math.ceil(mqls),
       leads: Math.ceil(leads),
       investimento: Math.round(investimento),
+    };
+  });
+  
+  // Desloca os investimentos em 1 mês:
+  // Jan recebe o investimento de Fev, Fev recebe o de Mar, etc.
+  // Isso reflete que o investimento de um mês gera resultado no mês seguinte
+  return dadosOriginais.map((dados, index) => {
+    // Pega o investimento do próximo mês, ou mantém o próprio se for dezembro
+    const investimentoDeslocado = index < months.length - 1 
+      ? dadosOriginais[index + 1].investimento 
+      : dados.investimento;
+    
+    return {
+      ...dados,
+      investimento: investimentoDeslocado,
     };
   });
 }
