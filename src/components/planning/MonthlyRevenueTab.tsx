@@ -21,51 +21,43 @@ const quarterMonths = {
   Q4: ["Out", "Nov", "Dez"],
 };
 
-// Calculate monthly values with smooth growth from Feb to Oct, respecting quarterly totals
-// Jan is base, Feb-Oct grows steadily, Nov peaks, Dec reduced
+// Dias úteis de 2026 por mês
+// Premissas:
+// - Dezembro: até dia 23 (17 dias úteis)
+// - Fevereiro: descontando Carnaval 16-17 (18 dias úteis)
+// - Demais meses: dias úteis padrão
+const DIAS_UTEIS_2026: Record<string, number> = {
+  Jan: 21, Fev: 18, Mar: 22, Abr: 20,
+  Mai: 20, Jun: 21, Jul: 23, Ago: 21,
+  Set: 21, Out: 21, Nov: 20, Dez: 17,
+};
+
+const DIAS_UTEIS_TRIMESTRE = {
+  Q1: DIAS_UTEIS_2026.Jan + DIAS_UTEIS_2026.Fev + DIAS_UTEIS_2026.Mar, // 61
+  Q2: DIAS_UTEIS_2026.Abr + DIAS_UTEIS_2026.Mai + DIAS_UTEIS_2026.Jun, // 61
+  Q3: DIAS_UTEIS_2026.Jul + DIAS_UTEIS_2026.Ago + DIAS_UTEIS_2026.Set, // 65
+  Q4: DIAS_UTEIS_2026.Out + DIAS_UTEIS_2026.Nov + DIAS_UTEIS_2026.Dez, // 58
+};
+
+// Calculate monthly values based on working days within each quarter
 function calculateMonthlyValuesSmooth(
   quarterlyData: { Q1: number; Q2: number; Q3: number; Q4: number },
   initialValue: number
 ) {
   const monthlyValues: Record<string, number> = {};
-  const yearlyTotal = quarterlyData.Q1 + quarterlyData.Q2 + quarterlyData.Q3 + quarterlyData.Q4;
   
-  // Define growth curve: Jan=base, Feb-Oct crescente, Nov pico, Dez reduzido
-  // Weights that grow smoothly from Feb to Oct
-  const weights = {
-    Jan: 1.00,   // Base
-    Fev: 1.02,   // Slight dip for seasonality but still growing
-    Mar: 1.08,   // Growing
-    Abr: 1.14,   // Growing
-    Mai: 1.20,   // Growing
-    Jun: 1.28,   // Growing
-    Jul: 1.38,   // Growing
-    Ago: 1.50,   // Growing
-    Set: 1.65,   // Growing
-    Out: 1.82,   // Peak month before Q4 adjustment
-    Nov: 2.00,   // Highest
-    Dez: 1.60,   // Reduced (holidays)
-  };
-  
-  // Calculate raw values
-  const rawValues: Record<string, number> = {};
-  months.forEach(month => {
-    rawValues[month] = initialValue * weights[month as keyof typeof weights];
-  });
-  
-  // Now scale each quarter to match quarterly totals
-  const scaleQuarter = (quarterMonths: string[], quarterTotal: number) => {
-    const rawQuarterSum = quarterMonths.reduce((sum, m) => sum + rawValues[m], 0);
-    const scale = quarterTotal / rawQuarterSum;
-    quarterMonths.forEach(m => {
-      monthlyValues[m] = rawValues[m] * scale;
+  // Distribui dentro de cada trimestre proporcionalmente aos dias úteis
+  const distributeQuarter = (quarterMonthsList: string[], quarterTotal: number, quarterKey: keyof typeof DIAS_UTEIS_TRIMESTRE) => {
+    const totalDiasQuarter = DIAS_UTEIS_TRIMESTRE[quarterKey];
+    quarterMonthsList.forEach(m => {
+      monthlyValues[m] = quarterTotal * (DIAS_UTEIS_2026[m] / totalDiasQuarter);
     });
   };
   
-  scaleQuarter(["Jan", "Fev", "Mar"], quarterlyData.Q1);
-  scaleQuarter(["Abr", "Mai", "Jun"], quarterlyData.Q2);
-  scaleQuarter(["Jul", "Ago", "Set"], quarterlyData.Q3);
-  scaleQuarter(["Out", "Nov", "Dez"], quarterlyData.Q4);
+  distributeQuarter(["Jan", "Fev", "Mar"], quarterlyData.Q1, "Q1");
+  distributeQuarter(["Abr", "Mai", "Jun"], quarterlyData.Q2, "Q2");
+  distributeQuarter(["Jul", "Ago", "Set"], quarterlyData.Q3, "Q3");
+  distributeQuarter(["Out", "Nov", "Dez"], quarterlyData.Q4, "Q4");
   
   return monthlyValues;
 }
