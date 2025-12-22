@@ -13,22 +13,6 @@ const quarterlyTotals = {
   franquia: { Q1: 2 * 140000, Q2: 3 * 140000, Q3: 6 * 140000, Q4: 9 * 140000 },
 };
 
-// Seasonality factors (Feb/Dec lower, Mar-Oct higher to compensate)
-const seasonalityFactors = {
-  Jan: 1.0,
-  Fev: 0.75,
-  Mar: 1.15,
-  Abr: 1.05,
-  Mai: 1.10,
-  Jun: 1.05,
-  Jul: 1.05,
-  Ago: 1.10,
-  Set: 1.05,
-  Out: 1.10,
-  Nov: 1.0,
-  Dez: 0.75,
-};
-
 const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const quarterMonths = {
   Q1: ["Jan", "Fev", "Mar"],
@@ -37,52 +21,115 @@ const quarterMonths = {
   Q4: ["Out", "Nov", "Dez"],
 };
 
-// Calculate monthly values respecting quarterly totals and seasonality
-function calculateMonthlyValues(quarterlyData: { Q1: number; Q2: number; Q3: number; Q4: number }) {
+// Calculate monthly values with smooth growth, respecting quarterly totals
+// Starting from initialValue, with Feb/Dec reduced (~75%), and gradual increase through the year
+function calculateMonthlyValuesSmooth(
+  quarterlyData: { Q1: number; Q2: number; Q3: number; Q4: number },
+  initialValue: number
+) {
   const monthlyValues: Record<string, number> = {};
-
-  Object.entries(quarterMonths).forEach(([quarter, monthsInQuarter]) => {
-    const quarterTotal = quarterlyData[quarter as keyof typeof quarterlyData];
-    const factors = monthsInQuarter.map(m => seasonalityFactors[m as keyof typeof seasonalityFactors]);
-    const factorSum = factors.reduce((a, b) => a + b, 0);
-
-    monthsInQuarter.forEach((month, index) => {
-      const factor = factors[index];
-      monthlyValues[month] = (quarterTotal * factor) / factorSum;
-    });
+  const yearlyTotal = quarterlyData.Q1 + quarterlyData.Q2 + quarterlyData.Q3 + quarterlyData.Q4;
+  
+  // Define relative weights for smooth growth with seasonal adjustments
+  // Jan=base, Feb/Dec reduced, rest grows gradually
+  const rawWeights = {
+    Jan: initialValue,
+    Fev: initialValue * 0.91, // Reduced (about 75% of expected trend)
+    Mar: 0, // Will be calculated to complete Q1
+    Abr: 0, Mai: 0, Jun: 0, // Q2
+    Jul: 0, Ago: 0, Set: 0, // Q3
+    Out: 0, Nov: 0, Dez: 0, // Q4
+  };
+  
+  // Calculate Mar to complete Q1
+  rawWeights.Mar = quarterlyData.Q1 - rawWeights.Jan - rawWeights.Fev;
+  
+  // Calculate Q2 with gradual growth from Mar
+  const q2Avg = quarterlyData.Q2 / 3;
+  const marValue = rawWeights.Mar;
+  // Start Q2 slightly above Mar, grow gradually
+  rawWeights.Abr = marValue * 0.85; // Start Q2 a bit lower than Mar end
+  rawWeights.Mai = rawWeights.Abr * 1.07; // +7%
+  rawWeights.Jun = quarterlyData.Q2 - rawWeights.Abr - rawWeights.Mai; // Complete Q2
+  
+  // Calculate Q3 with gradual growth
+  rawWeights.Jul = rawWeights.Jun * 1.08; // +8% from Jun
+  rawWeights.Ago = rawWeights.Jul * 1.11; // +11%
+  rawWeights.Set = quarterlyData.Q3 - rawWeights.Jul - rawWeights.Ago; // Complete Q3
+  
+  // Calculate Q4 with gradual growth and reduced Dec
+  const q4Target = quarterlyData.Q4;
+  rawWeights.Out = rawWeights.Set * 1.12; // +12% from Set
+  rawWeights.Nov = rawWeights.Out * 1.15; // +15% 
+  rawWeights.Dez = q4Target - rawWeights.Out - rawWeights.Nov; // Reduced Dec
+  
+  // Assign values
+  months.forEach(month => {
+    monthlyValues[month] = rawWeights[month as keyof typeof rawWeights];
   });
-
+  
   return monthlyValues;
 }
 
-// For Oxy Hacker and Franquia, distribute units across months
-function calculateUnitBasedMonthly(quarterlyUnits: { Q1: number; Q2: number; Q3: number; Q4: number }, unitValue: number) {
+// For Oxy Hacker and Franquia, distribute units with gradual growth
+function calculateUnitBasedMonthlySmooth(
+  quarterlyUnits: { Q1: number; Q2: number; Q3: number; Q4: number },
+  unitValue: number
+) {
   const monthlyValues: Record<string, number> = {};
-
-  Object.entries(quarterMonths).forEach(([quarter, monthsInQuarter]) => {
-    const quarterUnits = quarterlyUnits[quarter as keyof typeof quarterlyUnits];
-    const factors = monthsInQuarter.map(m => seasonalityFactors[m as keyof typeof seasonalityFactors]);
-    const factorSum = factors.reduce((a, b) => a + b, 0);
-
-    monthsInQuarter.forEach((month, index) => {
-      const factor = factors[index];
-      // Calculate proportional units for this month
-      const monthUnits = (quarterUnits * factor) / factorSum;
-      monthlyValues[month] = monthUnits * unitValue;
-    });
+  
+  // Distribute units within each quarter with gradual growth and Feb/Dec reduction
+  const distributeQuarter = (quarterUnits: number, quarterKey: string): number[] => {
+    if (quarterKey === "Q1") {
+      // Jan normal, Feb reduced, Mar compensates
+      const jan = quarterUnits * 0.34;
+      const fev = quarterUnits * 0.26; // Reduced
+      const mar = quarterUnits - jan - fev;
+      return [jan, fev, mar];
+    } else if (quarterKey === "Q4") {
+      // Oct/Nov grow, Dec reduced
+      const out = quarterUnits * 0.35;
+      const nov = quarterUnits * 0.40;
+      const dez = quarterUnits - out - nov; // Reduced
+      return [out, nov, dez];
+    } else {
+      // Q2/Q3: gradual growth within quarter
+      const first = quarterUnits * 0.30;
+      const second = quarterUnits * 0.33;
+      const third = quarterUnits - first - second;
+      return [first, second, third];
+    }
+  };
+  
+  const q1Dist = distributeQuarter(quarterlyUnits.Q1, "Q1");
+  const q2Dist = distributeQuarter(quarterlyUnits.Q2, "Q2");
+  const q3Dist = distributeQuarter(quarterlyUnits.Q3, "Q3");
+  const q4Dist = distributeQuarter(quarterlyUnits.Q4, "Q4");
+  
+  const allDist = [...q1Dist, ...q2Dist, ...q3Dist, ...q4Dist];
+  
+  months.forEach((month, index) => {
+    monthlyValues[month] = allDist[index] * unitValue;
   });
-
+  
   return monthlyValues;
 }
 
-// Calculate all BU monthly values
-const modeloAtualMonthly = calculateMonthlyValues(quarterlyTotals.modeloAtual);
-const o2TaxMonthly = calculateMonthlyValues(quarterlyTotals.o2Tax);
-const oxyHackerMonthly = calculateUnitBasedMonthly(
+// Calculate all BU monthly values with smooth distribution
+// Modelo Atual: starts at R$ 1.1M
+const modeloAtualMonthly = calculateMonthlyValuesSmooth(quarterlyTotals.modeloAtual, 1100000);
+
+// O2 TAX: proportional distribution based on quarterly growth
+const o2TaxMonthly = calculateMonthlyValuesSmooth(quarterlyTotals.o2Tax, 120000);
+
+// Oxy Hacker: unit-based with gradual growth
+const oxyHackerMonthly = calculateUnitBasedMonthlySmooth(
   { Q1: 5, Q2: 15, Q3: 30, Q4: 50 },
   54000
 );
-const franquiaMonthly = calculateUnitBasedMonthly(
+
+// Franquia: unit-based with gradual growth
+const franquiaMonthly = calculateUnitBasedMonthlySmooth(
   { Q1: 2, Q2: 3, Q3: 6, Q4: 9 },
   140000
 );
