@@ -194,6 +194,8 @@ function calculateReverseFunnel(
   metasMensais: Record<string, number> | null = null,
   cpvValue: number = indicators2025.cpv
 ): FunnelData[] {
+  let investimentoAnterior = 0;
+  
   return months.map(month => {
     const faturamentoVender = netRevenueToSell[month];
     const mrrBaseAtual = mrrComChurn ? mrrComChurn[month] : 0;
@@ -205,7 +207,13 @@ function calculateReverseFunnel(
     const rms = rrs / metrics.rmToRr;
     const mqls = rms / metrics.mqlToRm;
     const leads = mqls / metrics.leadToMql;
-    const investimento = useCpv ? vendas * cpvValue : vendas * metrics.cac;
+    
+    // Calcula investimento baseado na fórmula original
+    const investimentoCalculado = useCpv ? vendas * cpvValue : vendas * metrics.cac;
+    
+    // Garante que o investimento nunca diminua (sempre crescente ou estável)
+    const investimento = Math.max(investimentoCalculado, investimentoAnterior);
+    investimentoAnterior = investimento;
     
     return {
       month,
