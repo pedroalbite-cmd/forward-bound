@@ -2,8 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, AreaChart, Area, Legend } from "recharts";
-import { Building2, DollarSign, Rocket, Users, TrendingUp } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, AreaChart, Area, Legend, PieChart, Pie, Cell } from "recharts";
+import { Building2, DollarSign, Rocket, Users, TrendingUp, ArrowUp, ArrowDown, Minus } from "lucide-react";
 
 // Quarterly totals from Goals2026Tab
 const quarterlyTotals = {
@@ -121,6 +121,46 @@ const formatCompact = (value: number) => {
   return formatCurrency(value);
 };
 
+// Calculate MoM variation
+function getMoMVariation(monthIndex: number, data: Record<string, number>): number | null {
+  if (monthIndex === 0) return null;
+  const currentMonth = months[monthIndex];
+  const prevMonth = months[monthIndex - 1];
+  const variation = ((data[currentMonth] - data[prevMonth]) / data[prevMonth]) * 100;
+  return variation;
+}
+
+// Calculate QoQ variation
+function getQoQVariation(quarter: string, quarterTotals: Record<string, number>): number | null {
+  const quarters = ["Q1", "Q2", "Q3", "Q4"];
+  const qIndex = quarters.indexOf(quarter);
+  if (qIndex === 0) return null;
+  const prevQ = quarters[qIndex - 1];
+  const variation = ((quarterTotals[quarter] - quarterTotals[prevQ]) / quarterTotals[prevQ]) * 100;
+  return variation;
+}
+
+// Variation Badge Component
+function VariationBadge({ variation, showIcon = true }: { variation: number | null; showIcon?: boolean }) {
+  if (variation === null) return <span className="text-muted-foreground text-xs">-</span>;
+  
+  const isPositive = variation > 0;
+  const isNeutral = Math.abs(variation) < 0.5;
+  
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${
+      isNeutral ? "text-muted-foreground" : isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+    }`}>
+      {showIcon && (
+        isNeutral ? <Minus className="h-3 w-3" /> : 
+        isPositive ? <ArrowUp className="h-3 w-3" /> : 
+        <ArrowDown className="h-3 w-3" />
+      )}
+      {isPositive && "+"}{variation.toFixed(1)}%
+    </span>
+  );
+}
+
 const chartConfig = {
   modeloAtual: { label: "Modelo Atual", color: "hsl(var(--primary))" },
   o2Tax: { label: "O2 TAX", color: "hsl(var(--warning))" },
@@ -128,6 +168,13 @@ const chartConfig = {
   franquia: { label: "Franquia", color: "hsl(var(--secondary))" },
   total: { label: "Total", color: "hsl(var(--foreground))" },
 };
+
+const PIE_COLORS = [
+  "hsl(var(--primary))",
+  "hsl(var(--warning))",
+  "hsl(var(--accent))",
+  "hsl(var(--secondary))",
+];
 
 interface BUTableProps {
   title: string;
@@ -145,7 +192,7 @@ function BUTable({ title, icon, data, color, total }: BUTableProps) {
     return "Q4";
   };
 
-  const quarterTotals = {
+  const quarterTotalsCalc = {
     Q1: months.slice(0, 3).reduce((sum, m) => sum + data[m], 0),
     Q2: months.slice(3, 6).reduce((sum, m) => sum + data[m], 0),
     Q3: months.slice(6, 9).reduce((sum, m) => sum + data[m], 0),
@@ -165,8 +212,9 @@ function BUTable({ title, icon, data, color, total }: BUTableProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-20">Mês</TableHead>
+                <TableHead className="w-16">Mês</TableHead>
                 <TableHead className="text-right">Faturamento</TableHead>
+                <TableHead className="text-right w-20">Var. MoM</TableHead>
                 <TableHead className="text-right">Trimestre</TableHead>
               </TableRow>
             </TableHeader>
@@ -174,6 +222,9 @@ function BUTable({ title, icon, data, color, total }: BUTableProps) {
               {months.map((month, index) => {
                 const quarter = getQuarter(month);
                 const isQuarterEnd = [2, 5, 8, 11].includes(index);
+                const momVariation = getMoMVariation(index, data);
+                const qoqVariation = isQuarterEnd ? getQoQVariation(quarter, quarterTotalsCalc) : null;
+                
                 return (
                   <TableRow key={month} className={isQuarterEnd ? "border-b-2 border-border" : ""}>
                     <TableCell className="font-medium">
@@ -183,10 +234,20 @@ function BUTable({ title, icon, data, color, total }: BUTableProps) {
                       {formatCurrency(Math.round(data[month]))}
                     </TableCell>
                     <TableCell className="text-right">
+                      <VariationBadge variation={momVariation} />
+                    </TableCell>
+                    <TableCell className="text-right">
                       {isQuarterEnd && (
-                        <Badge className={`${color}`}>
-                          {quarter}: {formatCompact(quarterTotals[quarter as keyof typeof quarterTotals])}
-                        </Badge>
+                        <div className="flex flex-col items-end gap-1">
+                          <Badge className={`${color}`}>
+                            {quarter}: {formatCompact(quarterTotalsCalc[quarter as keyof typeof quarterTotalsCalc])}
+                          </Badge>
+                          {qoqVariation !== null && (
+                            <span className="text-xs text-muted-foreground">
+                              vs {quarter === "Q2" ? "Q1" : quarter === "Q3" ? "Q2" : "Q3"}: <VariationBadge variation={qoqVariation} showIcon={false} />
+                            </span>
+                          )}
+                        </div>
                       )}
                     </TableCell>
                   </TableRow>
@@ -195,6 +256,7 @@ function BUTable({ title, icon, data, color, total }: BUTableProps) {
               <TableRow className="bg-muted/50 font-bold">
                 <TableCell>Total</TableCell>
                 <TableCell className="text-right font-display text-lg">{formatCurrency(Math.round(total))}</TableCell>
+                <TableCell></TableCell>
                 <TableCell></TableCell>
               </TableRow>
             </TableBody>
@@ -253,12 +315,57 @@ function BUChart({ title, data, color }: BUChartProps) {
   );
 }
 
+// Custom label for pie chart
+const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }: any) => {
+  const RADIAN = Math.PI / 180;
+  const radius = innerRadius + (outerRadius - innerRadius) * 1.4;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text 
+      x={x} 
+      y={y} 
+      fill="hsl(var(--foreground))" 
+      textAnchor={x > cx ? 'start' : 'end'} 
+      dominantBaseline="central"
+      className="text-xs font-medium"
+    >
+      {name} ({(percent * 100).toFixed(1)}%)
+    </text>
+  );
+};
+
 export function MonthlyRevenueTab() {
   const modeloAtualTotal = Object.values(modeloAtualMonthly).reduce((a, b) => a + b, 0);
   const o2TaxTotal = Object.values(o2TaxMonthly).reduce((a, b) => a + b, 0);
   const oxyHackerTotal = Object.values(oxyHackerMonthly).reduce((a, b) => a + b, 0);
   const franquiaTotal = Object.values(franquiaMonthly).reduce((a, b) => a + b, 0);
   const grandTotal = modeloAtualTotal + o2TaxTotal + oxyHackerTotal + franquiaTotal;
+
+  // Data for pie chart
+  const pieData = [
+    { name: "Modelo Atual", value: modeloAtualTotal },
+    { name: "O2 TAX", value: o2TaxTotal },
+    { name: "Oxy Hacker", value: oxyHackerTotal },
+    { name: "Franquia", value: franquiaTotal },
+  ];
+
+  // Calculate consolidated MoM variation
+  const getConsolidatedMoM = (monthIndex: number) => {
+    if (monthIndex === 0) return null;
+    const currentTotal = chartData[monthIndex].total;
+    const prevTotal = chartData[monthIndex - 1].total;
+    return ((currentTotal - prevTotal) / prevTotal) * 100;
+  };
+
+  // Calculate quarterly totals for consolidated view
+  const consolidatedQuarterTotals = {
+    Q1: chartData.slice(0, 3).reduce((sum, d) => sum + d.total, 0),
+    Q2: chartData.slice(3, 6).reduce((sum, d) => sum + d.total, 0),
+    Q3: chartData.slice(6, 9).reduce((sum, d) => sum + d.total, 0),
+    Q4: chartData.slice(9, 12).reduce((sum, d) => sum + d.total, 0),
+  };
 
   return (
     <div className="space-y-10 animate-fade-in">
@@ -288,6 +395,80 @@ export function MonthlyRevenueTab() {
           Visão Consolidada
         </h3>
 
+        {/* Pie Chart - BU Participation */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <Card className="glass-card">
+            <CardHeader>
+              <CardTitle className="font-display">Participação por BU</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={chartConfig} className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={90}
+                      paddingAngle={2}
+                      dataKey="value"
+                      label={renderCustomizedLabel}
+                      labelLine={false}
+                    >
+                      {pieData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent
+                          formatter={(value, name) => (
+                            <span>
+                              {name}: {formatCurrency(Number(value))} ({((Number(value) / grandTotal) * 100).toFixed(1)}%)
+                            </span>
+                          )}
+                        />
+                      }
+                    />
+                    {/* Center text */}
+                    <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground">
+                      <tspan x="50%" dy="-0.5em" className="text-lg font-bold fill-foreground">Total</tspan>
+                      <tspan x="50%" dy="1.4em" className="text-sm fill-muted-foreground">{formatCompact(grandTotal)}</tspan>
+                    </text>
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+
+          {/* Summary Cards */}
+          <Card className="glass-card">
+            <CardHeader>
+              <CardTitle className="font-display">Resumo por BU</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {pieData.map((bu, index) => (
+                <div key={bu.name} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="w-3 h-3 rounded-full" 
+                      style={{ backgroundColor: PIE_COLORS[index] }}
+                    />
+                    <span className="font-medium">{bu.name}</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-display font-bold">{formatCurrency(Math.round(bu.value))}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {((bu.value / grandTotal) * 100).toFixed(1)}% do total
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Consolidated Table */}
         <Card className="glass-card mb-6">
           <CardHeader>
@@ -298,17 +479,23 @@ export function MonthlyRevenueTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-20">Mês</TableHead>
+                    <TableHead className="w-16">Mês</TableHead>
                     <TableHead className="text-right">Modelo Atual</TableHead>
                     <TableHead className="text-right">O2 TAX</TableHead>
                     <TableHead className="text-right">Oxy Hacker</TableHead>
                     <TableHead className="text-right">Franquia</TableHead>
                     <TableHead className="text-right font-bold">Total</TableHead>
+                    <TableHead className="text-right w-20">Var. MoM</TableHead>
+                    <TableHead className="text-right">Trimestre</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {chartData.map((row, index) => {
                     const isQuarterEnd = [2, 5, 8, 11].includes(index);
+                    const quarter = isQuarterEnd ? (index === 2 ? "Q1" : index === 5 ? "Q2" : index === 8 ? "Q3" : "Q4") : null;
+                    const momVariation = getConsolidatedMoM(index);
+                    const qoqVariation = quarter ? getQoQVariation(quarter, consolidatedQuarterTotals) : null;
+                    
                     return (
                       <TableRow key={row.month} className={isQuarterEnd ? "border-b-2 border-border" : ""}>
                         <TableCell>
@@ -319,6 +506,23 @@ export function MonthlyRevenueTab() {
                         <TableCell className="text-right">{formatCurrency(row.oxyHacker)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(row.franquia)}</TableCell>
                         <TableCell className="text-right font-bold">{formatCurrency(row.total)}</TableCell>
+                        <TableCell className="text-right">
+                          <VariationBadge variation={momVariation} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {isQuarterEnd && quarter && (
+                            <div className="flex flex-col items-end gap-1">
+                              <Badge className="bg-primary">
+                                {quarter}: {formatCompact(consolidatedQuarterTotals[quarter as keyof typeof consolidatedQuarterTotals])}
+                              </Badge>
+                              {qoqVariation !== null && (
+                                <span className="text-xs text-muted-foreground">
+                                  vs {quarter === "Q2" ? "Q1" : quarter === "Q3" ? "Q2" : "Q3"}: <VariationBadge variation={qoqVariation} showIcon={false} />
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -329,6 +533,8 @@ export function MonthlyRevenueTab() {
                     <TableCell className="text-right text-accent">{formatCurrency(Math.round(oxyHackerTotal))}</TableCell>
                     <TableCell className="text-right">{formatCurrency(Math.round(franquiaTotal))}</TableCell>
                     <TableCell className="text-right text-lg">{formatCurrency(Math.round(grandTotal))}</TableCell>
+                    <TableCell></TableCell>
+                    <TableCell></TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
