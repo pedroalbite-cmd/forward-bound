@@ -120,25 +120,33 @@ function distributeQuarterlyToMonthly(
 }
 
 // Calcula MRR dinâmico e "A Vender" a partir das METAS FIXAS
+// valorVenderInicial: valor fixo para janeiro, o MRR base é calculado para bater
 function calculateMrrAndRevenueToSell(
   mrrInicial: number, 
   churnRate: number, 
   retencaoRate: number,
   metasMensais: Record<string, number>,
-  ticketMedio: number
+  ticketMedio: number,
+  valorVenderInicial: number = 0 // Se > 0, fixa janeiro neste valor
 ): { mrrPorMes: Record<string, number>; vendasPorMes: Record<string, number>; revenueToSell: Record<string, number> } {
   const mrrPorMes: Record<string, number> = {};
   const vendasPorMes: Record<string, number> = {};
   const revenueToSell: Record<string, number> = {};
   
-  let mrrAtual = mrrInicial;
+  // Se valorVenderInicial > 0, calcular o MRR base de janeiro a partir dele
+  let mrrAtual = valorVenderInicial > 0 
+    ? metasMensais["Jan"] - valorVenderInicial 
+    : mrrInicial;
+  
   let vendasMesAnterior = 0;
   
   months.forEach((month, index) => {
     if (index > 0) {
+      // Aplica churn sobre o MRR base
       mrrAtual = mrrAtual * (1 - churnRate);
     }
     
+    // Adiciona retenção das vendas do mês anterior
     const retencaoDoMesAnterior = vendasMesAnterior * ticketMedio * retencaoRate;
     mrrAtual = mrrAtual + retencaoDoMesAnterior;
     
@@ -445,6 +453,7 @@ function BUInvestmentTable({
 export function MediaInvestmentTab() {
   // Estados editáveis - Taxas
   const [mrrBase, setMrrBase] = useState(700000);
+  const [valorVenderInicial, setValorVenderInicial] = useState(400000); // Valor A Vender fixo para Janeiro
   const [ticketMedio, setTicketMedio] = useState(17000);
   const [churnMensal, setChurnMensal] = useState(0.06);
   const [retencaoVendas, setRetencaoVendas] = useState(0.25);
@@ -543,15 +552,17 @@ export function MediaInvestmentTab() {
   );
 
   // Calcula MRR dinâmico e "A Vender" a partir das metas fixas
+  // valorVenderInicial > 0 fixa janeiro em R$ 400k e calcula MRR base automaticamente
   const mrrDynamic = useMemo(() => 
     calculateMrrAndRevenueToSell(
       mrrBase, 
       churnMensal, 
       retencaoVendas,
       metasMensaisModeloAtual,
-      ticketMedio
+      ticketMedio,
+      valorVenderInicial
     ),
-    [mrrBase, churnMensal, retencaoVendas, metasMensaisModeloAtual, ticketMedio]
+    [mrrBase, churnMensal, retencaoVendas, metasMensaisModeloAtual, ticketMedio, valorVenderInicial]
   );
 
   // Receitas outras BUs
@@ -683,7 +694,7 @@ export function MediaInvestmentTab() {
               ROI Médio: {overallROI.toFixed(1)}x
             </Badge>
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
-              MRR Base: {formatCurrency(mrrBase)}
+              A Vender Jan: {formatCurrency(valorVenderInicial)}
             </Badge>
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
               Churn: {(churnMensal * 100).toFixed(0)}%/mês
@@ -744,13 +755,16 @@ export function MediaInvestmentTab() {
                   <h4 className="font-semibold">Parâmetros Base</h4>
                   
                   <div className="space-y-2">
-                    <Label>MRR Base Inicial</Label>
+                    <Label>Valor A Vender Inicial (Jan)</Label>
                     <Input
                       type="number"
-                      value={mrrBase}
-                      onChange={(e) => setMrrBase(Number(e.target.value))}
+                      value={valorVenderInicial}
+                      onChange={(e) => setValorVenderInicial(Number(e.target.value))}
                       className="font-mono"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      MRR Base Jan calculado: {formatCurrency(metasMensaisModeloAtual["Jan"] - valorVenderInicial)}
+                    </p>
                   </div>
                   
                   <div className="space-y-2">
