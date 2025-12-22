@@ -25,6 +25,26 @@ const growthData = revenueData.map((item, index) => {
   return { ...item, crescimento: parseFloat(growth.toFixed(1)) };
 });
 
+// Calculate average monthly growth (excluding first month which is 0)
+const avgMonthlyGrowth = growthData.slice(1).reduce((acc, item) => acc + item.crescimento, 0) / (growthData.length - 1);
+
+// Calculate quarterly averages
+const quarterlyAverages = [
+  { quarter: "Q1", avg: (revenueData[0].faturamento + revenueData[1].faturamento + revenueData[2].faturamento) / 3 },
+  { quarter: "Q2", avg: (revenueData[3].faturamento + revenueData[4].faturamento + revenueData[5].faturamento) / 3 },
+  { quarter: "Q3", avg: (revenueData[6].faturamento + revenueData[7].faturamento + revenueData[8].faturamento) / 3 },
+  { quarter: "Q4", avg: (revenueData[9].faturamento + revenueData[10].faturamento + revenueData[11].faturamento) / 3 },
+];
+
+// Sales Funnel Data
+const funnelData = [
+  { stage: "MQL", description: "Marketing Qualified Lead (>200k mês)", percent: "—%" },
+  { stage: "Reunião Marcada", description: "Agendamentos confirmados", percent: "—%" },
+  { stage: "Reunião Realizada", description: "Reuniões efetivamente realizadas", percent: "—%" },
+  { stage: "Proposta Enviada", description: "Propostas comerciais enviadas", percent: "—%" },
+  { stage: "Venda", description: "Contratos fechados", percent: "—%" },
+];
+
 const indicators = [
   { name: "CPMQL", value: "R$ 472,72", description: "Custo por MQL - quanto custa gerar um lead qualificado através de marketing", icon: Target },
   { name: "CPRR", value: "R$ 1.347,48", description: "Custo por reunião realizada - investimento para cada reunião agendada pelo SDR", icon: Users },
@@ -172,12 +192,27 @@ export function Context2025Tab() {
                 </LineChart>
               </ResponsiveContainer>
             </div>
+            
+            {/* Quarterly Averages */}
+            <div className="grid grid-cols-4 gap-3 mt-6">
+              {quarterlyAverages.map((q, index) => (
+                <div key={q.quarter} className="text-center p-3 rounded-lg bg-primary/10 border border-primary/20">
+                  <p className="text-xs text-muted-foreground mb-1">Média {q.quarter}</p>
+                  <p className="font-display font-bold text-sm text-primary">{formatCurrency(q.avg)}</p>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
         <Card className="glass-card">
           <CardHeader>
-            <CardTitle className="font-display">Crescimento % Mês a Mês</CardTitle>
+            <CardTitle className="font-display flex items-center gap-3">
+              Crescimento % Mês a Mês
+              <Badge className="bg-accent text-accent-foreground">
+                Média: {avgMonthlyGrowth.toFixed(1)}% a.m.
+              </Badge>
+            </CardTitle>
             <p className="text-sm text-muted-foreground">Variação percentual mensal</p>
           </CardHeader>
           <CardContent>
@@ -241,11 +276,65 @@ export function Context2025Tab() {
         </div>
       </div>
 
+      {/* Funil de Vendas */}
+      <div>
+        <h3 className="font-display text-2xl font-bold mb-6 flex items-center gap-2">
+          <TrendingUp className="h-6 w-6 text-primary" />
+          Funil de Vendas 2025
+        </h3>
+        <Card className="glass-card">
+          <CardContent className="p-6">
+            <div className="flex flex-col items-center">
+              {funnelData.map((item, index) => {
+                const widthPercent = 100 - (index * 15);
+                return (
+                  <div key={item.stage} className="flex items-center w-full max-w-2xl mb-2">
+                    {/* Conversion percentage on the left */}
+                    <div className="w-20 text-right pr-4">
+                      {index > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          {item.percent}
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    {/* Funnel stage */}
+                    <div 
+                      className="relative py-4 text-center transition-all duration-300 hover:scale-105"
+                      style={{ 
+                        width: `${widthPercent}%`,
+                        background: `linear-gradient(135deg, hsl(var(--primary) / ${1 - index * 0.15}), hsl(var(--accent) / ${1 - index * 0.15}))`,
+                        borderRadius: '8px',
+                        marginLeft: 'auto',
+                        marginRight: 'auto'
+                      }}
+                    >
+                      <p className="font-display font-bold text-primary-foreground text-sm md:text-base">
+                        {item.stage}
+                      </p>
+                      <p className="text-xs text-primary-foreground/80 hidden md:block">
+                        {item.description}
+                      </p>
+                    </div>
+                    
+                    {/* Empty space on the right for symmetry */}
+                    <div className="w-20" />
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-center text-sm text-muted-foreground mt-4">
+              * Percentuais de conversão entre etapas a serem preenchidos
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Reflexão Churn */}
       <Card className="glass-card border-l-4 border-l-warning overflow-hidden">
         <CardHeader className="bg-warning/5">
           <CardTitle className="font-display text-lg">
-            💡 A empresa que temos, mas que não somos competentes pra administrar
+            💡 E se fôssemos mais austeros e competentes, qual empresa teríamos?
           </CardTitle>
         </CardHeader>
         <CardContent className="p-6">
