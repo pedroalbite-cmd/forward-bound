@@ -188,8 +188,10 @@ function calculateMrrDynamicWithRetention(
   let vendasMesAnterior = 0;
   
   months.forEach((month, index) => {
-    // 1. Aplica churn sobre o MRR base atual
-    mrrAtual = mrrAtual * (1 - churnRate);
+    // 1. Aplica churn sobre o MRR base atual (apenas a partir do 2º mês)
+    if (index > 0) {
+      mrrAtual = mrrAtual * (1 - churnRate);
+    }
     
     // 2. Adiciona 25% das vendas do mês anterior ao MRR
     const retencaoDoMesAnterior = vendasMesAnterior * ticketMedio * retencaoRate;
