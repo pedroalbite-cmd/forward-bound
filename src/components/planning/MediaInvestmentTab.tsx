@@ -1,24 +1,15 @@
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3, Info } from "lucide-react";
-
-// MRR Base - receita recorrente já existente
-const MRR_BASE = 700000;
-
-// Valor a vender inicial em Janeiro (fixo)
-const VALOR_VENDER_INICIAL = 400000;
-
-// Churn mensal de 6%
-const CHURN_MENSAL = 0.06;
-
-// Retenção de vendas: 25% das vendas do mês anterior permanecem no MRR
-const RETENCAO_VENDAS = 0.25;
-
-// Ticket médio ajustado
-const TICKET_MEDIO = 17000;
+import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3, Info, Settings } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Button } from "@/components/ui/button";
 
 // Indicadores de 2025 (base para projeção)
 const indicators2025 = {
@@ -37,75 +28,7 @@ const indicators2025 = {
   tcv: 13218976.08,
 };
 
-// Quarterly totals from Goals2026Tab
-const quarterlyTotals = {
-  modeloAtual: { Q1: 3750000, Q2: 4500000, Q3: 6000000, Q4: 8000000 },
-  o2Tax: { Q1: 412224, Q2: 587220.48, Q3: 781590.46, Q4: 1040296.90 },
-  oxyHacker: { Q1: 5 * 54000, Q2: 15 * 54000, Q3: 30 * 54000, Q4: 50 * 54000 },
-  franquia: { Q1: 2 * 140000, Q2: 3 * 140000, Q3: 6 * 140000, Q4: 9 * 140000 },
-};
-
 const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-
-// Funnel metrics per BU - atualizado com indicadores de 2025
-const funnelMetrics = {
-  modeloAtual: {
-    name: "Modelo Atual",
-    ticketMedio: TICKET_MEDIO, // R$ 17k
-    leadToMql: 0.43,
-    mqlToRm: 0.49,
-    rmToRr: 0.72,
-    rrToProp: 0.88,
-    propToVenda: 0.24,
-    cpmql: indicators2025.cpmql, // Custo por MQL de 2025
-    cprr: indicators2025.cprr, // Custo por RR de 2025
-    cac: indicators2025.cac, // CAC de 2025
-    color: "hsl(var(--primary))",
-    icon: <Building2 className="h-5 w-5 text-primary" />,
-  },
-  o2Tax: {
-    name: "O2 TAX",
-    ticketMedio: 50000,
-    leadToMql: 0.35,
-    mqlToRm: 0.45,
-    rmToRr: 0.65,
-    rrToProp: 0.80,
-    propToVenda: 0.20,
-    cpmql: 600, // Estimativa para nicho tributário
-    cprr: 1800,
-    cac: 12000,
-    color: "hsl(var(--warning))",
-    icon: <DollarSign className="h-5 w-5 text-warning" />,
-  },
-  oxyHacker: {
-    name: "Oxy Hacker",
-    ticketMedio: 54000,
-    leadToMql: 0.25,
-    mqlToRm: 0.40,
-    rmToRr: 0.60,
-    rrToProp: 0.75,
-    propToVenda: 0.15,
-    cpmql: 800, // Estimativa para tech/consultoria
-    cprr: 2500,
-    cac: 18000,
-    color: "hsl(var(--accent))",
-    icon: <Rocket className="h-5 w-5 text-accent-foreground" />,
-  },
-  franquia: {
-    name: "Franquia",
-    ticketMedio: 140000,
-    leadToMql: 0.20,
-    mqlToRm: 0.35,
-    rmToRr: 0.55,
-    rrToProp: 0.70,
-    propToVenda: 0.18,
-    cpmql: 1200, // Franquias têm CAC mais alto
-    cprr: 4000,
-    cac: 25000,
-    color: "hsl(var(--secondary))",
-    icon: <Users className="h-5 w-5 text-secondary-foreground" />,
-  },
-};
 
 // Calculate smooth monthly distribution
 function calculateMonthlyValuesSmooth(
@@ -163,12 +86,6 @@ function calculateFromUnits(units: Record<string, number>, ticketValue: number):
   return result;
 }
 
-// Calculate revenue per BU per month
-const modeloAtualMonthly = calculateMonthlyValuesSmooth(quarterlyTotals.modeloAtual, 1100000);
-const o2TaxMonthly = calculateMonthlyValuesSmooth(quarterlyTotals.o2Tax, 120000);
-const oxyHackerMonthly = calculateFromUnits(oxyHackerUnits, 54000);
-const franquiaMonthly = calculateFromUnits(franquiaUnits, 140000);
-
 // Distribui metas trimestrais em mensais proporcionalmente
 function distributeQuarterlyToMonthly(
   quarterlyData: { Q1: number; Q2: number; Q3: number; Q4: number }
@@ -183,22 +100,18 @@ function distributeQuarterlyToMonthly(
     Q4: { Out: 0.33, Nov: 0.37, Dez: 0.30 }, // Dez um pouco menor por sazonalidade
   };
   
-  // Distribui Q1
   monthlyMetas["Jan"] = quarterlyData.Q1 * quarterWeights.Q1.Jan;
   monthlyMetas["Fev"] = quarterlyData.Q1 * quarterWeights.Q1.Fev;
   monthlyMetas["Mar"] = quarterlyData.Q1 * quarterWeights.Q1.Mar;
   
-  // Distribui Q2
   monthlyMetas["Abr"] = quarterlyData.Q2 * quarterWeights.Q2.Abr;
   monthlyMetas["Mai"] = quarterlyData.Q2 * quarterWeights.Q2.Mai;
   monthlyMetas["Jun"] = quarterlyData.Q2 * quarterWeights.Q2.Jun;
   
-  // Distribui Q3
   monthlyMetas["Jul"] = quarterlyData.Q3 * quarterWeights.Q3.Jul;
   monthlyMetas["Ago"] = quarterlyData.Q3 * quarterWeights.Q3.Ago;
   monthlyMetas["Set"] = quarterlyData.Q3 * quarterWeights.Q3.Set;
   
-  // Distribui Q4
   monthlyMetas["Out"] = quarterlyData.Q4 * quarterWeights.Q4.Out;
   monthlyMetas["Nov"] = quarterlyData.Q4 * quarterWeights.Q4.Nov;
   monthlyMetas["Dez"] = quarterlyData.Q4 * quarterWeights.Q4.Dez;
@@ -207,7 +120,6 @@ function distributeQuarterlyToMonthly(
 }
 
 // Calcula MRR dinâmico e "A Vender" a partir das METAS FIXAS
-// A Vender = Meta do Mês - MRR Base do Mês
 function calculateMrrAndRevenueToSell(
   mrrInicial: number, 
   churnRate: number, 
@@ -223,24 +135,19 @@ function calculateMrrAndRevenueToSell(
   let vendasMesAnterior = 0;
   
   months.forEach((month, index) => {
-    // 1. Aplica churn sobre o MRR base atual (apenas a partir do 2º mês)
     if (index > 0) {
       mrrAtual = mrrAtual * (1 - churnRate);
     }
     
-    // 2. Adiciona 25% das vendas do mês anterior ao MRR
     const retencaoDoMesAnterior = vendasMesAnterior * ticketMedio * retencaoRate;
     mrrAtual = mrrAtual + retencaoDoMesAnterior;
     
-    // Guarda o MRR do mês
     mrrPorMes[month] = mrrAtual;
     
-    // 3. Calcula "A Vender" = Meta - MRR Base
     const metaDoMes = metasMensais[month];
     const aVender = Math.max(0, metaDoMes - mrrAtual);
     revenueToSell[month] = aVender;
     
-    // 4. Calcula vendas do mês atual (para usar no próximo mês)
     const vendasDoMes = aVender / ticketMedio;
     vendasPorMes[month] = vendasDoMes;
     vendasMesAnterior = vendasDoMes;
@@ -249,25 +156,7 @@ function calculateMrrAndRevenueToSell(
   return { mrrPorMes, vendasPorMes, revenueToSell };
 }
 
-// Distribui as metas trimestrais em mensais (fonte da verdade: R$ 22.250.000)
-const metasMensaisModeloAtual = distributeQuarterlyToMonthly(quarterlyTotals.modeloAtual);
-
-// Calcula MRR dinâmico e "A Vender" a partir das metas fixas
-const mrrDynamic = calculateMrrAndRevenueToSell(
-  MRR_BASE, 
-  CHURN_MENSAL, 
-  RETENCAO_VENDAS,
-  metasMensaisModeloAtual,
-  TICKET_MEDIO
-);
-
-// MRR após churn + retenção para cada mês
-const mrrAposChurn = mrrDynamic.mrrPorMes;
-
-// Receita líquida a vender para Modelo Atual (derivada das metas)
-const modeloAtualNetToSell = mrrDynamic.revenueToSell;
-
-// Reverse funnel calculation - usando CPV (custo por venda) como base de investimento
+// Reverse funnel calculation
 interface FunnelData {
   month: string;
   faturamentoMeta: number;
@@ -282,17 +171,32 @@ interface FunnelData {
   investimento: number;
 }
 
+interface FunnelMetrics {
+  name: string;
+  ticketMedio: number;
+  leadToMql: number;
+  mqlToRm: number;
+  rmToRr: number;
+  rrToProp: number;
+  propToVenda: number;
+  cpmql: number;
+  cprr: number;
+  cac: number;
+  color: string;
+  icon: React.ReactNode;
+}
+
 function calculateReverseFunnel(
   netRevenueToSell: Record<string, number>,
-  metrics: typeof funnelMetrics.modeloAtual,
+  metrics: FunnelMetrics,
   mrrComChurn: Record<string, number> | null = null,
   useCpv: boolean = false,
-  metasMensais: Record<string, number> | null = null // Metas fixas opcionais
+  metasMensais: Record<string, number> | null = null,
+  cpvValue: number = indicators2025.cpv
 ): FunnelData[] {
   return months.map(month => {
     const faturamentoVender = netRevenueToSell[month];
     const mrrBaseAtual = mrrComChurn ? mrrComChurn[month] : 0;
-    // Se temos metas fixas, usa elas; senão calcula MRR + A Vender
     const faturamentoMeta = metasMensais ? metasMensais[month] : (mrrBaseAtual + faturamentoVender);
     
     const vendas = faturamentoVender / metrics.ticketMedio;
@@ -301,8 +205,7 @@ function calculateReverseFunnel(
     const rms = rrs / metrics.rmToRr;
     const mqls = rms / metrics.mqlToRm;
     const leads = mqls / metrics.leadToMql;
-    // Investimento baseado em CPV (custo por venda) para Modelo Atual, ou CAC para outras BUs
-    const investimento = useCpv ? vendas * indicators2025.cpv : vendas * metrics.cac;
+    const investimento = useCpv ? vendas * cpvValue : vendas * metrics.cac;
     
     return {
       month,
@@ -362,12 +265,26 @@ interface BUInvestmentTableProps {
   icon: React.ReactNode;
   funnelData: FunnelData[];
   color: string;
-  metrics: typeof funnelMetrics.modeloAtual;
+  metrics: FunnelMetrics;
   showMrrBase?: boolean;
   mrrBase?: number;
+  churnMensal?: number;
+  retencaoVendas?: number;
+  mrrFinal?: number;
 }
 
-function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBase = false, mrrBase = 0 }: BUInvestmentTableProps) {
+function BUInvestmentTable({ 
+  title, 
+  icon, 
+  funnelData, 
+  color, 
+  metrics, 
+  showMrrBase = false, 
+  mrrBase = 0,
+  churnMensal = 0.06,
+  retencaoVendas = 0.25,
+  mrrFinal = 0
+}: BUInvestmentTableProps) {
   const totalInvestimento = funnelData.reduce((sum, d) => sum + d.investimento, 0);
   const totalFaturamentoMeta = funnelData.reduce((sum, d) => sum + d.faturamentoMeta, 0);
   const totalFaturamentoVender = funnelData.reduce((sum, d) => sum + d.faturamentoVender, 0);
@@ -402,12 +319,12 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBas
             )}
             {showMrrBase && (
               <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/30">
-                Churn: {(CHURN_MENSAL * 100).toFixed(0)}%/mês
+                Churn: {(churnMensal * 100).toFixed(0)}%/mês
               </Badge>
             )}
             {showMrrBase && (
               <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/30">
-                Retenção: {(RETENCAO_VENDAS * 100).toFixed(0)}%
+                Retenção: {(retencaoVendas * 100).toFixed(0)}%
               </Badge>
             )}
           </div>
@@ -416,14 +333,14 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBas
           <div className="mt-2 flex flex-col gap-2 text-sm text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
             <div className="flex items-center gap-2">
               <Info className="h-4 w-4" />
-              <span>MRR Base Inicial: {formatCurrency(mrrBase)} — Churn {(CHURN_MENSAL * 100).toFixed(0)}%/mês + Retenção {(RETENCAO_VENDAS * 100).toFixed(0)}% das vendas</span>
+              <span>MRR Base Inicial: {formatCurrency(mrrBase)} — Churn {(churnMensal * 100).toFixed(0)}%/mês + Retenção {(retencaoVendas * 100).toFixed(0)}% das vendas</span>
             </div>
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-destructive">Churn: -{(CHURN_MENSAL * 100).toFixed(0)}%/mês sobre MRR</span>
+              <span className="text-destructive">Churn: -{(churnMensal * 100).toFixed(0)}%/mês sobre MRR</span>
               <span>•</span>
-              <span className="text-blue-600">Retenção: +{(RETENCAO_VENDAS * 100).toFixed(0)}% das vendas anteriores</span>
+              <span className="text-blue-600">Retenção: +{(retencaoVendas * 100).toFixed(0)}% das vendas anteriores</span>
               <span>•</span>
-              <span>MRR Final (Dez): {formatCurrency(mrrAposChurn["Dez"])}</span>
+              <span>MRR Final (Dez): {formatCurrency(mrrFinal)}</span>
             </div>
           </div>
         )}
@@ -459,16 +376,16 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBas
             <TableHeader>
               <TableRow>
                 <TableHead className="w-14">Mês</TableHead>
-                <TableHead className="text-right">Meta</TableHead>
-                {showMrrBase && <TableHead className="text-right">MRR Base</TableHead>}
-                {showMrrBase && <TableHead className="text-right">A Vender</TableHead>}
+                <TableHead className="text-right min-w-[130px]">Meta</TableHead>
+                {showMrrBase && <TableHead className="text-right min-w-[130px]">MRR Base</TableHead>}
+                {showMrrBase && <TableHead className="text-right min-w-[130px]">A Vender</TableHead>}
                 <TableHead className="text-right">Vendas</TableHead>
                 <TableHead className="text-right">Propostas</TableHead>
                 <TableHead className="text-right">RRs</TableHead>
                 <TableHead className="text-right">RMs</TableHead>
                 <TableHead className="text-right">MQLs</TableHead>
                 <TableHead className="text-right">Leads</TableHead>
-                <TableHead className="text-right">Investimento</TableHead>
+                <TableHead className="text-right min-w-[120px]">Investimento</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -479,12 +396,12 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBas
                     <TableCell>
                       <Badge variant="outline" className="w-12 justify-center">{data.month}</Badge>
                     </TableCell>
-                    <TableCell className="text-right font-medium">{formatCompact(data.faturamentoMeta)}</TableCell>
+                    <TableCell className="text-right font-medium">{formatCurrency(data.faturamentoMeta)}</TableCell>
                     {showMrrBase && (
-                      <TableCell className="text-right text-muted-foreground">{formatCompact(data.mrrBase)}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">{formatCurrency(data.mrrBase)}</TableCell>
                     )}
                     {showMrrBase && (
-                      <TableCell className="text-right text-amber-600 font-medium">{formatCompact(data.faturamentoVender)}</TableCell>
+                      <TableCell className="text-right text-amber-600 font-medium">{formatCurrency(data.faturamentoVender)}</TableCell>
                     )}
                     <TableCell className="text-right">{data.vendas}</TableCell>
                     <TableCell className="text-right">{data.propostas}</TableCell>
@@ -498,9 +415,9 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBas
               })}
               <TableRow className="bg-muted/50 font-bold">
                 <TableCell>Total</TableCell>
-                <TableCell className="text-right">{formatCompact(totalFaturamentoMeta)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(totalFaturamentoMeta)}</TableCell>
                 {showMrrBase && <TableCell className="text-right text-muted-foreground">—</TableCell>}
-                {showMrrBase && <TableCell className="text-right text-amber-600">{formatCompact(totalFaturamentoVender)}</TableCell>}
+                {showMrrBase && <TableCell className="text-right text-amber-600">{formatCurrency(totalFaturamentoVender)}</TableCell>}
                 <TableCell className="text-right">{totalVendas}</TableCell>
                 <TableCell className="text-right">{funnelData.reduce((s, d) => s + d.propostas, 0)}</TableCell>
                 <TableCell className="text-right">{funnelData.reduce((s, d) => s + d.rrs, 0)}</TableCell>
@@ -518,13 +435,158 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBas
 }
 
 export function MediaInvestmentTab() {
+  // Estados editáveis - Taxas
+  const [mrrBase, setMrrBase] = useState(700000);
+  const [ticketMedio, setTicketMedio] = useState(17000);
+  const [churnMensal, setChurnMensal] = useState(0.06);
+  const [retencaoVendas, setRetencaoVendas] = useState(0.25);
+  const [cpv, setCpv] = useState(indicators2025.cpv);
+  
+  // Estados editáveis - Metas trimestrais
+  const [metasTrimestrais, setMetasTrimestrais] = useState({
+    Q1: 3750000,
+    Q2: 4500000,
+    Q3: 6000000,
+    Q4: 8000000,
+  });
+  
+  // Estados editáveis - Taxas de conversão do funil
+  const [taxasConversao, setTaxasConversao] = useState({
+    leadToMql: 0.43,
+    mqlToRm: 0.49,
+    rmToRr: 0.72,
+    rrToProp: 0.88,
+    propToVenda: 0.24,
+  });
+
+  const [configOpen, setConfigOpen] = useState(false);
+
+  // Quarterly totals para outras BUs
+  const quarterlyTotalsOutrasBUs = useMemo(() => ({
+    o2Tax: { Q1: 412224, Q2: 587220.48, Q3: 781590.46, Q4: 1040296.90 },
+    oxyHacker: { Q1: 5 * 54000, Q2: 15 * 54000, Q3: 30 * 54000, Q4: 50 * 54000 },
+    franquia: { Q1: 2 * 140000, Q2: 3 * 140000, Q3: 6 * 140000, Q4: 9 * 140000 },
+  }), []);
+
+  // Funnel metrics dinâmicos
+  const funnelMetrics = useMemo(() => ({
+    modeloAtual: {
+      name: "Modelo Atual",
+      ticketMedio: ticketMedio,
+      leadToMql: taxasConversao.leadToMql,
+      mqlToRm: taxasConversao.mqlToRm,
+      rmToRr: taxasConversao.rmToRr,
+      rrToProp: taxasConversao.rrToProp,
+      propToVenda: taxasConversao.propToVenda,
+      cpmql: indicators2025.cpmql,
+      cprr: indicators2025.cprr,
+      cac: indicators2025.cac,
+      color: "hsl(var(--primary))",
+      icon: <Building2 className="h-5 w-5 text-primary" />,
+    },
+    o2Tax: {
+      name: "O2 TAX",
+      ticketMedio: 50000,
+      leadToMql: 0.35,
+      mqlToRm: 0.45,
+      rmToRr: 0.65,
+      rrToProp: 0.80,
+      propToVenda: 0.20,
+      cpmql: 600,
+      cprr: 1800,
+      cac: 12000,
+      color: "hsl(var(--warning))",
+      icon: <DollarSign className="h-5 w-5 text-warning" />,
+    },
+    oxyHacker: {
+      name: "Oxy Hacker",
+      ticketMedio: 54000,
+      leadToMql: 0.25,
+      mqlToRm: 0.40,
+      rmToRr: 0.60,
+      rrToProp: 0.75,
+      propToVenda: 0.15,
+      cpmql: 800,
+      cprr: 2500,
+      cac: 18000,
+      color: "hsl(var(--accent))",
+      icon: <Rocket className="h-5 w-5 text-accent-foreground" />,
+    },
+    franquia: {
+      name: "Franquia",
+      ticketMedio: 140000,
+      leadToMql: 0.20,
+      mqlToRm: 0.35,
+      rmToRr: 0.55,
+      rrToProp: 0.70,
+      propToVenda: 0.18,
+      cpmql: 1200,
+      cprr: 4000,
+      cac: 25000,
+      color: "hsl(var(--secondary))",
+      icon: <Users className="h-5 w-5 text-secondary-foreground" />,
+    },
+  }), [ticketMedio, taxasConversao]);
+
+  // Metas mensais distribuídas (fonte da verdade: meta trimestral)
+  const metasMensaisModeloAtual = useMemo(() => 
+    distributeQuarterlyToMonthly(metasTrimestrais), 
+    [metasTrimestrais]
+  );
+
+  // Calcula MRR dinâmico e "A Vender" a partir das metas fixas
+  const mrrDynamic = useMemo(() => 
+    calculateMrrAndRevenueToSell(
+      mrrBase, 
+      churnMensal, 
+      retencaoVendas,
+      metasMensaisModeloAtual,
+      ticketMedio
+    ),
+    [mrrBase, churnMensal, retencaoVendas, metasMensaisModeloAtual, ticketMedio]
+  );
+
+  // Receitas outras BUs
+  const o2TaxMonthly = useMemo(() => 
+    calculateMonthlyValuesSmooth(quarterlyTotalsOutrasBUs.o2Tax, 120000), 
+    [quarterlyTotalsOutrasBUs]
+  );
+  const oxyHackerMonthly = useMemo(() => 
+    calculateFromUnits(oxyHackerUnits, 54000), 
+    []
+  );
+  const franquiaMonthly = useMemo(() => 
+    calculateFromUnits(franquiaUnits, 140000), 
+    []
+  );
+
   // Calculate funnel data for each BU
-  // Modelo Atual usa MRR base com churn, CPV para investimento, e METAS FIXAS (R$ 22.250.000)
-  const modeloAtualFunnel = calculateReverseFunnel(modeloAtualNetToSell, funnelMetrics.modeloAtual, mrrAposChurn, true, metasMensaisModeloAtual);
-  // Outras BUs não têm MRR base, usam CAC - passam o próprio faturamento como "a vender"
-  const o2TaxFunnel = calculateReverseFunnel(o2TaxMonthly, funnelMetrics.o2Tax, null, false, null);
-  const oxyHackerFunnel = calculateReverseFunnel(oxyHackerMonthly, funnelMetrics.oxyHacker, null, false, null);
-  const franquiaFunnel = calculateReverseFunnel(franquiaMonthly, funnelMetrics.franquia, null, false, null);
+  const modeloAtualFunnel = useMemo(() => 
+    calculateReverseFunnel(
+      mrrDynamic.revenueToSell, 
+      funnelMetrics.modeloAtual, 
+      mrrDynamic.mrrPorMes, 
+      true, 
+      metasMensaisModeloAtual,
+      cpv
+    ),
+    [mrrDynamic, funnelMetrics.modeloAtual, metasMensaisModeloAtual, cpv]
+  );
+  
+  const o2TaxFunnel = useMemo(() => 
+    calculateReverseFunnel(o2TaxMonthly, funnelMetrics.o2Tax, null, false, null),
+    [o2TaxMonthly, funnelMetrics.o2Tax]
+  );
+  
+  const oxyHackerFunnel = useMemo(() => 
+    calculateReverseFunnel(oxyHackerMonthly, funnelMetrics.oxyHacker, null, false, null),
+    [oxyHackerMonthly, funnelMetrics.oxyHacker]
+  );
+  
+  const franquiaFunnel = useMemo(() => 
+    calculateReverseFunnel(franquiaMonthly, funnelMetrics.franquia, null, false, null),
+    [franquiaMonthly, funnelMetrics.franquia]
+  );
 
   // Calculate totals
   const totalInvestimento = 
@@ -538,6 +600,8 @@ export function MediaInvestmentTab() {
     o2TaxFunnel.reduce((s, d) => s + d.faturamentoMeta, 0) +
     oxyHackerFunnel.reduce((s, d) => s + d.faturamentoMeta, 0) +
     franquiaFunnel.reduce((s, d) => s + d.faturamentoMeta, 0);
+
+  const metaAnualTotal = metasTrimestrais.Q1 + metasTrimestrais.Q2 + metasTrimestrais.Q3 + metasTrimestrais.Q4;
 
   const overallROI = totalFaturamento / totalInvestimento;
 
@@ -581,6 +645,11 @@ export function MediaInvestmentTab() {
     );
   };
 
+  const handleMetaChange = (quarter: 'Q1' | 'Q2' | 'Q3' | 'Q4', value: string) => {
+    const numValue = parseFloat(value.replace(/\D/g, '')) || 0;
+    setMetasTrimestrais(prev => ({ ...prev, [quarter]: numValue }));
+  };
+
   return (
     <div className="space-y-10 animate-fade-in">
       {/* Hero Section */}
@@ -593,9 +662,12 @@ export function MediaInvestmentTab() {
           </Badge>
           <h2 className="font-display text-4xl font-bold mb-4">Planejamento de Mídia</h2>
           <p className="text-primary-foreground/80 max-w-2xl">
-            Cálculo de investimento baseado em funil reverso. <strong>MRR Base: {formatCurrency(MRR_BASE)}</strong> — investimento apenas para vender a diferença da meta mensal.
+            Cálculo de investimento baseado em funil reverso. <strong>MRR Base: {formatCurrency(mrrBase)}</strong> — investimento apenas para vender a diferença da meta mensal.
           </p>
           <div className="flex flex-wrap gap-4 mt-6">
+            <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
+              Meta Anual: {formatCurrency(metaAnualTotal)}
+            </Badge>
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
               Investimento Total: {formatCurrency(totalInvestimento)}
             </Badge>
@@ -603,20 +675,164 @@ export function MediaInvestmentTab() {
               ROI Médio: {overallROI.toFixed(1)}x
             </Badge>
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
-              MRR Base: {formatCurrency(MRR_BASE)}
+              MRR Base: {formatCurrency(mrrBase)}
             </Badge>
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
-              Churn: {(CHURN_MENSAL * 100).toFixed(0)}%/mês
+              Churn: {(churnMensal * 100).toFixed(0)}%/mês
             </Badge>
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
-              Ticket: {formatCurrency(TICKET_MEDIO)}
+              Ticket: {formatCurrency(ticketMedio)}
             </Badge>
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
-              CPV: {formatCurrency(indicators2025.cpv)}
+              CPV: {formatCurrency(cpv)}
             </Badge>
           </div>
         </div>
       </div>
+
+      {/* Configurações Editáveis */}
+      <Collapsible open={configOpen} onOpenChange={setConfigOpen}>
+        <Card className="glass-card border-primary/30">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors">
+              <div className="flex items-center justify-between">
+                <CardTitle className="font-display flex items-center gap-2">
+                  <Settings className="h-5 w-5 text-primary" />
+                  Configurações do Modelo (Clique para {configOpen ? 'ocultar' : 'editar'})
+                </CardTitle>
+                <Button variant="outline" size="sm">
+                  {configOpen ? 'Ocultar' : 'Editar'}
+                </Button>
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="space-y-6">
+              {/* Metas Trimestrais */}
+              <div>
+                <h4 className="font-semibold mb-4 flex items-center gap-2">
+                  <Target className="h-4 w-4" />
+                  Metas Trimestrais (Total: {formatCurrency(metaAnualTotal)})
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {(['Q1', 'Q2', 'Q3', 'Q4'] as const).map((quarter) => (
+                    <div key={quarter} className="space-y-2">
+                      <Label htmlFor={quarter}>{quarter}</Label>
+                      <Input
+                        id={quarter}
+                        type="text"
+                        value={formatCurrency(metasTrimestrais[quarter]).replace('R$', '').trim()}
+                        onChange={(e) => handleMetaChange(quarter, e.target.value)}
+                        className="text-right font-mono"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Parâmetros Base */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-4">
+                  <h4 className="font-semibold">Parâmetros Base</h4>
+                  
+                  <div className="space-y-2">
+                    <Label>MRR Base Inicial</Label>
+                    <Input
+                      type="number"
+                      value={mrrBase}
+                      onChange={(e) => setMrrBase(Number(e.target.value))}
+                      className="font-mono"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Ticket Médio</Label>
+                    <Input
+                      type="number"
+                      value={ticketMedio}
+                      onChange={(e) => setTicketMedio(Number(e.target.value))}
+                      className="font-mono"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>CPV (Custo por Venda)</Label>
+                    <Input
+                      type="number"
+                      value={cpv}
+                      onChange={(e) => setCpv(Number(e.target.value))}
+                      className="font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="font-semibold">Taxas de Retenção</h4>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <Label>Churn Mensal</Label>
+                      <span className="text-sm font-mono text-primary">{(churnMensal * 100).toFixed(1)}%</span>
+                    </div>
+                    <Slider
+                      value={[churnMensal * 100]}
+                      onValueChange={(v) => setChurnMensal(v[0] / 100)}
+                      max={20}
+                      step={0.5}
+                      className="w-full"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <Label>Retenção de Vendas</Label>
+                      <span className="text-sm font-mono text-primary">{(retencaoVendas * 100).toFixed(0)}%</span>
+                    </div>
+                    <Slider
+                      value={[retencaoVendas * 100]}
+                      onValueChange={(v) => setRetencaoVendas(v[0] / 100)}
+                      max={50}
+                      step={1}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="font-semibold">Taxas de Conversão do Funil</h4>
+                  
+                  {[
+                    { key: 'leadToMql', label: 'Lead → MQL' },
+                    { key: 'mqlToRm', label: 'MQL → RM' },
+                    { key: 'rmToRr', label: 'RM → RR' },
+                    { key: 'rrToProp', label: 'RR → Proposta' },
+                    { key: 'propToVenda', label: 'Proposta → Venda' },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <Label>{label}</Label>
+                        <span className="font-mono text-primary">
+                          {(taxasConversao[key as keyof typeof taxasConversao] * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <Slider
+                        value={[taxasConversao[key as keyof typeof taxasConversao] * 100]}
+                        onValueChange={(v) => setTaxasConversao(prev => ({ 
+                          ...prev, 
+                          [key]: v[0] / 100 
+                        }))}
+                        max={100}
+                        step={1}
+                        className="w-full"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Indicadores 2025 - Referência */}
       <Card className="glass-card border-amber-500/30 bg-amber-500/5">
@@ -674,7 +890,7 @@ export function MediaInvestmentTab() {
             </div>
             <div className="text-center p-3 bg-background/50 rounded-lg">
               <p className="text-xs text-muted-foreground">MRR Base 2026</p>
-              <p className="text-lg font-bold text-primary">{formatCurrency(MRR_BASE)}</p>
+              <p className="text-lg font-bold text-primary">{formatCurrency(mrrBase)}</p>
             </div>
           </div>
         </CardContent>
@@ -840,7 +1056,10 @@ export function MediaInvestmentTab() {
             color={funnelMetrics.modeloAtual.color}
             metrics={funnelMetrics.modeloAtual}
             showMrrBase={true}
-            mrrBase={MRR_BASE}
+            mrrBase={mrrBase}
+            churnMensal={churnMensal}
+            retencaoVendas={retencaoVendas}
+            mrrFinal={mrrDynamic.mrrPorMes["Dez"]}
           />
 
           <BUInvestmentTable
