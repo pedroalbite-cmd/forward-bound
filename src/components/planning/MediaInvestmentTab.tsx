@@ -30,43 +30,36 @@ const indicators2025 = {
 
 const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-// Dias úteis de 2026 por mês
-// Premissas:
-// - Dezembro: até dia 23 (17 dias úteis)
-// - Fevereiro: descontando Carnaval 16-17 (18 dias úteis)
-// - Demais meses: dias úteis padrão
-const DIAS_UTEIS_2026: Record<string, number> = {
-  Jan: 21, Fev: 18, Mar: 22, Abr: 20,
-  Mai: 20, Jun: 21, Jul: 23, Ago: 21,
-  Set: 21, Out: 21, Nov: 20, Dez: 17,
-};
-
-const DIAS_UTEIS_TRIMESTRE = {
-  Q1: DIAS_UTEIS_2026.Jan + DIAS_UTEIS_2026.Fev + DIAS_UTEIS_2026.Mar, // 61
-  Q2: DIAS_UTEIS_2026.Abr + DIAS_UTEIS_2026.Mai + DIAS_UTEIS_2026.Jun, // 61
-  Q3: DIAS_UTEIS_2026.Jul + DIAS_UTEIS_2026.Ago + DIAS_UTEIS_2026.Set, // 65
-  Q4: DIAS_UTEIS_2026.Out + DIAS_UTEIS_2026.Nov + DIAS_UTEIS_2026.Dez, // 58
-};
-
-// Calculate smooth monthly distribution based on working days
+// Calculate smooth monthly distribution
 function calculateMonthlyValuesSmooth(
   quarterlyData: { Q1: number; Q2: number; Q3: number; Q4: number },
   initialValue: number
 ) {
   const monthlyValues: Record<string, number> = {};
+  const weights = {
+    Jan: 1.00, Fev: 1.02, Mar: 1.08,
+    Abr: 1.14, Mai: 1.20, Jun: 1.28,
+    Jul: 1.38, Ago: 1.50, Set: 1.65,
+    Out: 1.82, Nov: 2.00, Dez: 1.60,
+  };
   
-  // Distribui dentro de cada trimestre proporcionalmente aos dias úteis
-  const distributeQuarter = (quarterMonths: string[], quarterTotal: number, quarterKey: keyof typeof DIAS_UTEIS_TRIMESTRE) => {
-    const totalDiasQuarter = DIAS_UTEIS_TRIMESTRE[quarterKey];
+  const rawValues: Record<string, number> = {};
+  months.forEach(month => {
+    rawValues[month] = initialValue * weights[month as keyof typeof weights];
+  });
+  
+  const scaleQuarter = (quarterMonths: string[], quarterTotal: number) => {
+    const rawQuarterSum = quarterMonths.reduce((sum, m) => sum + rawValues[m], 0);
+    const scale = quarterTotal / rawQuarterSum;
     quarterMonths.forEach(m => {
-      monthlyValues[m] = quarterTotal * (DIAS_UTEIS_2026[m] / totalDiasQuarter);
+      monthlyValues[m] = rawValues[m] * scale;
     });
   };
   
-  distributeQuarter(["Jan", "Fev", "Mar"], quarterlyData.Q1, "Q1");
-  distributeQuarter(["Abr", "Mai", "Jun"], quarterlyData.Q2, "Q2");
-  distributeQuarter(["Jul", "Ago", "Set"], quarterlyData.Q3, "Q3");
-  distributeQuarter(["Out", "Nov", "Dez"], quarterlyData.Q4, "Q4");
+  scaleQuarter(["Jan", "Fev", "Mar"], quarterlyData.Q1);
+  scaleQuarter(["Abr", "Mai", "Jun"], quarterlyData.Q2);
+  scaleQuarter(["Jul", "Ago", "Set"], quarterlyData.Q3);
+  scaleQuarter(["Out", "Nov", "Dez"], quarterlyData.Q4);
   
   return monthlyValues;
 }
@@ -93,24 +86,35 @@ function calculateFromUnits(units: Record<string, number>, ticketValue: number):
   return result;
 }
 
-// Distribui metas trimestrais em mensais proporcionalmente aos dias úteis
+// Distribui metas trimestrais em mensais proporcionalmente
 function distributeQuarterlyToMonthly(
   quarterlyData: { Q1: number; Q2: number; Q3: number; Q4: number }
 ): Record<string, number> {
   const monthlyMetas: Record<string, number> = {};
   
-  // Distribui proporcionalmente aos dias úteis de cada mês dentro do trimestre
-  const distributeQuarter = (quarterMonths: string[], quarterTotal: number, quarterKey: keyof typeof DIAS_UTEIS_TRIMESTRE) => {
-    const totalDiasQuarter = DIAS_UTEIS_TRIMESTRE[quarterKey];
-    quarterMonths.forEach(m => {
-      monthlyMetas[m] = quarterTotal * (DIAS_UTEIS_2026[m] / totalDiasQuarter);
-    });
+  // Pesos relativos dentro de cada trimestre (crescimento proporcional)
+  const quarterWeights = {
+    Q1: { Jan: 0.30, Fev: 0.33, Mar: 0.37 }, // Crescimento dentro do Q1
+    Q2: { Abr: 0.30, Mai: 0.33, Jun: 0.37 },
+    Q3: { Jul: 0.30, Ago: 0.33, Set: 0.37 },
+    Q4: { Out: 0.33, Nov: 0.37, Dez: 0.30 }, // Dez um pouco menor por sazonalidade
   };
   
-  distributeQuarter(["Jan", "Fev", "Mar"], quarterlyData.Q1, "Q1");
-  distributeQuarter(["Abr", "Mai", "Jun"], quarterlyData.Q2, "Q2");
-  distributeQuarter(["Jul", "Ago", "Set"], quarterlyData.Q3, "Q3");
-  distributeQuarter(["Out", "Nov", "Dez"], quarterlyData.Q4, "Q4");
+  monthlyMetas["Jan"] = quarterlyData.Q1 * quarterWeights.Q1.Jan;
+  monthlyMetas["Fev"] = quarterlyData.Q1 * quarterWeights.Q1.Fev;
+  monthlyMetas["Mar"] = quarterlyData.Q1 * quarterWeights.Q1.Mar;
+  
+  monthlyMetas["Abr"] = quarterlyData.Q2 * quarterWeights.Q2.Abr;
+  monthlyMetas["Mai"] = quarterlyData.Q2 * quarterWeights.Q2.Mai;
+  monthlyMetas["Jun"] = quarterlyData.Q2 * quarterWeights.Q2.Jun;
+  
+  monthlyMetas["Jul"] = quarterlyData.Q3 * quarterWeights.Q3.Jul;
+  monthlyMetas["Ago"] = quarterlyData.Q3 * quarterWeights.Q3.Ago;
+  monthlyMetas["Set"] = quarterlyData.Q3 * quarterWeights.Q3.Set;
+  
+  monthlyMetas["Out"] = quarterlyData.Q4 * quarterWeights.Q4.Out;
+  monthlyMetas["Nov"] = quarterlyData.Q4 * quarterWeights.Q4.Nov;
+  monthlyMetas["Dez"] = quarterlyData.Q4 * quarterWeights.Q4.Dez;
   
   return monthlyMetas;
 }
