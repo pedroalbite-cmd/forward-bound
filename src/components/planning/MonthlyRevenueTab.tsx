@@ -71,48 +71,31 @@ function calculateMonthlyValuesSmooth(
   return monthlyValues;
 }
 
-// For Oxy Hacker and Franquia, distribute units with gradual growth
-function calculateUnitBasedMonthlySmooth(
-  quarterlyUnits: { Q1: number; Q2: number; Q3: number; Q4: number },
-  unitValue: number
-) {
-  const monthlyValues: Record<string, number> = {};
-  
-  // Distribute units within each quarter with gradual growth and Feb/Dec reduction
-  const distributeQuarter = (quarterUnits: number, quarterKey: string): number[] => {
-    if (quarterKey === "Q1") {
-      // Jan normal, Feb reduced, Mar compensates
-      const jan = quarterUnits * 0.34;
-      const fev = quarterUnits * 0.26; // Reduced
-      const mar = quarterUnits - jan - fev;
-      return [jan, fev, mar];
-    } else if (quarterKey === "Q4") {
-      // Oct/Nov grow, Dec reduced
-      const out = quarterUnits * 0.35;
-      const nov = quarterUnits * 0.40;
-      const dez = quarterUnits - out - nov; // Reduced
-      return [out, nov, dez];
-    } else {
-      // Q2/Q3: gradual growth within quarter
-      const first = quarterUnits * 0.30;
-      const second = quarterUnits * 0.33;
-      const third = quarterUnits - first - second;
-      return [first, second, third];
-    }
-  };
-  
-  const q1Dist = distributeQuarter(quarterlyUnits.Q1, "Q1");
-  const q2Dist = distributeQuarter(quarterlyUnits.Q2, "Q2");
-  const q3Dist = distributeQuarter(quarterlyUnits.Q3, "Q3");
-  const q4Dist = distributeQuarter(quarterlyUnits.Q4, "Q4");
-  
-  const allDist = [...q1Dist, ...q2Dist, ...q3Dist, ...q4Dist];
-  
-  months.forEach((month, index) => {
-    monthlyValues[month] = allDist[index] * unitValue;
+// Oxy Hacker: distribuição por unidades inteiras (100 unidades x R$ 54.000)
+const oxyHackerUnits: Record<string, number> = {
+  Jan: 1, Fev: 2, Mar: 2,     // Q1 = 5 unidades
+  Abr: 5, Mai: 5, Jun: 5,     // Q2 = 15 unidades
+  Jul: 10, Ago: 10, Set: 10,  // Q3 = 30 unidades
+  Out: 15, Nov: 18, Dez: 17,  // Q4 = 50 unidades
+};
+const OXY_HACKER_TICKET = 54000;
+
+// Franquia: distribuição por unidades inteiras (20 unidades x R$ 140.000)
+const franquiaUnits: Record<string, number> = {
+  Jan: 0, Fev: 1, Mar: 1,     // Q1 = 2 unidades
+  Abr: 1, Mai: 1, Jun: 1,     // Q2 = 3 unidades
+  Jul: 2, Ago: 2, Set: 2,     // Q3 = 6 unidades
+  Out: 3, Nov: 3, Dez: 3,     // Q4 = 9 unidades
+};
+const FRANQUIA_TICKET = 140000;
+
+// Calcula faturamento mensal a partir das unidades
+function calculateFromUnits(units: Record<string, number>, ticketValue: number): Record<string, number> {
+  const result: Record<string, number> = {};
+  months.forEach(month => {
+    result[month] = units[month] * ticketValue;
   });
-  
-  return monthlyValues;
+  return result;
 }
 
 // Calculate all BU monthly values with smooth distribution
@@ -122,17 +105,11 @@ const modeloAtualMonthly = calculateMonthlyValuesSmooth(quarterlyTotals.modeloAt
 // O2 TAX: proportional distribution based on quarterly growth
 const o2TaxMonthly = calculateMonthlyValuesSmooth(quarterlyTotals.o2Tax, 120000);
 
-// Oxy Hacker: unit-based with gradual growth
-const oxyHackerMonthly = calculateUnitBasedMonthlySmooth(
-  { Q1: 5, Q2: 15, Q3: 30, Q4: 50 },
-  54000
-);
+// Oxy Hacker: unidades inteiras x ticket
+const oxyHackerMonthly = calculateFromUnits(oxyHackerUnits, OXY_HACKER_TICKET);
 
-// Franquia: unit-based with gradual growth
-const franquiaMonthly = calculateUnitBasedMonthlySmooth(
-  { Q1: 2, Q2: 3, Q3: 6, Q4: 9 },
-  140000
-);
+// Franquia: unidades inteiras x ticket
+const franquiaMonthly = calculateFromUnits(franquiaUnits, FRANQUIA_TICKET);
 
 // Build chart data
 const chartData = months.map(month => ({
