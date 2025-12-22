@@ -78,6 +78,13 @@ const franchiseGoals = [
   { quarter: "Q4", units: 9 },
 ];
 
+const o2TaxGoals = [
+  { quarter: "Q1", value: null },
+  { quarter: "Q2", value: null },
+  { quarter: "Q3", value: null },
+  { quarter: "Q4", value: null },
+];
+
 const departmentGoals = [
   {
     name: "COMERCIAL",
@@ -135,6 +142,17 @@ const departmentGoals = [
       "Lançamento Podcast LUXA TALKS",
       "Evento presencial com os Oxy Hackers",
       "Funis automatizados performando O2 TAX, EXPANSÃO e CAAS/SAAS",
+    ],
+  },
+  {
+    name: "CX - CUSTOMER EXPERIENCE",
+    icon: Heart,
+    color: "primary",
+    goals: [
+      "Antecipar insatisfações",
+      "Garantir entrega do playbook",
+      "Organizar database CNPJ",
+      "Organizar database sócios e quem são (conhecer de verdade o cliente)",
     ],
   },
 ];
@@ -239,15 +257,15 @@ export function Goals2026Tab() {
       </Card>
 
       {/* Business Units */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Modelo Atual */}
-        <Card className="glass-card lg:col-span-1">
+        <Card className="glass-card">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-primary" />
               <CardTitle className="font-display">Modelo Atual</CardTitle>
             </div>
-            <p className="text-sm text-muted-foreground">CAAS, SAAS, Serviços Especializados e O2 TAX</p>
+            <p className="text-sm text-muted-foreground">CAAS, SAAS, Serviços Especializados</p>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -263,6 +281,31 @@ export function Goals2026Tab() {
               <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 mt-4">
                 <p className="text-sm text-muted-foreground">Total</p>
                 <p className="font-display font-bold text-2xl text-primary">{formatCurrency(22250000)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* O2 TAX */}
+        <Card className="glass-card">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-warning" />
+              <CardTitle className="font-display">O2 TAX</CardTitle>
+            </div>
+            <p className="text-sm text-muted-foreground">Valores a definir</p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {o2TaxGoals.map((goal, index) => (
+                <div key={goal.quarter} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                  <Badge variant="outline">{goal.quarter}</Badge>
+                  <p className="font-display font-bold text-muted-foreground">A definir</p>
+                </div>
+              ))}
+              <div className="p-4 rounded-lg bg-warning/10 border border-warning/20 mt-4">
+                <p className="text-sm text-muted-foreground">Total</p>
+                <p className="font-display font-bold text-2xl text-warning">A definir</p>
               </div>
             </div>
           </CardContent>
