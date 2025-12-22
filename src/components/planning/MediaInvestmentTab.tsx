@@ -286,13 +286,14 @@ function calculateReverseFunnel(
   netRevenueToSell: Record<string, number>,
   metrics: typeof funnelMetrics.modeloAtual,
   mrrComChurn: Record<string, number> | null = null,
-  useCpv: boolean = false
+  useCpv: boolean = false,
+  metasMensais: Record<string, number> | null = null // Metas fixas opcionais
 ): FunnelData[] {
   return months.map(month => {
     const faturamentoVender = netRevenueToSell[month];
     const mrrBaseAtual = mrrComChurn ? mrrComChurn[month] : 0;
-    // Meta = MRR Base + A Vender
-    const faturamentoMeta = mrrBaseAtual + faturamentoVender;
+    // Se temos metas fixas, usa elas; senão calcula MRR + A Vender
+    const faturamentoMeta = metasMensais ? metasMensais[month] : (mrrBaseAtual + faturamentoVender);
     
     const vendas = faturamentoVender / metrics.ticketMedio;
     const propostas = vendas / metrics.propToVenda;
@@ -518,12 +519,12 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBas
 
 export function MediaInvestmentTab() {
   // Calculate funnel data for each BU
-  // Modelo Atual usa MRR base com churn e CPV para investimento
-  const modeloAtualFunnel = calculateReverseFunnel(modeloAtualNetToSell, funnelMetrics.modeloAtual, mrrAposChurn, true);
+  // Modelo Atual usa MRR base com churn, CPV para investimento, e METAS FIXAS (R$ 22.250.000)
+  const modeloAtualFunnel = calculateReverseFunnel(modeloAtualNetToSell, funnelMetrics.modeloAtual, mrrAposChurn, true, metasMensaisModeloAtual);
   // Outras BUs não têm MRR base, usam CAC - passam o próprio faturamento como "a vender"
-  const o2TaxFunnel = calculateReverseFunnel(o2TaxMonthly, funnelMetrics.o2Tax, null, false);
-  const oxyHackerFunnel = calculateReverseFunnel(oxyHackerMonthly, funnelMetrics.oxyHacker, null, false);
-  const franquiaFunnel = calculateReverseFunnel(franquiaMonthly, funnelMetrics.franquia, null, false);
+  const o2TaxFunnel = calculateReverseFunnel(o2TaxMonthly, funnelMetrics.o2Tax, null, false, null);
+  const oxyHackerFunnel = calculateReverseFunnel(oxyHackerMonthly, funnelMetrics.oxyHacker, null, false, null);
+  const franquiaFunnel = calculateReverseFunnel(franquiaMonthly, funnelMetrics.franquia, null, false, null);
 
   // Calculate totals
   const totalInvestimento = 
