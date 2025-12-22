@@ -2,7 +2,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Context2025Tab } from "@/components/planning/Context2025Tab";
 import { Goals2026Tab } from "@/components/planning/Goals2026Tab";
 import { MonthlyRevenueTab } from "@/components/planning/MonthlyRevenueTab";
-import { Calendar, BarChart3, LineChart } from "lucide-react";
+import { MediaInvestmentTab } from "@/components/planning/MediaInvestmentTab";
+import { Calendar, BarChart3, LineChart, Megaphone } from "lucide-react";
 
 export default function Planning2026() {
   return (
@@ -19,7 +20,7 @@ export default function Planning2026() {
       {/* Main Content */}
       <main className="container py-8">
         <Tabs defaultValue="context" className="w-full">
-          <TabsList className="grid w-full max-w-2xl grid-cols-3 mb-8">
+          <TabsList className="grid w-full max-w-3xl grid-cols-4 mb-8">
             <TabsTrigger value="context" className="gap-2">
               <BarChart3 className="h-4 w-4" />
               Contexto 2025
@@ -31,6 +32,10 @@ export default function Planning2026() {
             <TabsTrigger value="monthly" className="gap-2">
               <LineChart className="h-4 w-4" />
               Faturamento Mensal
+            </TabsTrigger>
+            <TabsTrigger value="media" className="gap-2">
+              <Megaphone className="h-4 w-4" />
+              Investimento Mídia
             </TabsTrigger>
           </TabsList>
 
@@ -44,6 +49,10 @@ export default function Planning2026() {
 
           <TabsContent value="monthly" className="mt-0">
             <MonthlyRevenueTab />
+          </TabsContent>
+
+          <TabsContent value="media" className="mt-0">
+            <MediaInvestmentTab />
           </TabsContent>
         </Tabs>
       </main>
