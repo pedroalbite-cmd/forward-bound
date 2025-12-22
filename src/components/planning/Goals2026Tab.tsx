@@ -79,10 +79,10 @@ const franchiseGoals = [
 ];
 
 const o2TaxGoals = [
-  { quarter: "Q1", value: null },
-  { quarter: "Q2", value: null },
-  { quarter: "Q3", value: null },
-  { quarter: "Q4", value: null },
+  { quarter: "Q1", value: 412224, average: 137408 },
+  { quarter: "Q2", value: 587220.48, average: 195740.16 },
+  { quarter: "Q3", value: 781590.46, average: 260530.15 },
+  { quarter: "Q4", value: 1040296.90, average: 346765.63 },
 ];
 
 const departmentGoals = [
@@ -293,19 +293,22 @@ export function Goals2026Tab() {
               <DollarSign className="h-5 w-5 text-warning" />
               <CardTitle className="font-display">O2 TAX</CardTitle>
             </div>
-            <p className="text-sm text-muted-foreground">Valores a definir</p>
+            <p className="text-sm text-muted-foreground">Recuperação tributária</p>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {o2TaxGoals.map((goal, index) => (
-                <div key={goal.quarter} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                  <Badge variant="outline">{goal.quarter}</Badge>
-                  <p className="font-display font-bold text-muted-foreground">A definir</p>
+                <div key={goal.quarter} className="flex items-center justify-between p-3 rounded-lg bg-muted/50" style={{ animationDelay: `${index * 50}ms` }}>
+                  <div>
+                    <Badge variant="outline" className="mb-1">{goal.quarter}</Badge>
+                    <p className="font-display font-bold text-lg">{formatCurrency(goal.value)}</p>
+                    <p className="text-xs text-muted-foreground">média {formatCurrency(goal.average)}/mês</p>
+                  </div>
                 </div>
               ))}
               <div className="p-4 rounded-lg bg-warning/10 border border-warning/20 mt-4">
                 <p className="text-sm text-muted-foreground">Total</p>
-                <p className="font-display font-bold text-2xl text-warning">A definir</p>
+                <p className="font-display font-bold text-2xl text-warning">{formatCurrency(2821331.84)}</p>
               </div>
             </div>
           </CardContent>
