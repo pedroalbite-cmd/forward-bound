@@ -11,6 +11,9 @@ const MRR_BASE = 700000;
 // Churn mensal de 6%
 const CHURN_MENSAL = 0.06;
 
+// Retenção de vendas: 25% das vendas do mês anterior permanecem no MRR
+const RETENCAO_VENDAS = 0.25;
+
 // Ticket médio ajustado
 const TICKET_MEDIO = 17000;
 
@@ -163,39 +166,61 @@ const o2TaxMonthly = calculateMonthlyValuesSmooth(quarterlyTotals.o2Tax, 120000)
 const oxyHackerMonthly = calculateFromUnits(oxyHackerUnits, 54000);
 const franquiaMonthly = calculateFromUnits(franquiaUnits, 140000);
 
-// Calcula MRR com churn mensal de 6%
-function calculateMrrWithChurn(mrrInicial: number, churnRate: number): Record<string, number> {
-  const result: Record<string, number> = {};
+// Calcula MRR dinâmico considerando:
+// 1. Churn mensal de 6% sobre MRR base
+// 2. 25% das vendas do mês anterior são adicionadas ao MRR base
+function calculateMrrDynamicWithRetention(
+  mrrInicial: number, 
+  churnRate: number, 
+  retencaoRate: number,
+  monthlyRevenue: Record<string, number>,
+  ticketMedio: number
+): { mrrPorMes: Record<string, number>; vendasPorMes: Record<string, number>; revenueToSell: Record<string, number> } {
+  const mrrPorMes: Record<string, number> = {};
+  const vendasPorMes: Record<string, number> = {};
+  const revenueToSell: Record<string, number> = {};
+  
   let mrrAtual = mrrInicial;
+  let vendasMesAnterior = 0;
   
-  months.forEach(month => {
-    // Aplicar churn ANTES do mês (o MRR decai mês a mês)
+  months.forEach((month, index) => {
+    // 1. Aplica churn sobre o MRR base atual
     mrrAtual = mrrAtual * (1 - churnRate);
-    result[month] = mrrAtual;
+    
+    // 2. Adiciona 25% das vendas do mês anterior ao MRR
+    const retencaoDoMesAnterior = vendasMesAnterior * ticketMedio * retencaoRate;
+    mrrAtual = mrrAtual + retencaoDoMesAnterior;
+    
+    // Guarda o MRR do mês
+    mrrPorMes[month] = mrrAtual;
+    
+    // 3. Calcula quanto precisa vender (meta - MRR atual)
+    const aVender = Math.max(0, monthlyRevenue[month] - mrrAtual);
+    revenueToSell[month] = aVender;
+    
+    // 4. Calcula vendas do mês atual (para usar no próximo mês)
+    const vendasDoMes = aVender / ticketMedio;
+    vendasPorMes[month] = vendasDoMes;
+    vendasMesAnterior = vendasDoMes;
   });
   
-  return result;
+  return { mrrPorMes, vendasPorMes, revenueToSell };
 }
 
-// MRR após churn para cada mês
-const mrrAposChurn = calculateMrrWithChurn(MRR_BASE, CHURN_MENSAL);
+// Calcula MRR dinâmico com retenção de vendas
+const mrrDynamic = calculateMrrDynamicWithRetention(
+  MRR_BASE, 
+  CHURN_MENSAL, 
+  RETENCAO_VENDAS,
+  modeloAtualMonthly,
+  TICKET_MEDIO
+);
 
-// Calcula receita líquida a vender (descontando MRR após churn)
-function calculateNetRevenueToSell(
-  monthlyRevenue: Record<string, number>, 
-  mrrComChurn: Record<string, number>
-): Record<string, number> {
-  const result: Record<string, number> = {};
-  months.forEach(month => {
-    // Precisa vender: meta - MRR restante após churn
-    const difference = monthlyRevenue[month] - mrrComChurn[month];
-    result[month] = Math.max(0, difference);
-  });
-  return result;
-}
+// MRR após churn + retenção para cada mês
+const mrrAposChurn = mrrDynamic.mrrPorMes;
 
-// Receita líquida a vender para Modelo Atual (desconta MRR com churn)
-const modeloAtualNetToSell = calculateNetRevenueToSell(modeloAtualMonthly, mrrAposChurn);
+// Receita líquida a vender para Modelo Atual
+const modeloAtualNetToSell = mrrDynamic.revenueToSell;
 
 // Reverse funnel calculation - usando CPV (custo por venda) como base de investimento
 interface FunnelData {
@@ -335,18 +360,25 @@ function BUInvestmentTable({ title, icon, funnelData, color, metrics, showMrrBas
                 Churn: {(CHURN_MENSAL * 100).toFixed(0)}%/mês
               </Badge>
             )}
+            {showMrrBase && (
+              <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/30">
+                Retenção: {(RETENCAO_VENDAS * 100).toFixed(0)}%
+              </Badge>
+            )}
           </div>
         </div>
         {showMrrBase && (
           <div className="mt-2 flex flex-col gap-2 text-sm text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
             <div className="flex items-center gap-2">
               <Info className="h-4 w-4" />
-              <span>MRR Base Inicial: {formatCurrency(mrrBase)} — com churn de {(CHURN_MENSAL * 100).toFixed(0)}%/mês, decai ao longo do ano</span>
+              <span>MRR Base Inicial: {formatCurrency(mrrBase)} — Churn {(CHURN_MENSAL * 100).toFixed(0)}%/mês + Retenção {(RETENCAO_VENDAS * 100).toFixed(0)}% das vendas</span>
             </div>
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-destructive">MRR Final (Dez): {formatCurrency(mrrAposChurn["Dez"])}</span>
+              <span className="text-destructive">Churn: -{(CHURN_MENSAL * 100).toFixed(0)}%/mês sobre MRR</span>
               <span>•</span>
-              <span>Investimento calculado com CPV de {formatCurrency(indicators2025.cpv)}</span>
+              <span className="text-blue-600">Retenção: +{(RETENCAO_VENDAS * 100).toFixed(0)}% das vendas anteriores</span>
+              <span>•</span>
+              <span>MRR Final (Dez): {formatCurrency(mrrAposChurn["Dez"])}</span>
             </div>
           </div>
         )}
