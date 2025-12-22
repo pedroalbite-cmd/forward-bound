@@ -5,8 +5,10 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3, Info } from "lucide-react";
 
-// MRR Base - receita recorrente já existente
-const MRR_BASE = 700000;
+// MRR Base - ajustado para que Janeiro tenha R$ 400k a vender
+// Meta Jan ≈ R$ 1.21M, então MRR após churn deve ser ~R$ 810k
+// Com churn de 6%, MRR inicial = 810k / 0.94 ≈ 862k
+const MRR_BASE = 862000;
 
 // Churn mensal de 6%
 const CHURN_MENSAL = 0.06;
