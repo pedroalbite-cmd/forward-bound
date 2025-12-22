@@ -1020,6 +1020,131 @@ export function MediaInvestmentTab() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Investment vs Return Chart with Temporal Shift */}
+        <Card className="glass-card mb-8">
+          <CardHeader>
+            <CardTitle className="font-display flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              Investimento vs Retorno (Deslocamento Temporal)
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              O investimento de cada mês gera retorno no mês seguinte. Ex: Investimento de Jan gera vendas em Fev.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={chartConfig} className="h-[350px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart 
+                  data={months.map((month, index) => {
+                    const investimento = modeloAtualFunnel[index]?.investimento || 0;
+                    // Retorno é o faturamento a vender do mês seguinte (que foi gerado pelo investimento deste mês)
+                    const retornoMesSeguinte = index < months.length - 1 
+                      ? modeloAtualFunnel[index + 1]?.faturamentoVender || 0
+                      : modeloAtualFunnel[index]?.faturamentoVender || 0;
+                    const roi = investimento > 0 ? retornoMesSeguinte / investimento : 0;
+                    
+                    return {
+                      month,
+                      investimento,
+                      retorno: retornoMesSeguinte,
+                      roi: roi.toFixed(2),
+                    };
+                  })} 
+                  margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="colorInvestimento" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--destructive))" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="hsl(var(--destructive))" stopOpacity={0.1}/>
+                    </linearGradient>
+                    <linearGradient id="colorRetorno" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="hsl(var(--success))" stopOpacity={0.1}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="month" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                  <YAxis 
+                    tickFormatter={(value) => formatCompact(value)} 
+                    className="text-xs" 
+                    tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                    width={80}
+                  />
+                  <ChartTooltip 
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      return (
+                        <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+                          <p className="font-semibold mb-2">{label}</p>
+                          <p className="text-sm text-destructive">
+                            Investimento: {formatCurrency(payload[0]?.value as number)}
+                          </p>
+                          <p className="text-sm text-emerald-600">
+                            Retorno (mês seguinte): {formatCurrency(payload[1]?.value as number)}
+                          </p>
+                          <p className="text-sm text-primary font-semibold mt-1">
+                            ROI: {payload[0]?.payload?.roi}x
+                          </p>
+                        </div>
+                      );
+                    }} 
+                  />
+                  <Legend />
+                  <Area 
+                    type="monotone" 
+                    dataKey="investimento" 
+                    stroke="hsl(var(--destructive))" 
+                    fill="url(#colorInvestimento)" 
+                    name="Investimento (este mês)" 
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="retorno" 
+                    stroke="hsl(var(--success))" 
+                    fill="url(#colorRetorno)" 
+                    name="Retorno (mês seguinte)" 
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+            
+            {/* ROI Summary */}
+            <div className="mt-4 grid grid-cols-3 md:grid-cols-6 gap-2">
+              {months.slice(0, 6).map((month, index) => {
+                const investimento = modeloAtualFunnel[index]?.investimento || 0;
+                const retorno = index < months.length - 1 
+                  ? modeloAtualFunnel[index + 1]?.faturamentoVender || 0
+                  : modeloAtualFunnel[index]?.faturamentoVender || 0;
+                const roi = investimento > 0 ? retorno / investimento : 0;
+                
+                return (
+                  <div key={month} className="text-center p-2 bg-muted/30 rounded-lg">
+                    <p className="text-xs text-muted-foreground">{month}</p>
+                    <p className="text-sm font-bold text-primary">{roi.toFixed(1)}x</p>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-2 grid grid-cols-3 md:grid-cols-6 gap-2">
+              {months.slice(6).map((month, index) => {
+                const realIndex = index + 6;
+                const investimento = modeloAtualFunnel[realIndex]?.investimento || 0;
+                const retorno = realIndex < months.length - 1 
+                  ? modeloAtualFunnel[realIndex + 1]?.faturamentoVender || 0
+                  : modeloAtualFunnel[realIndex]?.faturamentoVender || 0;
+                const roi = investimento > 0 ? retorno / investimento : 0;
+                
+                return (
+                  <div key={month} className="text-center p-2 bg-muted/30 rounded-lg">
+                    <p className="text-xs text-muted-foreground">{month}</p>
+                    <p className="text-sm font-bold text-primary">{roi.toFixed(1)}x</p>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Funnel Metrics Comparison */}
