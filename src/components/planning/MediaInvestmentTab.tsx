@@ -169,15 +169,50 @@ const o2TaxMonthly = calculateMonthlyValuesSmooth(quarterlyTotals.o2Tax, 120000)
 const oxyHackerMonthly = calculateFromUnits(oxyHackerUnits, 54000);
 const franquiaMonthly = calculateFromUnits(franquiaUnits, 140000);
 
-// Calcula MRR dinâmico considerando:
-// 1. Valor a vender inicial fixo em Janeiro (R$ 400k)
-// 2. Churn mensal de 6% sobre MRR base
-// 3. 25% das vendas do mês anterior são adicionadas ao MRR base
-function calculateMrrDynamicWithRetention(
+// Distribui metas trimestrais em mensais proporcionalmente
+function distributeQuarterlyToMonthly(
+  quarterlyData: { Q1: number; Q2: number; Q3: number; Q4: number }
+): Record<string, number> {
+  const monthlyMetas: Record<string, number> = {};
+  
+  // Pesos relativos dentro de cada trimestre (crescimento proporcional)
+  const quarterWeights = {
+    Q1: { Jan: 0.30, Fev: 0.33, Mar: 0.37 }, // Crescimento dentro do Q1
+    Q2: { Abr: 0.30, Mai: 0.33, Jun: 0.37 },
+    Q3: { Jul: 0.30, Ago: 0.33, Set: 0.37 },
+    Q4: { Out: 0.33, Nov: 0.37, Dez: 0.30 }, // Dez um pouco menor por sazonalidade
+  };
+  
+  // Distribui Q1
+  monthlyMetas["Jan"] = quarterlyData.Q1 * quarterWeights.Q1.Jan;
+  monthlyMetas["Fev"] = quarterlyData.Q1 * quarterWeights.Q1.Fev;
+  monthlyMetas["Mar"] = quarterlyData.Q1 * quarterWeights.Q1.Mar;
+  
+  // Distribui Q2
+  monthlyMetas["Abr"] = quarterlyData.Q2 * quarterWeights.Q2.Abr;
+  monthlyMetas["Mai"] = quarterlyData.Q2 * quarterWeights.Q2.Mai;
+  monthlyMetas["Jun"] = quarterlyData.Q2 * quarterWeights.Q2.Jun;
+  
+  // Distribui Q3
+  monthlyMetas["Jul"] = quarterlyData.Q3 * quarterWeights.Q3.Jul;
+  monthlyMetas["Ago"] = quarterlyData.Q3 * quarterWeights.Q3.Ago;
+  monthlyMetas["Set"] = quarterlyData.Q3 * quarterWeights.Q3.Set;
+  
+  // Distribui Q4
+  monthlyMetas["Out"] = quarterlyData.Q4 * quarterWeights.Q4.Out;
+  monthlyMetas["Nov"] = quarterlyData.Q4 * quarterWeights.Q4.Nov;
+  monthlyMetas["Dez"] = quarterlyData.Q4 * quarterWeights.Q4.Dez;
+  
+  return monthlyMetas;
+}
+
+// Calcula MRR dinâmico e "A Vender" a partir das METAS FIXAS
+// A Vender = Meta do Mês - MRR Base do Mês
+function calculateMrrAndRevenueToSell(
   mrrInicial: number, 
   churnRate: number, 
   retencaoRate: number,
-  valorVenderInicial: number,
+  metasMensais: Record<string, number>,
   ticketMedio: number
 ): { mrrPorMes: Record<string, number>; vendasPorMes: Record<string, number>; revenueToSell: Record<string, number> } {
   const mrrPorMes: Record<string, number> = {};
@@ -200,17 +235,9 @@ function calculateMrrDynamicWithRetention(
     // Guarda o MRR do mês
     mrrPorMes[month] = mrrAtual;
     
-    // 3. Para Janeiro, usa o valor a vender inicial fixo; demais meses calculam normalmente
-    let aVender: number;
-    if (index === 0) {
-      // Janeiro: valor fixo de R$ 400k
-      aVender = valorVenderInicial;
-    } else {
-      // Demais meses: aumenta proporcionalmente (crescimento mensal)
-      // Base: valor inicial + crescimento de ~8% ao mês composto
-      const crescimentoMensal = 1.08;
-      aVender = valorVenderInicial * Math.pow(crescimentoMensal, index);
-    }
+    // 3. Calcula "A Vender" = Meta - MRR Base
+    const metaDoMes = metasMensais[month];
+    const aVender = Math.max(0, metaDoMes - mrrAtual);
     revenueToSell[month] = aVender;
     
     // 4. Calcula vendas do mês atual (para usar no próximo mês)
@@ -222,19 +249,22 @@ function calculateMrrDynamicWithRetention(
   return { mrrPorMes, vendasPorMes, revenueToSell };
 }
 
-// Calcula MRR dinâmico com retenção de vendas
-const mrrDynamic = calculateMrrDynamicWithRetention(
+// Distribui as metas trimestrais em mensais (fonte da verdade: R$ 22.250.000)
+const metasMensaisModeloAtual = distributeQuarterlyToMonthly(quarterlyTotals.modeloAtual);
+
+// Calcula MRR dinâmico e "A Vender" a partir das metas fixas
+const mrrDynamic = calculateMrrAndRevenueToSell(
   MRR_BASE, 
   CHURN_MENSAL, 
   RETENCAO_VENDAS,
-  VALOR_VENDER_INICIAL,
+  metasMensaisModeloAtual,
   TICKET_MEDIO
 );
 
 // MRR após churn + retenção para cada mês
 const mrrAposChurn = mrrDynamic.mrrPorMes;
 
-// Receita líquida a vender para Modelo Atual
+// Receita líquida a vender para Modelo Atual (derivada das metas)
 const modeloAtualNetToSell = mrrDynamic.revenueToSell;
 
 // Reverse funnel calculation - usando CPV (custo por venda) como base de investimento
