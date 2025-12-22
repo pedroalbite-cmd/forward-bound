@@ -22,51 +22,51 @@ const quarterMonths = {
 };
 
 // Calculate monthly values with smooth growth, respecting quarterly totals
-// Starting from initialValue, with Feb/Dec reduced (~75%), and gradual increase through the year
+// Starting from initialValue, with Feb/Dec slightly reduced, and gradual increase through the year
 function calculateMonthlyValuesSmooth(
   quarterlyData: { Q1: number; Q2: number; Q3: number; Q4: number },
   initialValue: number
 ) {
   const monthlyValues: Record<string, number> = {};
-  const yearlyTotal = quarterlyData.Q1 + quarterlyData.Q2 + quarterlyData.Q3 + quarterlyData.Q4;
   
-  // Define relative weights for smooth growth with seasonal adjustments
-  // Jan=base, Feb/Dec reduced, rest grows gradually
-  const rawWeights = {
-    Jan: initialValue,
-    Fev: initialValue * 0.91, // Reduced (about 75% of expected trend)
-    Mar: 0, // Will be calculated to complete Q1
-    Abr: 0, Mai: 0, Jun: 0, // Q2
-    Jul: 0, Ago: 0, Set: 0, // Q3
-    Out: 0, Nov: 0, Dez: 0, // Q4
-  };
+  // Q1: Distribute smoothly - Feb slightly reduced, growth spread evenly
+  // Jan: initialValue, Feb: +11%, Mar: +16% (smooth progression)
+  const q1Total = quarterlyData.Q1;
+  const jan = initialValue;
+  const fev = jan * 1.11; // Slight growth, but lower than pure trend would suggest
+  const mar = q1Total - jan - fev; // Completes Q1
   
-  // Calculate Mar to complete Q1
-  rawWeights.Mar = quarterlyData.Q1 - rawWeights.Jan - rawWeights.Fev;
+  // Q2: Continue gradual growth from Mar
+  const q2Total = quarterlyData.Q2;
+  const abr = mar * 0.95; // Slight dip at quarter start
+  const mai = abr * 1.08; // +8%
+  const jun = q2Total - abr - mai; // Completes Q2
   
-  // Calculate Q2 with gradual growth from Mar
-  const q2Avg = quarterlyData.Q2 / 3;
-  const marValue = rawWeights.Mar;
-  // Start Q2 slightly above Mar, grow gradually
-  rawWeights.Abr = marValue * 0.85; // Start Q2 a bit lower than Mar end
-  rawWeights.Mai = rawWeights.Abr * 1.07; // +7%
-  rawWeights.Jun = quarterlyData.Q2 - rawWeights.Abr - rawWeights.Mai; // Complete Q2
+  // Q3: Continue gradual growth
+  const q3Total = quarterlyData.Q3;
+  const jul = jun * 1.05; // +5%
+  const ago = jul * 1.10; // +10%
+  const set = q3Total - jul - ago; // Completes Q3
   
-  // Calculate Q3 with gradual growth
-  rawWeights.Jul = rawWeights.Jun * 1.08; // +8% from Jun
-  rawWeights.Ago = rawWeights.Jul * 1.11; // +11%
-  rawWeights.Set = quarterlyData.Q3 - rawWeights.Jul - rawWeights.Ago; // Complete Q3
+  // Q4: Growth continues, Dec slightly reduced
+  const q4Total = quarterlyData.Q4;
+  const out = set * 1.10; // +10%
+  const nov = out * 1.12; // +12%
+  const dez = q4Total - out - nov; // Reduced Dec (what remains)
   
-  // Calculate Q4 with gradual growth and reduced Dec
-  const q4Target = quarterlyData.Q4;
-  rawWeights.Out = rawWeights.Set * 1.12; // +12% from Set
-  rawWeights.Nov = rawWeights.Out * 1.15; // +15% 
-  rawWeights.Dez = q4Target - rawWeights.Out - rawWeights.Nov; // Reduced Dec
-  
-  // Assign values
-  months.forEach(month => {
-    monthlyValues[month] = rawWeights[month as keyof typeof rawWeights];
-  });
+  // Assign all values
+  monthlyValues.Jan = jan;
+  monthlyValues.Fev = fev;
+  monthlyValues.Mar = mar;
+  monthlyValues.Abr = abr;
+  monthlyValues.Mai = mai;
+  monthlyValues.Jun = jun;
+  monthlyValues.Jul = jul;
+  monthlyValues.Ago = ago;
+  monthlyValues.Set = set;
+  monthlyValues.Out = out;
+  monthlyValues.Nov = nov;
+  monthlyValues.Dez = dez;
   
   return monthlyValues;
 }
