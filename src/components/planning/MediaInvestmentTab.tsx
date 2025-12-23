@@ -190,6 +190,7 @@ interface FunnelMetrics {
   cpmql: number;
   cprr: number;
   cac: number;
+  cpv?: number;
   color: string;
   icon: React.ReactNode;
 }
@@ -532,6 +533,7 @@ export function MediaInvestmentTab() {
       cpmql: indicators2025.cpmql,
       cprr: indicators2025.cprr,
       cac: indicators2025.cac,
+      cpv: cpv,
       color: "hsl(var(--primary))",
       icon: <Building2 className="h-5 w-5 text-primary" />,
     },
@@ -1184,7 +1186,7 @@ export function MediaInvestmentTab() {
                     <TableHead className="text-center">Investimento</TableHead>
                     <TableHead className="text-center">% A Vender</TableHead>
                     <TableHead className="text-center">% Meta</TableHead>
-                    <TableHead className="text-center">CAC</TableHead>
+                    <TableHead className="text-center">CPV</TableHead>
                     <TableHead className="text-center">Lead→MQL</TableHead>
                     <TableHead className="text-center">MQL→RM</TableHead>
                     <TableHead className="text-center">RM→RR</TableHead>
@@ -1219,7 +1221,7 @@ export function MediaInvestmentTab() {
                         <TableCell className="text-center font-semibold text-primary">{formatCompact(totalInv)}</TableCell>
                         <TableCell className="text-center font-semibold text-amber-600">{pctAVender.toFixed(1)}%</TableCell>
                         <TableCell className="text-center font-semibold text-blue-600">{pctMeta.toFixed(1)}%</TableCell>
-                        <TableCell className="text-center">{formatCurrency(metrics.cac)}</TableCell>
+                        <TableCell className="text-center">{formatCurrency(metrics.cpv || metrics.cac)}</TableCell>
                         <TableCell className="text-center">{(metrics.leadToMql * 100).toFixed(0)}%</TableCell>
                         <TableCell className="text-center">{(metrics.mqlToRm * 100).toFixed(0)}%</TableCell>
                         <TableCell className="text-center">{(metrics.rmToRr * 100).toFixed(0)}%</TableCell>
