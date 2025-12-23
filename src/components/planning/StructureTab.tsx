@@ -44,7 +44,9 @@ import {
   HeartHandshake,
   Pencil,
   DollarSign,
-  Calendar
+  Calendar,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 // ============ TYPES ============
@@ -392,29 +394,29 @@ const allBUsHirings = calculateAllBUsHiring();
 const initialMarketingTeam: TeamMember[] = [
   {
     role: "Head de Marketing",
-    name: "João Silva",
+    name: "Maria Eduarda",
     responsibilities: ["Estratégia geral", "Gestão do time", "Budget", "Alinhamento com vendas"],
     status: "contratado",
     person: "Contratado",
-    salary: 0,
+    salary: 7500,
     area: "marketing"
   },
   {
     role: "Social Media",
-    name: "Maria Santos",
+    name: "Rafaela Mendes",
     responsibilities: ["Calendário de posts", "Engajamento", "Comunidade", "Tendências"],
     status: "contratado",
     person: "Contratado",
-    salary: 0,
+    salary: 4500,
     area: "marketing"
   },
   {
     role: "Designer",
-    name: "Pedro Costa",
+    name: "Daniel Fernandes",
     responsibilities: ["Criativos para ads", "Social media", "Materiais ricos", "Branding"],
     status: "contratado",
     person: "Contratado",
-    salary: 0,
+    salary: 5000,
     area: "marketing"
   }
 ];
@@ -422,31 +424,31 @@ const initialMarketingTeam: TeamMember[] = [
 const initialSalesTeam: TeamMember[] = [
   {
     role: "Head Comercial",
-    name: "Ana Oliveira",
+    name: "Daniel Trindade",
     responsibilities: ["Estratégia de vendas", "Gestão do pipeline", "Metas", "Treinamento"],
     status: "contratado",
     person: "Contratado",
-    salary: 0,
+    salary: 7500,
     area: "vendas",
     bu: "modeloAtual"
   },
   {
     role: "SDR (Sales Development)",
-    name: "Carlos Souza",
+    name: "Amanda",
     responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up", "CRM"],
     status: "contratado",
     quantity: 1,
-    salary: 0,
+    salary: 2500,
     area: "vendas",
     bu: "modeloAtual"
   },
   {
     role: "SDR (Sales Development)",
-    name: "Fernanda Lima",
+    name: "Carol",
     responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up", "CRM"],
     status: "contratado",
     quantity: 1,
-    salary: 0,
+    salary: 2500,
     area: "vendas",
     bu: "modeloAtual"
   },
@@ -963,6 +965,20 @@ interface SalaryTableProps {
 }
 
 const SalaryTable = ({ allTeamData, onEdit, selectedBU }: SalaryTableProps) => {
+  const [visibleSalaries, setVisibleSalaries] = useState<Set<string>>(new Set());
+
+  const toggleSalaryVisibility = (memberId: string) => {
+    setVisibleSalaries(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(memberId)) {
+        newSet.delete(memberId);
+      } else {
+        newSet.add(memberId);
+      }
+      return newSet;
+    });
+  };
+
   // Filtra dados com base na BU selecionada
   const filteredData = useMemo(() => {
     if (selectedBU === "all") return allTeamData;
@@ -972,12 +988,18 @@ const SalaryTable = ({ allTeamData, onEdit, selectedBU }: SalaryTableProps) => {
       m.area !== "vendas" // Mantém Marketing e Expansão
     );
   }, [allTeamData, selectedBU]);
+
   const contratados = filteredData.filter(m => m.status === "contratado");
   const aContratar = filteredData.filter(m => m.status === "a contratar");
   
   const totalContratados = contratados.reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
   const totalAContratar = aContratar.reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
   const totalGeral = totalContratados + totalAContratar;
+
+  // Totais por área
+  const totalMarketing = allTeamData.filter(m => m.area === "marketing").reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
+  const totalVendas = allTeamData.filter(m => m.area === "vendas").reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
+  const totalExpansao = allTeamData.filter(m => m.area === "expansao").reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
 
   return (
     <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
@@ -995,6 +1017,43 @@ const SalaryTable = ({ allTeamData, onEdit, selectedBU }: SalaryTableProps) => {
         </div>
       </CardHeader>
       <CardContent>
+        {/* Totais por área */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Card className="bg-green-500/10 border-green-500/30">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Marketing</p>
+                <p className="text-xl font-bold text-green-500">
+                  {formatCurrency(totalMarketing)}
+                </p>
+              </div>
+              <Megaphone className="h-8 w-8 text-green-500/50" />
+            </CardContent>
+          </Card>
+          <Card className="bg-blue-500/10 border-blue-500/30">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Vendas</p>
+                <p className="text-xl font-bold text-blue-500">
+                  {formatCurrency(totalVendas)}
+                </p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-blue-500/50" />
+            </CardContent>
+          </Card>
+          <Card className="bg-purple-500/10 border-purple-500/30">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Expansão</p>
+                <p className="text-xl font-bold text-purple-500">
+                  {formatCurrency(totalExpansao)}
+                </p>
+              </div>
+              <Building2 className="h-8 w-8 text-purple-500/50" />
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="rounded-lg border border-border/50 overflow-hidden">
           <Table>
             <TableHeader>
@@ -1009,47 +1068,66 @@ const SalaryTable = ({ allTeamData, onEdit, selectedBU }: SalaryTableProps) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredData.map((member, index) => (
-                <TableRow key={`${member.area}-${member.role}-${index}`} className="hover:bg-muted/20">
-                  <TableCell>
-                    <Badge 
-                      variant="outline"
-                      className={`text-xs ${
-                        member.status === "contratado" 
-                          ? "bg-green-500/10 text-green-500 border-green-500/30" 
-                          : "bg-amber-500/10 text-amber-500 border-amber-500/30"
-                      }`}
+              {filteredData.map((member, index) => {
+                const memberId = `${member.area}-${member.role}-${index}`;
+                const isVisible = visibleSalaries.has(memberId);
+                return (
+                  <TableRow key={memberId} className="hover:bg-muted/20">
+                    <TableCell>
+                      <Badge 
+                        variant="outline"
+                        className={`text-xs ${
+                          member.status === "contratado" 
+                            ? "bg-green-500/10 text-green-500 border-green-500/30" 
+                            : "bg-amber-500/10 text-amber-500 border-amber-500/30"
+                        }`}
+                      >
+                        {member.status === "contratado" ? "Contratado" : "A contratar"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`font-medium ${getAreaColor(member.area)}`}>
+                        {getAreaLabel(member.area)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="font-medium">{member.role}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {member.name || member.person || "—"}
+                    </TableCell>
+                    <TableCell 
+                      className="text-right font-mono cursor-pointer hover:bg-muted/30 transition-colors"
+                      onClick={() => toggleSalaryVisibility(memberId)}
                     >
-                      {member.status === "contratado" ? "Contratado" : "A contratar"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <span className={`font-medium ${getAreaColor(member.area)}`}>
-                      {getAreaLabel(member.area)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="font-medium">{member.role}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {member.name || member.person || "—"}
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    {formatCurrency(member.salary)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono font-medium">
-                    {formatCurrency(member.salary * (member.quantity || 1))}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onEdit(member, index)}
-                      className="h-8 w-8 p-0"
+                      {isVisible ? (
+                        <span className="flex items-center justify-end gap-1">
+                          {formatCurrency(member.salary)}
+                          <EyeOff className="h-3 w-3 text-muted-foreground" />
+                        </span>
+                      ) : (
+                        <span className="flex items-center justify-end gap-1 text-muted-foreground">
+                          <Eye className="h-4 w-4" /> Clique para ver
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell 
+                      className="text-right font-mono font-medium cursor-pointer hover:bg-muted/30 transition-colors"
+                      onClick={() => toggleSalaryVisibility(memberId)}
                     >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      {isVisible ? formatCurrency(member.salary * (member.quantity || 1)) : "••••••"}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onEdit(member, index)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
             <TableFooter>
               <TableRow className="bg-green-500/5">
