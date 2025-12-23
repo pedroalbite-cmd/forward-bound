@@ -483,7 +483,7 @@ const initialSalesTeam: TeamMember[] = [
     responsibilities: ["Gestão de impostos", "Análise tributária", "Consultoria fiscal", "Compliance"],
     status: "contratado",
     person: "Contratado",
-    salary: 12000,
+    salary: 6000,
     area: "vendas",
     bu: "o2Tax"
   },
