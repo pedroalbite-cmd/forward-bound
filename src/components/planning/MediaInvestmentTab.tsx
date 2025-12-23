@@ -618,17 +618,17 @@ export function MediaInvestmentTab() {
   );
   
   const o2TaxFunnel = useMemo(() => 
-    calculateReverseFunnel(o2TaxMonthly, funnelMetrics.o2Tax, null, false, null, funnelMetrics.o2Tax.cpv, 10000),
+    calculateReverseFunnel(o2TaxMonthly, funnelMetrics.o2Tax, null, true, null, funnelMetrics.o2Tax.cpv, 10000),
     [o2TaxMonthly, funnelMetrics.o2Tax]
   );
   
   const oxyHackerFunnel = useMemo(() => 
-    calculateReverseFunnel(oxyHackerMonthly, funnelMetrics.oxyHacker, null, false, null, funnelMetrics.oxyHacker.cpv, 10000),
+    calculateReverseFunnel(oxyHackerMonthly, funnelMetrics.oxyHacker, null, true, null, funnelMetrics.oxyHacker.cpv, 10000),
     [oxyHackerMonthly, funnelMetrics.oxyHacker]
   );
   
   const franquiaFunnel = useMemo(() => 
-    calculateReverseFunnel(franquiaMonthly, funnelMetrics.franquia, null, false, null, funnelMetrics.franquia.cpv, 10000),
+    calculateReverseFunnel(franquiaMonthly, funnelMetrics.franquia, null, true, null, funnelMetrics.franquia.cpv, 10000),
     [franquiaMonthly, funnelMetrics.franquia]
   );
 
