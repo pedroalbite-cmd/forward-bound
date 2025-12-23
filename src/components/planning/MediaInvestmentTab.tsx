@@ -525,7 +525,8 @@ export function MediaInvestmentTab() {
     },
     o2Tax: {
       name: "O2 TAX",
-      ticketMedio: 50000,
+      ticketMedio: 15000,
+      cpv: 2500,
       leadToMql: 0.35,
       mqlToRm: 0.45,
       rmToRr: 0.65,
@@ -540,6 +541,7 @@ export function MediaInvestmentTab() {
     oxyHacker: {
       name: "Oxy Hacker",
       ticketMedio: 54000,
+      cpv: 5000,
       leadToMql: 0.25,
       mqlToRm: 0.40,
       rmToRr: 0.60,
@@ -554,6 +556,7 @@ export function MediaInvestmentTab() {
     franquia: {
       name: "Franquia",
       ticketMedio: 140000,
+      cpv: 12000,
       leadToMql: 0.20,
       mqlToRm: 0.35,
       rmToRr: 0.55,
@@ -615,17 +618,17 @@ export function MediaInvestmentTab() {
   );
   
   const o2TaxFunnel = useMemo(() => 
-    calculateReverseFunnel(o2TaxMonthly, funnelMetrics.o2Tax, null, false, null, indicators2025.cpv, 10000),
+    calculateReverseFunnel(o2TaxMonthly, funnelMetrics.o2Tax, null, false, null, funnelMetrics.o2Tax.cpv, 10000),
     [o2TaxMonthly, funnelMetrics.o2Tax]
   );
   
   const oxyHackerFunnel = useMemo(() => 
-    calculateReverseFunnel(oxyHackerMonthly, funnelMetrics.oxyHacker, null, false, null, indicators2025.cpv, 10000),
+    calculateReverseFunnel(oxyHackerMonthly, funnelMetrics.oxyHacker, null, false, null, funnelMetrics.oxyHacker.cpv, 10000),
     [oxyHackerMonthly, funnelMetrics.oxyHacker]
   );
   
   const franquiaFunnel = useMemo(() => 
-    calculateReverseFunnel(franquiaMonthly, funnelMetrics.franquia, null, false, null, indicators2025.cpv, 10000),
+    calculateReverseFunnel(franquiaMonthly, funnelMetrics.franquia, null, false, null, funnelMetrics.franquia.cpv, 10000),
     [franquiaMonthly, funnelMetrics.franquia]
   );
 
