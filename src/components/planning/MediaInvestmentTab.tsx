@@ -200,8 +200,7 @@ function calculateReverseFunnel(
   mrrComChurn: Record<string, number> | null = null,
   useCpv: boolean = false,
   metasMensais: Record<string, number> | null = null,
-  cpvValue: number = indicators2025.cpv,
-  investimentoMinimo: number = 0
+  cpvValue: number = indicators2025.cpv
 ): FunnelData[] {
   let investimentoAnterior = 0;
   
@@ -221,8 +220,8 @@ function calculateReverseFunnel(
     // Calcula investimento baseado na fórmula original
     const investimentoCalculado = useCpv ? vendas * cpvValue : vendas * metrics.cac;
     
-    // Garante que o investimento nunca diminua E nunca seja menor que o mínimo
-    const investimento = Math.max(investimentoCalculado, investimentoAnterior, investimentoMinimo);
+    // Garante que o investimento nunca diminua (sempre crescente ou estável)
+    const investimento = Math.max(investimentoCalculado, investimentoAnterior);
     investimentoAnterior = investimento;
     
     return {
@@ -610,17 +609,17 @@ export function MediaInvestmentTab() {
   );
   
   const o2TaxFunnel = useMemo(() => 
-    calculateReverseFunnel(o2TaxMonthly, funnelMetrics.o2Tax, null, false, null, indicators2025.cpv, 10000),
+    calculateReverseFunnel(o2TaxMonthly, funnelMetrics.o2Tax, null, false, null),
     [o2TaxMonthly, funnelMetrics.o2Tax]
   );
   
   const oxyHackerFunnel = useMemo(() => 
-    calculateReverseFunnel(oxyHackerMonthly, funnelMetrics.oxyHacker, null, false, null, indicators2025.cpv, 10000),
+    calculateReverseFunnel(oxyHackerMonthly, funnelMetrics.oxyHacker, null, false, null),
     [oxyHackerMonthly, funnelMetrics.oxyHacker]
   );
   
   const franquiaFunnel = useMemo(() => 
-    calculateReverseFunnel(franquiaMonthly, funnelMetrics.franquia, null, false, null, indicators2025.cpv, 10000),
+    calculateReverseFunnel(franquiaMonthly, funnelMetrics.franquia, null, false, null),
     [franquiaMonthly, funnelMetrics.franquia]
   );
 
