@@ -707,7 +707,7 @@ export function MediaInvestmentTab() {
           </p>
           <div className="flex flex-wrap gap-4 mt-6">
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
-              Meta Anual: {formatCurrency(metaAnualTotal)}
+              Meta Anual: {formatCurrency(totalFaturamento)}
             </Badge>
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
               Investimento Total: {formatCurrency(totalInvestimento)}
