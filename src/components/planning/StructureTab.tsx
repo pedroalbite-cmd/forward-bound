@@ -1321,75 +1321,16 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
               </Card>
             </div>
             
-            {/* Gráfico 1 - Faturamento */}
-            <Card className="p-4 mb-6">
-              <h4 className="font-semibold text-sm mb-4 flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-amber-500" />
-                Evolução do Faturamento Mensal
-              </h4>
-              <div className="h-[200px] relative overflow-hidden">
-                <ChartContainer config={chartConfig}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={evolucaoData} margin={{ top: 10, right: 30, left: 20, bottom: 5 }}>
-                      <defs>
-                        <linearGradient id="faturamentoGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(45, 93%, 47%)" stopOpacity={0.4}/>
-                          <stop offset="95%" stopColor="hsl(45, 93%, 47%)" stopOpacity={0.05}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
-                      <XAxis 
-                        dataKey="month" 
-                        className="text-xs"
-                        tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                      />
-                      <YAxis 
-                        className="text-xs"
-                        tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                        tickFormatter={(value) => `R$ ${(value / 1000000).toFixed(1)}M`}
-                        domain={['dataMin - 500000', 'dataMax + 500000']}
-                      />
-                      <Tooltip 
-                        content={({ active, payload, label }) => {
-                          if (!active || !payload || !payload[0]) return null;
-                          return (
-                            <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
-                              <p className="font-semibold mb-2">{label}</p>
-                              <div className="flex items-center gap-2 text-sm">
-                                <div className="w-3 h-3 rounded-full bg-amber-500" />
-                                <span className="text-muted-foreground">Faturamento:</span>
-                                <span className="font-mono font-medium">
-                                  R$ {((payload[0].value as number) / 1000000).toFixed(2)}M
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        }}
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="faturamento" 
-                        stroke="hsl(45, 93%, 47%)" 
-                        strokeWidth={3}
-                        fill="url(#faturamentoGradient)"
-                        name="Faturamento"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </div>
-            </Card>
-            
-            {/* Gráfico 2 - Custos por Time */}
+            {/* Gráfico de evolução */}
             <Card className="p-4 mb-8">
               <h4 className="font-semibold text-sm mb-4 flex items-center gap-2">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                Custos por Time + % do Faturamento
+                <TrendingDown className="h-4 w-4 text-muted-foreground" />
+                Evolução Mensal: Custos vs Faturamento
               </h4>
-              <div className="h-[280px] relative overflow-hidden">
+              <div className="h-[350px] relative overflow-hidden">
                 <ChartContainer config={chartConfig}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={evolucaoData} margin={{ top: 10, right: 50, left: 20, bottom: 5 }}>
+                    <ComposedChart data={evolucaoData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
                       <XAxis 
                         dataKey="month" 
@@ -1400,14 +1341,14 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
                         yAxisId="left"
                         className="text-xs"
                         tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                        tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+                        tickFormatter={(value) => `R$ ${(value / 1000000).toFixed(1)}M`}
                       />
                       <YAxis 
                         yAxisId="right"
                         orientation="right"
                         className="text-xs"
                         tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                        tickFormatter={(value) => `${value.toFixed(1)}%`}
+                        tickFormatter={(value) => `${value.toFixed(0)}%`}
                         domain={[0, 'auto']}
                       />
                       <Tooltip 
@@ -1424,9 +1365,11 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
                                   />
                                   <span className="text-muted-foreground">{entry.name}:</span>
                                   <span className="font-mono font-medium">
-                                    {entry.dataKey === 'pctTotal'
-                                      ? `${(entry.value as number).toFixed(2)}%`
-                                      : `R$ ${((entry.value as number) / 1000).toFixed(0)}k`
+                                    {entry.dataKey === 'faturamento' 
+                                      ? `R$ ${(entry.value / 1000000).toFixed(2)}M`
+                                      : entry.dataKey.startsWith('pct')
+                                        ? `${entry.value.toFixed(1)}%`
+                                        : `R$ ${(entry.value / 1000).toFixed(0)}k`
                                     }
                                   </span>
                                 </div>
@@ -1445,7 +1388,6 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
                         stackId="1" 
                         fill="hsl(142, 76%, 36%)" 
                         stroke="hsl(142, 76%, 36%)"
-                        fillOpacity={0.7}
                         name="Marketing"
                       />
                       <Area 
@@ -1455,7 +1397,6 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
                         stackId="1" 
                         fill="hsl(217, 91%, 60%)" 
                         stroke="hsl(217, 91%, 60%)"
-                        fillOpacity={0.7}
                         name="Vendas"
                       />
                       <Area 
@@ -1465,20 +1406,18 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
                         stackId="1" 
                         fill="hsl(270, 60%, 50%)" 
                         stroke="hsl(270, 60%, 50%)"
-                        fillOpacity={0.7}
                         name="Expansão"
                       />
                       
-                      {/* Linha de % do faturamento */}
+                      {/* Linha de faturamento */}
                       <Line 
-                        yAxisId="right"
+                        yAxisId="left"
                         type="monotone" 
-                        dataKey="pctTotal" 
-                        stroke="hsl(0, 84%, 60%)" 
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        dot={{ fill: "hsl(0, 84%, 60%)", strokeWidth: 2, r: 4 }}
-                        name="% do Faturamento"
+                        dataKey="faturamento" 
+                        stroke="hsl(45, 93%, 47%)" 
+                        strokeWidth={3}
+                        dot={{ fill: "hsl(45, 93%, 47%)", strokeWidth: 2 }}
+                        name="Faturamento"
                       />
                     </ComposedChart>
                   </ResponsiveContainer>
