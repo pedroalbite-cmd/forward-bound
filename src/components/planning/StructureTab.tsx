@@ -732,11 +732,7 @@ const ToolCategoryCard = ({ category }: { category: typeof toolCategories[0] }) 
   );
 };
 
-// ============ HIRING TIMELINE COMPONENT ============
-
-interface HiringTimelineProps {
-  allTeamData: TeamMember[];
-}
+// ============ BU FILTER HELPERS ============
 
 const getBuLabel = (bu?: string) => {
   switch (bu) {
@@ -758,8 +754,14 @@ const getBuColor = (bu?: string) => {
   }
 };
 
-const HiringTimeline = ({ allTeamData }: HiringTimelineProps) => {
-  const [selectedBU, setSelectedBU] = useState<string>("all");
+// ============ HIRING TIMELINE COMPONENT ============
+
+interface HiringTimelineProps {
+  allTeamData: TeamMember[];
+  selectedBU: string;
+}
+
+const HiringTimeline = ({ allTeamData, selectedBU }: HiringTimelineProps) => {
 
   // Filtra contratações por BU selecionada
   const filteredTeamData = useMemo(() => {
@@ -824,23 +826,9 @@ const HiringTimeline = ({ allTeamData }: HiringTimelineProps) => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Select value={selectedBU} onValueChange={setSelectedBU}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filtrar por BU" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas as BUs</SelectItem>
-                <SelectItem value="modeloAtual">Modelo Atual</SelectItem>
-                <SelectItem value="o2Tax">O2 TAX</SelectItem>
-                <SelectItem value="oxyHacker">Oxy Hacker</SelectItem>
-                <SelectItem value="franquia">Franquia</SelectItem>
-              </SelectContent>
-            </Select>
-            <Badge variant="outline" className="text-sm bg-primary/10 text-primary border-primary/30">
-              {totalHirings} contratações planejadas
-            </Badge>
-          </div>
+          <Badge variant="outline" className="text-sm bg-primary/10 text-primary border-primary/30">
+            {totalHirings} contratações planejadas
+          </Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -961,11 +949,21 @@ const HiringTimeline = ({ allTeamData }: HiringTimelineProps) => {
 interface SalaryTableProps {
   allTeamData: TeamMember[];
   onEdit: (member: TeamMember, index: number) => void;
+  selectedBU: string;
 }
 
-const SalaryTable = ({ allTeamData, onEdit }: SalaryTableProps) => {
-  const contratados = allTeamData.filter(m => m.status === "contratado");
-  const aContratar = allTeamData.filter(m => m.status === "a contratar");
+const SalaryTable = ({ allTeamData, onEdit, selectedBU }: SalaryTableProps) => {
+  // Filtra dados com base na BU selecionada
+  const filteredData = useMemo(() => {
+    if (selectedBU === "all") return allTeamData;
+    return allTeamData.filter(m => 
+      m.bu === selectedBU || 
+      !m.bu || // Marketing e Expansão não têm BU
+      m.area !== "vendas" // Mantém Marketing e Expansão
+    );
+  }, [allTeamData, selectedBU]);
+  const contratados = filteredData.filter(m => m.status === "contratado");
+  const aContratar = filteredData.filter(m => m.status === "a contratar");
   
   const totalContratados = contratados.reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
   const totalAContratar = aContratar.reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
@@ -1001,7 +999,7 @@ const SalaryTable = ({ allTeamData, onEdit }: SalaryTableProps) => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {allTeamData.map((member, index) => (
+              {filteredData.map((member, index) => (
                 <TableRow key={`${member.area}-${member.role}-${index}`} className="hover:bg-muted/20">
                   <TableCell>
                     <Badge 
@@ -1090,8 +1088,26 @@ export const StructureTab = () => {
   const [editingIndex, setEditingIndex] = useState<number>(-1);
   const [editingSalary, setEditingSalary] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  // Filtro global por BU
+  const [selectedBU, setSelectedBU] = useState<string>("all");
 
   const allTeamData = [...marketingData, ...salesData, ...expansionData];
+
+  // Dados filtrados por BU
+  const filteredSalesData = useMemo(() => {
+    if (selectedBU === "all") return salesData;
+    return salesData.filter(m => m.bu === selectedBU);
+  }, [salesData, selectedBU]);
+
+  const filteredAllTeamData = useMemo(() => {
+    if (selectedBU === "all") return allTeamData;
+    return allTeamData.filter(m => 
+      m.bu === selectedBU || 
+      !m.bu || // Marketing e Expansão não têm BU
+      m.area !== "vendas" // Mantém Marketing e Expansão
+    );
+  }, [allTeamData, selectedBU]);
 
   const handleEdit = (member: TeamMember, globalIndex: number) => {
     setEditingMember(member);
@@ -1133,15 +1149,15 @@ export const StructureTab = () => {
     setEditingIndex(-1);
   };
 
-  const totalPeople = allTeamData.reduce((acc, m) => acc + (m.quantity || 1), 0);
   const totalTools = toolCategories.reduce((acc, cat) => acc + cat.tools.length, 0);
   const activeTools = toolCategories.reduce((acc, cat) => acc + cat.tools.filter(t => t.status === "ativo").length, 0);
   
-  const totalContratados = allTeamData
+  // Totais filtrados
+  const totalPeople = filteredAllTeamData.reduce((acc, m) => acc + (m.quantity || 1), 0);
+  const totalContratados = filteredAllTeamData
     .filter(m => m.status === "contratado")
     .reduce((acc, m) => acc + (m.quantity || 1), 0);
-  
-  const totalAContratar = allTeamData
+  const totalAContratar = filteredAllTeamData
     .filter(m => m.status === "a contratar")
     .reduce((acc, m) => acc + (m.quantity || 1), 0);
 
@@ -1151,13 +1167,25 @@ export const StructureTab = () => {
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-background border border-primary/20 p-8">
         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
         <div className="relative">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
             <Badge className="bg-primary/20 text-primary border-primary/30 text-sm px-3 py-1">
               O2N
             </Badge>
             <Badge variant="outline" className="text-sm">
               Estrutura 2026
             </Badge>
+            <Select value={selectedBU} onValueChange={setSelectedBU}>
+              <SelectTrigger className="w-[180px] bg-background/50 border-border/50">
+                <SelectValue placeholder="Filtrar por BU" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as BUs</SelectItem>
+                <SelectItem value="modeloAtual">Modelo Atual</SelectItem>
+                <SelectItem value="o2Tax">O2 TAX</SelectItem>
+                <SelectItem value="oxyHacker">Oxy Hacker</SelectItem>
+                <SelectItem value="franquia">Franquia</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
             Estrutura de Time e Ferramentas
@@ -1215,7 +1243,7 @@ export const StructureTab = () => {
           <TeamSection 
             title="Vendas" 
             icon={TrendingUp} 
-            team={salesData}
+            team={filteredSalesData}
             color="from-blue-500 to-cyan-500"
             bgColor="bg-blue-500/10"
           />
@@ -1230,10 +1258,10 @@ export const StructureTab = () => {
       </div>
 
       {/* Hiring Timeline Section */}
-      <HiringTimeline allTeamData={allTeamData} />
+      <HiringTimeline allTeamData={allTeamData} selectedBU={selectedBU} />
 
       {/* Salary Table Section */}
-      <SalaryTable allTeamData={allTeamData} onEdit={handleEdit} />
+      <SalaryTable allTeamData={allTeamData} onEdit={handleEdit} selectedBU={selectedBU} />
 
       {/* Ferramentas Section */}
       <div>
@@ -1271,7 +1299,7 @@ export const StructureTab = () => {
                 <TrendingUp className="h-4 w-4 text-blue-500" />
                 <h4 className="font-semibold text-blue-500">Vendas</h4>
               </div>
-              <p className="text-2xl font-bold">{salesData.reduce((acc, m) => acc + (m.quantity || 1), 0)}</p>
+              <p className="text-2xl font-bold">{filteredSalesData.reduce((acc, m) => acc + (m.quantity || 1), 0)}</p>
               <p className="text-sm text-muted-foreground">posições no time</p>
             </div>
             <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20">
