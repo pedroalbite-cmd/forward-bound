@@ -33,31 +33,19 @@ const marketingTeam = [
     role: "Head de Marketing",
     responsibilities: ["Estratégia geral", "Gestão do time", "Budget", "Alinhamento com vendas"],
     status: "contratado",
-    person: "A definir"
-  },
-  {
-    role: "Gestor de Tráfego",
-    responsibilities: ["Meta Ads", "Google Ads", "Análise de performance", "Otimização de campanhas"],
-    status: "contratado",
-    person: "A definir"
+    person: "Contratado"
   },
   {
     role: "Social Media",
     responsibilities: ["Calendário de posts", "Engajamento", "Comunidade", "Tendências"],
-    status: "a contratar",
-    person: null
+    status: "contratado",
+    person: "Contratado"
   },
   {
     role: "Designer",
     responsibilities: ["Criativos para ads", "Social media", "Materiais ricos", "Branding"],
-    status: "a contratar",
-    person: null
-  },
-  {
-    role: "Redator/Copywriter",
-    responsibilities: ["Copy de anúncios", "E-mails", "Landing pages", "Conteúdo blog"],
-    status: "a contratar",
-    person: null
+    status: "contratado",
+    person: "Contratado"
   }
 ];
 
@@ -66,42 +54,17 @@ const salesTeam = [
     role: "Head Comercial",
     responsibilities: ["Estratégia de vendas", "Gestão do pipeline", "Metas", "Treinamento"],
     status: "contratado",
-    person: "A definir"
+    person: "Contratado"
   },
   {
     role: "SDR (Sales Development)",
     responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up", "CRM"],
-    status: "a contratar",
-    quantity: 2
-  },
-  {
-    role: "Closer",
-    responsibilities: ["Reuniões de venda", "Negociação", "Fechamento", "Onboarding inicial"],
     status: "contratado",
-    person: "A definir"
+    quantity: 2
   }
 ];
 
-const expansionTeam = [
-  {
-    role: "Gerente de Expansão",
-    responsibilities: ["Estratégia de franquias", "Prospecção de franqueados", "Análise de mercado"],
-    status: "contratado",
-    person: "A definir"
-  },
-  {
-    role: "Suporte ao Franqueado",
-    responsibilities: ["Onboarding", "Acompanhamento mensal", "Resolução de problemas", "Treinamento"],
-    status: "a contratar",
-    quantity: 2
-  },
-  {
-    role: "Analista de Performance",
-    responsibilities: ["KPIs de franquias", "Relatórios", "Benchmarking", "Planos de ação"],
-    status: "a contratar",
-    person: null
-  }
-];
+const expansionTeam: any[] = [];
 
 // ============ FERRAMENTAS DATA ============
 
@@ -206,6 +169,13 @@ const TeamMemberCard = ({ member, color }: { member: any; color: string }) => (
   </div>
 );
 
+const EmptyTeamMessage = () => (
+  <div className="flex flex-col items-center justify-center p-8 text-center">
+    <UserPlus className="h-12 w-12 text-muted-foreground/30 mb-3" />
+    <p className="text-muted-foreground text-sm">Nenhum cargo definido ainda</p>
+  </div>
+);
+
 const TeamSection = ({ 
   title, 
   icon: Icon, 
@@ -215,7 +185,7 @@ const TeamSection = ({
 }: { 
   title: string; 
   icon: any; 
-  team: any[]; 
+  team: any[];
   color: string;
   bgColor: string;
 }) => {
@@ -243,9 +213,13 @@ const TeamSection = ({
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {team.map((member, index) => (
-          <TeamMemberCard key={index} member={member} color={color} />
-        ))}
+        {team.length === 0 ? (
+          <EmptyTeamMessage />
+        ) : (
+          team.map((member, index) => (
+            <TeamMemberCard key={index} member={member} color={color} />
+          ))
+        )}
       </CardContent>
     </Card>
   );
