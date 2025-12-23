@@ -200,7 +200,8 @@ function calculateReverseFunnel(
   mrrComChurn: Record<string, number> | null = null,
   useCpv: boolean = false,
   metasMensais: Record<string, number> | null = null,
-  cpvValue: number = indicators2025.cpv
+  cpvValue: number = indicators2025.cpv,
+  investimentoInicialJan: number = 0
 ): FunnelData[] {
   let investimentoAnterior = 0;
   
@@ -243,6 +244,11 @@ function calculateReverseFunnel(
   // Jan recebe o investimento de Fev, Fev recebe o de Mar, etc.
   // Isso reflete que o investimento de um mês gera resultado no mês seguinte
   return dadosOriginais.map((dados, index) => {
+    // Se é janeiro e tem investimento inicial definido, usa o valor fixo
+    if (index === 0 && investimentoInicialJan > 0) {
+      return { ...dados, investimento: investimentoInicialJan };
+    }
+    
     // Pega o investimento do próximo mês, ou mantém o próprio se for dezembro
     const investimentoDeslocado = index < months.length - 1 
       ? dadosOriginais[index + 1].investimento 
@@ -609,17 +615,17 @@ export function MediaInvestmentTab() {
   );
   
   const o2TaxFunnel = useMemo(() => 
-    calculateReverseFunnel(o2TaxMonthly, funnelMetrics.o2Tax, null, false, null),
+    calculateReverseFunnel(o2TaxMonthly, funnelMetrics.o2Tax, null, false, null, indicators2025.cpv, 10000),
     [o2TaxMonthly, funnelMetrics.o2Tax]
   );
   
   const oxyHackerFunnel = useMemo(() => 
-    calculateReverseFunnel(oxyHackerMonthly, funnelMetrics.oxyHacker, null, false, null),
+    calculateReverseFunnel(oxyHackerMonthly, funnelMetrics.oxyHacker, null, false, null, indicators2025.cpv, 10000),
     [oxyHackerMonthly, funnelMetrics.oxyHacker]
   );
   
   const franquiaFunnel = useMemo(() => 
-    calculateReverseFunnel(franquiaMonthly, funnelMetrics.franquia, null, false, null),
+    calculateReverseFunnel(franquiaMonthly, funnelMetrics.franquia, null, false, null, indicators2025.cpv, 10000),
     [franquiaMonthly, funnelMetrics.franquia]
   );
 
