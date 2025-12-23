@@ -1327,54 +1327,50 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
                 <TrendingUp className="h-4 w-4 text-amber-500" />
                 📈 Evolução do Faturamento Mensal
               </h4>
-              <div className="h-[220px]">
-                <ChartContainer config={chartConfig}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={evolucaoData} margin={{ top: 10, right: 30, left: 60, bottom: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
-                      <XAxis 
-                        dataKey="month" 
-                        className="text-xs"
-                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                        axisLine={{ stroke: 'hsl(var(--border))' }}
-                      />
-                      <YAxis 
-                        className="text-xs"
-                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                        tickFormatter={(value) => `R$ ${(value / 1000000).toFixed(1)}M`}
-                        axisLine={{ stroke: 'hsl(var(--border))' }}
-                        width={70}
-                      />
-                      <Tooltip 
-                        content={({ active, payload, label }) => {
-                          if (!active || !payload || !payload[0]) return null;
-                          return (
-                            <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
-                              <p className="font-semibold mb-1">{label}</p>
-                              <div className="flex items-center gap-2 text-sm">
-                                <div className="w-3 h-3 rounded-full bg-amber-500" />
-                                <span className="text-muted-foreground">Faturamento:</span>
-                                <span className="font-mono font-medium">
-                                  R$ {((payload[0].value as number) / 1000000).toFixed(2)}M
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        }}
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="faturamento" 
-                        fill="hsl(45, 93%, 47%)" 
-                        fillOpacity={0.3}
-                        stroke="hsl(45, 93%, 47%)" 
-                        strokeWidth={2}
-                        name="Faturamento"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </div>
+              <ChartContainer config={chartConfig} className="h-[220px] !aspect-auto">
+                <AreaChart data={evolucaoData} margin={{ top: 10, right: 30, left: 60, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
+                  <XAxis 
+                    dataKey="month" 
+                    className="text-xs"
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                    axisLine={{ stroke: 'hsl(var(--border))' }}
+                  />
+                  <YAxis 
+                    className="text-xs"
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                    tickFormatter={(value) => `R$ ${(value / 1000000).toFixed(1)}M`}
+                    axisLine={{ stroke: 'hsl(var(--border))' }}
+                    width={70}
+                  />
+                  <Tooltip 
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload || !payload[0]) return null;
+                      return (
+                        <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+                          <p className="font-semibold mb-1">{label}</p>
+                          <div className="flex items-center gap-2 text-sm">
+                            <div className="w-3 h-3 rounded-full bg-amber-500" />
+                            <span className="text-muted-foreground">Faturamento:</span>
+                            <span className="font-mono font-medium">
+                              R$ {((payload[0].value as number) / 1000000).toFixed(2)}M
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="faturamento" 
+                    fill="hsl(45, 93%, 47%)" 
+                    fillOpacity={0.3}
+                    stroke="hsl(45, 93%, 47%)" 
+                    strokeWidth={2}
+                    name="Faturamento"
+                  />
+                </AreaChart>
+              </ChartContainer>
             </Card>
 
             {/* Gráfico 2 - Custos por Time com % do faturamento */}
@@ -1383,105 +1379,101 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
                 <Users className="h-4 w-4 text-blue-500" />
                 👥 Evolução dos Custos por Time
               </h4>
-              <div className="h-[280px]">
-                <ChartContainer config={chartConfig}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={evolucaoData} margin={{ top: 10, right: 70, left: 60, bottom: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
-                      <XAxis 
-                        dataKey="month" 
-                        className="text-xs"
-                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                        axisLine={{ stroke: 'hsl(var(--border))' }}
-                      />
-                      <YAxis 
-                        yAxisId="left"
-                        className="text-xs"
-                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                        tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
-                        axisLine={{ stroke: 'hsl(var(--border))' }}
-                        width={65}
-                      />
-                      <YAxis 
-                        yAxisId="right"
-                        orientation="right"
-                        className="text-xs"
-                        tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                        tickFormatter={(value) => `${value.toFixed(0)}%`}
-                        domain={[0, 10]}
-                        axisLine={{ stroke: 'hsl(var(--border))' }}
-                        width={50}
-                      />
-                      <Tooltip 
-                        content={({ active, payload, label }) => {
-                          if (!active || !payload) return null;
-                          return (
-                            <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
-                              <p className="font-semibold mb-2">{label}</p>
-                              {payload.map((entry: any, index: number) => (
-                                <div key={index} className="flex items-center gap-2 text-sm">
-                                  <div 
-                                    className="w-3 h-3 rounded-full" 
-                                    style={{ backgroundColor: entry.color }}
-                                  />
-                                  <span className="text-muted-foreground">{entry.name}:</span>
-                                  <span className="font-mono font-medium">
-                                    {entry.dataKey === 'pctTotal'
-                                      ? `${entry.value.toFixed(1)}%`
-                                      : `R$ ${(entry.value / 1000).toFixed(0)}k`
-                                    }
-                                  </span>
-                                </div>
-                              ))}
+              <ChartContainer config={chartConfig} className="h-[280px] !aspect-auto">
+                <ComposedChart data={evolucaoData} margin={{ top: 10, right: 70, left: 60, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
+                  <XAxis 
+                    dataKey="month" 
+                    className="text-xs"
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                    axisLine={{ stroke: 'hsl(var(--border))' }}
+                  />
+                  <YAxis 
+                    yAxisId="left"
+                    className="text-xs"
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                    tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+                    axisLine={{ stroke: 'hsl(var(--border))' }}
+                    width={65}
+                  />
+                  <YAxis 
+                    yAxisId="right"
+                    orientation="right"
+                    className="text-xs"
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                    tickFormatter={(value) => `${value.toFixed(0)}%`}
+                    domain={[0, 10]}
+                    axisLine={{ stroke: 'hsl(var(--border))' }}
+                    width={50}
+                  />
+                  <Tooltip 
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload) return null;
+                      return (
+                        <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+                          <p className="font-semibold mb-2">{label}</p>
+                          {payload.map((entry: any, index: number) => (
+                            <div key={index} className="flex items-center gap-2 text-sm">
+                              <div 
+                                className="w-3 h-3 rounded-full" 
+                                style={{ backgroundColor: entry.color }}
+                              />
+                              <span className="text-muted-foreground">{entry.name}:</span>
+                              <span className="font-mono font-medium">
+                                {entry.dataKey === 'pctTotal'
+                                  ? `${entry.value.toFixed(1)}%`
+                                  : `R$ ${(entry.value / 1000).toFixed(0)}k`
+                                }
+                              </span>
                             </div>
-                          );
-                        }}
-                      />
-                      <Legend />
-                      
-                      {/* Áreas empilhadas para custos dos times */}
-                      <Area 
-                        yAxisId="left"
-                        type="monotone" 
-                        dataKey="marketing" 
-                        stackId="1" 
-                        fill="hsl(142, 76%, 36%)" 
-                        stroke="hsl(142, 76%, 36%)"
-                        name="Marketing"
-                      />
-                      <Area 
-                        yAxisId="left"
-                        type="monotone" 
-                        dataKey="vendas" 
-                        stackId="1" 
-                        fill="hsl(217, 91%, 60%)" 
-                        stroke="hsl(217, 91%, 60%)"
-                        name="Vendas"
-                      />
-                      <Area 
-                        yAxisId="left"
-                        type="monotone" 
-                        dataKey="expansao" 
-                        stackId="1" 
-                        fill="hsl(270, 60%, 50%)" 
-                        stroke="hsl(270, 60%, 50%)"
-                        name="Expansão"
-                      />
-                      
-                      {/* Linha de % do faturamento */}
-                      <Line 
-                        yAxisId="right"
-                        type="monotone" 
-                        dataKey="pctTotal" 
-                        stroke="hsl(0, 84%, 60%)" 
-                        strokeWidth={2}
-                        dot={{ fill: "hsl(0, 84%, 60%)", strokeWidth: 2, r: 3 }}
-                        name="% do Faturamento"
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              </div>
+                          ))}
+                        </div>
+                      );
+                    }}
+                  />
+                  <Legend />
+                  
+                  {/* Áreas empilhadas para custos dos times */}
+                  <Area 
+                    yAxisId="left"
+                    type="monotone" 
+                    dataKey="marketing" 
+                    stackId="1" 
+                    fill="hsl(142, 76%, 36%)" 
+                    stroke="hsl(142, 76%, 36%)"
+                    name="Marketing"
+                  />
+                  <Area 
+                    yAxisId="left"
+                    type="monotone" 
+                    dataKey="vendas" 
+                    stackId="1" 
+                    fill="hsl(217, 91%, 60%)" 
+                    stroke="hsl(217, 91%, 60%)"
+                    name="Vendas"
+                  />
+                  <Area 
+                    yAxisId="left"
+                    type="monotone" 
+                    dataKey="expansao" 
+                    stackId="1" 
+                    fill="hsl(270, 60%, 50%)" 
+                    stroke="hsl(270, 60%, 50%)"
+                    name="Expansão"
+                  />
+                  
+                  {/* Linha de % do faturamento */}
+                  <Line 
+                    yAxisId="right"
+                    type="monotone" 
+                    dataKey="pctTotal" 
+                    stroke="hsl(0, 84%, 60%)" 
+                    strokeWidth={2}
+                    dot={{ fill: "hsl(0, 84%, 60%)", strokeWidth: 2, r: 3 }}
+                    name="% do Faturamento"
+                  />
+                </ComposedChart>
+              </ChartContainer>
             </Card>
             
             {/* Tabela de evolução mensal */}
