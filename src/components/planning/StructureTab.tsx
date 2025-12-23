@@ -476,6 +476,27 @@ const initialSalesTeam: TeamMember[] = [
     area: "vendas",
     bu: "modeloAtual"
   },
+  // Equipe O2 Tax
+  {
+    role: "Tax Manager",
+    name: "Lucas Ilha",
+    responsibilities: ["Gestão de impostos", "Análise tributária", "Consultoria fiscal", "Compliance"],
+    status: "contratado",
+    person: "Contratado",
+    salary: 12000,
+    area: "vendas",
+    bu: "o2Tax"
+  },
+  {
+    role: "SDR (Sales Development)",
+    name: "Carlos",
+    responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up", "CRM"],
+    status: "contratado",
+    quantity: 1,
+    salary: 2500,
+    area: "vendas",
+    bu: "o2Tax"
+  },
   // Contratações de todas as BUs
   ...allBUsHirings
 ];
