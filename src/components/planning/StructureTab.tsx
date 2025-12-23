@@ -46,7 +46,8 @@ import {
   DollarSign,
   Calendar,
   Eye,
-  EyeOff
+  EyeOff,
+  Crown
 } from "lucide-react";
 
 // ============ TYPES ============
@@ -59,7 +60,7 @@ interface TeamMember {
   name?: string;
   quantity?: number;
   salary: number;
-  area: "marketing" | "vendas" | "expansao";
+  area: "diretoria" | "marketing" | "vendas" | "expansao";
   hiringMonth?: string;
   bu?: "modeloAtual" | "o2Tax" | "oxyHacker" | "franquia";
 }
@@ -391,6 +392,27 @@ function calculateAllBUsHiring(): TeamMember[] {
 // Pré-calcula contratações para todas as BUs
 const allBUsHirings = calculateAllBUsHiring();
 
+const initialLeadershipTeam: TeamMember[] = [
+  {
+    role: "CEO",
+    name: "Pedro Albite",
+    responsibilities: ["Visão estratégica", "Gestão geral", "Relacionamento com investidores", "Cultura"],
+    status: "contratado",
+    person: "Contratado",
+    salary: 7200,
+    area: "diretoria"
+  },
+  {
+    role: "CMO",
+    name: "Rafael Fleck",
+    responsibilities: ["Estratégia de marketing", "Branding", "Growth", "Posicionamento de mercado"],
+    status: "contratado",
+    person: "Contratado",
+    salary: 21000,
+    area: "diretoria"
+  }
+];
+
 const initialMarketingTeam: TeamMember[] = [
   {
     role: "Head de Marketing",
@@ -556,6 +578,7 @@ const formatCurrency = (value: number) => {
 
 const getAreaLabel = (area: string) => {
   switch (area) {
+    case "diretoria": return "Diretoria";
     case "marketing": return "Marketing";
     case "vendas": return "Vendas";
     case "expansao": return "Expansão";
@@ -565,6 +588,7 @@ const getAreaLabel = (area: string) => {
 
 const getAreaColor = (area: string) => {
   switch (area) {
+    case "diretoria": return "text-amber-500";
     case "marketing": return "text-green-500";
     case "vendas": return "text-blue-500";
     case "expansao": return "text-purple-500";
@@ -997,6 +1021,7 @@ const SalaryTable = ({ allTeamData, onEdit, selectedBU }: SalaryTableProps) => {
   const totalGeral = totalContratados + totalAContratar;
 
   // Totais por área
+  const totalDiretoria = allTeamData.filter(m => m.area === "diretoria").reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
   const totalMarketing = allTeamData.filter(m => m.area === "marketing").reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
   const totalVendas = allTeamData.filter(m => m.area === "vendas").reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
   const totalExpansao = allTeamData.filter(m => m.area === "expansao").reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
@@ -1018,7 +1043,18 @@ const SalaryTable = ({ allTeamData, onEdit, selectedBU }: SalaryTableProps) => {
       </CardHeader>
       <CardContent>
         {/* Totais por área */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <Card className="bg-amber-500/10 border-amber-500/30">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Diretoria</p>
+                <p className="text-xl font-bold text-amber-500">
+                  {formatCurrency(totalDiretoria)}
+                </p>
+              </div>
+              <Crown className="h-8 w-8 text-amber-500/50" />
+            </CardContent>
+          </Card>
           <Card className="bg-green-500/10 border-green-500/30">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
@@ -1169,6 +1205,7 @@ const SalaryTable = ({ allTeamData, onEdit, selectedBU }: SalaryTableProps) => {
 
 export const StructureTab = () => {
   const [marketingData, setMarketingData] = useState<TeamMember[]>(initialMarketingTeam);
+  const [leadershipData, setLeadershipData] = useState<TeamMember[]>(initialLeadershipTeam);
   const [salesData, setSalesData] = useState<TeamMember[]>(initialSalesTeam);
   const [expansionData, setExpansionData] = useState<TeamMember[]>(initialExpansionTeam);
   
@@ -1180,7 +1217,7 @@ export const StructureTab = () => {
   // Filtro global por BU
   const [selectedBU, setSelectedBU] = useState<string>("all");
 
-  const allTeamData = [...marketingData, ...salesData, ...expansionData];
+  const allTeamData = [...leadershipData, ...marketingData, ...salesData, ...expansionData];
 
   // Dados filtrados por BU
   const filteredSalesData = useMemo(() => {
@@ -1224,7 +1261,9 @@ export const StructureTab = () => {
       return false;
     };
     
-    if (editingMember.area === "marketing") {
+    if (editingMember.area === "diretoria") {
+      updateTeam(leadershipData, setLeadershipData);
+    } else if (editingMember.area === "marketing") {
       updateTeam(marketingData, setMarketingData);
     } else if (editingMember.area === "vendas") {
       updateTeam(salesData, setSalesData);
