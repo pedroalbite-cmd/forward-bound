@@ -385,7 +385,7 @@ function BUInvestmentTable({
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <div className="bg-muted/50 rounded-lg p-4 text-center">
             <p className="text-sm text-muted-foreground">Investimento Total</p>
             <p className="text-xl font-display font-bold text-primary">{formatCompact(totalInvestimento)}</p>
@@ -393,6 +393,18 @@ function BUInvestmentTable({
           <div className="bg-muted/50 rounded-lg p-4 text-center">
             <p className="text-sm text-muted-foreground">ROI Projetado</p>
             <p className="text-xl font-display font-bold text-emerald-600">{roi.toFixed(1)}x</p>
+          </div>
+          <div className="bg-muted/50 rounded-lg p-4 text-center">
+            <p className="text-sm text-muted-foreground">% do A Vender</p>
+            <p className="text-xl font-display font-bold text-amber-600">
+              {totalFaturamentoVender > 0 ? ((totalInvestimento / totalFaturamentoVender) * 100).toFixed(1) : 0}%
+            </p>
+          </div>
+          <div className="bg-muted/50 rounded-lg p-4 text-center">
+            <p className="text-sm text-muted-foreground">% da Meta</p>
+            <p className="text-xl font-display font-bold text-blue-600">
+              {totalFaturamentoMeta > 0 ? ((totalInvestimento / totalFaturamentoMeta) * 100).toFixed(1) : 0}%
+            </p>
           </div>
           <div className="bg-muted/50 rounded-lg p-4 text-center">
             <p className="text-sm text-muted-foreground">MQLs Necessários</p>
@@ -1169,8 +1181,9 @@ export function MediaInvestmentTab() {
                   <TableRow>
                     <TableHead>BU</TableHead>
                     <TableHead className="text-center">Ticket Médio</TableHead>
-                    <TableHead className="text-center">CPMQL</TableHead>
-                    <TableHead className="text-center">CPRR</TableHead>
+                    <TableHead className="text-center">Investimento</TableHead>
+                    <TableHead className="text-center">% A Vender</TableHead>
+                    <TableHead className="text-center">% Meta</TableHead>
                     <TableHead className="text-center">CAC</TableHead>
                     <TableHead className="text-center">Lead→MQL</TableHead>
                     <TableHead className="text-center">MQL→RM</TableHead>
@@ -1183,6 +1196,17 @@ export function MediaInvestmentTab() {
                 <TableBody>
                   {Object.entries(funnelMetrics).map(([key, metrics]) => {
                     const mqlToVenda = metrics.mqlToRm * metrics.rmToRr * metrics.rrToProp * metrics.propToVenda;
+                    // Get funnel data for this BU to calculate percentages
+                    const buFunnelData = key === 'modeloAtual' ? modeloAtualFunnel :
+                                        key === 'o2Tax' ? o2TaxFunnel :
+                                        key === 'oxyHacker' ? oxyHackerFunnel :
+                                        franquiaFunnel;
+                    const totalInv = buFunnelData.reduce((sum, d) => sum + d.investimento, 0);
+                    const totalAVender = buFunnelData.reduce((sum, d) => sum + d.faturamentoVender, 0);
+                    const totalMeta = buFunnelData.reduce((sum, d) => sum + d.faturamentoMeta, 0);
+                    const pctAVender = totalAVender > 0 ? (totalInv / totalAVender) * 100 : 0;
+                    const pctMeta = totalMeta > 0 ? (totalInv / totalMeta) * 100 : 0;
+                    
                     return (
                       <TableRow key={key}>
                         <TableCell className="font-medium">
@@ -1192,8 +1216,9 @@ export function MediaInvestmentTab() {
                           </div>
                         </TableCell>
                         <TableCell className="text-center">{formatCurrency(metrics.ticketMedio)}</TableCell>
-                        <TableCell className="text-center">{formatCurrency(metrics.cpmql)}</TableCell>
-                        <TableCell className="text-center">{formatCurrency(metrics.cprr)}</TableCell>
+                        <TableCell className="text-center font-semibold text-primary">{formatCompact(totalInv)}</TableCell>
+                        <TableCell className="text-center font-semibold text-amber-600">{pctAVender.toFixed(1)}%</TableCell>
+                        <TableCell className="text-center font-semibold text-blue-600">{pctMeta.toFixed(1)}%</TableCell>
                         <TableCell className="text-center">{formatCurrency(metrics.cac)}</TableCell>
                         <TableCell className="text-center">{(metrics.leadToMql * 100).toFixed(0)}%</TableCell>
                         <TableCell className="text-center">{(metrics.mqlToRm * 100).toFixed(0)}%</TableCell>
