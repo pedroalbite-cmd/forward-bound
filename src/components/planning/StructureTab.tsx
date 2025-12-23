@@ -461,7 +461,17 @@ const initialExpansionTeam: TeamMember[] = [
     status: "a contratar",
     quantity: 1,
     salary: 0,
-    area: "expansao"
+    area: "expansao",
+    bu: "franquia"
+  },
+  {
+    role: "Gestor de Comunidade",
+    responsibilities: ["Engajamento da comunidade Oxy Hacker", "Relacionamento", "Suporte", "Eventos"],
+    status: "a contratar",
+    quantity: 1,
+    salary: 0,
+    area: "expansao",
+    bu: "oxyHacker"
   }
 ];
 
