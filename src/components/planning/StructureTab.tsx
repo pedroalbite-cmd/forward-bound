@@ -62,7 +62,7 @@ interface TeamMember {
   name?: string;
   quantity?: number;
   salary: number;
-  area: "diretoria" | "marketing" | "vendas" | "expansao";
+  area: "marketing" | "vendas" | "expansao";
   hiringMonth?: string;
   bu?: "modeloAtual" | "o2Tax" | "oxyHacker" | "franquia";
 }
@@ -653,10 +653,6 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
   const [viewMode, setViewMode] = useState<"bu" | "time">("bu");
   
   // Custos de estrutura mensais por área
-  const custoMensalDiretoria = allTeamData
-    .filter(m => m.area === "diretoria")
-    .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
-  
   const custoMensalMarketing = allTeamData
     .filter(m => m.area === "marketing")
     .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
@@ -669,8 +665,8 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
     .filter(m => m.area === "expansao")
     .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
   
-  // Custos compartilhados (Diretoria + Marketing) - anualizados
-  const custosCompartilhadosAnuais = (custoMensalDiretoria + custoMensalMarketing) * 12;
+  // Custos compartilhados (Marketing) - anualizados
+  const custosCompartilhadosAnuais = custoMensalMarketing * 12;
   
   // Custos de vendas por BU (mensal)
   const custoMensalVendasPorBU = {
@@ -737,12 +733,6 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
   
   const timeData = [
     { 
-      key: "diretoria" as const, 
-      name: "Diretoria", 
-      color: "bg-amber-500/10 border-amber-500/30 text-amber-500",
-      iconColor: "text-amber-500/50"
-    },
-    { 
       key: "marketing" as const, 
       name: "Marketing", 
       color: "bg-green-500/10 border-green-500/30 text-green-500",
@@ -764,7 +754,6 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
   
   // Custos anuais por time
   const custoPorTime = {
-    diretoria: custoMensalDiretoria * 12,
     marketing: custoMensalMarketing * 12,
     vendas: custoMensalVendas * 12,
     expansao: custoMensalExpansao * 12,
@@ -1001,7 +990,7 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
               </h4>
               <ul className="text-sm text-muted-foreground space-y-1">
                 <li>• <strong>Custos Diretos</strong>: Vendas e Expansão são alocados diretamente à BU correspondente</li>
-                <li>• <strong>Custos Compartilhados</strong>: Diretoria (R$ {formatCurrency(custoMensalDiretoria)}/mês) + Marketing (R$ {formatCurrency(custoMensalMarketing)}/mês) são rateados proporcionalmente ao faturamento de cada BU</li>
+                <li>• <strong>Custos Compartilhados</strong>: Marketing (R$ {formatCurrency(custoMensalMarketing)}/mês) é rateado proporcionalmente ao faturamento de cada BU</li>
                 <li>• <strong>Proporções</strong>: Modelo Atual ({(proporcaoPorBU.modeloAtual * 100).toFixed(1)}%), O2 TAX ({(proporcaoPorBU.o2Tax * 100).toFixed(1)}%), Oxy Hacker ({(proporcaoPorBU.oxyHacker * 100).toFixed(1)}%), Franquia ({(proporcaoPorBU.franquia * 100).toFixed(1)}%)</li>
               </ul>
             </div>
@@ -1557,7 +1546,6 @@ const SalaryTable = ({ allTeamData, onEdit, selectedBU }: SalaryTableProps) => {
   const totalGeral = totalContratados + totalAContratar;
 
   // Totais por área
-  const totalDiretoria = allTeamData.filter(m => m.area === "diretoria").reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
   const totalMarketing = allTeamData.filter(m => m.area === "marketing").reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
   const totalVendas = allTeamData.filter(m => m.area === "vendas").reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
   const totalExpansao = allTeamData.filter(m => m.area === "expansao").reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
@@ -1579,18 +1567,7 @@ const SalaryTable = ({ allTeamData, onEdit, selectedBU }: SalaryTableProps) => {
       </CardHeader>
       <CardContent>
         {/* Totais por área */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card className="bg-amber-500/10 border-amber-500/30">
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Diretoria</p>
-                <p className="text-xl font-bold text-amber-500">
-                  {formatCurrency(totalDiretoria)}
-                </p>
-              </div>
-              <Crown className="h-8 w-8 text-amber-500/50" />
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <Card className="bg-green-500/10 border-green-500/30">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
@@ -1797,9 +1774,7 @@ export const StructureTab = () => {
       return false;
     };
     
-    if (editingMember.area === "diretoria") {
-      updateTeam(leadershipData, setLeadershipData);
-    } else if (editingMember.area === "marketing") {
+    if (editingMember.area === "marketing") {
       updateTeam(marketingData, setMarketingData);
     } else if (editingMember.area === "vendas") {
       updateTeam(salesData, setSalesData);
