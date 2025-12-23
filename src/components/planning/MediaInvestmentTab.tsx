@@ -715,9 +715,6 @@ export function MediaInvestmentTab() {
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
               ROI Médio: {overallROI.toFixed(1)}x
             </Badge>
-            <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
-              A Vender Jan: {formatCurrency(valorVenderInicial)}
-            </Badge>
           </div>
         </div>
       </div>
