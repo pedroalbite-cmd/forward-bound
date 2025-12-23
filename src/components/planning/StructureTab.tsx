@@ -516,6 +516,190 @@ const ToolCategoryCard = ({ category }: { category: typeof toolCategories[0] }) 
   );
 };
 
+// ============ HIRING TIMELINE COMPONENT ============
+
+interface HiringTimelineProps {
+  allTeamData: TeamMember[];
+}
+
+const HiringTimeline = ({ allTeamData }: HiringTimelineProps) => {
+  // Agrupa contratações por mês
+  const hiringsByMonth = useMemo(() => {
+    const aContratar = allTeamData.filter(m => m.status === "a contratar" && m.hiringMonth);
+    const grouped: Record<string, TeamMember[]> = {};
+    
+    aContratar.forEach(member => {
+      const month = member.hiringMonth!;
+      if (!grouped[month]) grouped[month] = [];
+      grouped[month].push(member);
+    });
+    
+    return grouped;
+  }, [allTeamData]);
+
+  // Conta total de contratações
+  const totalHirings = allTeamData
+    .filter(m => m.status === "a contratar")
+    .reduce((acc, m) => acc + (m.quantity || 1), 0);
+
+  const getMonthColor = (month: string) => {
+    const hirings = hiringsByMonth[month];
+    if (!hirings || hirings.length === 0) return "bg-muted/30 border-border/30";
+    
+    const count = hirings.reduce((acc, m) => acc + (m.quantity || 1), 0);
+    if (count >= 3) return "bg-red-500/20 border-red-500/50";
+    if (count >= 2) return "bg-amber-500/20 border-amber-500/50";
+    return "bg-blue-500/20 border-blue-500/50";
+  };
+
+  const getMonthTextColor = (month: string) => {
+    const hirings = hiringsByMonth[month];
+    if (!hirings || hirings.length === 0) return "text-muted-foreground";
+    
+    const count = hirings.reduce((acc, m) => acc + (m.quantity || 1), 0);
+    if (count >= 3) return "text-red-500";
+    if (count >= 2) return "text-amber-500";
+    return "text-blue-500";
+  };
+
+  return (
+    <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+      <CardHeader>
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 text-white">
+              <Calendar className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle>Timeline de Contratações 2026</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Planejamento de contratações ao longo do ano
+              </p>
+            </div>
+          </div>
+          <Badge variant="outline" className="text-sm bg-primary/10 text-primary border-primary/30">
+            {totalHirings} contratações planejadas
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Timeline visual */}
+        <div className="relative">
+          {/* Linha conectora */}
+          <div className="absolute top-6 left-0 right-0 h-0.5 bg-gradient-to-r from-primary/20 via-primary/40 to-primary/20" />
+          
+          {/* Meses */}
+          <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-2">
+            {months.map((month, index) => {
+              const hirings = hiringsByMonth[month] || [];
+              const hiringCount = hirings.reduce((acc, m) => acc + (m.quantity || 1), 0);
+              const hasHiring = hiringCount > 0;
+              
+              return (
+                <div key={month} className="flex flex-col items-center">
+                  {/* Indicador do mês */}
+                  <div 
+                    className={`relative z-10 w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all ${getMonthColor(month)} ${hasHiring ? 'shadow-lg' : ''}`}
+                  >
+                    {hasHiring ? (
+                      <span className={`font-bold text-sm ${getMonthTextColor(month)}`}>
+                        {hiringCount}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </div>
+                  
+                  {/* Nome do mês */}
+                  <span className={`mt-2 text-xs font-medium ${hasHiring ? getMonthTextColor(month) : 'text-muted-foreground'}`}>
+                    {month}
+                  </span>
+                  
+                  {/* Detalhes das contratações */}
+                  {hasHiring && (
+                    <div className="mt-2 space-y-1 w-full">
+                      {hirings.map((h, i) => (
+                        <div 
+                          key={`${h.role}-${i}`}
+                          className={`text-xs px-2 py-1 rounded text-center truncate ${
+                            h.area === "vendas" 
+                              ? "bg-blue-500/10 text-blue-600" 
+                              : h.area === "expansao"
+                              ? "bg-purple-500/10 text-purple-600"
+                              : "bg-green-500/10 text-green-600"
+                          }`}
+                          title={h.role}
+                        >
+                          {h.role.includes("SDR") ? "SDR" : h.role.includes("Closer") ? "Closer" : h.role.split(" ")[0]}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Legenda */}
+        <div className="flex flex-wrap gap-4 pt-4 border-t border-border/50">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded-full bg-blue-500/20 border-2 border-blue-500/50" />
+            <span className="text-xs text-muted-foreground">1 contratação</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded-full bg-amber-500/20 border-2 border-amber-500/50" />
+            <span className="text-xs text-muted-foreground">2 contratações</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded-full bg-red-500/20 border-2 border-red-500/50" />
+            <span className="text-xs text-muted-foreground">3+ contratações</span>
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/30">Vendas</Badge>
+            <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-600 border-purple-500/30">Expansão</Badge>
+            <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-500/30">Marketing</Badge>
+          </div>
+        </div>
+
+        {/* Resumo por trimestre */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: "Q1", months: ["Jan", "Fev", "Mar"] },
+            { label: "Q2", months: ["Abr", "Mai", "Jun"] },
+            { label: "Q3", months: ["Jul", "Ago", "Set"] },
+            { label: "Q4", months: ["Out", "Nov", "Dez"] },
+          ].map(quarter => {
+            const quarterHirings = quarter.months.reduce((acc, month) => {
+              const monthHirings = hiringsByMonth[month] || [];
+              return acc + monthHirings.reduce((a, m) => a + (m.quantity || 1), 0);
+            }, 0);
+            
+            return (
+              <div 
+                key={quarter.label}
+                className={`p-4 rounded-lg border text-center transition-all ${
+                  quarterHirings > 0 
+                    ? "bg-primary/5 border-primary/20" 
+                    : "bg-muted/30 border-border/30"
+                }`}
+              >
+                <p className="text-sm text-muted-foreground">{quarter.label}</p>
+                <p className={`text-2xl font-bold ${quarterHirings > 0 ? "text-primary" : "text-muted-foreground"}`}>
+                  {quarterHirings}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {quarterHirings === 1 ? "contratação" : "contratações"}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 // ============ SALARY TABLE COMPONENT ============
 
 interface SalaryTableProps {
@@ -803,6 +987,9 @@ export const StructureTab = () => {
           />
         </div>
       </div>
+
+      {/* Hiring Timeline Section */}
+      <HiringTimeline allTeamData={allTeamData} />
 
       {/* Salary Table Section */}
       <SalaryTable allTeamData={allTeamData} onEdit={handleEdit} />
