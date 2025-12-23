@@ -402,7 +402,7 @@ const initialLeadershipTeam: TeamMember[] = [
     status: "contratado",
     person: "Contratado",
     salary: 7200,
-    area: "diretoria"
+    area: "vendas"
   },
   {
     role: "CMO",
@@ -411,7 +411,7 @@ const initialLeadershipTeam: TeamMember[] = [
     status: "contratado",
     person: "Contratado",
     salary: 21000,
-    area: "diretoria"
+    area: "marketing"
   }
 ];
 
@@ -650,6 +650,8 @@ const proporcaoPorBU = {
 
 // Componente de análise de investimento
 const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
+  const [viewMode, setViewMode] = useState<"bu" | "time">("bu");
+  
   // Custos de estrutura mensais por área
   const custoMensalDiretoria = allTeamData
     .filter(m => m.area === "diretoria")
@@ -657,6 +659,14 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
   
   const custoMensalMarketing = allTeamData
     .filter(m => m.area === "marketing")
+    .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
+  
+  const custoMensalVendas = allTeamData
+    .filter(m => m.area === "vendas")
+    .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
+  
+  const custoMensalExpansao = allTeamData
+    .filter(m => m.area === "expansao")
     .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
   
   // Custos compartilhados (Diretoria + Marketing) - anualizados
@@ -725,7 +735,45 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
     },
   ];
   
-  // Calcular totais
+  const timeData = [
+    { 
+      key: "diretoria" as const, 
+      name: "Diretoria", 
+      color: "bg-amber-500/10 border-amber-500/30 text-amber-500",
+      iconColor: "text-amber-500/50"
+    },
+    { 
+      key: "marketing" as const, 
+      name: "Marketing", 
+      color: "bg-green-500/10 border-green-500/30 text-green-500",
+      iconColor: "text-green-500/50"
+    },
+    { 
+      key: "vendas" as const, 
+      name: "Vendas", 
+      color: "bg-blue-500/10 border-blue-500/30 text-blue-500",
+      iconColor: "text-blue-500/50"
+    },
+    { 
+      key: "expansao" as const, 
+      name: "Expansão", 
+      color: "bg-purple-500/10 border-purple-500/30 text-purple-500",
+      iconColor: "text-purple-500/50"
+    },
+  ];
+  
+  // Custos anuais por time
+  const custoPorTime = {
+    diretoria: custoMensalDiretoria * 12,
+    marketing: custoMensalMarketing * 12,
+    vendas: custoMensalVendas * 12,
+    expansao: custoMensalExpansao * 12,
+  };
+  
+  const custoTotalTime = Object.values(custoPorTime).reduce((a, b) => a + b, 0);
+  const faturamentoTotal = Object.values(faturamentoAnualPorBU).reduce((a, b) => a + b, 0);
+  
+  // Calcular totais por BU
   const totais = buData.reduce((acc, bu) => {
     const custoEstrutura = calcularCustoEstruturaPorBU(bu.key);
     const custoMidia = investimentoMidiaAnualPorBU[bu.key];
@@ -741,114 +789,38 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
   return (
     <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
       <CardHeader>
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 text-white">
-            <PieChart className="h-5 w-5" />
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 text-white">
+              <PieChart className="h-5 w-5" />
+            </div>
+            <div>
+              <CardTitle>Análise de Investimento vs Faturamento</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                {viewMode === "bu" 
+                  ? "% do investimento (time + mídia) em relação ao faturamento projetado — Custos compartilhados rateados proporcionalmente"
+                  : "Custos anuais por área/time em relação ao faturamento total projetado"
+                }
+              </p>
+            </div>
           </div>
-          <div>
-            <CardTitle>Análise de Investimento vs Faturamento por BU</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              % do investimento (time + mídia) em relação ao faturamento projetado — Custos compartilhados (Diretoria + Marketing) rateados proporcionalmente
-            </p>
-          </div>
+          
+          <Select value={viewMode} onValueChange={(v) => setViewMode(v as "bu" | "time")}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Visualizar por..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="bu">Por BU</SelectItem>
+              <SelectItem value="time">Por Time</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Cards por BU */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {buData.map(bu => {
-            const faturamento = faturamentoAnualPorBU[bu.key];
-            const custoEstrutura = calcularCustoEstruturaPorBU(bu.key);
-            const custoMidia = investimentoMidiaAnualPorBU[bu.key];
-            const custoTotal = custoEstrutura + custoMidia;
-            
-            const pctEstrutura = (custoEstrutura / faturamento) * 100;
-            const pctMidia = (custoMidia / faturamento) * 100;
-            const pctTotal = (custoTotal / faturamento) * 100;
-            
-            return (
-              <Card key={bu.key} className={`${bu.color}`}>
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold">{bu.name}</h4>
-                    <Calculator className={`h-5 w-5 ${bu.iconColor}`} />
-                  </div>
-                  
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Faturamento Projetado</span>
-                      <span className="font-bold font-mono">
-                        R$ {(faturamento / 1000000).toFixed(2)}M
-                      </span>
-                    </div>
-                    
-                    <Separator className="bg-border/50" />
-                    
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Estrutura de Time</span>
-                      <span className="font-mono">
-                        R$ {(custoEstrutura / 1000).toFixed(0)}k
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">% do Faturamento</span>
-                      <Badge variant="outline" className="font-mono bg-background/50">
-                        {pctEstrutura.toFixed(1)}%
-                      </Badge>
-                    </div>
-                    
-                    <Separator className="bg-border/50" />
-                    
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Investimento em Mídia</span>
-                      <span className="font-mono">
-                        R$ {(custoMidia / 1000).toFixed(0)}k
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">% do Faturamento</span>
-                      <Badge variant="outline" className="font-mono bg-background/50">
-                        {pctMidia.toFixed(1)}%
-                      </Badge>
-                    </div>
-                    
-                    <Separator className="bg-border/50" />
-                    
-                    <div className="flex justify-between items-center pt-1">
-                      <span className="font-semibold">Investimento Total</span>
-                      <span className="font-bold font-mono">
-                        R$ {(custoTotal / 1000).toFixed(0)}k
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="font-semibold">% Total do Faturamento</span>
-                      <Badge className="font-mono text-base px-3 py-1">
-                        {pctTotal.toFixed(1)}%
-                      </Badge>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-        
-        {/* Tabela Comparativa */}
-        <div className="rounded-lg border border-border/50 overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead>BU</TableHead>
-                <TableHead className="text-right">Faturamento</TableHead>
-                <TableHead className="text-right">Time</TableHead>
-                <TableHead className="text-right">% Time</TableHead>
-                <TableHead className="text-right">Mídia</TableHead>
-                <TableHead className="text-right">% Mídia</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">% Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+        {viewMode === "bu" ? (
+          <>
+            {/* Cards por BU */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {buData.map(bu => {
                 const faturamento = faturamentoAnualPorBU[bu.key];
                 const custoEstrutura = calcularCustoEstruturaPorBU(bu.key);
@@ -860,86 +832,301 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
                 const pctTotal = (custoTotal / faturamento) * 100;
                 
                 return (
-                  <TableRow key={bu.key} className="hover:bg-muted/20">
-                    <TableCell className="font-medium">{bu.name}</TableCell>
-                    <TableCell className="text-right font-mono">
-                      R$ {(faturamento / 1000000).toFixed(2)}M
+                  <Card key={bu.key} className={`${bu.color}`}>
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold">{bu.name}</h4>
+                        <Calculator className={`h-5 w-5 ${bu.iconColor}`} />
+                      </div>
+                      
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Faturamento Projetado</span>
+                          <span className="font-bold font-mono">
+                            R$ {(faturamento / 1000000).toFixed(2)}M
+                          </span>
+                        </div>
+                        
+                        <Separator className="bg-border/50" />
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Estrutura de Time</span>
+                          <span className="font-mono">
+                            R$ {(custoEstrutura / 1000).toFixed(0)}k
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">% do Faturamento</span>
+                          <Badge variant="outline" className="font-mono bg-background/50">
+                            {pctEstrutura.toFixed(1)}%
+                          </Badge>
+                        </div>
+                        
+                        <Separator className="bg-border/50" />
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Investimento em Mídia</span>
+                          <span className="font-mono">
+                            R$ {(custoMidia / 1000).toFixed(0)}k
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">% do Faturamento</span>
+                          <Badge variant="outline" className="font-mono bg-background/50">
+                            {pctMidia.toFixed(1)}%
+                          </Badge>
+                        </div>
+                        
+                        <Separator className="bg-border/50" />
+                        
+                        <div className="flex justify-between items-center pt-1">
+                          <span className="font-semibold">Investimento Total</span>
+                          <span className="font-bold font-mono">
+                            R$ {(custoTotal / 1000).toFixed(0)}k
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="font-semibold">% Total do Faturamento</span>
+                          <Badge className="font-mono text-base px-3 py-1">
+                            {pctTotal.toFixed(1)}%
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+            
+            {/* Tabela Comparativa por BU */}
+            <div className="rounded-lg border border-border/50 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead>BU</TableHead>
+                    <TableHead className="text-right">Faturamento</TableHead>
+                    <TableHead className="text-right">Time</TableHead>
+                    <TableHead className="text-right">% Time</TableHead>
+                    <TableHead className="text-right">Mídia</TableHead>
+                    <TableHead className="text-right">% Mídia</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">% Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {buData.map(bu => {
+                    const faturamento = faturamentoAnualPorBU[bu.key];
+                    const custoEstrutura = calcularCustoEstruturaPorBU(bu.key);
+                    const custoMidia = investimentoMidiaAnualPorBU[bu.key];
+                    const custoTotal = custoEstrutura + custoMidia;
+                    
+                    const pctEstrutura = (custoEstrutura / faturamento) * 100;
+                    const pctMidia = (custoMidia / faturamento) * 100;
+                    const pctTotal = (custoTotal / faturamento) * 100;
+                    
+                    return (
+                      <TableRow key={bu.key} className="hover:bg-muted/20">
+                        <TableCell className="font-medium">{bu.name}</TableCell>
+                        <TableCell className="text-right font-mono">
+                          R$ {(faturamento / 1000000).toFixed(2)}M
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          R$ {(custoEstrutura / 1000).toFixed(0)}k
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant="outline" className="font-mono">
+                            {pctEstrutura.toFixed(1)}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          R$ {(custoMidia / 1000).toFixed(0)}k
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant="outline" className="font-mono">
+                            {pctMidia.toFixed(1)}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-medium">
+                          R$ {(custoTotal / 1000).toFixed(0)}k
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge className="font-mono">
+                            {pctTotal.toFixed(1)}%
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+                <TableFooter>
+                  <TableRow className="bg-primary/5">
+                    <TableCell className="font-bold text-primary">TOTAL</TableCell>
+                    <TableCell className="text-right font-mono font-bold text-primary">
+                      R$ {(totais.faturamento / 1000000).toFixed(2)}M
                     </TableCell>
-                    <TableCell className="text-right font-mono">
-                      R$ {(custoEstrutura / 1000).toFixed(0)}k
+                    <TableCell className="text-right font-mono font-bold text-primary">
+                      R$ {(totais.estrutura / 1000).toFixed(0)}k
                     </TableCell>
                     <TableCell className="text-right">
-                      <Badge variant="outline" className="font-mono">
-                        {pctEstrutura.toFixed(1)}%
+                      <Badge variant="outline" className="font-mono bg-primary/10 text-primary border-primary/30">
+                        {((totais.estrutura / totais.faturamento) * 100).toFixed(1)}%
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right font-mono">
-                      R$ {(custoMidia / 1000).toFixed(0)}k
+                    <TableCell className="text-right font-mono font-bold text-primary">
+                      R$ {(totais.midia / 1000).toFixed(0)}k
                     </TableCell>
                     <TableCell className="text-right">
-                      <Badge variant="outline" className="font-mono">
-                        {pctMidia.toFixed(1)}%
+                      <Badge variant="outline" className="font-mono bg-primary/10 text-primary border-primary/30">
+                        {((totais.midia / totais.faturamento) * 100).toFixed(1)}%
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right font-mono font-medium">
-                      R$ {(custoTotal / 1000).toFixed(0)}k
+                    <TableCell className="text-right font-mono font-bold text-primary">
+                      R$ {((totais.estrutura + totais.midia) / 1000).toFixed(0)}k
                     </TableCell>
                     <TableCell className="text-right">
-                      <Badge className="font-mono">
-                        {pctTotal.toFixed(1)}%
+                      <Badge className="font-mono bg-primary text-primary-foreground">
+                        {(((totais.estrutura + totais.midia) / totais.faturamento) * 100).toFixed(1)}%
                       </Badge>
                     </TableCell>
                   </TableRow>
+                </TableFooter>
+              </Table>
+            </div>
+            
+            {/* Legenda explicativa */}
+            <div className="p-4 rounded-lg bg-muted/30 border border-border/30">
+              <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                Metodologia de Rateio
+              </h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• <strong>Custos Diretos</strong>: Vendas e Expansão são alocados diretamente à BU correspondente</li>
+                <li>• <strong>Custos Compartilhados</strong>: Diretoria (R$ {formatCurrency(custoMensalDiretoria)}/mês) + Marketing (R$ {formatCurrency(custoMensalMarketing)}/mês) são rateados proporcionalmente ao faturamento de cada BU</li>
+                <li>• <strong>Proporções</strong>: Modelo Atual ({(proporcaoPorBU.modeloAtual * 100).toFixed(1)}%), O2 TAX ({(proporcaoPorBU.o2Tax * 100).toFixed(1)}%), Oxy Hacker ({(proporcaoPorBU.oxyHacker * 100).toFixed(1)}%), Franquia ({(proporcaoPorBU.franquia * 100).toFixed(1)}%)</li>
+              </ul>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Cards por Time */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {timeData.map(time => {
+                const custoAnual = custoPorTime[time.key];
+                const pctDoTotal = custoTotalTime > 0 ? (custoAnual / custoTotalTime) * 100 : 0;
+                const pctDoFaturamento = faturamentoTotal > 0 ? (custoAnual / faturamentoTotal) * 100 : 0;
+                
+                return (
+                  <Card key={time.key} className={`${time.color}`}>
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold">{time.name}</h4>
+                        <Users className={`h-5 w-5 ${time.iconColor}`} />
+                      </div>
+                      
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Custo Anual</span>
+                          <span className="font-bold font-mono">
+                            R$ {(custoAnual / 1000).toFixed(0)}k
+                          </span>
+                        </div>
+                        
+                        <Separator className="bg-border/50" />
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">% do Total de Times</span>
+                          <Badge variant="outline" className="font-mono bg-background/50">
+                            {pctDoTotal.toFixed(1)}%
+                          </Badge>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">% do Faturamento Total</span>
+                          <Badge className="font-mono text-base px-3 py-1">
+                            {pctDoFaturamento.toFixed(1)}%
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 );
               })}
-            </TableBody>
-            <TableFooter>
-              <TableRow className="bg-primary/5">
-                <TableCell className="font-bold text-primary">TOTAL</TableCell>
-                <TableCell className="text-right font-mono font-bold text-primary">
-                  R$ {(totais.faturamento / 1000000).toFixed(2)}M
-                </TableCell>
-                <TableCell className="text-right font-mono font-bold text-primary">
-                  R$ {(totais.estrutura / 1000).toFixed(0)}k
-                </TableCell>
-                <TableCell className="text-right">
-                  <Badge variant="outline" className="font-mono bg-primary/10 text-primary border-primary/30">
-                    {((totais.estrutura / totais.faturamento) * 100).toFixed(1)}%
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right font-mono font-bold text-primary">
-                  R$ {(totais.midia / 1000).toFixed(0)}k
-                </TableCell>
-                <TableCell className="text-right">
-                  <Badge variant="outline" className="font-mono bg-primary/10 text-primary border-primary/30">
-                    {((totais.midia / totais.faturamento) * 100).toFixed(1)}%
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right font-mono font-bold text-primary">
-                  R$ {((totais.estrutura + totais.midia) / 1000).toFixed(0)}k
-                </TableCell>
-                <TableCell className="text-right">
-                  <Badge className="font-mono bg-primary text-primary-foreground">
-                    {(((totais.estrutura + totais.midia) / totais.faturamento) * 100).toFixed(1)}%
-                  </Badge>
-                </TableCell>
-              </TableRow>
-            </TableFooter>
-          </Table>
-        </div>
-        
-        {/* Legenda explicativa */}
-        <div className="p-4 rounded-lg bg-muted/30 border border-border/30">
-          <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-            Metodologia de Rateio
-          </h4>
-          <ul className="text-sm text-muted-foreground space-y-1">
-            <li>• <strong>Custos Diretos</strong>: Vendas e Expansão são alocados diretamente à BU correspondente</li>
-            <li>• <strong>Custos Compartilhados</strong>: Diretoria (R$ {formatCurrency(custoMensalDiretoria)}/mês) + Marketing (R$ {formatCurrency(custoMensalMarketing)}/mês) são rateados proporcionalmente ao faturamento de cada BU</li>
-            <li>• <strong>Proporções</strong>: Modelo Atual ({(proporcaoPorBU.modeloAtual * 100).toFixed(1)}%), O2 TAX ({(proporcaoPorBU.o2Tax * 100).toFixed(1)}%), Oxy Hacker ({(proporcaoPorBU.oxyHacker * 100).toFixed(1)}%), Franquia ({(proporcaoPorBU.franquia * 100).toFixed(1)}%)</li>
-          </ul>
-        </div>
+            </div>
+            
+            {/* Tabela Comparativa por Time */}
+            <div className="rounded-lg border border-border/50 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead>Time</TableHead>
+                    <TableHead className="text-right">Custo Anual</TableHead>
+                    <TableHead className="text-right">% do Total Time</TableHead>
+                    <TableHead className="text-right">% do Faturamento Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {timeData.map(time => {
+                    const custoAnual = custoPorTime[time.key];
+                    const pctDoTotal = custoTotalTime > 0 ? (custoAnual / custoTotalTime) * 100 : 0;
+                    const pctDoFaturamento = faturamentoTotal > 0 ? (custoAnual / faturamentoTotal) * 100 : 0;
+                    
+                    return (
+                      <TableRow key={time.key} className="hover:bg-muted/20">
+                        <TableCell className="font-medium">{time.name}</TableCell>
+                        <TableCell className="text-right font-mono">
+                          R$ {(custoAnual / 1000).toFixed(0)}k
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant="outline" className="font-mono">
+                            {pctDoTotal.toFixed(1)}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge className="font-mono">
+                            {pctDoFaturamento.toFixed(1)}%
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+                <TableFooter>
+                  <TableRow className="bg-primary/5">
+                    <TableCell className="font-bold text-primary">TOTAL</TableCell>
+                    <TableCell className="text-right font-mono font-bold text-primary">
+                      R$ {(custoTotalTime / 1000).toFixed(0)}k
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="outline" className="font-mono bg-primary/10 text-primary border-primary/30">
+                        100%
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge className="font-mono bg-primary text-primary-foreground">
+                        {((custoTotalTime / faturamentoTotal) * 100).toFixed(1)}%
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
+              </Table>
+            </div>
+            
+            {/* Legenda explicativa */}
+            <div className="p-4 rounded-lg bg-muted/30 border border-border/30">
+              <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                Visão por Área/Time
+              </h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• <strong>Diretoria</strong>: Custos de liderança executiva</li>
+                <li>• <strong>Marketing</strong>: Time de marketing incluindo CMO (R$ {formatCurrency(custoMensalMarketing)}/mês)</li>
+                <li>• <strong>Vendas</strong>: Time comercial incluindo CEO (R$ {formatCurrency(custoMensalVendas)}/mês)</li>
+                <li>• <strong>Expansão</strong>: Time de expansão e sucesso do cliente (R$ {formatCurrency(custoMensalExpansao)}/mês)</li>
+                <li>• <strong>Faturamento Total</strong>: R$ {(faturamentoTotal / 1000000).toFixed(2)}M (soma de todas as BUs)</li>
+              </ul>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );
