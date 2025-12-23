@@ -47,7 +47,9 @@ import {
   Calendar,
   Eye,
   EyeOff,
-  Crown
+  Crown,
+  PieChart,
+  Calculator
 } from "lucide-react";
 
 // ============ TYPES ============
@@ -594,6 +596,332 @@ const getAreaColor = (area: string) => {
     case "expansao": return "text-purple-500";
     default: return "text-foreground";
   }
+};
+
+// ============ INVESTMENT ANALYSIS DATA ============
+
+// Faturamento projetado anual por BU (baseado nos dados de MonthlyRevenueTab)
+const faturamentoAnualPorBU = {
+  modeloAtual: 23100000,  // Q1: 3.75M + Q2: 4.95M + Q3: 6.4M + Q4: 8M = ~23.1M
+  o2Tax: 2800000,         // ~R$ 2.8M anual
+  oxyHacker: 5400000,     // ~R$ 5.4M anual
+  franquia: 2800000,      // ~R$ 2.8M anual
+};
+
+// Investimento em mídia anual por BU (baseado nos dados de MediaInvestmentTab)
+const investimentoMidiaAnualPorBU = {
+  modeloAtual: 720000,    // ~R$ 60k/mês = R$ 720k/ano
+  o2Tax: 180000,          // ~R$ 15k/mês = R$ 180k/ano
+  oxyHacker: 300000,      // ~R$ 25k/mês = R$ 300k/ano
+  franquia: 240000,       // ~R$ 20k/mês = R$ 240k/ano
+};
+
+// Calcula faturamento total para rateio proporcional
+const faturamentoTotal = Object.values(faturamentoAnualPorBU).reduce((a, b) => a + b, 0);
+
+// Proporção de cada BU no faturamento total
+const proporcaoPorBU = {
+  modeloAtual: faturamentoAnualPorBU.modeloAtual / faturamentoTotal,
+  o2Tax: faturamentoAnualPorBU.o2Tax / faturamentoTotal,
+  oxyHacker: faturamentoAnualPorBU.oxyHacker / faturamentoTotal,
+  franquia: faturamentoAnualPorBU.franquia / faturamentoTotal,
+};
+
+// Componente de análise de investimento
+const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
+  // Custos de estrutura mensais por área
+  const custoMensalDiretoria = allTeamData
+    .filter(m => m.area === "diretoria")
+    .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
+  
+  const custoMensalMarketing = allTeamData
+    .filter(m => m.area === "marketing")
+    .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
+  
+  // Custos compartilhados (Diretoria + Marketing) - anualizados
+  const custosCompartilhadosAnuais = (custoMensalDiretoria + custoMensalMarketing) * 12;
+  
+  // Custos de vendas por BU (mensal)
+  const custoMensalVendasPorBU = {
+    modeloAtual: allTeamData
+      .filter(m => m.area === "vendas" && (m.bu === "modeloAtual" || !m.bu))
+      .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0),
+    o2Tax: allTeamData
+      .filter(m => m.area === "vendas" && m.bu === "o2Tax")
+      .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0),
+    oxyHacker: allTeamData
+      .filter(m => m.area === "vendas" && m.bu === "oxyHacker")
+      .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0),
+    franquia: allTeamData
+      .filter(m => m.area === "vendas" && m.bu === "franquia")
+      .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0),
+  };
+  
+  // Custos de expansão por BU (mensal)
+  const custoMensalExpansaoPorBU = {
+    modeloAtual: 0,
+    o2Tax: 0,
+    oxyHacker: allTeamData
+      .filter(m => m.area === "expansao" && m.bu === "oxyHacker")
+      .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0),
+    franquia: allTeamData
+      .filter(m => m.area === "expansao" && m.bu === "franquia")
+      .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0),
+  };
+  
+  // Calcula custo de estrutura total por BU (anual) com rateio de custos compartilhados
+  const calcularCustoEstruturaPorBU = (bu: keyof typeof proporcaoPorBU) => {
+    const custoVendasAnual = custoMensalVendasPorBU[bu] * 12;
+    const custoExpansaoAnual = custoMensalExpansaoPorBU[bu] * 12;
+    const custosCompartilhadosRateados = custosCompartilhadosAnuais * proporcaoPorBU[bu];
+    return custoVendasAnual + custoExpansaoAnual + custosCompartilhadosRateados;
+  };
+  
+  const buData = [
+    { 
+      key: "modeloAtual" as const, 
+      name: "Modelo Atual", 
+      color: "bg-primary/10 border-primary/30 text-primary",
+      iconColor: "text-primary/50"
+    },
+    { 
+      key: "o2Tax" as const, 
+      name: "O2 TAX", 
+      color: "bg-blue-500/10 border-blue-500/30 text-blue-500",
+      iconColor: "text-blue-500/50"
+    },
+    { 
+      key: "oxyHacker" as const, 
+      name: "Oxy Hacker", 
+      color: "bg-purple-500/10 border-purple-500/30 text-purple-500",
+      iconColor: "text-purple-500/50"
+    },
+    { 
+      key: "franquia" as const, 
+      name: "Franquia", 
+      color: "bg-amber-500/10 border-amber-500/30 text-amber-500",
+      iconColor: "text-amber-500/50"
+    },
+  ];
+  
+  // Calcular totais
+  const totais = buData.reduce((acc, bu) => {
+    const custoEstrutura = calcularCustoEstruturaPorBU(bu.key);
+    const custoMidia = investimentoMidiaAnualPorBU[bu.key];
+    const faturamento = faturamentoAnualPorBU[bu.key];
+    
+    return {
+      faturamento: acc.faturamento + faturamento,
+      estrutura: acc.estrutura + custoEstrutura,
+      midia: acc.midia + custoMidia,
+    };
+  }, { faturamento: 0, estrutura: 0, midia: 0 });
+  
+  return (
+    <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 text-white">
+            <PieChart className="h-5 w-5" />
+          </div>
+          <div>
+            <CardTitle>Análise de Investimento vs Faturamento por BU</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              % do investimento (time + mídia) em relação ao faturamento projetado — Custos compartilhados (Diretoria + Marketing) rateados proporcionalmente
+            </p>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Cards por BU */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {buData.map(bu => {
+            const faturamento = faturamentoAnualPorBU[bu.key];
+            const custoEstrutura = calcularCustoEstruturaPorBU(bu.key);
+            const custoMidia = investimentoMidiaAnualPorBU[bu.key];
+            const custoTotal = custoEstrutura + custoMidia;
+            
+            const pctEstrutura = (custoEstrutura / faturamento) * 100;
+            const pctMidia = (custoMidia / faturamento) * 100;
+            const pctTotal = (custoTotal / faturamento) * 100;
+            
+            return (
+              <Card key={bu.key} className={`${bu.color}`}>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold">{bu.name}</h4>
+                    <Calculator className={`h-5 w-5 ${bu.iconColor}`} />
+                  </div>
+                  
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Faturamento Projetado</span>
+                      <span className="font-bold font-mono">
+                        R$ {(faturamento / 1000000).toFixed(2)}M
+                      </span>
+                    </div>
+                    
+                    <Separator className="bg-border/50" />
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Estrutura de Time</span>
+                      <span className="font-mono">
+                        R$ {(custoEstrutura / 1000).toFixed(0)}k
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">% do Faturamento</span>
+                      <Badge variant="outline" className="font-mono bg-background/50">
+                        {pctEstrutura.toFixed(1)}%
+                      </Badge>
+                    </div>
+                    
+                    <Separator className="bg-border/50" />
+                    
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Investimento em Mídia</span>
+                      <span className="font-mono">
+                        R$ {(custoMidia / 1000).toFixed(0)}k
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">% do Faturamento</span>
+                      <Badge variant="outline" className="font-mono bg-background/50">
+                        {pctMidia.toFixed(1)}%
+                      </Badge>
+                    </div>
+                    
+                    <Separator className="bg-border/50" />
+                    
+                    <div className="flex justify-between items-center pt-1">
+                      <span className="font-semibold">Investimento Total</span>
+                      <span className="font-bold font-mono">
+                        R$ {(custoTotal / 1000).toFixed(0)}k
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold">% Total do Faturamento</span>
+                      <Badge className="font-mono text-base px-3 py-1">
+                        {pctTotal.toFixed(1)}%
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+        
+        {/* Tabela Comparativa */}
+        <div className="rounded-lg border border-border/50 overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/30">
+                <TableHead>BU</TableHead>
+                <TableHead className="text-right">Faturamento</TableHead>
+                <TableHead className="text-right">Time</TableHead>
+                <TableHead className="text-right">% Time</TableHead>
+                <TableHead className="text-right">Mídia</TableHead>
+                <TableHead className="text-right">% Mídia</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">% Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {buData.map(bu => {
+                const faturamento = faturamentoAnualPorBU[bu.key];
+                const custoEstrutura = calcularCustoEstruturaPorBU(bu.key);
+                const custoMidia = investimentoMidiaAnualPorBU[bu.key];
+                const custoTotal = custoEstrutura + custoMidia;
+                
+                const pctEstrutura = (custoEstrutura / faturamento) * 100;
+                const pctMidia = (custoMidia / faturamento) * 100;
+                const pctTotal = (custoTotal / faturamento) * 100;
+                
+                return (
+                  <TableRow key={bu.key} className="hover:bg-muted/20">
+                    <TableCell className="font-medium">{bu.name}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      R$ {(faturamento / 1000000).toFixed(2)}M
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      R$ {(custoEstrutura / 1000).toFixed(0)}k
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="outline" className="font-mono">
+                        {pctEstrutura.toFixed(1)}%
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      R$ {(custoMidia / 1000).toFixed(0)}k
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="outline" className="font-mono">
+                        {pctMidia.toFixed(1)}%
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-medium">
+                      R$ {(custoTotal / 1000).toFixed(0)}k
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge className="font-mono">
+                        {pctTotal.toFixed(1)}%
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+            <TableFooter>
+              <TableRow className="bg-primary/5">
+                <TableCell className="font-bold text-primary">TOTAL</TableCell>
+                <TableCell className="text-right font-mono font-bold text-primary">
+                  R$ {(totais.faturamento / 1000000).toFixed(2)}M
+                </TableCell>
+                <TableCell className="text-right font-mono font-bold text-primary">
+                  R$ {(totais.estrutura / 1000).toFixed(0)}k
+                </TableCell>
+                <TableCell className="text-right">
+                  <Badge variant="outline" className="font-mono bg-primary/10 text-primary border-primary/30">
+                    {((totais.estrutura / totais.faturamento) * 100).toFixed(1)}%
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right font-mono font-bold text-primary">
+                  R$ {(totais.midia / 1000).toFixed(0)}k
+                </TableCell>
+                <TableCell className="text-right">
+                  <Badge variant="outline" className="font-mono bg-primary/10 text-primary border-primary/30">
+                    {((totais.midia / totais.faturamento) * 100).toFixed(1)}%
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right font-mono font-bold text-primary">
+                  R$ {((totais.estrutura + totais.midia) / 1000).toFixed(0)}k
+                </TableCell>
+                <TableCell className="text-right">
+                  <Badge className="font-mono bg-primary text-primary-foreground">
+                    {(((totais.estrutura + totais.midia) / totais.faturamento) * 100).toFixed(1)}%
+                  </Badge>
+                </TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </div>
+        
+        {/* Legenda explicativa */}
+        <div className="p-4 rounded-lg bg-muted/30 border border-border/30">
+          <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            Metodologia de Rateio
+          </h4>
+          <ul className="text-sm text-muted-foreground space-y-1">
+            <li>• <strong>Custos Diretos</strong>: Vendas e Expansão são alocados diretamente à BU correspondente</li>
+            <li>• <strong>Custos Compartilhados</strong>: Diretoria (R$ {formatCurrency(custoMensalDiretoria)}/mês) + Marketing (R$ {formatCurrency(custoMensalMarketing)}/mês) são rateados proporcionalmente ao faturamento de cada BU</li>
+            <li>• <strong>Proporções</strong>: Modelo Atual ({(proporcaoPorBU.modeloAtual * 100).toFixed(1)}%), O2 TAX ({(proporcaoPorBU.o2Tax * 100).toFixed(1)}%), Oxy Hacker ({(proporcaoPorBU.oxyHacker * 100).toFixed(1)}%), Franquia ({(proporcaoPorBU.franquia * 100).toFixed(1)}%)</li>
+          </ul>
+        </div>
+      </CardContent>
+    </Card>
+  );
 };
 
 // ============ COMPONENTS ============
@@ -1389,6 +1717,9 @@ export const StructureTab = () => {
 
       {/* Salary Table Section */}
       <SalaryTable allTeamData={allTeamData} onEdit={handleEdit} selectedBU={selectedBU} />
+
+      {/* Investment Analysis Section */}
+      <InvestmentAnalysis allTeamData={allTeamData} />
 
       {/* Ferramentas Section */}
       <div>
