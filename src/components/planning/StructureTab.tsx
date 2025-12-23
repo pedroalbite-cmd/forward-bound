@@ -1,5 +1,25 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  TableFooter,
+} from "@/components/ui/table";
 import { 
   Users, 
   Wrench, 
@@ -12,76 +32,96 @@ import {
   MessageSquare,
   Palette,
   BarChart3,
-  Mail,
-  Calendar,
-  Video,
-  FileText,
-  Database,
   Workflow,
-  Phone,
-  Globe,
-  LineChart,
-  PieChart,
-  Briefcase,
-  HeartHandshake
+  HeartHandshake,
+  Pencil,
+  DollarSign
 } from "lucide-react";
 
-// ============ TIME DATA ============
+// ============ TYPES ============
 
-const marketingTeam = [
+interface TeamMember {
+  role: string;
+  responsibilities: string[];
+  status: "contratado" | "a contratar";
+  person?: string;
+  quantity?: number;
+  salary: number;
+  area: "marketing" | "vendas" | "expansao";
+}
+
+// ============ INITIAL DATA ============
+
+const initialMarketingTeam: TeamMember[] = [
   {
     role: "Head de Marketing",
     responsibilities: ["Estratégia geral", "Gestão do time", "Budget", "Alinhamento com vendas"],
     status: "contratado",
-    person: "Contratado"
+    person: "Contratado",
+    salary: 0,
+    area: "marketing"
   },
   {
     role: "Social Media",
     responsibilities: ["Calendário de posts", "Engajamento", "Comunidade", "Tendências"],
     status: "contratado",
-    person: "Contratado"
+    person: "Contratado",
+    salary: 0,
+    area: "marketing"
   },
   {
     role: "Designer",
     responsibilities: ["Criativos para ads", "Social media", "Materiais ricos", "Branding"],
     status: "contratado",
-    person: "Contratado"
+    person: "Contratado",
+    salary: 0,
+    area: "marketing"
   }
 ];
 
-const salesTeam = [
+const initialSalesTeam: TeamMember[] = [
   {
     role: "Head Comercial",
     responsibilities: ["Estratégia de vendas", "Gestão do pipeline", "Metas", "Treinamento"],
     status: "contratado",
-    person: "Contratado"
+    person: "Contratado",
+    salary: 0,
+    area: "vendas"
   },
   {
     role: "SDR (Sales Development)",
     responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up", "CRM"],
     status: "contratado",
-    quantity: 2
+    quantity: 2,
+    salary: 0,
+    area: "vendas"
   },
   {
     role: "Closer",
     responsibilities: ["Reuniões de venda", "Negociação", "Fechamento", "Onboarding inicial"],
     status: "a contratar",
-    quantity: 1
+    quantity: 1,
+    salary: 0,
+    area: "vendas"
   },
   {
     role: "SDR (Sales Development)",
     responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up", "CRM"],
     status: "a contratar",
-    quantity: 2
+    quantity: 2,
+    salary: 0,
+    area: "vendas"
   }
 ];
 
-const expansionTeam = [
+const initialExpansionTeam: TeamMember[] = [
   {
     role: "Gestor de Comunidade",
     responsibilities: ["Engajamento de franqueados", "Relacionamento", "Suporte", "Eventos"],
     status: "a contratar",
-    quantity: 1
+    quantity: 1,
+    salary: 0,
+    area: "expansao"
   }
 ];
 
@@ -151,9 +191,38 @@ const toolCategories = [
   }
 ];
 
+// ============ HELPER FUNCTIONS ============
+
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(value);
+};
+
+const getAreaLabel = (area: string) => {
+  switch (area) {
+    case "marketing": return "Marketing";
+    case "vendas": return "Vendas";
+    case "expansao": return "Expansão";
+    default: return area;
+  }
+};
+
+const getAreaColor = (area: string) => {
+  switch (area) {
+    case "marketing": return "text-green-500";
+    case "vendas": return "text-blue-500";
+    case "expansao": return "text-purple-500";
+    default: return "text-foreground";
+  }
+};
+
 // ============ COMPONENTS ============
 
-const TeamMemberCard = ({ member, color }: { member: any; color: string }) => (
+const TeamMemberCard = ({ member, color }: { member: TeamMember; color: string }) => (
   <div className="flex items-start gap-3 p-4 rounded-lg bg-background/50 border border-border/30 hover:border-border/50 transition-all">
     <div className={`p-2 rounded-lg bg-gradient-to-br ${color} text-white shrink-0`}>
       {member.status === "contratado" ? (
@@ -204,7 +273,7 @@ const TeamSection = ({
 }: { 
   title: string; 
   icon: any; 
-  team: any[];
+  team: TeamMember[];
   color: string;
   bgColor: string;
 }) => {
@@ -292,29 +361,192 @@ const ToolCategoryCard = ({ category }: { category: typeof toolCategories[0] }) 
   );
 };
 
+// ============ SALARY TABLE COMPONENT ============
+
+interface SalaryTableProps {
+  allTeamData: TeamMember[];
+  onEdit: (member: TeamMember, index: number) => void;
+}
+
+const SalaryTable = ({ allTeamData, onEdit }: SalaryTableProps) => {
+  const contratados = allTeamData.filter(m => m.status === "contratado");
+  const aContratar = allTeamData.filter(m => m.status === "a contratar");
+  
+  const totalContratados = contratados.reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
+  const totalAContratar = aContratar.reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
+  const totalGeral = totalContratados + totalAContratar;
+
+  return (
+    <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 text-white">
+            <DollarSign className="h-5 w-5" />
+          </div>
+          <div>
+            <CardTitle>Tabela de Remuneração</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Valores mensais por cargo
+            </p>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-lg border border-border/50 overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/30">
+                <TableHead className="w-[120px]">Status</TableHead>
+                <TableHead className="w-[100px]">Área</TableHead>
+                <TableHead>Cargo</TableHead>
+                <TableHead className="text-center w-[60px]">Qtd</TableHead>
+                <TableHead className="text-right w-[140px]">Remuneração</TableHead>
+                <TableHead className="text-right w-[140px]">Total</TableHead>
+                <TableHead className="text-center w-[80px]">Ação</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {allTeamData.map((member, index) => (
+                <TableRow key={`${member.area}-${member.role}-${index}`} className="hover:bg-muted/20">
+                  <TableCell>
+                    <Badge 
+                      variant="outline"
+                      className={`text-xs ${
+                        member.status === "contratado" 
+                          ? "bg-green-500/10 text-green-500 border-green-500/30" 
+                          : "bg-amber-500/10 text-amber-500 border-amber-500/30"
+                      }`}
+                    >
+                      {member.status === "contratado" ? "Contratado" : "A contratar"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <span className={`font-medium ${getAreaColor(member.area)}`}>
+                      {getAreaLabel(member.area)}
+                    </span>
+                  </TableCell>
+                  <TableCell className="font-medium">{member.role}</TableCell>
+                  <TableCell className="text-center">{member.quantity || 1}</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {formatCurrency(member.salary)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono font-medium">
+                    {formatCurrency(member.salary * (member.quantity || 1))}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEdit(member, index)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+            <TableFooter>
+              <TableRow className="bg-green-500/5">
+                <TableCell colSpan={5} className="font-semibold text-green-500">
+                  Total Contratados
+                </TableCell>
+                <TableCell className="text-right font-mono font-bold text-green-500">
+                  {formatCurrency(totalContratados)}
+                </TableCell>
+                <TableCell />
+              </TableRow>
+              <TableRow className="bg-amber-500/5">
+                <TableCell colSpan={5} className="font-semibold text-amber-500">
+                  Total A Contratar
+                </TableCell>
+                <TableCell className="text-right font-mono font-bold text-amber-500">
+                  {formatCurrency(totalAContratar)}
+                </TableCell>
+                <TableCell />
+              </TableRow>
+              <TableRow className="bg-primary/5">
+                <TableCell colSpan={5} className="font-bold text-primary">
+                  Total Geral (Mensal)
+                </TableCell>
+                <TableCell className="text-right font-mono font-bold text-primary text-lg">
+                  {formatCurrency(totalGeral)}
+                </TableCell>
+                <TableCell />
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 // ============ MAIN COMPONENT ============
 
 export const StructureTab = () => {
-  const totalPeople = [
-    ...marketingTeam.map((m: any) => m.quantity || 1),
-    ...salesTeam.map((m: any) => m.quantity || 1),
-    ...expansionTeam.map((m: any) => m.quantity || 1)
-  ].reduce((a, b) => a + b, 0);
+  const [marketingData, setMarketingData] = useState<TeamMember[]>(initialMarketingTeam);
+  const [salesData, setSalesData] = useState<TeamMember[]>(initialSalesTeam);
+  const [expansionData, setExpansionData] = useState<TeamMember[]>(initialExpansionTeam);
   
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number>(-1);
+  const [editingSalary, setEditingSalary] = useState<string>("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const allTeamData = [...marketingData, ...salesData, ...expansionData];
+
+  const handleEdit = (member: TeamMember, globalIndex: number) => {
+    setEditingMember(member);
+    setEditingIndex(globalIndex);
+    setEditingSalary(member.salary.toString());
+    setIsDialogOpen(true);
+  };
+
+  const handleSave = () => {
+    if (!editingMember) return;
+    
+    const newSalary = parseFloat(editingSalary) || 0;
+    
+    const updateTeam = (team: TeamMember[], setTeam: React.Dispatch<React.SetStateAction<TeamMember[]>>) => {
+      const index = team.findIndex(m => 
+        m.role === editingMember.role && 
+        m.status === editingMember.status && 
+        m.area === editingMember.area
+      );
+      if (index !== -1) {
+        const updated = [...team];
+        updated[index] = { ...updated[index], salary: newSalary };
+        setTeam(updated);
+        return true;
+      }
+      return false;
+    };
+    
+    if (editingMember.area === "marketing") {
+      updateTeam(marketingData, setMarketingData);
+    } else if (editingMember.area === "vendas") {
+      updateTeam(salesData, setSalesData);
+    } else if (editingMember.area === "expansao") {
+      updateTeam(expansionData, setExpansionData);
+    }
+    
+    setIsDialogOpen(false);
+    setEditingMember(null);
+    setEditingIndex(-1);
+  };
+
+  const totalPeople = allTeamData.reduce((acc, m) => acc + (m.quantity || 1), 0);
   const totalTools = toolCategories.reduce((acc, cat) => acc + cat.tools.length, 0);
   const activeTools = toolCategories.reduce((acc, cat) => acc + cat.tools.filter(t => t.status === "ativo").length, 0);
   
-  const totalContratados = [
-    ...marketingTeam.filter(m => m.status === "contratado").map((m: any) => m.quantity || 1),
-    ...salesTeam.filter(m => m.status === "contratado").map((m: any) => m.quantity || 1),
-    ...expansionTeam.filter(m => m.status === "contratado").map((m: any) => m.quantity || 1)
-  ].reduce((a, b) => a + b, 0);
+  const totalContratados = allTeamData
+    .filter(m => m.status === "contratado")
+    .reduce((acc, m) => acc + (m.quantity || 1), 0);
   
-  const totalAContratar = [
-    ...marketingTeam.filter(m => m.status === "a contratar").map((m: any) => m.quantity || 1),
-    ...salesTeam.filter(m => m.status === "a contratar").map((m: any) => m.quantity || 1),
-    ...expansionTeam.filter(m => m.status === "a contratar").map((m: any) => m.quantity || 1)
-  ].reduce((a, b) => a + b, 0);
+  const totalAContratar = allTeamData
+    .filter(m => m.status === "a contratar")
+    .reduce((acc, m) => acc + (m.quantity || 1), 0);
 
   return (
     <div className="space-y-8">
@@ -379,26 +611,29 @@ export const StructureTab = () => {
           <TeamSection 
             title="Marketing" 
             icon={Megaphone} 
-            team={marketingTeam}
+            team={marketingData}
             color="from-green-500 to-emerald-500"
             bgColor="bg-green-500/10"
           />
           <TeamSection 
             title="Vendas" 
             icon={TrendingUp} 
-            team={salesTeam}
+            team={salesData}
             color="from-blue-500 to-cyan-500"
             bgColor="bg-blue-500/10"
           />
           <TeamSection 
             title="Expansão" 
             icon={Building2} 
-            team={expansionTeam}
+            team={expansionData}
             color="from-purple-500 to-pink-500"
             bgColor="bg-purple-500/10"
           />
         </div>
       </div>
+
+      {/* Salary Table Section */}
+      <SalaryTable allTeamData={allTeamData} onEdit={handleEdit} />
 
       {/* Ferramentas Section */}
       <div>
@@ -428,7 +663,7 @@ export const StructureTab = () => {
                 <Megaphone className="h-4 w-4 text-green-500" />
                 <h4 className="font-semibold text-green-500">Marketing</h4>
               </div>
-              <p className="text-2xl font-bold">{marketingTeam.length}</p>
+              <p className="text-2xl font-bold">{marketingData.length}</p>
               <p className="text-sm text-muted-foreground">posições no time</p>
             </div>
             <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
@@ -436,7 +671,7 @@ export const StructureTab = () => {
                 <TrendingUp className="h-4 w-4 text-blue-500" />
                 <h4 className="font-semibold text-blue-500">Vendas</h4>
               </div>
-              <p className="text-2xl font-bold">{salesTeam.reduce((acc, m: any) => acc + (m.quantity || 1), 0)}</p>
+              <p className="text-2xl font-bold">{salesData.reduce((acc, m) => acc + (m.quantity || 1), 0)}</p>
               <p className="text-sm text-muted-foreground">posições no time</p>
             </div>
             <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20">
@@ -444,12 +679,72 @@ export const StructureTab = () => {
                 <Building2 className="h-4 w-4 text-purple-500" />
                 <h4 className="font-semibold text-purple-500">Expansão</h4>
               </div>
-              <p className="text-2xl font-bold">{expansionTeam.reduce((acc, m: any) => acc + (m.quantity || 1), 0)}</p>
+              <p className="text-2xl font-bold">{expansionData.reduce((acc, m) => acc + (m.quantity || 1), 0)}</p>
               <p className="text-sm text-muted-foreground">posições no time</p>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit Salary Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Editar Remuneração</DialogTitle>
+          </DialogHeader>
+          {editingMember && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className={getAreaColor(editingMember.area)}>
+                    {getAreaLabel(editingMember.area)}
+                  </Badge>
+                  <Badge 
+                    variant="outline"
+                    className={`text-xs ${
+                      editingMember.status === "contratado" 
+                        ? "bg-green-500/10 text-green-500 border-green-500/30" 
+                        : "bg-amber-500/10 text-amber-500 border-amber-500/30"
+                    }`}
+                  >
+                    {editingMember.status === "contratado" ? "Contratado" : "A contratar"}
+                  </Badge>
+                </div>
+                <p className="font-semibold text-lg">{editingMember.role}</p>
+                {editingMember.quantity && editingMember.quantity > 1 && (
+                  <p className="text-sm text-muted-foreground">
+                    Quantidade: {editingMember.quantity} pessoas
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="salary">Remuneração Mensal (R$)</Label>
+                <Input
+                  id="salary"
+                  type="number"
+                  value={editingSalary}
+                  onChange={(e) => setEditingSalary(e.target.value)}
+                  placeholder="0"
+                  className="font-mono"
+                />
+                {editingMember.quantity && editingMember.quantity > 1 && (
+                  <p className="text-sm text-muted-foreground">
+                    Total para {editingMember.quantity} pessoas: {formatCurrency((parseFloat(editingSalary) || 0) * editingMember.quantity)}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSave}>
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
