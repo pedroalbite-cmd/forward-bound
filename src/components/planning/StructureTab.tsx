@@ -61,10 +61,29 @@ const salesTeam = [
     responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up", "CRM"],
     status: "contratado",
     quantity: 2
+  },
+  {
+    role: "Closer",
+    responsibilities: ["Reuniões de venda", "Negociação", "Fechamento", "Onboarding inicial"],
+    status: "a contratar",
+    quantity: 1
+  },
+  {
+    role: "SDR (Sales Development)",
+    responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up", "CRM"],
+    status: "a contratar",
+    quantity: 2
   }
 ];
 
-const expansionTeam: any[] = [];
+const expansionTeam = [
+  {
+    role: "Gestor de Comunidade",
+    responsibilities: ["Engajamento de franqueados", "Relacionamento", "Suporte", "Eventos"],
+    status: "a contratar",
+    quantity: 1
+  }
+];
 
 // ============ FERRAMENTAS DATA ============
 
@@ -189,7 +208,7 @@ const TeamSection = ({
   color: string;
   bgColor: string;
 }) => {
-  const contratados = team.filter(m => m.status === "contratado").length;
+  const contratados = team.filter(m => m.status === "contratado").reduce((acc, m) => acc + (m.quantity || 1), 0);
   const aContratar = team.filter(m => m.status === "a contratar").reduce((acc, m) => acc + (m.quantity || 1), 0);
   
   return (
@@ -286,10 +305,10 @@ export const StructureTab = () => {
   const activeTools = toolCategories.reduce((acc, cat) => acc + cat.tools.filter(t => t.status === "ativo").length, 0);
   
   const totalContratados = [
-    ...marketingTeam.filter(m => m.status === "contratado"),
-    ...salesTeam.filter(m => m.status === "contratado"),
-    ...expansionTeam.filter(m => m.status === "contratado")
-  ].length;
+    ...marketingTeam.filter(m => m.status === "contratado").map((m: any) => m.quantity || 1),
+    ...salesTeam.filter(m => m.status === "contratado").map((m: any) => m.quantity || 1),
+    ...expansionTeam.filter(m => m.status === "contratado").map((m: any) => m.quantity || 1)
+  ].reduce((a, b) => a + b, 0);
   
   const totalAContratar = [
     ...marketingTeam.filter(m => m.status === "a contratar").map((m: any) => m.quantity || 1),
