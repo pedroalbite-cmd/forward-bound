@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,8 @@ import {
   Workflow,
   HeartHandshake,
   Pencil,
-  DollarSign
+  DollarSign,
+  Calendar
 } from "lucide-react";
 
 // ============ TYPES ============
@@ -48,9 +49,159 @@ interface TeamMember {
   quantity?: number;
   salary: number;
   area: "marketing" | "vendas" | "expansao";
+  hiringMonth?: string;
+}
+
+// ============ FUNNEL CALCULATION CONSTANTS ============
+
+const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+// Capacidades de cada cargo
+const CLOSER_CAPACITY = 14; // vendas por mês
+const SDR_CAPACITY = 80;    // reuniões realizadas (RRs) por mês
+
+// Dados do Modelo Atual (BU principal) - mesmo que no MediaInvestmentTab
+const modeloAtualQuarterlyMetas = { Q1: 3750000, Q2: 4950000, Q3: 6400000, Q4: 8000000 };
+const modeloAtualTicket = 17000;
+const modeloAtualMrrBase = 2700000;
+const modeloAtualChurn = 0.06;
+const modeloAtualRetencao = 0.25;
+
+// Taxas de conversão do funil (Modelo Atual)
+const modeloAtualMetrics = {
+  leadToMql: 0.35,
+  mqlToRm: 0.60,
+  rmToRr: 0.70,
+  rrToProp: 0.75,
+  propToVenda: 0.60,
+};
+
+// Distribui metas trimestrais em mensais
+function distributeQuarterlyToMonthly(
+  quarterlyData: { Q1: number; Q2: number; Q3: number; Q4: number }
+): Record<string, number> {
+  const monthlyMetas: Record<string, number> = {};
+  const quarterWeights = {
+    Q1: { Jan: 0.30, Fev: 0.33, Mar: 0.37 },
+    Q2: { Abr: 0.30, Mai: 0.33, Jun: 0.37 },
+    Q3: { Jul: 0.30, Ago: 0.33, Set: 0.37 },
+    Q4: { Out: 0.33, Nov: 0.37, Dez: 0.30 },
+  };
+  
+  monthlyMetas["Jan"] = quarterlyData.Q1 * quarterWeights.Q1.Jan;
+  monthlyMetas["Fev"] = quarterlyData.Q1 * quarterWeights.Q1.Fev;
+  monthlyMetas["Mar"] = quarterlyData.Q1 * quarterWeights.Q1.Mar;
+  monthlyMetas["Abr"] = quarterlyData.Q2 * quarterWeights.Q2.Abr;
+  monthlyMetas["Mai"] = quarterlyData.Q2 * quarterWeights.Q2.Mai;
+  monthlyMetas["Jun"] = quarterlyData.Q2 * quarterWeights.Q2.Jun;
+  monthlyMetas["Jul"] = quarterlyData.Q3 * quarterWeights.Q3.Jul;
+  monthlyMetas["Ago"] = quarterlyData.Q3 * quarterWeights.Q3.Ago;
+  monthlyMetas["Set"] = quarterlyData.Q3 * quarterWeights.Q3.Set;
+  monthlyMetas["Out"] = quarterlyData.Q4 * quarterWeights.Q4.Out;
+  monthlyMetas["Nov"] = quarterlyData.Q4 * quarterWeights.Q4.Nov;
+  monthlyMetas["Dez"] = quarterlyData.Q4 * quarterWeights.Q4.Dez;
+  
+  return monthlyMetas;
+}
+
+// Calcula MRR dinâmico e vendas necessárias
+function calculateMrrAndRevenueToSell(
+  mrrInicial: number, 
+  churnRate: number, 
+  retencaoRate: number,
+  metasMensais: Record<string, number>,
+  ticketMedio: number
+): { vendasPorMes: Record<string, number>; revenueToSell: Record<string, number> } {
+  const vendasPorMes: Record<string, number> = {};
+  const revenueToSell: Record<string, number> = {};
+  
+  let mrrAtual = mrrInicial;
+  let vendasMesAnterior = 0;
+  
+  months.forEach((month, index) => {
+    if (index > 0) {
+      mrrAtual = mrrAtual * (1 - churnRate);
+    }
+    const retencaoDoMesAnterior = vendasMesAnterior * ticketMedio * retencaoRate;
+    mrrAtual = mrrAtual + retencaoDoMesAnterior;
+    
+    const metaDoMes = metasMensais[month];
+    const aVender = Math.max(0, metaDoMes - mrrAtual);
+    revenueToSell[month] = aVender;
+    
+    const vendasDoMes = aVender / ticketMedio;
+    vendasPorMes[month] = vendasDoMes;
+    vendasMesAnterior = vendasDoMes;
+  });
+  
+  return { vendasPorMes, revenueToSell };
+}
+
+// Calcula funil reverso para obter RRs
+function calculateReverseFunnel(
+  vendasPorMes: Record<string, number>,
+  metrics: typeof modeloAtualMetrics
+): Record<string, { vendas: number; rrs: number }> {
+  const funnelData: Record<string, { vendas: number; rrs: number }> = {};
+  
+  months.forEach(month => {
+    const vendas = Math.ceil(vendasPorMes[month]);
+    const propostas = vendas / metrics.propToVenda;
+    const rrs = Math.ceil(propostas / metrics.rrToProp);
+    
+    funnelData[month] = { vendas, rrs };
+  });
+  
+  return funnelData;
+}
+
+// Calcula meses de contratação para Closers e SDRs
+function calculateHiringMonths(): { closerMonths: string[]; sdrMonths: string[] } {
+  const metasMensais = distributeQuarterlyToMonthly(modeloAtualQuarterlyMetas);
+  const { vendasPorMes } = calculateMrrAndRevenueToSell(
+    modeloAtualMrrBase,
+    modeloAtualChurn,
+    modeloAtualRetencao,
+    metasMensais,
+    modeloAtualTicket
+  );
+  const funnelData = calculateReverseFunnel(vendasPorMes, modeloAtualMetrics);
+  
+  // Estado atual: 0 Closers contratados, 2 SDRs contratados
+  let currentClosers = 0;
+  let currentSDRs = 2;
+  
+  const closerMonths: string[] = [];
+  const sdrMonths: string[] = [];
+  
+  months.forEach(month => {
+    const { vendas, rrs } = funnelData[month];
+    
+    // Quantos Closers são necessários para as vendas do mês
+    const closersNeeded = Math.ceil(vendas / CLOSER_CAPACITY);
+    // Quantos SDRs são necessários para os RRs do mês
+    const sdrsNeeded = Math.ceil(rrs / SDR_CAPACITY);
+    
+    // Contratar Closers se necessário
+    while (currentClosers < closersNeeded) {
+      closerMonths.push(month);
+      currentClosers++;
+    }
+    
+    // Contratar SDRs se necessário
+    while (currentSDRs < sdrsNeeded) {
+      sdrMonths.push(month);
+      currentSDRs++;
+    }
+  });
+  
+  return { closerMonths, sdrMonths };
 }
 
 // ============ INITIAL DATA ============
+
+// Pré-calcula os meses de contratação
+const { closerMonths, sdrMonths } = calculateHiringMonths();
 
 const initialMarketingTeam: TeamMember[] = [
   {
@@ -96,22 +247,26 @@ const initialSalesTeam: TeamMember[] = [
     salary: 0,
     area: "vendas"
   },
-  {
+  // Closers a contratar (com mês calculado)
+  ...closerMonths.map((month, index) => ({
     role: "Closer",
     responsibilities: ["Reuniões de venda", "Negociação", "Fechamento", "Onboarding inicial"],
-    status: "a contratar",
+    status: "a contratar" as const,
     quantity: 1,
     salary: 0,
-    area: "vendas"
-  },
-  {
+    area: "vendas" as const,
+    hiringMonth: month
+  })),
+  // SDRs a contratar (com mês calculado)
+  ...sdrMonths.map((month, index) => ({
     role: "SDR (Sales Development)",
     responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up", "CRM"],
-    status: "a contratar",
-    quantity: 2,
+    status: "a contratar" as const,
+    quantity: 1,
     salary: 0,
-    area: "vendas"
-  }
+    area: "vendas" as const,
+    hiringMonth: month
+  }))
 ];
 
 const initialExpansionTeam: TeamMember[] = [
@@ -400,6 +555,12 @@ const SalaryTable = ({ allTeamData, onEdit }: SalaryTableProps) => {
                 <TableHead className="w-[100px]">Área</TableHead>
                 <TableHead>Cargo</TableHead>
                 <TableHead className="text-center w-[60px]">Qtd</TableHead>
+                <TableHead className="text-center w-[120px]">
+                  <div className="flex items-center justify-center gap-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    Mês Contratação
+                  </div>
+                </TableHead>
                 <TableHead className="text-right w-[140px]">Remuneração</TableHead>
                 <TableHead className="text-right w-[140px]">Total</TableHead>
                 <TableHead className="text-center w-[80px]">Ação</TableHead>
@@ -427,6 +588,17 @@ const SalaryTable = ({ allTeamData, onEdit }: SalaryTableProps) => {
                   </TableCell>
                   <TableCell className="font-medium">{member.role}</TableCell>
                   <TableCell className="text-center">{member.quantity || 1}</TableCell>
+                  <TableCell className="text-center">
+                    {member.status === "contratado" ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : member.hiringMonth ? (
+                      <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30">
+                        {member.hiringMonth}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">A definir</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right font-mono">
                     {formatCurrency(member.salary)}
                   </TableCell>
@@ -448,7 +620,7 @@ const SalaryTable = ({ allTeamData, onEdit }: SalaryTableProps) => {
             </TableBody>
             <TableFooter>
               <TableRow className="bg-green-500/5">
-                <TableCell colSpan={5} className="font-semibold text-green-500">
+                <TableCell colSpan={6} className="font-semibold text-green-500">
                   Total Contratados
                 </TableCell>
                 <TableCell className="text-right font-mono font-bold text-green-500">
@@ -457,7 +629,7 @@ const SalaryTable = ({ allTeamData, onEdit }: SalaryTableProps) => {
                 <TableCell />
               </TableRow>
               <TableRow className="bg-amber-500/5">
-                <TableCell colSpan={5} className="font-semibold text-amber-500">
+                <TableCell colSpan={6} className="font-semibold text-amber-500">
                   Total A Contratar
                 </TableCell>
                 <TableCell className="text-right font-mono font-bold text-amber-500">
@@ -466,7 +638,7 @@ const SalaryTable = ({ allTeamData, onEdit }: SalaryTableProps) => {
                 <TableCell />
               </TableRow>
               <TableRow className="bg-primary/5">
-                <TableCell colSpan={5} className="font-bold text-primary">
+                <TableCell colSpan={6} className="font-bold text-primary">
                   Total Geral (Mensal)
                 </TableCell>
                 <TableCell className="text-right font-mono font-bold text-primary text-lg">
