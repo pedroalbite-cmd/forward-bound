@@ -245,9 +245,25 @@ function calculateReverseFunnel(
   // Jan recebe o investimento de Fev, Fev recebe o de Mar, etc.
   // Isso reflete que o investimento de um mês gera resultado no mês seguinte
   return dadosOriginais.map((dados, index) => {
-    // Se é janeiro e tem investimento inicial definido, usa o valor fixo
+    // Se é janeiro e tem investimento inicial definido, recalcula vendas baseado no investimento e CPV
     if (index === 0 && investimentoInicialJan > 0) {
-      return { ...dados, investimento: investimentoInicialJan };
+      const vendasIniciais = Math.ceil(investimentoInicialJan / cpvValue);
+      const propostas = Math.ceil(vendasIniciais / metrics.propToVenda);
+      const rrs = Math.ceil(propostas / metrics.rrToProp);
+      const rms = Math.ceil(rrs / metrics.rmToRr);
+      const mqls = Math.ceil(rms / metrics.mqlToRm);
+      const leads = Math.ceil(mqls / metrics.leadToMql);
+      
+      return { 
+        ...dados, 
+        investimento: investimentoInicialJan,
+        vendas: vendasIniciais,
+        propostas,
+        rrs,
+        rms,
+        mqls,
+        leads,
+      };
     }
     
     // Pega o investimento do próximo mês, ou mantém o próprio se for dezembro
@@ -386,7 +402,7 @@ function BUInvestmentTable({
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-muted/50 rounded-lg p-4 text-center">
             <p className="text-sm text-muted-foreground">Investimento Total</p>
             <p className="text-xl font-display font-bold text-primary">{formatCompact(totalInvestimento)}</p>
@@ -408,12 +424,8 @@ function BUInvestmentTable({
             </p>
           </div>
           <div className="bg-muted/50 rounded-lg p-4 text-center">
-            <p className="text-sm text-muted-foreground">MQLs Necessários</p>
-            <p className="text-xl font-display font-bold">{formatNumber(totalMqls)}</p>
-          </div>
-          <div className="bg-muted/50 rounded-lg p-4 text-center">
-            <p className="text-sm text-muted-foreground">Leads Necessários</p>
-            <p className="text-xl font-display font-bold">{formatNumber(totalLeads)}</p>
+            <p className="text-sm text-muted-foreground">CPV</p>
+            <p className="text-xl font-display font-bold text-emerald-600">{formatCurrency(metrics.cpv || metrics.cac)}</p>
           </div>
           <div className="bg-muted/50 rounded-lg p-4 text-center">
             <p className="text-sm text-muted-foreground">Vendas Previstas</p>
