@@ -1322,105 +1322,113 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
             </div>
             
             {/* Gráfico de evolução */}
-            <div className="h-[400px] mb-6">
-              <ChartContainer config={chartConfig}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={evolucaoData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
-                    <XAxis 
-                      dataKey="month" 
-                      className="text-xs"
-                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                    />
-                    <YAxis 
-                      yAxisId="left"
-                      className="text-xs"
-                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                      tickFormatter={(value) => `R$ ${(value / 1000000).toFixed(1)}M`}
-                    />
-                    <YAxis 
-                      yAxisId="right"
-                      orientation="right"
-                      className="text-xs"
-                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
-                      tickFormatter={(value) => `${value.toFixed(0)}%`}
-                      domain={[0, 'auto']}
-                    />
-                    <Tooltip 
-                      content={({ active, payload, label }) => {
-                        if (!active || !payload) return null;
-                        return (
-                          <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
-                            <p className="font-semibold mb-2">{label}</p>
-                            {payload.map((entry: any, index: number) => (
-                              <div key={index} className="flex items-center gap-2 text-sm">
-                                <div 
-                                  className="w-3 h-3 rounded-full" 
-                                  style={{ backgroundColor: entry.color }}
-                                />
-                                <span className="text-muted-foreground">{entry.name}:</span>
-                                <span className="font-mono font-medium">
-                                  {entry.dataKey === 'faturamento' 
-                                    ? `R$ ${(entry.value / 1000000).toFixed(2)}M`
-                                    : entry.dataKey.startsWith('pct')
-                                      ? `${entry.value.toFixed(1)}%`
-                                      : `R$ ${(entry.value / 1000).toFixed(0)}k`
-                                  }
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      }}
-                    />
-                    <Legend />
-                    
-                    {/* Áreas empilhadas para custos dos times */}
-                    <Area 
-                      yAxisId="left"
-                      type="monotone" 
-                      dataKey="marketing" 
-                      stackId="1" 
-                      fill="hsl(142, 76%, 36%)" 
-                      stroke="hsl(142, 76%, 36%)"
-                      name="Marketing"
-                    />
-                    <Area 
-                      yAxisId="left"
-                      type="monotone" 
-                      dataKey="vendas" 
-                      stackId="1" 
-                      fill="hsl(217, 91%, 60%)" 
-                      stroke="hsl(217, 91%, 60%)"
-                      name="Vendas"
-                    />
-                    <Area 
-                      yAxisId="left"
-                      type="monotone" 
-                      dataKey="expansao" 
-                      stackId="1" 
-                      fill="hsl(270, 60%, 50%)" 
-                      stroke="hsl(270, 60%, 50%)"
-                      name="Expansão"
-                    />
-                    
-                    {/* Linha de faturamento */}
-                    <Line 
-                      yAxisId="left"
-                      type="monotone" 
-                      dataKey="faturamento" 
-                      stroke="hsl(45, 93%, 47%)" 
-                      strokeWidth={3}
-                      dot={{ fill: "hsl(45, 93%, 47%)", strokeWidth: 2 }}
-                      name="Faturamento"
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-            </div>
+            <Card className="p-4 mb-8">
+              <h4 className="font-semibold text-sm mb-4 flex items-center gap-2">
+                <TrendingDown className="h-4 w-4 text-muted-foreground" />
+                Evolução Mensal: Custos vs Faturamento
+              </h4>
+              <div className="h-[350px] relative overflow-hidden">
+                <ChartContainer config={chartConfig}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={evolucaoData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
+                      <XAxis 
+                        dataKey="month" 
+                        className="text-xs"
+                        tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      />
+                      <YAxis 
+                        yAxisId="left"
+                        className="text-xs"
+                        tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                        tickFormatter={(value) => `R$ ${(value / 1000000).toFixed(1)}M`}
+                      />
+                      <YAxis 
+                        yAxisId="right"
+                        orientation="right"
+                        className="text-xs"
+                        tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                        tickFormatter={(value) => `${value.toFixed(0)}%`}
+                        domain={[0, 'auto']}
+                      />
+                      <Tooltip 
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload) return null;
+                          return (
+                            <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+                              <p className="font-semibold mb-2">{label}</p>
+                              {payload.map((entry: any, index: number) => (
+                                <div key={index} className="flex items-center gap-2 text-sm">
+                                  <div 
+                                    className="w-3 h-3 rounded-full" 
+                                    style={{ backgroundColor: entry.color }}
+                                  />
+                                  <span className="text-muted-foreground">{entry.name}:</span>
+                                  <span className="font-mono font-medium">
+                                    {entry.dataKey === 'faturamento' 
+                                      ? `R$ ${(entry.value / 1000000).toFixed(2)}M`
+                                      : entry.dataKey.startsWith('pct')
+                                        ? `${entry.value.toFixed(1)}%`
+                                        : `R$ ${(entry.value / 1000).toFixed(0)}k`
+                                    }
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        }}
+                      />
+                      <Legend />
+                      
+                      {/* Áreas empilhadas para custos dos times */}
+                      <Area 
+                        yAxisId="left"
+                        type="monotone" 
+                        dataKey="marketing" 
+                        stackId="1" 
+                        fill="hsl(142, 76%, 36%)" 
+                        stroke="hsl(142, 76%, 36%)"
+                        name="Marketing"
+                      />
+                      <Area 
+                        yAxisId="left"
+                        type="monotone" 
+                        dataKey="vendas" 
+                        stackId="1" 
+                        fill="hsl(217, 91%, 60%)" 
+                        stroke="hsl(217, 91%, 60%)"
+                        name="Vendas"
+                      />
+                      <Area 
+                        yAxisId="left"
+                        type="monotone" 
+                        dataKey="expansao" 
+                        stackId="1" 
+                        fill="hsl(270, 60%, 50%)" 
+                        stroke="hsl(270, 60%, 50%)"
+                        name="Expansão"
+                      />
+                      
+                      {/* Linha de faturamento */}
+                      <Line 
+                        yAxisId="left"
+                        type="monotone" 
+                        dataKey="faturamento" 
+                        stroke="hsl(45, 93%, 47%)" 
+                        strokeWidth={3}
+                        dot={{ fill: "hsl(45, 93%, 47%)", strokeWidth: 2 }}
+                        name="Faturamento"
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              </div>
+            </Card>
             
             {/* Tabela de evolução mensal */}
-            <div className="rounded-lg border border-border/50 overflow-x-auto">
+            <Card className="p-4">
+              <h4 className="font-semibold text-sm mb-4">Detalhamento Mensal</h4>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/30">
@@ -1525,7 +1533,8 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
                   </TableRow>
                 </TableFooter>
               </Table>
-            </div>
+              </div>
+            </Card>
             
             {/* Legenda explicativa */}
             <div className="p-4 rounded-lg bg-muted/30 border border-border/30 mt-6">
