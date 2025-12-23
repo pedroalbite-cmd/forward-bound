@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Legend, Line } from "recharts";
 import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3, Info, Settings } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
@@ -1014,12 +1014,22 @@ export function MediaInvestmentTab() {
                       tick={{ fill: 'hsl(var(--muted-foreground))' }}
                       width={80}
                     />
-                    <ChartTooltip content={<ChartTooltipContent formatter={(value) => formatCurrency(Number(value))} />} />
+                    <ChartTooltip 
+                      content={
+                        <ChartTooltipContent 
+                          formatter={(value, name) => {
+                            const formatted = formatCurrency(Number(value));
+                            return name === "total" ? <strong>{formatted}</strong> : formatted;
+                          }} 
+                        />
+                      } 
+                    />
                     <Legend />
                     <Area type="monotone" dataKey="modeloAtual" stackId="1" stroke="hsl(var(--primary))" fill="url(#colorModeloAtual)" name="Modelo Atual" />
                     <Area type="monotone" dataKey="o2Tax" stackId="1" stroke="hsl(var(--warning))" fill="url(#colorO2Tax)" name="O2 TAX" />
                     <Area type="monotone" dataKey="oxyHacker" stackId="1" stroke="hsl(var(--accent))" fill="url(#colorOxyHacker)" name="Oxy Hacker" />
                     <Area type="monotone" dataKey="franquia" stackId="1" stroke="hsl(var(--secondary))" fill="url(#colorFranquia)" name="Franquia" />
+                    <Line type="monotone" dataKey="total" stroke="hsl(var(--foreground))" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Total" />
                   </AreaChart>
                 </ResponsiveContainer>
               </ChartContainer>
