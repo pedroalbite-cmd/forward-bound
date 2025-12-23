@@ -601,7 +601,6 @@ const formatCurrency = (value: number) => {
 
 const getAreaLabel = (area: string) => {
   switch (area) {
-    case "diretoria": return "Diretoria";
     case "marketing": return "Marketing";
     case "vendas": return "Vendas";
     case "expansao": return "Expansão";
@@ -611,7 +610,6 @@ const getAreaLabel = (area: string) => {
 
 const getAreaColor = (area: string) => {
   switch (area) {
-    case "diretoria": return "text-amber-500";
     case "marketing": return "text-green-500";
     case "vendas": return "text-blue-500";
     case "expansao": return "text-purple-500";
@@ -1107,7 +1105,6 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
                 Visão por Área/Time
               </h4>
               <ul className="text-sm text-muted-foreground space-y-1">
-                <li>• <strong>Diretoria</strong>: Custos de liderança executiva</li>
                 <li>• <strong>Marketing</strong>: Time de marketing incluindo CMO (R$ {formatCurrency(custoMensalMarketing)}/mês)</li>
                 <li>• <strong>Vendas</strong>: Time comercial incluindo CEO (R$ {formatCurrency(custoMensalVendas)}/mês)</li>
                 <li>• <strong>Expansão</strong>: Time de expansão e sucesso do cliente (R$ {formatCurrency(custoMensalExpansao)}/mês)</li>
