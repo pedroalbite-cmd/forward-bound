@@ -49,8 +49,24 @@ import {
   EyeOff,
   Crown,
   PieChart,
-  Calculator
+  Calculator,
+  TrendingDown,
+  ArrowUpRight,
+  ArrowDownRight
 } from "lucide-react";
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  ResponsiveContainer,
+  Tooltip,
+  Legend,
+  Line,
+  ComposedChart
+} from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 // ============ TYPES ============
 
@@ -635,6 +651,34 @@ const investimentoMidiaAnualPorBU = {
   franquia: 240000,       // ~R$ 20k/mês = R$ 240k/ano
 };
 
+// Faturamento mensal por BU (distribuído ao longo do ano com crescimento)
+const faturamentoMensalPorBU: Record<string, Record<string, number>> = {
+  modeloAtual: {
+    Jan: 1125000, Fev: 1237500, Mar: 1387500,  // Q1: 3.75M
+    Abr: 1485000, Mai: 1633500, Jun: 1831500,  // Q2: 4.95M
+    Jul: 1920000, Ago: 2112000, Set: 2368000,  // Q3: 6.4M
+    Out: 2640000, Nov: 2960000, Dez: 2400000   // Q4: 8M
+  },
+  o2Tax: {
+    Jan: 100000, Fev: 115000, Mar: 132250,
+    Abr: 152088, Mai: 174901, Jun: 201136,
+    Jul: 231306, Ago: 266002, Set: 305902,
+    Out: 351788, Nov: 404556, Dez: 465239
+  },
+  oxyHacker: {
+    Jan: 250000, Fev: 275000, Mar: 302500,
+    Abr: 332750, Mai: 366025, Jun: 402628,
+    Jul: 442890, Ago: 487179, Set: 535897,
+    Out: 589487, Nov: 648436, Dez: 713279
+  },
+  franquia: {
+    Jan: 100000, Fev: 108000, Mar: 116640,
+    Abr: 125971, Mai: 136049, Jun: 146933,
+    Jul: 158687, Ago: 171382, Set: 185093,
+    Out: 199900, Nov: 215892, Dez: 233164
+  }
+};
+
 // Calcula faturamento total para rateio proporcional
 const faturamentoTotal = Object.values(faturamentoAnualPorBU).reduce((a, b) => a + b, 0);
 
@@ -648,7 +692,7 @@ const proporcaoPorBU = {
 
 // Componente de análise de investimento
 const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
-  const [viewMode, setViewMode] = useState<"bu" | "time">("bu");
+  const [viewMode, setViewMode] = useState<"bu" | "time" | "evolucao">("bu");
   
   // Custos de estrutura mensais por área
   const custoMensalMarketing = allTeamData
@@ -760,6 +804,115 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
   const custoTotalTime = Object.values(custoPorTime).reduce((a, b) => a + b, 0);
   const faturamentoTotal = Object.values(faturamentoAnualPorBU).reduce((a, b) => a + b, 0);
   
+  // ===== EVOLUÇÃO MENSAL =====
+  // Calcula faturamento mensal total (todas as BUs)
+  const calcularFaturamentoMensal = () => {
+    return months.map((month) => {
+      const modeloAtual = faturamentoMensalPorBU.modeloAtual[month];
+      const o2Tax = faturamentoMensalPorBU.o2Tax[month];
+      const oxyHacker = faturamentoMensalPorBU.oxyHacker[month];
+      const franquia = faturamentoMensalPorBU.franquia[month];
+      return {
+        month,
+        modeloAtual,
+        o2Tax,
+        oxyHacker,
+        franquia,
+        total: modeloAtual + o2Tax + oxyHacker + franquia
+      };
+    });
+  };
+  
+  // Calcula custo mensal acumulado por time (considerando contratações)
+  const calcularCustoMensalPorTime = () => {
+    return months.map((month, monthIndex) => {
+      // Filtrar membros contratados ou que serão contratados até este mês
+      const membrosAtivos = allTeamData.filter(m => {
+        if (m.status === "contratado") return true;
+        if (m.hiringMonth) {
+          const hiringIndex = months.indexOf(m.hiringMonth);
+          return hiringIndex !== -1 && hiringIndex <= monthIndex;
+        }
+        return false;
+      });
+      
+      const custoMarketing = membrosAtivos
+        .filter(m => m.area === "marketing")
+        .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
+      
+      const custoVendas = membrosAtivos
+        .filter(m => m.area === "vendas")
+        .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
+      
+      const custoExpansao = membrosAtivos
+        .filter(m => m.area === "expansao")
+        .reduce((acc, m) => acc + (m.salary * (m.quantity || 1)), 0);
+      
+      return {
+        month,
+        marketing: custoMarketing,
+        vendas: custoVendas,
+        expansao: custoExpansao,
+        total: custoMarketing + custoVendas + custoExpansao
+      };
+    });
+  };
+  
+  const faturamentoMensal = calcularFaturamentoMensal();
+  const custoMensalPorTime = calcularCustoMensalPorTime();
+  
+  // Dados de evolução para gráfico e tabela
+  const evolucaoData = months.map((month, index) => {
+    const fat = faturamentoMensal[index].total;
+    const custos = custoMensalPorTime[index];
+    
+    return {
+      month,
+      faturamento: fat,
+      marketing: custos.marketing,
+      vendas: custos.vendas,
+      expansao: custos.expansao,
+      totalTime: custos.total,
+      pctMarketing: fat > 0 ? (custos.marketing / fat) * 100 : 0,
+      pctVendas: fat > 0 ? (custos.vendas / fat) * 100 : 0,
+      pctExpansao: fat > 0 ? (custos.expansao / fat) * 100 : 0,
+      pctTotal: fat > 0 ? (custos.total / fat) * 100 : 0,
+    };
+  });
+  
+  // Estatísticas de evolução
+  const evolucaoStats = useMemo(() => {
+    const pctTotais = evolucaoData.map(d => d.pctTotal);
+    const minPct = Math.min(...pctTotais);
+    const maxPct = Math.max(...pctTotais);
+    const avgPct = pctTotais.reduce((a, b) => a + b, 0) / pctTotais.length;
+    const tendencia = pctTotais[pctTotais.length - 1] - pctTotais[0];
+    
+    const minMonth = evolucaoData.find(d => d.pctTotal === minPct)?.month || "";
+    const maxMonth = evolucaoData.find(d => d.pctTotal === maxPct)?.month || "";
+    
+    return { minPct, maxPct, avgPct, tendencia, minMonth, maxMonth };
+  }, [evolucaoData]);
+  
+  const chartConfig = {
+    marketing: {
+      label: "Marketing",
+      color: "hsl(142, 76%, 36%)",
+    },
+    vendas: {
+      label: "Vendas",
+      color: "hsl(217, 91%, 60%)",
+    },
+    expansao: {
+      label: "Expansão",
+      color: "hsl(270, 60%, 50%)",
+    },
+    faturamento: {
+      label: "Faturamento",
+      color: "hsl(45, 93%, 47%)",
+    },
+  };
+  
   // Calcular totais por BU
   const totais = buData.reduce((acc, bu) => {
     const custoEstrutura = calcularCustoEstruturaPorBU(bu.key);
@@ -792,13 +945,14 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
             </div>
           </div>
           
-          <Select value={viewMode} onValueChange={(v) => setViewMode(v as "bu" | "time")}>
+          <Select value={viewMode} onValueChange={(v) => setViewMode(v as "bu" | "time" | "evolucao")}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Visualizar por..." />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="bu">Por BU</SelectItem>
               <SelectItem value="time">Por Time</SelectItem>
+              <SelectItem value="evolucao">Evolução Mensal</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -993,7 +1147,7 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
               </ul>
             </div>
           </>
-        ) : (
+        ) : viewMode === "time" ? (
           <>
             {/* Cards por Time */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1109,6 +1263,284 @@ const InvestmentAnalysis = ({ allTeamData }: { allTeamData: TeamMember[] }) => {
                 <li>• <strong>Vendas</strong>: Time comercial incluindo CEO (R$ {formatCurrency(custoMensalVendas)}/mês)</li>
                 <li>• <strong>Expansão</strong>: Time de expansão e sucesso do cliente (R$ {formatCurrency(custoMensalExpansao)}/mês)</li>
                 <li>• <strong>Faturamento Total</strong>: R$ {(faturamentoTotal / 1000000).toFixed(2)}M (soma de todas as BUs)</li>
+              </ul>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Cards de destaque */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <Card className="bg-green-500/10 border-green-500/30">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ArrowDownRight className="h-4 w-4 text-green-500" />
+                    <span className="text-xs text-muted-foreground">Menor %</span>
+                  </div>
+                  <div className="text-2xl font-bold text-green-500">{evolucaoStats.minPct.toFixed(1)}%</div>
+                  <div className="text-xs text-muted-foreground">{evolucaoStats.minMonth}</div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-red-500/10 border-red-500/30">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ArrowUpRight className="h-4 w-4 text-red-500" />
+                    <span className="text-xs text-muted-foreground">Maior %</span>
+                  </div>
+                  <div className="text-2xl font-bold text-red-500">{evolucaoStats.maxPct.toFixed(1)}%</div>
+                  <div className="text-xs text-muted-foreground">{evolucaoStats.maxMonth}</div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-blue-500/10 border-blue-500/30">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <BarChart3 className="h-4 w-4 text-blue-500" />
+                    <span className="text-xs text-muted-foreground">Média Anual</span>
+                  </div>
+                  <div className="text-2xl font-bold text-blue-500">{evolucaoStats.avgPct.toFixed(1)}%</div>
+                  <div className="text-xs text-muted-foreground">do faturamento</div>
+                </CardContent>
+              </Card>
+              
+              <Card className={`${evolucaoStats.tendencia <= 0 ? "bg-green-500/10 border-green-500/30" : "bg-amber-500/10 border-amber-500/30"}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    {evolucaoStats.tendencia <= 0 ? (
+                      <TrendingDown className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <TrendingUp className="h-4 w-4 text-amber-500" />
+                    )}
+                    <span className="text-xs text-muted-foreground">Tendência</span>
+                  </div>
+                  <div className={`text-2xl font-bold ${evolucaoStats.tendencia <= 0 ? "text-green-500" : "text-amber-500"}`}>
+                    {evolucaoStats.tendencia > 0 ? "+" : ""}{evolucaoStats.tendencia.toFixed(1)}pp
+                  </div>
+                  <div className="text-xs text-muted-foreground">Jan → Dez</div>
+                </CardContent>
+              </Card>
+            </div>
+            
+            {/* Gráfico de evolução */}
+            <div className="h-[400px] mb-6">
+              <ChartContainer config={chartConfig}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={evolucaoData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
+                    <XAxis 
+                      dataKey="month" 
+                      className="text-xs"
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                    />
+                    <YAxis 
+                      yAxisId="left"
+                      className="text-xs"
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      tickFormatter={(value) => `R$ ${(value / 1000000).toFixed(1)}M`}
+                    />
+                    <YAxis 
+                      yAxisId="right"
+                      orientation="right"
+                      className="text-xs"
+                      tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                      tickFormatter={(value) => `${value.toFixed(0)}%`}
+                      domain={[0, 'auto']}
+                    />
+                    <Tooltip 
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload) return null;
+                        return (
+                          <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+                            <p className="font-semibold mb-2">{label}</p>
+                            {payload.map((entry: any, index: number) => (
+                              <div key={index} className="flex items-center gap-2 text-sm">
+                                <div 
+                                  className="w-3 h-3 rounded-full" 
+                                  style={{ backgroundColor: entry.color }}
+                                />
+                                <span className="text-muted-foreground">{entry.name}:</span>
+                                <span className="font-mono font-medium">
+                                  {entry.dataKey === 'faturamento' 
+                                    ? `R$ ${(entry.value / 1000000).toFixed(2)}M`
+                                    : entry.dataKey.startsWith('pct')
+                                      ? `${entry.value.toFixed(1)}%`
+                                      : `R$ ${(entry.value / 1000).toFixed(0)}k`
+                                  }
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      }}
+                    />
+                    <Legend />
+                    
+                    {/* Áreas empilhadas para custos dos times */}
+                    <Area 
+                      yAxisId="left"
+                      type="monotone" 
+                      dataKey="marketing" 
+                      stackId="1" 
+                      fill="hsl(142, 76%, 36%)" 
+                      stroke="hsl(142, 76%, 36%)"
+                      name="Marketing"
+                    />
+                    <Area 
+                      yAxisId="left"
+                      type="monotone" 
+                      dataKey="vendas" 
+                      stackId="1" 
+                      fill="hsl(217, 91%, 60%)" 
+                      stroke="hsl(217, 91%, 60%)"
+                      name="Vendas"
+                    />
+                    <Area 
+                      yAxisId="left"
+                      type="monotone" 
+                      dataKey="expansao" 
+                      stackId="1" 
+                      fill="hsl(270, 60%, 50%)" 
+                      stroke="hsl(270, 60%, 50%)"
+                      name="Expansão"
+                    />
+                    
+                    {/* Linha de faturamento */}
+                    <Line 
+                      yAxisId="left"
+                      type="monotone" 
+                      dataKey="faturamento" 
+                      stroke="hsl(45, 93%, 47%)" 
+                      strokeWidth={3}
+                      dot={{ fill: "hsl(45, 93%, 47%)", strokeWidth: 2 }}
+                      name="Faturamento"
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </div>
+            
+            {/* Tabela de evolução mensal */}
+            <div className="rounded-lg border border-border/50 overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead className="sticky left-0 bg-muted/30">Mês</TableHead>
+                    <TableHead className="text-right">Faturamento</TableHead>
+                    <TableHead className="text-right">Marketing</TableHead>
+                    <TableHead className="text-right">% Mkt</TableHead>
+                    <TableHead className="text-right">Vendas</TableHead>
+                    <TableHead className="text-right">% Vendas</TableHead>
+                    <TableHead className="text-right">Expansão</TableHead>
+                    <TableHead className="text-right">% Exp</TableHead>
+                    <TableHead className="text-right">Total Time</TableHead>
+                    <TableHead className="text-right">% Total</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {evolucaoData.map((row, index) => (
+                    <TableRow key={row.month} className="hover:bg-muted/20">
+                      <TableCell className="font-medium sticky left-0 bg-background">{row.month}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        R$ {(row.faturamento / 1000000).toFixed(2)}M
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-green-500">
+                        R$ {(row.marketing / 1000).toFixed(0)}k
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline" className="font-mono text-green-500 border-green-500/30">
+                          {row.pctMarketing.toFixed(1)}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-blue-500">
+                        R$ {(row.vendas / 1000).toFixed(0)}k
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline" className="font-mono text-blue-500 border-blue-500/30">
+                          {row.pctVendas.toFixed(1)}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-purple-500">
+                        R$ {(row.expansao / 1000).toFixed(0)}k
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline" className="font-mono text-purple-500 border-purple-500/30">
+                          {row.pctExpansao.toFixed(1)}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-medium">
+                        R$ {(row.totalTime / 1000).toFixed(0)}k
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge className="font-mono">
+                          {row.pctTotal.toFixed(1)}%
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+                <TableFooter>
+                  <TableRow className="bg-primary/5">
+                    <TableCell className="font-bold text-primary sticky left-0">TOTAL ANUAL</TableCell>
+                    <TableCell className="text-right font-mono font-bold text-primary">
+                      R$ {(evolucaoData.reduce((a, b) => a + b.faturamento, 0) / 1000000).toFixed(2)}M
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-bold text-green-500">
+                      R$ {(evolucaoData.reduce((a, b) => a + b.marketing, 0) / 1000).toFixed(0)}k
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="outline" className="font-mono bg-green-500/10 text-green-500 border-green-500/30">
+                        {evolucaoStats.avgPct > 0 ? (
+                          (evolucaoData.reduce((a, b) => a + b.marketing, 0) / evolucaoData.reduce((a, b) => a + b.faturamento, 0) * 100).toFixed(1)
+                        ) : "0.0"}%
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-bold text-blue-500">
+                      R$ {(evolucaoData.reduce((a, b) => a + b.vendas, 0) / 1000).toFixed(0)}k
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="outline" className="font-mono bg-blue-500/10 text-blue-500 border-blue-500/30">
+                        {evolucaoStats.avgPct > 0 ? (
+                          (evolucaoData.reduce((a, b) => a + b.vendas, 0) / evolucaoData.reduce((a, b) => a + b.faturamento, 0) * 100).toFixed(1)
+                        ) : "0.0"}%
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-bold text-purple-500">
+                      R$ {(evolucaoData.reduce((a, b) => a + b.expansao, 0) / 1000).toFixed(0)}k
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="outline" className="font-mono bg-purple-500/10 text-purple-500 border-purple-500/30">
+                        {evolucaoStats.avgPct > 0 ? (
+                          (evolucaoData.reduce((a, b) => a + b.expansao, 0) / evolucaoData.reduce((a, b) => a + b.faturamento, 0) * 100).toFixed(1)
+                        ) : "0.0"}%
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-bold text-primary">
+                      R$ {(evolucaoData.reduce((a, b) => a + b.totalTime, 0) / 1000).toFixed(0)}k
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge className="font-mono bg-primary text-primary-foreground">
+                        {((evolucaoData.reduce((a, b) => a + b.totalTime, 0) / evolucaoData.reduce((a, b) => a + b.faturamento, 0)) * 100).toFixed(1)}%
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
+              </Table>
+            </div>
+            
+            {/* Legenda explicativa */}
+            <div className="p-4 rounded-lg bg-muted/30 border border-border/30 mt-6">
+              <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                Evolução Mensal: Investimento vs Faturamento
+              </h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• <strong>Áreas empilhadas</strong>: Mostram a evolução dos custos de cada time ao longo do ano</li>
+                <li>• <strong>Linha amarela</strong>: Representa o faturamento projetado mensal (todas as BUs)</li>
+                <li>• <strong>Tendência</strong>: {evolucaoStats.tendencia <= 0 
+                  ? `Queda de ${Math.abs(evolucaoStats.tendencia).toFixed(1)}pp no % de custos entre Jan e Dez (economia de escala)`
+                  : `Aumento de ${evolucaoStats.tendencia.toFixed(1)}pp no % de custos entre Jan e Dez`
+                }</li>
+                <li>• <strong>Contratações</strong>: Os custos crescem conforme novas contratações são realizadas ao longo do ano</li>
               </ul>
             </div>
           </>
