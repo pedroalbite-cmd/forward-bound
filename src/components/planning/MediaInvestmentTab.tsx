@@ -718,15 +718,6 @@ export function MediaInvestmentTab() {
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
               A Vender Jan: {formatCurrency(valorVenderInicial)}
             </Badge>
-            <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
-              Churn: {(churnMensal * 100).toFixed(0)}%/mês
-            </Badge>
-            <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
-              Ticket: {formatCurrency(ticketMedio)}
-            </Badge>
-            <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
-              CPV: {formatCurrency(cpv)}
-            </Badge>
           </div>
         </div>
       </div>
