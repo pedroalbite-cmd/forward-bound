@@ -20,6 +20,14 @@ import {
   TableRow,
   TableFooter,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { 
   Users, 
   Wrench, 
@@ -46,10 +54,12 @@ interface TeamMember {
   responsibilities: string[];
   status: "contratado" | "a contratar";
   person?: string;
+  name?: string;
   quantity?: number;
   salary: number;
   area: "marketing" | "vendas" | "expansao";
   hiringMonth?: string;
+  bu?: "modeloAtual" | "o2Tax" | "oxyHacker" | "franquia";
 }
 
 // ============ FUNNEL CALCULATION CONSTANTS ============
@@ -74,6 +84,37 @@ const modeloAtualMetrics = {
   rmToRr: 0.70,
   rrToProp: 0.75,
   propToVenda: 0.60,
+};
+
+// Dados das outras BUs
+const buConfigs = {
+  o2Tax: {
+    name: "O2 TAX",
+    cpv: 2500,
+    ticket: 3500,
+    investimentoInicialJan: 10000,
+    investimentoMensalBase: 10000,
+    crescimentoMensal: 0.15,
+    metrics: { leadToMql: 0.35, mqlToRm: 0.60, rmToRr: 0.70, rrToProp: 0.75, propToVenda: 0.55 }
+  },
+  oxyHacker: {
+    name: "Oxy Hacker",
+    cpv: 5000,
+    ticket: 7000,
+    investimentoInicialJan: 15000,
+    investimentoMensalBase: 15000,
+    crescimentoMensal: 0.10,
+    metrics: { leadToMql: 0.30, mqlToRm: 0.55, rmToRr: 0.65, rrToProp: 0.70, propToVenda: 0.50 }
+  },
+  franquia: {
+    name: "Franquia",
+    cpv: 12000,
+    ticket: 50000,
+    investimentoInicialJan: 20000,
+    investimentoMensalBase: 20000,
+    crescimentoMensal: 0.08,
+    metrics: { leadToMql: 0.25, mqlToRm: 0.50, rmToRr: 0.60, rrToProp: 0.65, propToVenda: 0.45 }
+  }
 };
 
 // Distribui metas trimestrais em mensais
@@ -155,27 +196,57 @@ function calculateReverseFunnel(
   return funnelData;
 }
 
-// Calcula meses de contratação para Closers e SDRs
-function calculateHiringMonths(): { closerMonths: string[]; sdrMonths: string[] } {
-  const metasMensais = distributeQuarterlyToMonthly(modeloAtualQuarterlyMetas);
-  const { vendasPorMes } = calculateMrrAndRevenueToSell(
-    modeloAtualMrrBase,
-    modeloAtualChurn,
-    modeloAtualRetencao,
-    metasMensais,
-    modeloAtualTicket
-  );
-  const funnelData = calculateReverseFunnel(vendasPorMes, modeloAtualMetrics);
+// Calcula meses de contratação para Closers e SDRs para uma BU específica
+function calculateHiringMonthsForBU(
+  buName: "modeloAtual" | "o2Tax" | "oxyHacker" | "franquia",
+  initialClosers: number = 0,
+  initialSDRs: number = 0
+): { closerMonths: string[]; sdrMonths: string[] } {
+  let vendasPorMes: Record<string, number> = {};
+  let rrsPorMes: Record<string, number> = {};
   
-  // Estado atual: 0 Closers contratados, 2 SDRs contratados
-  let currentClosers = 0;
-  let currentSDRs = 2;
+  if (buName === "modeloAtual") {
+    const metasMensais = distributeQuarterlyToMonthly(modeloAtualQuarterlyMetas);
+    const { vendasPorMes: vendas } = calculateMrrAndRevenueToSell(
+      modeloAtualMrrBase,
+      modeloAtualChurn,
+      modeloAtualRetencao,
+      metasMensais,
+      modeloAtualTicket
+    );
+    const funnelData = calculateReverseFunnel(vendas, modeloAtualMetrics);
+    months.forEach(month => {
+      vendasPorMes[month] = funnelData[month].vendas;
+      rrsPorMes[month] = funnelData[month].rrs;
+    });
+  } else {
+    const config = buConfigs[buName];
+    let investimento = config.investimentoInicialJan;
+    
+    months.forEach((month, index) => {
+      const vendas = Math.ceil(investimento / config.cpv);
+      const propostas = vendas / config.metrics.propToVenda;
+      const rrs = Math.ceil(propostas / config.metrics.rrToProp);
+      
+      vendasPorMes[month] = vendas;
+      rrsPorMes[month] = rrs;
+      
+      // Crescimento mensal do investimento
+      if (index < months.length - 1) {
+        investimento = investimento * (1 + config.crescimentoMensal);
+      }
+    });
+  }
+  
+  let currentClosers = initialClosers;
+  let currentSDRs = initialSDRs;
   
   const closerMonths: string[] = [];
   const sdrMonths: string[] = [];
   
   months.forEach(month => {
-    const { vendas, rrs } = funnelData[month];
+    const vendas = vendasPorMes[month];
+    const rrs = rrsPorMes[month];
     
     // Quantos Closers são necessários para as vendas do mês
     const closersNeeded = Math.ceil(vendas / CLOSER_CAPACITY);
@@ -198,14 +269,130 @@ function calculateHiringMonths(): { closerMonths: string[]; sdrMonths: string[] 
   return { closerMonths, sdrMonths };
 }
 
+// Calcula contratações para todas as BUs
+function calculateAllBUsHiring(): TeamMember[] {
+  const allHirings: TeamMember[] = [];
+  
+  // Modelo Atual - começa com 0 Closers e 2 SDRs
+  const modeloAtual = calculateHiringMonthsForBU("modeloAtual", 0, 2);
+  modeloAtual.closerMonths.forEach(month => {
+    allHirings.push({
+      role: "Closer",
+      responsibilities: ["Reuniões de venda", "Negociação", "Fechamento", "Onboarding inicial"],
+      status: "a contratar",
+      quantity: 1,
+      salary: 0,
+      area: "vendas",
+      hiringMonth: month,
+      bu: "modeloAtual"
+    });
+  });
+  modeloAtual.sdrMonths.forEach(month => {
+    allHirings.push({
+      role: "SDR (Sales Development)",
+      responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up", "CRM"],
+      status: "a contratar",
+      quantity: 1,
+      salary: 0,
+      area: "vendas",
+      hiringMonth: month,
+      bu: "modeloAtual"
+    });
+  });
+  
+  // O2 TAX - começa com 0 Closers e 0 SDRs
+  const o2Tax = calculateHiringMonthsForBU("o2Tax", 0, 0);
+  o2Tax.closerMonths.forEach(month => {
+    allHirings.push({
+      role: "Closer",
+      responsibilities: ["Reuniões de venda", "Negociação", "Fechamento"],
+      status: "a contratar",
+      quantity: 1,
+      salary: 0,
+      area: "vendas",
+      hiringMonth: month,
+      bu: "o2Tax"
+    });
+  });
+  o2Tax.sdrMonths.forEach(month => {
+    allHirings.push({
+      role: "SDR (Sales Development)",
+      responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up"],
+      status: "a contratar",
+      quantity: 1,
+      salary: 0,
+      area: "vendas",
+      hiringMonth: month,
+      bu: "o2Tax"
+    });
+  });
+  
+  // Oxy Hacker - começa com 0 Closers e 0 SDRs
+  const oxyHacker = calculateHiringMonthsForBU("oxyHacker", 0, 0);
+  oxyHacker.closerMonths.forEach(month => {
+    allHirings.push({
+      role: "Closer",
+      responsibilities: ["Reuniões de venda", "Negociação", "Fechamento"],
+      status: "a contratar",
+      quantity: 1,
+      salary: 0,
+      area: "vendas",
+      hiringMonth: month,
+      bu: "oxyHacker"
+    });
+  });
+  oxyHacker.sdrMonths.forEach(month => {
+    allHirings.push({
+      role: "SDR (Sales Development)",
+      responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up"],
+      status: "a contratar",
+      quantity: 1,
+      salary: 0,
+      area: "vendas",
+      hiringMonth: month,
+      bu: "oxyHacker"
+    });
+  });
+  
+  // Franquia - começa com 0 Closers e 0 SDRs
+  const franquia = calculateHiringMonthsForBU("franquia", 0, 0);
+  franquia.closerMonths.forEach(month => {
+    allHirings.push({
+      role: "Closer",
+      responsibilities: ["Reuniões de venda", "Negociação", "Fechamento"],
+      status: "a contratar",
+      quantity: 1,
+      salary: 0,
+      area: "vendas",
+      hiringMonth: month,
+      bu: "franquia"
+    });
+  });
+  franquia.sdrMonths.forEach(month => {
+    allHirings.push({
+      role: "SDR (Sales Development)",
+      responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up"],
+      status: "a contratar",
+      quantity: 1,
+      salary: 0,
+      area: "vendas",
+      hiringMonth: month,
+      bu: "franquia"
+    });
+  });
+  
+  return allHirings;
+}
+
 // ============ INITIAL DATA ============
 
-// Pré-calcula os meses de contratação
-const { closerMonths, sdrMonths } = calculateHiringMonths();
+// Pré-calcula contratações para todas as BUs
+const allBUsHirings = calculateAllBUsHiring();
 
 const initialMarketingTeam: TeamMember[] = [
   {
     role: "Head de Marketing",
+    name: "João Silva",
     responsibilities: ["Estratégia geral", "Gestão do time", "Budget", "Alinhamento com vendas"],
     status: "contratado",
     person: "Contratado",
@@ -214,6 +401,7 @@ const initialMarketingTeam: TeamMember[] = [
   },
   {
     role: "Social Media",
+    name: "Maria Santos",
     responsibilities: ["Calendário de posts", "Engajamento", "Comunidade", "Tendências"],
     status: "contratado",
     person: "Contratado",
@@ -222,6 +410,7 @@ const initialMarketingTeam: TeamMember[] = [
   },
   {
     role: "Designer",
+    name: "Pedro Costa",
     responsibilities: ["Criativos para ads", "Social media", "Materiais ricos", "Branding"],
     status: "contratado",
     person: "Contratado",
@@ -233,40 +422,36 @@ const initialMarketingTeam: TeamMember[] = [
 const initialSalesTeam: TeamMember[] = [
   {
     role: "Head Comercial",
+    name: "Ana Oliveira",
     responsibilities: ["Estratégia de vendas", "Gestão do pipeline", "Metas", "Treinamento"],
     status: "contratado",
     person: "Contratado",
     salary: 0,
-    area: "vendas"
+    area: "vendas",
+    bu: "modeloAtual"
   },
   {
     role: "SDR (Sales Development)",
+    name: "Carlos Souza",
     responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up", "CRM"],
     status: "contratado",
-    quantity: 2,
+    quantity: 1,
     salary: 0,
-    area: "vendas"
+    area: "vendas",
+    bu: "modeloAtual"
   },
-  // Closers a contratar (com mês calculado)
-  ...closerMonths.map((month, index) => ({
-    role: "Closer",
-    responsibilities: ["Reuniões de venda", "Negociação", "Fechamento", "Onboarding inicial"],
-    status: "a contratar" as const,
-    quantity: 1,
-    salary: 0,
-    area: "vendas" as const,
-    hiringMonth: month
-  })),
-  // SDRs a contratar (com mês calculado)
-  ...sdrMonths.map((month, index) => ({
+  {
     role: "SDR (Sales Development)",
+    name: "Fernanda Lima",
     responsibilities: ["Qualificação de leads", "Agendamento de reuniões", "Follow-up", "CRM"],
-    status: "a contratar" as const,
+    status: "contratado",
     quantity: 1,
     salary: 0,
-    area: "vendas" as const,
-    hiringMonth: month
-  }))
+    area: "vendas",
+    bu: "modeloAtual"
+  },
+  // Contratações de todas as BUs
+  ...allBUsHirings
 ];
 
 const initialExpansionTeam: TeamMember[] = [
@@ -432,8 +617,10 @@ const TeamSection = ({
   color: string;
   bgColor: string;
 }) => {
-  const contratados = team.filter(m => m.status === "contratado").reduce((acc, m) => acc + (m.quantity || 1), 0);
-  const aContratar = team.filter(m => m.status === "a contratar").reduce((acc, m) => acc + (m.quantity || 1), 0);
+  const contratadosList = team.filter(m => m.status === "contratado");
+  const aContratarList = team.filter(m => m.status === "a contratar");
+  const contratados = contratadosList.reduce((acc, m) => acc + (m.quantity || 1), 0);
+  const aContratar = aContratarList.reduce((acc, m) => acc + (m.quantity || 1), 0);
   
   return (
     <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
@@ -455,13 +642,42 @@ const TeamSection = ({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
         {team.length === 0 ? (
           <EmptyTeamMessage />
         ) : (
-          team.map((member, index) => (
-            <TeamMemberCard key={index} member={member} color={color} />
-          ))
+          <>
+            {/* Seção: Contratados */}
+            {contratadosList.length > 0 && (
+              <div className="space-y-3">
+                <h5 className="text-sm font-medium text-green-500 flex items-center gap-2">
+                  <UserCheck className="h-4 w-4" />
+                  Contratados ({contratados})
+                </h5>
+                {contratadosList.map((member, index) => (
+                  <TeamMemberCard key={`contratado-${index}`} member={member} color={color} />
+                ))}
+              </div>
+            )}
+            
+            {/* Separador */}
+            {contratadosList.length > 0 && aContratarList.length > 0 && (
+              <Separator className="my-4" />
+            )}
+            
+            {/* Seção: Oportunidades em Aberto */}
+            {aContratarList.length > 0 && (
+              <div className="space-y-3">
+                <h5 className="text-sm font-medium text-amber-500 flex items-center gap-2">
+                  <UserPlus className="h-4 w-4" />
+                  Oportunidades em Aberto ({aContratar})
+                </h5>
+                {aContratarList.map((member, index) => (
+                  <TeamMemberCard key={`acontratar-${index}`} member={member} color={color} />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
@@ -522,25 +738,56 @@ interface HiringTimelineProps {
   allTeamData: TeamMember[];
 }
 
+const getBuLabel = (bu?: string) => {
+  switch (bu) {
+    case "modeloAtual": return "Modelo Atual";
+    case "o2Tax": return "O2 TAX";
+    case "oxyHacker": return "Oxy Hacker";
+    case "franquia": return "Franquia";
+    default: return "Geral";
+  }
+};
+
+const getBuColor = (bu?: string) => {
+  switch (bu) {
+    case "modeloAtual": return "bg-blue-500/10 text-blue-600 border-blue-500/30";
+    case "o2Tax": return "bg-emerald-500/10 text-emerald-600 border-emerald-500/30";
+    case "oxyHacker": return "bg-purple-500/10 text-purple-600 border-purple-500/30";
+    case "franquia": return "bg-amber-500/10 text-amber-600 border-amber-500/30";
+    default: return "bg-muted text-muted-foreground";
+  }
+};
+
 const HiringTimeline = ({ allTeamData }: HiringTimelineProps) => {
+  const [selectedBU, setSelectedBU] = useState<string>("all");
+
+  // Filtra contratações por BU selecionada
+  const filteredTeamData = useMemo(() => {
+    if (selectedBU === "all") {
+      return allTeamData.filter(m => m.status === "a contratar" && m.hiringMonth);
+    }
+    return allTeamData.filter(m => 
+      m.status === "a contratar" && 
+      m.hiringMonth && 
+      m.bu === selectedBU
+    );
+  }, [allTeamData, selectedBU]);
+
   // Agrupa contratações por mês
   const hiringsByMonth = useMemo(() => {
-    const aContratar = allTeamData.filter(m => m.status === "a contratar" && m.hiringMonth);
     const grouped: Record<string, TeamMember[]> = {};
     
-    aContratar.forEach(member => {
+    filteredTeamData.forEach(member => {
       const month = member.hiringMonth!;
       if (!grouped[month]) grouped[month] = [];
       grouped[month].push(member);
     });
     
     return grouped;
-  }, [allTeamData]);
+  }, [filteredTeamData]);
 
   // Conta total de contratações
-  const totalHirings = allTeamData
-    .filter(m => m.status === "a contratar")
-    .reduce((acc, m) => acc + (m.quantity || 1), 0);
+  const totalHirings = filteredTeamData.reduce((acc, m) => acc + (m.quantity || 1), 0);
 
   const getMonthColor = (month: string) => {
     const hirings = hiringsByMonth[month];
@@ -577,9 +824,23 @@ const HiringTimeline = ({ allTeamData }: HiringTimelineProps) => {
               </p>
             </div>
           </div>
-          <Badge variant="outline" className="text-sm bg-primary/10 text-primary border-primary/30">
-            {totalHirings} contratações planejadas
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Select value={selectedBU} onValueChange={setSelectedBU}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filtrar por BU" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as BUs</SelectItem>
+                <SelectItem value="modeloAtual">Modelo Atual</SelectItem>
+                <SelectItem value="o2Tax">O2 TAX</SelectItem>
+                <SelectItem value="oxyHacker">Oxy Hacker</SelectItem>
+                <SelectItem value="franquia">Franquia</SelectItem>
+              </SelectContent>
+            </Select>
+            <Badge variant="outline" className="text-sm bg-primary/10 text-primary border-primary/30">
+              {totalHirings} contratações planejadas
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -590,7 +851,7 @@ const HiringTimeline = ({ allTeamData }: HiringTimelineProps) => {
           
           {/* Meses */}
           <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-2">
-            {months.map((month, index) => {
+            {months.map((month) => {
               const hirings = hiringsByMonth[month] || [];
               const hiringCount = hirings.reduce((acc, m) => acc + (m.quantity || 1), 0);
               const hasHiring = hiringCount > 0;
@@ -620,15 +881,9 @@ const HiringTimeline = ({ allTeamData }: HiringTimelineProps) => {
                     <div className="mt-2 space-y-1 w-full">
                       {hirings.map((h, i) => (
                         <div 
-                          key={`${h.role}-${i}`}
-                          className={`text-xs px-2 py-1 rounded text-center truncate ${
-                            h.area === "vendas" 
-                              ? "bg-blue-500/10 text-blue-600" 
-                              : h.area === "expansao"
-                              ? "bg-purple-500/10 text-purple-600"
-                              : "bg-green-500/10 text-green-600"
-                          }`}
-                          title={h.role}
+                          key={`${h.role}-${h.bu}-${i}`}
+                          className={`text-xs px-1 py-0.5 rounded text-center truncate ${getBuColor(h.bu)}`}
+                          title={`${h.role} - ${getBuLabel(h.bu)}`}
                         >
                           {h.role.includes("SDR") ? "SDR" : h.role.includes("Closer") ? "Closer" : h.role.split(" ")[0]}
                         </div>
@@ -655,10 +910,11 @@ const HiringTimeline = ({ allTeamData }: HiringTimelineProps) => {
             <div className="w-4 h-4 rounded-full bg-red-500/20 border-2 border-red-500/50" />
             <span className="text-xs text-muted-foreground">3+ contratações</span>
           </div>
-          <div className="flex items-center gap-2 ml-auto">
-            <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/30">Vendas</Badge>
-            <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-600 border-purple-500/30">Expansão</Badge>
-            <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-500/30">Marketing</Badge>
+          <div className="flex items-center gap-2 ml-auto flex-wrap">
+            <Badge variant="outline" className={`text-xs ${getBuColor("modeloAtual")}`}>Modelo Atual</Badge>
+            <Badge variant="outline" className={`text-xs ${getBuColor("o2Tax")}`}>O2 TAX</Badge>
+            <Badge variant="outline" className={`text-xs ${getBuColor("oxyHacker")}`}>Oxy Hacker</Badge>
+            <Badge variant="outline" className={`text-xs ${getBuColor("franquia")}`}>Franquia</Badge>
           </div>
         </div>
 
@@ -738,13 +994,7 @@ const SalaryTable = ({ allTeamData, onEdit }: SalaryTableProps) => {
                 <TableHead className="w-[120px]">Status</TableHead>
                 <TableHead className="w-[100px]">Área</TableHead>
                 <TableHead>Cargo</TableHead>
-                <TableHead className="text-center w-[60px]">Qtd</TableHead>
-                <TableHead className="text-center w-[120px]">
-                  <div className="flex items-center justify-center gap-1">
-                    <Calendar className="h-3.5 w-3.5" />
-                    Mês Contratação
-                  </div>
-                </TableHead>
+                <TableHead>Nome</TableHead>
                 <TableHead className="text-right w-[140px]">Remuneração</TableHead>
                 <TableHead className="text-right w-[140px]">Total</TableHead>
                 <TableHead className="text-center w-[80px]">Ação</TableHead>
@@ -771,17 +1021,8 @@ const SalaryTable = ({ allTeamData, onEdit }: SalaryTableProps) => {
                     </span>
                   </TableCell>
                   <TableCell className="font-medium">{member.role}</TableCell>
-                  <TableCell className="text-center">{member.quantity || 1}</TableCell>
-                  <TableCell className="text-center">
-                    {member.status === "contratado" ? (
-                      <span className="text-muted-foreground">—</span>
-                    ) : member.hiringMonth ? (
-                      <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30">
-                        {member.hiringMonth}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">A definir</span>
-                    )}
+                  <TableCell className="text-muted-foreground">
+                    {member.name || member.person || "—"}
                   </TableCell>
                   <TableCell className="text-right font-mono">
                     {formatCurrency(member.salary)}
@@ -804,7 +1045,7 @@ const SalaryTable = ({ allTeamData, onEdit }: SalaryTableProps) => {
             </TableBody>
             <TableFooter>
               <TableRow className="bg-green-500/5">
-                <TableCell colSpan={6} className="font-semibold text-green-500">
+                <TableCell colSpan={5} className="font-semibold text-green-500">
                   Total Contratados
                 </TableCell>
                 <TableCell className="text-right font-mono font-bold text-green-500">
@@ -813,7 +1054,7 @@ const SalaryTable = ({ allTeamData, onEdit }: SalaryTableProps) => {
                 <TableCell />
               </TableRow>
               <TableRow className="bg-amber-500/5">
-                <TableCell colSpan={6} className="font-semibold text-amber-500">
+                <TableCell colSpan={5} className="font-semibold text-amber-500">
                   Total A Contratar
                 </TableCell>
                 <TableCell className="text-right font-mono font-bold text-amber-500">
@@ -822,7 +1063,7 @@ const SalaryTable = ({ allTeamData, onEdit }: SalaryTableProps) => {
                 <TableCell />
               </TableRow>
               <TableRow className="bg-primary/5">
-                <TableCell colSpan={6} className="font-bold text-primary">
+                <TableCell colSpan={5} className="font-bold text-primary">
                   Total Geral (Mensal)
                 </TableCell>
                 <TableCell className="text-right font-mono font-bold text-primary text-lg">
