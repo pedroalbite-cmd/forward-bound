@@ -303,12 +303,17 @@ interface BUChartProps {
 }
 
 function BUChart({ title, data, color }: BUChartProps) {
-  // Calculate quarterly averages for this BU
+  // Calculate quarterly averages for this BU (using safe access)
+  const q1Values = data.slice(0, 3).map(d => d.value);
+  const q2Values = data.slice(3, 6).map(d => d.value);
+  const q3Values = data.slice(6, 9).map(d => d.value);
+  const q4Values = data.slice(9, 12).map(d => d.value);
+  
   const quarterlyAverages = {
-    Q1: (data[0].value + data[1].value + data[2].value) / 3,
-    Q2: (data[3].value + data[4].value + data[5].value) / 3,
-    Q3: (data[6].value + data[7].value + data[8].value) / 3,
-    Q4: (data[9].value + data[10].value + data[11].value) / 3,
+    Q1: q1Values.reduce((a, b) => a + b, 0) / 3,
+    Q2: q2Values.reduce((a, b) => a + b, 0) / 3,
+    Q3: q3Values.reduce((a, b) => a + b, 0) / 3,
+    Q4: q4Values.reduce((a, b) => a + b, 0) / 3,
   };
 
   return (
@@ -327,11 +332,11 @@ function BUChart({ title, data, color }: BUChartProps) {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis dataKey="month" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+              <XAxis dataKey="month" className="text-xs" tick={{ fill: '#3d3d3d' }} />
               <YAxis 
                 tickFormatter={(value) => formatCompact(value)} 
                 className="text-xs" 
-                tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                tick={{ fill: '#3d3d3d' }}
                 width={80}
               />
               <ChartTooltip 
@@ -619,22 +624,29 @@ export function MonthlyRevenueTab() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                  <XAxis dataKey="month" tick={{ fill: '#3d3d3d' }} />
                   <YAxis 
                     tickFormatter={(value) => formatCompact(value)} 
-                    tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                    tick={{ fill: '#3d3d3d' }}
                     width={80}
                   />
                   <ChartTooltip 
-                    content={<ChartTooltipContent formatter={(value) => formatCurrency(Number(value))} />} 
+                    content={
+                      <ChartTooltipContent 
+                        formatter={(value, name) => (
+                          <span><strong>{name}:</strong> {formatCurrency(Number(value))}</span>
+                        )}
+                        labelFormatter={(label) => `Mês: ${label}`}
+                      />
+                    } 
                   />
                   <Legend 
                     formatter={(value, entry: any) => {
                       const dataKey = entry.dataKey as keyof typeof chartData[0];
                       const total = chartData.reduce((sum, d) => sum + (d[dataKey] as number || 0), 0);
-                      return <span style={{ color: 'hsl(45, 10%, 30%)' }}>{value}: {formatCompact(total)}</span>;
+                      return <span style={{ color: '#3d3d3d' }}>{value}: {formatCompact(total)}</span>;
                     }}
-                    wrapperStyle={{ color: 'hsl(45, 10%, 30%)' }}
+                    wrapperStyle={{ color: '#3d3d3d' }}
                   />
                   <Area
                     type="monotone"
@@ -684,10 +696,10 @@ export function MonthlyRevenueTab() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                  <XAxis dataKey="month" tick={{ fill: '#3d3d3d' }} />
                   <YAxis 
                     tickFormatter={(value) => formatCompact(value)} 
-                    tick={{ fill: 'hsl(var(--muted-foreground))' }}
+                    tick={{ fill: '#3d3d3d' }}
                     width={80}
                   />
                   <ChartTooltip 
