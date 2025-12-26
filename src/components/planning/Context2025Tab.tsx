@@ -36,6 +36,23 @@ const quarterlyAverages = [
   { quarter: "Q4", avg: (revenueData[9].faturamento + revenueData[10].faturamento + revenueData[11].faturamento) / 3 },
 ];
 
+// Calculate quarterly growth averages (Q1: Feb-Mar, Q2: Apr-Jun, Q3: Jul-Sep, Q4: Oct-Dec)
+const quarterlyGrowthAverages = [
+  { quarter: "Q1", avg: (growthData[1].crescimento + growthData[2].crescimento) / 2 },
+  { quarter: "Q2", avg: (growthData[3].crescimento + growthData[4].crescimento + growthData[5].crescimento) / 3 },
+  { quarter: "Q3", avg: (growthData[6].crescimento + growthData[7].crescimento + growthData[8].crescimento) / 3 },
+  { quarter: "Q4", avg: (growthData[9].crescimento + growthData[10].crescimento + growthData[11].crescimento) / 3 },
+];
+
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
 // Sales Funnel Data
 const funnelData = [
   { stage: "MQL", description: "Marketing Qualified Lead (>200k mês)", percent: "43%", label: "Lead → MQL" },
@@ -56,17 +73,9 @@ const indicators = [
   { name: "LTV/CAC", value: "3.99x", description: "Relação entre valor do cliente ao longo do tempo e custo para adquiri-lo", icon: Target },
   { name: "ROI", value: "2.31x", description: "Retorno sobre investimento - quanto a empresa ganha para cada real investido", icon: Trophy },
   { name: "Novo MRR", value: "R$ 883.928", description: "Conquista de MRR no ano - nova receita recorrente adicionada", icon: TrendingUp },
+  { name: "ARR Potencial", value: formatCurrency((883928 * 12) + (418959 * 12)), description: "Potencial de ARR anual baseado em (Novo MRR × 12) + (Revenue Churn × 12)", icon: DollarSign },
   { name: "TCV", value: "R$ 13.2M", description: "Total Contract Value - valor total dos contratos assinados", icon: Building2 },
 ];
-
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-};
 
 export function Context2025Tab() {
   const totalRevenue = revenueData.reduce((acc, item) => acc + item.faturamento, 0);
@@ -244,6 +253,18 @@ export function Context2025Tab() {
                   />
                 </LineChart>
               </ResponsiveContainer>
+            </div>
+            
+            {/* Quarterly Growth Averages */}
+            <div className="grid grid-cols-4 gap-3 mt-6">
+              {quarterlyGrowthAverages.map((q) => (
+                <div key={q.quarter} className="text-center p-3 rounded-lg bg-accent/10 border border-accent/20">
+                  <p className="text-xs text-muted-foreground mb-1">Média {q.quarter}</p>
+                  <p className={`font-display font-bold text-sm ${q.avg >= 0 ? 'text-accent' : 'text-destructive'}`}>
+                    {q.avg >= 0 ? '+' : ''}{q.avg.toFixed(1)}%
+                  </p>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
