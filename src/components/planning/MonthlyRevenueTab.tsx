@@ -194,7 +194,7 @@ const chartConfig = {
   modeloAtual: { label: "Modelo Atual", color: "hsl(var(--primary))" },
   o2Tax: { label: "O2 TAX", color: "hsl(var(--warning))" },
   oxyHacker: { label: "Oxy Hacker", color: "hsl(var(--accent))" },
-  franquia: { label: "Franquia", color: "hsl(var(--secondary))" },
+  franquia: { label: "Franquia", color: "hsl(var(--franquia))" },
   total: { label: "Total", color: "hsl(var(--foreground))" },
 };
 
@@ -202,7 +202,7 @@ const PIE_COLORS = [
   "hsl(var(--primary))",
   "hsl(var(--warning))",
   "hsl(var(--accent))",
-  "hsl(var(--secondary))",
+  "hsl(var(--franquia))",
 ];
 
 interface BUTableProps {
@@ -794,15 +794,15 @@ export function MonthlyRevenueTab() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <BUTable
             title="Franquia"
-            icon={<Users className="h-5 w-5 text-secondary-foreground" />}
+            icon={<Users className="h-5 w-5 text-franquia" />}
             data={franquiaMonthly}
-            color="bg-secondary"
+            color="bg-franquia"
             total={franquiaTotal}
           />
           <BUChart
             title="Franquia"
             data={months.map(m => ({ month: m, value: Math.round(franquiaMonthly[m]) }))}
-            color="hsl(var(--secondary))"
+            color="hsl(var(--franquia))"
           />
         </div>
       </div>

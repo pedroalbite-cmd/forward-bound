@@ -47,6 +47,8 @@
     --success-foreground: 0 0% 8%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
+    --franquia: 250 60% 50%;
+    --franquia-foreground: 0 0% 100%;
 
     --sidebar-background: 0 0% 95%;
     --sidebar-foreground: 0 0% 8%;
@@ -98,6 +100,8 @@
     --success-foreground: 0 0% 8%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
+    --franquia: 250 60% 60%;
+    --franquia-foreground: 0 0% 100%;
 
     --sidebar-background: 0 0% 6%;
     --sidebar-foreground: 0 0% 100%;
