@@ -125,6 +125,12 @@ const chartData = months.map(month => ({
   ),
 }));
 
+// Export grandTotal for use in other components
+export const totalRevenue2026 = Object.values(modeloAtualMonthly).reduce((a, b) => a + b, 0) +
+  Object.values(o2TaxMonthly).reduce((a, b) => a + b, 0) +
+  Object.values(oxyHackerMonthly).reduce((a, b) => a + b, 0) +
+  Object.values(franquiaMonthly).reduce((a, b) => a + b, 0);
+
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -297,6 +303,14 @@ interface BUChartProps {
 }
 
 function BUChart({ title, data, color }: BUChartProps) {
+  // Calculate quarterly averages for this BU
+  const quarterlyAverages = {
+    Q1: (data[0].value + data[1].value + data[2].value) / 3,
+    Q2: (data[3].value + data[4].value + data[5].value) / 3,
+    Q3: (data[6].value + data[7].value + data[8].value) / 3,
+    Q4: (data[9].value + data[10].value + data[11].value) / 3,
+  };
+
   return (
     <Card className="glass-card">
       <CardHeader>
@@ -333,6 +347,18 @@ function BUChart({ title, data, color }: BUChartProps) {
             </AreaChart>
           </ResponsiveContainer>
         </ChartContainer>
+        
+        {/* Quarterly Averages */}
+        <div className="grid grid-cols-4 gap-3 mt-4">
+          {Object.entries(quarterlyAverages).map(([quarter, avg]) => (
+            <div key={quarter} className="text-center p-2 rounded-lg bg-muted/50 border border-border/50">
+              <p className="text-xs text-muted-foreground mb-1">Média {quarter}</p>
+              <p className="font-display font-bold text-xs" style={{ color }}>
+                {formatCompact(avg)}
+              </p>
+            </div>
+          ))}
+        </div>
       </CardContent>
     </Card>
   );
@@ -602,7 +628,14 @@ export function MonthlyRevenueTab() {
                   <ChartTooltip 
                     content={<ChartTooltipContent formatter={(value) => formatCurrency(Number(value))} />} 
                   />
-                  <Legend />
+                  <Legend 
+                    formatter={(value, entry: any) => {
+                      const dataKey = entry.dataKey as keyof typeof chartData[0];
+                      const total = chartData.reduce((sum, d) => sum + (d[dataKey] as number || 0), 0);
+                      return <span style={{ color: 'hsl(45, 10%, 30%)' }}>{value}: {formatCompact(total)}</span>;
+                    }}
+                    wrapperStyle={{ color: 'hsl(45, 10%, 30%)' }}
+                  />
                   <Area
                     type="monotone"
                     dataKey="modeloAtual"
@@ -671,6 +704,21 @@ export function MonthlyRevenueTab() {
                 </LineChart>
               </ResponsiveContainer>
             </ChartContainer>
+            
+            {/* Quarterly Averages */}
+            <div className="grid grid-cols-4 gap-3 mt-6">
+              {Object.entries(consolidatedQuarterTotals).map(([quarter, total]) => {
+                const avg = total / 3;
+                return (
+                  <div key={quarter} className="text-center p-3 rounded-lg bg-primary/10 border border-primary/20">
+                    <p className="text-xs text-muted-foreground mb-1">Média {quarter}</p>
+                    <p className="font-display font-bold text-sm text-primary">
+                      {formatCompact(avg)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
       </div>
