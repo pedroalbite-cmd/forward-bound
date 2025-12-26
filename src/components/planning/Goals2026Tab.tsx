@@ -14,6 +14,7 @@ import {
   Rocket,
   Shield
 } from "lucide-react";
+import { totalRevenue2026 } from "./MonthlyRevenueTab";
 
 const pillars = [
   {
@@ -250,7 +251,7 @@ export function Goals2026Tab() {
         </CardHeader>
         <CardContent className="p-8">
           <div className="text-center mb-8">
-            <p className="text-5xl font-display font-bold text-gradient mb-2">R$ 30 Milhões</p>
+            <p className="text-5xl font-display font-bold text-gradient mb-2">{formatCurrency(Math.round(totalRevenue2026))}</p>
             <p className="text-muted-foreground">Faturamento total projetado para 2026</p>
           </div>
         </CardContent>
