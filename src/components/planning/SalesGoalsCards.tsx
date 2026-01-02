@@ -1,24 +1,23 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, Target, Building2, DollarSign, Rocket, Users } from "lucide-react";
-import { BUConfig, BUKey, formatCurrency, formatCompact, months } from "./salesData";
+import { TrendingUp, TrendingDown, Target, Building2, DollarSign, Expand } from "lucide-react";
+import { DashboardBUConfig, DashboardBUKey, formatCurrency, formatCompact, months } from "./salesData";
 
 interface SalesGoalsCardsProps {
-  buConfigs: BUConfig[];
-  projectedData: Record<BUKey, Record<string, number>>;
-  realizedByBU: Record<string, Record<string, number>>;
-  calculateBUTotal: (bu: BUKey) => number;
-  calculateBURealized: (bu: BUKey) => number;
-  selectedBU: BUKey | 'all';
+  buConfigs: DashboardBUConfig[];
+  projectedData: Record<DashboardBUKey, Record<string, number>>;
+  realizedByBU: Record<DashboardBUKey, Record<string, number>>;
+  calculateBUTotal: (bu: DashboardBUKey) => number;
+  calculateBURealized: (bu: DashboardBUKey) => number;
+  selectedBU: DashboardBUKey | 'all';
   isLoading: boolean;
 }
 
-const buIcons: Record<BUKey, React.ReactNode> = {
+const buIcons: Record<DashboardBUKey, React.ReactNode> = {
   modelo_atual: <Building2 className="h-5 w-5" />,
   o2_tax: <DollarSign className="h-5 w-5" />,
-  oxy_hacker: <Rocket className="h-5 w-5" />,
-  franquia: <Users className="h-5 w-5" />,
+  expansao_o2: <Expand className="h-5 w-5" />,
 };
 
 export function SalesGoalsCards({
@@ -33,7 +32,7 @@ export function SalesGoalsCards({
   const filteredBUs = selectedBU === 'all' ? buConfigs : buConfigs.filter(bu => bu.key === selectedBU);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {filteredBUs.map((bu) => {
         const projected = calculateBUTotal(bu.key);
         const realized = calculateBURealized(bu.key);
@@ -133,7 +132,7 @@ export function SalesGoalsCards({
 
       {/* Consolidated Card when showing all */}
       {selectedBU === 'all' && (
-        <Card className="glass-card col-span-full lg:col-span-4 bg-gradient-to-br from-primary/5 to-accent/5 border-primary/30">
+        <Card className="glass-card col-span-full lg:col-span-3 bg-gradient-to-br from-primary/5 to-accent/5 border-primary/30">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-primary">
               <Target className="h-5 w-5" />
@@ -142,13 +141,13 @@ export function SalesGoalsCards({
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="grid grid-cols-4 gap-4">
-                {[1, 2, 3, 4].map((i) => (
+              <div className="grid grid-cols-3 gap-4">
+                {[1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-20" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {buConfigs.map((bu) => {
                   const projected = calculateBUTotal(bu.key);
                   const realized = calculateBURealized(bu.key);

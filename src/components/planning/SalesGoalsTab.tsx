@@ -2,34 +2,37 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Target, TrendingUp, TrendingDown, Building2, Rocket, DollarSign, Users, BarChart3, LineChart } from "lucide-react";
+import { Target, TrendingUp, TrendingDown, Building2, DollarSign, Expand, BarChart3, LineChart } from "lucide-react";
 import { useSalesRealized } from "@/hooks/useSalesRealized";
 import { 
-  buConfigs, 
-  projectedData, 
-  calculateBUTotal, 
-  calculateGrandTotal,
+  dashboardBuConfigs, 
+  dashboardProjectedData,
+  calculateDashboardBUTotal,
+  calculateDashboardGrandTotal,
+  aggregateRealizedForDashboard,
   formatCurrency,
   formatCompact,
   months,
-  BUKey
+  DashboardBUKey
 } from "./salesData";
 import { SalesGoalsCards } from "./SalesGoalsCards";
 import { SalesGoalsTable } from "./SalesGoalsTable";
 import { SalesGoalsCharts } from "./SalesGoalsCharts";
 
-const buIcons: Record<BUKey, React.ReactNode> = {
+const buIcons: Record<DashboardBUKey, React.ReactNode> = {
   modelo_atual: <Building2 className="h-5 w-5" />,
   o2_tax: <DollarSign className="h-5 w-5" />,
-  oxy_hacker: <Rocket className="h-5 w-5" />,
-  franquia: <Users className="h-5 w-5" />,
+  expansao_o2: <Expand className="h-5 w-5" />,
 };
 
 export function SalesGoalsTab() {
-  const [selectedBU, setSelectedBU] = useState<BUKey | 'all'>('all');
-  const { realizedByBU, calculateBURealized, totalRealized, isLoading, error } = useSalesRealized(2026);
+  const [selectedBU, setSelectedBU] = useState<DashboardBUKey | 'all'>('all');
+  const { realizedByBU, totalRealized, isLoading, error } = useSalesRealized(2026);
   
-  const grandTotalProjected = calculateGrandTotal();
+  // Aggregate realized data for dashboard (combines oxy_hacker + franquia into expansao_o2)
+  const dashboardRealizedByBU = aggregateRealizedForDashboard(realizedByBU);
+  
+  const grandTotalProjected = calculateDashboardGrandTotal();
 
   // Calculate achievement rate
   const achievementRate = grandTotalProjected > 0 
@@ -37,9 +40,9 @@ export function SalesGoalsTab() {
     : 0;
 
   // Find best performing BU
-  const buPerformance = buConfigs.map(bu => {
-    const projected = calculateBUTotal(bu.key);
-    const realized = calculateBURealized(bu.key);
+  const buPerformance = dashboardBuConfigs.map(bu => {
+    const projected = calculateDashboardBUTotal(bu.key);
+    const realized = months.reduce((sum, month) => sum + (dashboardRealizedByBU[bu.key]?.[month] || 0), 0);
     const rate = projected > 0 ? (realized / projected) * 100 : 0;
     return { ...bu, projected, realized, rate };
   });
@@ -117,7 +120,7 @@ export function SalesGoalsTab() {
               <BarChart3 className="h-4 w-4 mr-2" />
               Consolidado
             </Badge>
-            {buConfigs.map((bu) => (
+            {dashboardBuConfigs.map((bu) => (
               <Badge
                 key={bu.key}
                 variant={selectedBU === bu.key ? 'default' : 'outline'}
@@ -134,12 +137,12 @@ export function SalesGoalsTab() {
 
       {/* Cards Section */}
       <SalesGoalsCards 
-        buConfigs={buConfigs}
-        projectedData={projectedData}
-        realizedByBU={realizedByBU}
-        calculateBUTotal={calculateBUTotal}
-        calculateBURealized={(bu: BUKey) => 
-          months.reduce((sum, month) => sum + (realizedByBU[bu]?.[month] || 0), 0)
+        buConfigs={dashboardBuConfigs}
+        projectedData={dashboardProjectedData}
+        realizedByBU={dashboardRealizedByBU}
+        calculateBUTotal={calculateDashboardBUTotal}
+        calculateBURealized={(bu: DashboardBUKey) => 
+          months.reduce((sum, month) => sum + (dashboardRealizedByBU[bu]?.[month] || 0), 0)
         }
         selectedBU={selectedBU}
         isLoading={isLoading}
@@ -160,9 +163,9 @@ export function SalesGoalsTab() {
 
         <TabsContent value="table" className="mt-6">
           <SalesGoalsTable 
-            buConfigs={buConfigs}
-            projectedData={projectedData}
-            realizedByBU={realizedByBU}
+            buConfigs={dashboardBuConfigs}
+            projectedData={dashboardProjectedData}
+            realizedByBU={dashboardRealizedByBU}
             selectedBU={selectedBU}
             isLoading={isLoading}
           />
@@ -170,13 +173,13 @@ export function SalesGoalsTab() {
 
         <TabsContent value="charts" className="mt-6">
           <SalesGoalsCharts 
-            buConfigs={buConfigs}
-            projectedData={projectedData}
-            realizedByBU={realizedByBU}
+            buConfigs={dashboardBuConfigs}
+            projectedData={dashboardProjectedData}
+            realizedByBU={dashboardRealizedByBU}
             selectedBU={selectedBU}
-            calculateBUTotal={calculateBUTotal}
-            calculateBURealized={(bu: BUKey) => 
-              months.reduce((sum, month) => sum + (realizedByBU[bu]?.[month] || 0), 0)
+            calculateBUTotal={calculateDashboardBUTotal}
+            calculateBURealized={(bu: DashboardBUKey) => 
+              months.reduce((sum, month) => sum + (dashboardRealizedByBU[bu]?.[month] || 0), 0)
             }
           />
         </TabsContent>

@@ -3,13 +3,13 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowUp, ArrowDown, Minus, CheckCircle2, XCircle } from "lucide-react";
-import { BUConfig, BUKey, formatCurrency, formatCompact, months, getQuarter } from "./salesData";
+import { DashboardBUConfig, DashboardBUKey, formatCurrency, formatCompact, months, getQuarter } from "./salesData";
 
 interface SalesGoalsTableProps {
-  buConfigs: BUConfig[];
-  projectedData: Record<BUKey, Record<string, number>>;
-  realizedByBU: Record<string, Record<string, number>>;
-  selectedBU: BUKey | 'all';
+  buConfigs: DashboardBUConfig[];
+  projectedData: Record<DashboardBUKey, Record<string, number>>;
+  realizedByBU: Record<DashboardBUKey, Record<string, number>>;
+  selectedBU: DashboardBUKey | 'all';
   isLoading: boolean;
 }
 
