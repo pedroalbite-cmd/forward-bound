@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save, Shield, User } from 'lucide-react';
+import { CreateUserForm } from './CreateUserForm';
 
 const TAB_OPTIONS: { key: TabKey; label: string }[] = [
   { key: 'context', label: 'Contexto 2025' },
@@ -21,11 +22,20 @@ const TAB_OPTIONS: { key: TabKey; label: string }[] = [
 ];
 
 export function AdminTab() {
-  const { users, loading, updatePermissions, toggleAdmin } = useAdminPermissions();
+  const { users, loading, updatePermissions, toggleAdmin, createUser } = useAdminPermissions();
   const { toast } = useToast();
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [tempPermissions, setTempPermissions] = useState<TabKey[]>([]);
   const [saving, setSaving] = useState(false);
+
+  const handleCreateUser = async (data: {
+    email: string;
+    password: string;
+    fullName?: string;
+    permissions: TabKey[];
+  }) => {
+    await createUser.mutateAsync(data);
+  };
 
   const startEditing = (userId: string, currentPermissions: TabKey[]) => {
     setEditingUser(userId);
@@ -86,13 +96,19 @@ export function AdminTab() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-display font-bold text-gradient mb-2">
-          Gerenciar Usuários
-        </h2>
-        <p className="text-muted-foreground">
-          Controle quais abas cada usuário pode acessar
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-display font-bold text-gradient mb-2">
+            Gerenciar Usuários
+          </h2>
+          <p className="text-muted-foreground">
+            Controle quais abas cada usuário pode acessar
+          </p>
+        </div>
+        <CreateUserForm 
+          onCreateUser={handleCreateUser}
+          isLoading={createUser.isPending}
+        />
       </div>
 
       <div className="grid gap-4">
