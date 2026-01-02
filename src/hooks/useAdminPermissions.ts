@@ -20,6 +20,12 @@ interface CreateUserParams {
   permissions: TabKey[];
 }
 
+interface UpdateUserParams {
+  userId: string;
+  email?: string;
+  fullName?: string;
+}
+
 export function useAdminPermissions() {
   const queryClient = useQueryClient();
 
@@ -132,10 +138,40 @@ export function useAdminPermissions() {
 
   const createUser = useMutation({
     mutationFn: async ({ email, password, fullName, permissions }: CreateUserParams) => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      
-      const { data, error } = await supabase.functions.invoke('create-user', {
-        body: { email, password, fullName, permissions },
+      const { data, error } = await supabase.functions.invoke('manage-user', {
+        body: { action: 'create', email, password, fullName, permissions },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+  });
+
+  const updateUser = useMutation({
+    mutationFn: async ({ userId, email, fullName }: UpdateUserParams) => {
+      const { data, error } = await supabase.functions.invoke('manage-user', {
+        body: { action: 'update', userId, email, fullName },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+  });
+
+  const deleteUser = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data, error } = await supabase.functions.invoke('manage-user', {
+        body: { action: 'delete', userId },
       });
 
       if (error) throw error;
@@ -154,5 +190,7 @@ export function useAdminPermissions() {
     updatePermissions,
     toggleAdmin,
     createUser,
+    updateUser,
+    deleteUser,
   };
 }

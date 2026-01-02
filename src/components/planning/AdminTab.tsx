@@ -8,8 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Shield, User } from 'lucide-react';
+import { Loader2, Pencil, Save, Shield, Trash2, User } from 'lucide-react';
 import { CreateUserForm } from './CreateUserForm';
+import { EditUserDialog } from './EditUserDialog';
+import { DeleteUserDialog } from './DeleteUserDialog';
 
 const TAB_OPTIONS: { key: TabKey; label: string }[] = [
   { key: 'context', label: 'Contexto 2025' },
@@ -22,11 +24,20 @@ const TAB_OPTIONS: { key: TabKey; label: string }[] = [
 ];
 
 export function AdminTab() {
-  const { users, loading, updatePermissions, toggleAdmin, createUser } = useAdminPermissions();
+  const { users, loading, updatePermissions, toggleAdmin, createUser, updateUser, deleteUser } = useAdminPermissions();
   const { toast } = useToast();
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [tempPermissions, setTempPermissions] = useState<TabKey[]>([]);
   const [saving, setSaving] = useState(false);
+  
+  // Edit/Delete dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<{
+    id: string;
+    email: string;
+    full_name: string | null;
+  } | null>(null);
 
   const handleCreateUser = async (data: {
     email: string;
@@ -86,6 +97,24 @@ export function AdminTab() {
     }
   };
 
+  const openEditDialog = (user: { id: string; email: string; full_name: string | null }) => {
+    setSelectedUser(user);
+    setEditDialogOpen(true);
+  };
+
+  const openDeleteDialog = (user: { id: string; email: string; full_name: string | null }) => {
+    setSelectedUser(user);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleUpdateUser = async (userId: string, data: { email?: string; fullName?: string }) => {
+    await updateUser.mutateAsync({ userId, ...data });
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    await deleteUser.mutateAsync(userId);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -135,8 +164,25 @@ export function AdminTab() {
                       <CardDescription>{user.email}</CardDescription>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => openEditDialog(user)}
+                      title="Editar usuário"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => openDeleteDialog(user)}
+                      title="Excluir usuário"
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <div className="flex items-center gap-2 ml-2">
                       <Switch
                         id={`admin-${user.id}`}
                         checked={isAdmin}
@@ -226,6 +272,20 @@ export function AdminTab() {
           );
         })}
       </div>
+
+      <EditUserDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        user={selectedUser}
+        onSave={handleUpdateUser}
+      />
+
+      <DeleteUserDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        user={selectedUser}
+        onDelete={handleDeleteUser}
+      />
     </div>
   );
 }
