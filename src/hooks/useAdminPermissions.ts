@@ -13,6 +13,13 @@ interface UserWithPermissions {
   permissions: TabKey[];
 }
 
+interface CreateUserParams {
+  email: string;
+  password: string;
+  fullName?: string;
+  permissions: TabKey[];
+}
+
 export function useAdminPermissions() {
   const queryClient = useQueryClient();
 
@@ -123,10 +130,29 @@ export function useAdminPermissions() {
     },
   });
 
+  const createUser = useMutation({
+    mutationFn: async ({ email, password, fullName, permissions }: CreateUserParams) => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: { email, password, fullName, permissions },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+  });
+
   return {
     users: users || [],
     loading: isLoading,
     updatePermissions,
     toggleAdmin,
+    createUser,
   };
 }
