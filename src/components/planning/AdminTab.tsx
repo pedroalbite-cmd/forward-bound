@@ -1,0 +1,215 @@
+import { useState } from 'react';
+import { useAdminPermissions } from '@/hooks/useAdminPermissions';
+import { TabKey } from '@/hooks/useUserPermissions';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, Save, Shield, User } from 'lucide-react';
+
+const TAB_OPTIONS: { key: TabKey; label: string }[] = [
+  { key: 'context', label: 'Contexto 2025' },
+  { key: 'goals', label: 'Metas 2026' },
+  { key: 'monthly', label: 'Faturamento Mensal' },
+  { key: 'sales', label: 'Dashboard Metas' },
+  { key: 'media', label: 'Investimento Mídia' },
+  { key: 'marketing', label: 'Marketing' },
+  { key: 'structure', label: 'Estrutura' },
+];
+
+export function AdminTab() {
+  const { users, loading, updatePermissions, toggleAdmin } = useAdminPermissions();
+  const { toast } = useToast();
+  const [editingUser, setEditingUser] = useState<string | null>(null);
+  const [tempPermissions, setTempPermissions] = useState<TabKey[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const startEditing = (userId: string, currentPermissions: TabKey[]) => {
+    setEditingUser(userId);
+    setTempPermissions([...currentPermissions]);
+  };
+
+  const cancelEditing = () => {
+    setEditingUser(null);
+    setTempPermissions([]);
+  };
+
+  const togglePermission = (tabKey: TabKey) => {
+    setTempPermissions(prev => 
+      prev.includes(tabKey) 
+        ? prev.filter(t => t !== tabKey)
+        : [...prev, tabKey]
+    );
+  };
+
+  const savePermissions = async (userId: string) => {
+    setSaving(true);
+    try {
+      await updatePermissions.mutateAsync({ userId, tabs: tempPermissions });
+      toast({ title: 'Permissões atualizadas!' });
+      setEditingUser(null);
+    } catch (error) {
+      toast({ 
+        variant: 'destructive', 
+        title: 'Erro ao salvar', 
+        description: 'Não foi possível atualizar as permissões' 
+      });
+    }
+    setSaving(false);
+  };
+
+  const handleToggleAdmin = async (userId: string, currentIsAdmin: boolean) => {
+    try {
+      await toggleAdmin.mutateAsync({ userId, makeAdmin: !currentIsAdmin });
+      toast({ 
+        title: currentIsAdmin ? 'Removido de admin' : 'Promovido a admin',
+      });
+    } catch (error) {
+      toast({ 
+        variant: 'destructive', 
+        title: 'Erro', 
+        description: 'Não foi possível alterar o role' 
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-display font-bold text-gradient mb-2">
+          Gerenciar Usuários
+        </h2>
+        <p className="text-muted-foreground">
+          Controle quais abas cada usuário pode acessar
+        </p>
+      </div>
+
+      <div className="grid gap-4">
+        {users.map(user => {
+          const isEditing = editingUser === user.id;
+          const isAdmin = user.role === 'admin';
+
+          return (
+            <Card key={user.id}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      {isAdmin ? (
+                        <Shield className="h-5 w-5 text-primary" />
+                      ) : (
+                        <User className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">
+                        {user.full_name || 'Sem nome'}
+                      </CardTitle>
+                      <CardDescription>{user.email}</CardDescription>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id={`admin-${user.id}`}
+                        checked={isAdmin}
+                        onCheckedChange={() => handleToggleAdmin(user.id, isAdmin)}
+                      />
+                      <Label htmlFor={`admin-${user.id}`} className="text-sm">
+                        Admin
+                      </Label>
+                    </div>
+                    {isAdmin && (
+                      <Badge variant="secondary">Acesso total</Badge>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+
+              {!isAdmin && (
+                <CardContent>
+                  {isEditing ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {TAB_OPTIONS.map(tab => (
+                          <div key={tab.key} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`${user.id}-${tab.key}`}
+                              checked={tempPermissions.includes(tab.key)}
+                              onCheckedChange={() => togglePermission(tab.key)}
+                            />
+                            <Label 
+                              htmlFor={`${user.id}-${tab.key}`}
+                              className="text-sm cursor-pointer"
+                            >
+                              {tab.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          onClick={() => savePermissions(user.id)}
+                          disabled={saving}
+                        >
+                          {saving ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          ) : (
+                            <Save className="h-4 w-4 mr-2" />
+                          )}
+                          Salvar
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={cancelEditing}
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap gap-2">
+                        {user.permissions.length > 0 ? (
+                          user.permissions.map(perm => (
+                            <Badge key={perm} variant="outline">
+                              {TAB_OPTIONS.find(t => t.key === perm)?.label || perm}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            Nenhuma aba liberada
+                          </span>
+                        )}
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => startEditing(user.id, user.permissions)}
+                      >
+                        Editar permissões
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

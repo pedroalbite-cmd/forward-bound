@@ -1,4 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Context2025Tab } from "@/components/planning/Context2025Tab";
 import { Goals2026Tab } from "@/components/planning/Goals2026Tab";
 import { MonthlyRevenueTab } from "@/components/planning/MonthlyRevenueTab";
@@ -6,82 +8,126 @@ import { MediaInvestmentTab } from "@/components/planning/MediaInvestmentTab";
 import { MarketingPlanTab } from "@/components/planning/MarketingPlanTab";
 import { StructureTab } from "@/components/planning/StructureTab";
 import { SalesGoalsTab } from "@/components/planning/SalesGoalsTab";
-import { Calendar, BarChart3, LineChart, Megaphone, Lightbulb, Users, Target } from "lucide-react";
+import { AdminTab } from "@/components/planning/AdminTab";
+import { useAuth } from "@/hooks/useAuth";
+import { useUserPermissions, TabKey } from "@/hooks/useUserPermissions";
+import { Calendar, BarChart3, LineChart, Megaphone, Lightbulb, Users, Target, Settings, LogOut, User, Loader2 } from "lucide-react";
+
+const TAB_CONFIG: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: 'context', label: 'Contexto 2025', icon: BarChart3 },
+  { key: 'goals', label: 'Metas 2026', icon: Calendar },
+  { key: 'monthly', label: 'Faturamento Mensal', icon: LineChart },
+  { key: 'sales', label: 'Dashboard Metas', icon: Target },
+  { key: 'media', label: 'Investimento Mídia', icon: Megaphone },
+  { key: 'marketing', label: 'Marketing', icon: Lightbulb },
+  { key: 'structure', label: 'Estrutura', icon: Users },
+  { key: 'admin', label: 'Admin', icon: Settings },
+];
 
 export default function Planning2026() {
+  const { user, signOut } = useAuth();
+  const { allowedTabs, isAdmin, loading } = useUserPermissions(user?.id);
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const visibleTabs = TAB_CONFIG.filter(tab => allowedTabs.includes(tab.key));
+  const defaultTab = visibleTabs[0]?.key || 'context';
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center">
+        <div className="container flex h-16 items-center justify-between">
           <h1 className="font-display text-xl font-bold text-gradient">
             Planejamento Estratégico
           </h1>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="gap-2">
+                <User className="h-4 w-4" />
+                <span className="hidden sm:inline">
+                  {user?.user_metadata?.full_name || user?.email}
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleSignOut}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Sair
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="container py-8">
-        <Tabs defaultValue="context" className="w-full">
-          <TabsList className="grid w-full max-w-6xl grid-cols-7 mb-8">
-            <TabsTrigger value="context" className="gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Contexto 2025
-            </TabsTrigger>
-            <TabsTrigger value="goals" className="gap-2">
-              <Calendar className="h-4 w-4" />
-              Metas 2026
-            </TabsTrigger>
-            <TabsTrigger value="monthly" className="gap-2">
-              <LineChart className="h-4 w-4" />
-              Faturamento Mensal
-            </TabsTrigger>
-            <TabsTrigger value="sales" className="gap-2">
-              <Target className="h-4 w-4" />
-              Dashboard Metas
-            </TabsTrigger>
-            <TabsTrigger value="media" className="gap-2">
-              <Megaphone className="h-4 w-4" />
-              Investimento Mídia
-            </TabsTrigger>
-            <TabsTrigger value="marketing" className="gap-2">
-              <Lightbulb className="h-4 w-4" />
-              Marketing
-            </TabsTrigger>
-            <TabsTrigger value="structure" className="gap-2">
-              <Users className="h-4 w-4" />
-              Estrutura
-            </TabsTrigger>
-          </TabsList>
+        {visibleTabs.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">
+              Você não tem acesso a nenhuma aba. Contate o administrador.
+            </p>
+          </div>
+        ) : (
+          <Tabs defaultValue={defaultTab} className="w-full">
+            <TabsList className={`grid w-full max-w-6xl mb-8`} style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, minmax(0, 1fr))` }}>
+              {visibleTabs.map(tab => {
+                const Icon = tab.icon;
+                return (
+                  <TabsTrigger key={tab.key} value={tab.key} className="gap-2">
+                    <Icon className="h-4 w-4" />
+                    <span className="hidden lg:inline">{tab.label}</span>
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
 
-          <TabsContent value="context" className="mt-0">
-            <Context2025Tab />
-          </TabsContent>
+            <TabsContent value="context" className="mt-0">
+              <Context2025Tab />
+            </TabsContent>
 
-          <TabsContent value="goals" className="mt-0">
-            <Goals2026Tab />
-          </TabsContent>
+            <TabsContent value="goals" className="mt-0">
+              <Goals2026Tab />
+            </TabsContent>
 
-          <TabsContent value="monthly" className="mt-0">
-            <MonthlyRevenueTab />
-          </TabsContent>
+            <TabsContent value="monthly" className="mt-0">
+              <MonthlyRevenueTab />
+            </TabsContent>
 
-          <TabsContent value="sales" className="mt-0">
-            <SalesGoalsTab />
-          </TabsContent>
+            <TabsContent value="sales" className="mt-0">
+              <SalesGoalsTab />
+            </TabsContent>
 
-          <TabsContent value="media" className="mt-0">
-            <MediaInvestmentTab />
-          </TabsContent>
+            <TabsContent value="media" className="mt-0">
+              <MediaInvestmentTab />
+            </TabsContent>
 
-          <TabsContent value="marketing" className="mt-0">
-            <MarketingPlanTab />
-          </TabsContent>
+            <TabsContent value="marketing" className="mt-0">
+              <MarketingPlanTab />
+            </TabsContent>
 
-          <TabsContent value="structure" className="mt-0">
-            <StructureTab />
-          </TabsContent>
-        </Tabs>
+            <TabsContent value="structure" className="mt-0">
+              <StructureTab />
+            </TabsContent>
+
+            {isAdmin && (
+              <TabsContent value="admin" className="mt-0">
+                <AdminTab />
+              </TabsContent>
+            )}
+          </Tabs>
+        )}
       </main>
 
       {/* Footer */}
