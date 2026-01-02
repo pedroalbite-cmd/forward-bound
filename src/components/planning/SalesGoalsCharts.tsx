@@ -1,15 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, LineChart, Line, PieChart, Pie, Cell } from "recharts";
-import { BUConfig, BUKey, formatCurrency, formatCompact, months, getQuarter } from "./salesData";
+import { DashboardBUConfig, DashboardBUKey, formatCurrency, formatCompact, months, getQuarter } from "./salesData";
 
 interface SalesGoalsChartsProps {
-  buConfigs: BUConfig[];
-  projectedData: Record<BUKey, Record<string, number>>;
-  realizedByBU: Record<string, Record<string, number>>;
-  selectedBU: BUKey | 'all';
-  calculateBUTotal: (bu: BUKey) => number;
-  calculateBURealized: (bu: BUKey) => number;
+  buConfigs: DashboardBUConfig[];
+  projectedData: Record<DashboardBUKey, Record<string, number>>;
+  realizedByBU: Record<DashboardBUKey, Record<string, number>>;
+  selectedBU: DashboardBUKey | 'all';
+  calculateBUTotal: (bu: DashboardBUKey) => number;
+  calculateBURealized: (bu: DashboardBUKey) => number;
 }
 
 export function SalesGoalsCharts({

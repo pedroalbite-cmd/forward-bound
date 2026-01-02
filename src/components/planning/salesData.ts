@@ -17,7 +17,7 @@ export const quarterlyTotals = {
   franquia: { Q1: 2 * 140000, Q2: 3 * 140000, Q3: 6 * 140000, Q4: 9 * 140000 },
 };
 
-// BU configurations
+// BU configurations (original - used in other tabs)
 export type BUKey = 'modelo_atual' | 'o2_tax' | 'oxy_hacker' | 'franquia';
 
 export interface BUConfig {
@@ -33,6 +33,23 @@ export const buConfigs: BUConfig[] = [
   { key: 'o2_tax', label: 'O2 TAX', color: 'hsl(var(--warning))', colorClass: 'text-warning', bgClass: 'bg-warning' },
   { key: 'oxy_hacker', label: 'Oxy Hacker', color: 'hsl(var(--accent))', colorClass: 'text-accent', bgClass: 'bg-accent' },
   { key: 'franquia', label: 'Franquia', color: 'hsl(var(--franquia))', colorClass: 'text-franquia', bgClass: 'bg-franquia' },
+];
+
+// Dashboard-specific BU configurations (Oxy Hacker + Franquia = Expansão O2)
+export type DashboardBUKey = 'modelo_atual' | 'o2_tax' | 'expansao_o2';
+
+export interface DashboardBUConfig {
+  key: DashboardBUKey;
+  label: string;
+  color: string;
+  colorClass: string;
+  bgClass: string;
+}
+
+export const dashboardBuConfigs: DashboardBUConfig[] = [
+  { key: 'modelo_atual', label: 'Modelo Atual', color: 'hsl(var(--primary))', colorClass: 'text-primary', bgClass: 'bg-primary' },
+  { key: 'o2_tax', label: 'O2 TAX', color: 'hsl(var(--warning))', colorClass: 'text-warning', bgClass: 'bg-warning' },
+  { key: 'expansao_o2', label: 'Expansão O2', color: 'hsl(var(--accent))', colorClass: 'text-accent', bgClass: 'bg-accent' },
 ];
 
 // Calculate monthly values with smooth growth
@@ -104,13 +121,50 @@ export const projectedData = {
   franquia: calculateFromUnits(franquiaUnits, FRANQUIA_TICKET),
 };
 
+// Dashboard-specific projected data (aggregates Oxy Hacker + Franquia into Expansão O2)
+export const dashboardProjectedData: Record<DashboardBUKey, Record<string, number>> = {
+  modelo_atual: projectedData.modelo_atual,
+  o2_tax: projectedData.o2_tax,
+  expansao_o2: months.reduce((acc, month) => {
+    acc[month] = projectedData.oxy_hacker[month] + projectedData.franquia[month];
+    return acc;
+  }, {} as Record<string, number>),
+};
+
 // Calculate totals
 export function calculateBUTotal(buKey: BUKey): number {
   return Object.values(projectedData[buKey]).reduce((a, b) => a + b, 0);
 }
 
+export function calculateDashboardBUTotal(buKey: DashboardBUKey): number {
+  return Object.values(dashboardProjectedData[buKey]).reduce((a, b) => a + b, 0);
+}
+
 export function calculateGrandTotal(): number {
   return buConfigs.reduce((sum, bu) => sum + calculateBUTotal(bu.key), 0);
+}
+
+export function calculateDashboardGrandTotal(): number {
+  return dashboardBuConfigs.reduce((sum, bu) => sum + calculateDashboardBUTotal(bu.key), 0);
+}
+
+// Aggregate realized data for dashboard (Oxy Hacker + Franquia = Expansão O2)
+export function aggregateRealizedForDashboard(
+  realizedByBU: Record<string, Record<string, number>>
+): Record<DashboardBUKey, Record<string, number>> {
+  const result: Record<DashboardBUKey, Record<string, number>> = {
+    modelo_atual: realizedByBU.modelo_atual || {},
+    o2_tax: realizedByBU.o2_tax || {},
+    expansao_o2: {},
+  };
+
+  months.forEach((month) => {
+    result.expansao_o2[month] = 
+      (realizedByBU.oxy_hacker?.[month] || 0) + 
+      (realizedByBU.franquia?.[month] || 0);
+  });
+
+  return result;
 }
 
 // Formatting utilities
