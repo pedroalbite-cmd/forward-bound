@@ -647,11 +647,16 @@ function BUIndicatorEditor({ indicators, onChange, buName, buIcon }: BUIndicator
 }
 
 export function MediaInvestmentTab() {
-  // Estados editáveis - Taxas gerais (Modelo Atual - backward compatibility)
-  const [mrrBase, setMrrBase] = useState(700000);
+  // Estados editáveis - Taxas gerais (Modelo Atual)
+  const [mrrInicial, setMrrInicial] = useState(700000);
   const [valorVenderInicial, setValorVenderInicial] = useState(400000);
   const [churnMensal, setChurnMensal] = useState(0.06);
   const [retencaoVendas, setRetencaoVendas] = useState(0.25);
+  
+  // Estados editáveis - O2 TAX
+  const [mrrInicialO2Tax, setMrrInicialO2Tax] = useState(100000);
+  const [churnMensalO2Tax, setChurnMensalO2Tax] = useState(0.04);
+  const [retencaoVendasO2Tax, setRetencaoVendasO2Tax] = useState(0.30);
   
   // Estados editáveis - Metas trimestrais
   const [metasTrimestrais, setMetasTrimestrais] = useState({
@@ -661,11 +666,12 @@ export function MediaInvestmentTab() {
     Q4: 8000000,
   });
 
-  // Estados editáveis - Indicadores por BU
+  // Estados editáveis - Indicadores por BU (separados Oxy Hacker e Franquia)
   const [indicadoresPorBU, setIndicadoresPorBU] = useState<{
     modeloAtual: BUIndicators;
     o2Tax: BUIndicators;
-    expansao: BUIndicators;
+    oxyHacker: BUIndicators;
+    franquia: BUIndicators;
   }>({
     modeloAtual: {
       ticketMedio: 17000,
@@ -685,14 +691,23 @@ export function MediaInvestmentTab() {
       rrToProp: 0.80,
       propToVenda: 0.20,
     },
-    expansao: {
-      ticketMedio: 54000, // Média ponderada Oxy Hacker e Franquia
+    oxyHacker: {
+      ticketMedio: 54000,
       cpmql: 800,
       cpv: 5000,
       mqlToRm: 0.40,
       rmToRr: 0.60,
       rrToProp: 0.75,
       propToVenda: 0.15,
+    },
+    franquia: {
+      ticketMedio: 140000,
+      cpmql: 1200,
+      cpv: 12000,
+      mqlToRm: 0.35,
+      rmToRr: 0.55,
+      rrToProp: 0.70,
+      propToVenda: 0.12,
     },
   });
 
@@ -740,14 +755,14 @@ export function MediaInvestmentTab() {
     },
     oxyHacker: {
       name: "Oxy Hacker",
-      ticketMedio: indicadoresPorBU.expansao.ticketMedio,
-      cpv: indicadoresPorBU.expansao.cpv,
+      ticketMedio: indicadoresPorBU.oxyHacker.ticketMedio,
+      cpv: indicadoresPorBU.oxyHacker.cpv,
       leadToMql: 0.25,
-      mqlToRm: indicadoresPorBU.expansao.mqlToRm,
-      rmToRr: indicadoresPorBU.expansao.rmToRr,
-      rrToProp: indicadoresPorBU.expansao.rrToProp,
-      propToVenda: indicadoresPorBU.expansao.propToVenda,
-      cpmql: indicadoresPorBU.expansao.cpmql,
+      mqlToRm: indicadoresPorBU.oxyHacker.mqlToRm,
+      rmToRr: indicadoresPorBU.oxyHacker.rmToRr,
+      rrToProp: indicadoresPorBU.oxyHacker.rrToProp,
+      propToVenda: indicadoresPorBU.oxyHacker.propToVenda,
+      cpmql: indicadoresPorBU.oxyHacker.cpmql,
       cprr: 2500,
       cac: 18000,
       color: "hsl(var(--accent))",
@@ -755,14 +770,14 @@ export function MediaInvestmentTab() {
     },
     franquia: {
       name: "Franquia",
-      ticketMedio: 140000, // Franquia mantém ticket próprio
-      cpv: 12000,
+      ticketMedio: indicadoresPorBU.franquia.ticketMedio,
+      cpv: indicadoresPorBU.franquia.cpv,
       leadToMql: 0.20,
-      mqlToRm: indicadoresPorBU.expansao.mqlToRm,
-      rmToRr: indicadoresPorBU.expansao.rmToRr,
-      rrToProp: indicadoresPorBU.expansao.rrToProp,
-      propToVenda: indicadoresPorBU.expansao.propToVenda,
-      cpmql: 1200,
+      mqlToRm: indicadoresPorBU.franquia.mqlToRm,
+      rmToRr: indicadoresPorBU.franquia.rmToRr,
+      rrToProp: indicadoresPorBU.franquia.rrToProp,
+      propToVenda: indicadoresPorBU.franquia.propToVenda,
+      cpmql: indicadoresPorBU.franquia.cpmql,
       cprr: 4000,
       cac: 25000,
       color: "hsl(var(--secondary))",
@@ -779,14 +794,14 @@ export function MediaInvestmentTab() {
   // Calcula MRR dinâmico e "A Vender" a partir das metas fixas
   const mrrDynamic = useMemo(() => 
     calculateMrrAndRevenueToSell(
-      mrrBase, 
+      mrrInicial, 
       churnMensal, 
       retencaoVendas,
       metasMensaisModeloAtual,
       indicadoresPorBU.modeloAtual.ticketMedio,
       valorVenderInicial
     ),
-    [mrrBase, churnMensal, retencaoVendas, metasMensaisModeloAtual, indicadoresPorBU.modeloAtual.ticketMedio, valorVenderInicial]
+    [mrrInicial, churnMensal, retencaoVendas, metasMensaisModeloAtual, indicadoresPorBU.modeloAtual.ticketMedio, valorVenderInicial]
   );
 
   // Receitas outras BUs
@@ -913,7 +928,7 @@ export function MediaInvestmentTab() {
     setMetasTrimestrais(prev => ({ ...prev, [quarter]: numValue }));
   };
 
-  const handleBUIndicatorChange = (bu: 'modeloAtual' | 'o2Tax' | 'expansao', indicators: BUIndicators) => {
+  const handleBUIndicatorChange = (bu: 'modeloAtual' | 'o2Tax' | 'oxyHacker' | 'franquia', indicators: BUIndicators) => {
     setIndicadoresPorBU(prev => ({ ...prev, [bu]: indicators }));
   };
 
@@ -929,7 +944,7 @@ export function MediaInvestmentTab() {
           </Badge>
           <h2 className="font-display text-4xl font-bold mb-4">Planejamento de Mídia</h2>
           <p className="text-primary-foreground/80 max-w-2xl">
-            Cálculo de investimento baseado em funil reverso. <strong>MRR Base: {formatCurrency(mrrBase)}</strong> — investimento apenas para vender a diferença da meta mensal.
+            Cálculo de investimento baseado em funil reverso. <strong>MRR Inicial: {formatCurrency(mrrInicial)}</strong> — investimento apenas para vender a diferença da meta mensal.
           </p>
           <div className="flex flex-wrap gap-4 mt-6">
             <Badge variant="secondary" className="text-lg px-4 py-2 bg-primary-foreground/20 text-primary-foreground border-0">
@@ -991,6 +1006,16 @@ export function MediaInvestmentTab() {
                   <h4 className="font-semibold">Parâmetros MRR (Modelo Atual)</h4>
                   
                   <div className="space-y-2">
+                    <Label>MRR Inicial</Label>
+                    <Input
+                      type="number"
+                      value={mrrInicial}
+                      onChange={(e) => setMrrInicial(Number(e.target.value))}
+                      className="font-mono"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
                     <Label>Valor A Vender Inicial (Jan)</Label>
                     <Input
                       type="number"
@@ -1037,6 +1062,53 @@ export function MediaInvestmentTab() {
                 </div>
               </div>
 
+              {/* Parâmetros O2 TAX */}
+              <div className="border-t pt-6">
+                <h4 className="font-semibold mb-4 flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-warning" />
+                  Configurações O2 TAX
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <Label>MRR Inicial O2 TAX</Label>
+                    <Input
+                      type="number"
+                      value={mrrInicialO2Tax}
+                      onChange={(e) => setMrrInicialO2Tax(Number(e.target.value))}
+                      className="font-mono"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <Label>Churn Mensal</Label>
+                      <span className="text-sm font-mono text-warning">{(churnMensalO2Tax * 100).toFixed(1)}%</span>
+                    </div>
+                    <Slider
+                      value={[churnMensalO2Tax * 100]}
+                      onValueChange={(v) => setChurnMensalO2Tax(v[0] / 100)}
+                      max={20}
+                      step={0.5}
+                      className="w-full"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <Label>Retenção de Vendas</Label>
+                      <span className="text-sm font-mono text-warning">{(retencaoVendasO2Tax * 100).toFixed(0)}%</span>
+                    </div>
+                    <Slider
+                      value={[retencaoVendasO2Tax * 100]}
+                      onValueChange={(v) => setRetencaoVendasO2Tax(v[0] / 100)}
+                      max={50}
+                      step={1}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* Indicadores por BU - Tabs */}
               <div className="border-t pt-6">
                 <h4 className="font-semibold mb-4 flex items-center gap-2">
@@ -1045,18 +1117,22 @@ export function MediaInvestmentTab() {
                 </h4>
                 
                 <Tabs value={selectedBUTab} onValueChange={setSelectedBUTab}>
-                  <TabsList className="grid w-full grid-cols-3 mb-6">
+                  <TabsList className="grid w-full grid-cols-4 mb-6">
                     <TabsTrigger value="modeloAtual" className="flex items-center gap-2">
                       <Building2 className="h-4 w-4" />
-                      Modelo Atual
+                      <span className="hidden sm:inline">Modelo Atual</span>
                     </TabsTrigger>
                     <TabsTrigger value="o2Tax" className="flex items-center gap-2">
                       <DollarSign className="h-4 w-4" />
-                      O2 Tax
+                      <span className="hidden sm:inline">O2 Tax</span>
                     </TabsTrigger>
-                    <TabsTrigger value="expansao" className="flex items-center gap-2">
+                    <TabsTrigger value="oxyHacker" className="flex items-center gap-2">
                       <Rocket className="h-4 w-4" />
-                      Expansão O2
+                      <span className="hidden sm:inline">Oxy Hacker</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="franquia" className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      <span className="hidden sm:inline">Franquias</span>
                     </TabsTrigger>
                   </TabsList>
 
@@ -1078,16 +1154,22 @@ export function MediaInvestmentTab() {
                     />
                   </TabsContent>
 
-                  <TabsContent value="expansao">
+                  <TabsContent value="oxyHacker">
                     <BUIndicatorEditor
-                      indicators={indicadoresPorBU.expansao}
-                      onChange={(ind) => handleBUIndicatorChange('expansao', ind)}
-                      buName="Expansão O2 (Oxy Hacker + Franquia)"
+                      indicators={indicadoresPorBU.oxyHacker}
+                      onChange={(ind) => handleBUIndicatorChange('oxyHacker', ind)}
+                      buName="Oxy Hacker"
                       buIcon={<Rocket className="h-5 w-5 text-accent-foreground" />}
                     />
-                    <p className="text-xs text-muted-foreground mt-4">
-                      * Os indicadores de Expansão O2 são aplicados tanto para Oxy Hacker quanto para Franquia (exceto ticket médio da Franquia que permanece R$ 140.000).
-                    </p>
+                  </TabsContent>
+
+                  <TabsContent value="franquia">
+                    <BUIndicatorEditor
+                      indicators={indicadoresPorBU.franquia}
+                      onChange={(ind) => handleBUIndicatorChange('franquia', ind)}
+                      buName="Franquias"
+                      buIcon={<Users className="h-5 w-5 text-secondary-foreground" />}
+                    />
                   </TabsContent>
                 </Tabs>
               </div>
@@ -1151,8 +1233,8 @@ export function MediaInvestmentTab() {
               <p className="text-lg font-bold">{formatCompact(indicators2025.tcv)}</p>
             </div>
             <div className="text-center p-3 bg-background/50 rounded-lg">
-              <p className="text-xs text-muted-foreground">MRR Base 2026</p>
-              <p className="text-lg font-bold text-primary">{formatCurrency(mrrBase)}</p>
+              <p className="text-xs text-muted-foreground">MRR Inicial 2026</p>
+              <p className="text-lg font-bold text-primary">{formatCurrency(mrrInicial)}</p>
             </div>
           </div>
         </CardContent>
@@ -1466,7 +1548,7 @@ export function MediaInvestmentTab() {
             color={funnelMetrics.modeloAtual.color}
             metrics={funnelMetrics.modeloAtual}
             showMrrBase={true}
-            mrrBase={mrrBase}
+            mrrBase={mrrInicial}
             churnMensal={churnMensal}
             retencaoVendas={retencaoVendas}
             mrrFinal={mrrDynamic.mrrPorMes["Dez"]}

@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Context2025Tab } from "@/components/planning/Context2025Tab";
 import { Goals2026Tab } from "@/components/planning/Goals2026Tab";
 import { MonthlyRevenueTab } from "@/components/planning/MonthlyRevenueTab";
@@ -12,22 +13,25 @@ import { AdminTab } from "@/components/planning/AdminTab";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserPermissions, TabKey } from "@/hooks/useUserPermissions";
 import { MediaMetasProvider } from "@/contexts/MediaMetasContext";
-import { Calendar, BarChart3, LineChart, Megaphone, Lightbulb, Users, Target, Settings, LogOut, User, Loader2 } from "lucide-react";
+import { Calendar, BarChart3, LineChart, Megaphone, Lightbulb, Users, Target, Settings, LogOut, User, Loader2, EyeOff, Eye } from "lucide-react";
 
 const TAB_CONFIG: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { key: 'context', label: 'Contexto 2025', icon: BarChart3 },
-  { key: 'goals', label: 'Metas 2026', icon: Calendar },
-  { key: 'monthly', label: 'Faturamento Mensal', icon: LineChart },
-  { key: 'sales', label: 'Dashboard Metas', icon: Target },
-  { key: 'media', label: 'Investimento Mídia', icon: Megaphone },
+  { key: 'context', label: 'Macro 2025', icon: BarChart3 },
+  { key: 'goals', label: 'Macro 2026', icon: Calendar },
+  { key: 'monthly', label: 'Meta por BU', icon: LineChart },
+  { key: 'sales', label: 'Controle Metas', icon: Target },
+  { key: 'media', label: 'Plan Growth', icon: Megaphone },
   { key: 'marketing', label: 'Marketing', icon: Lightbulb },
   { key: 'structure', label: 'Estrutura', icon: Users },
   { key: 'admin', label: 'Admin', icon: Settings },
 ];
 
+const HIDDEN_TABS: TabKey[] = ['marketing', 'structure'];
+
 export default function Planning2026() {
   const { user, signOut } = useAuth();
   const { allowedTabs, isAdmin, loading } = useUserPermissions(user?.id);
+  const [showHiddenTabs, setShowHiddenTabs] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -41,7 +45,12 @@ export default function Planning2026() {
     );
   }
 
-  const visibleTabs = TAB_CONFIG.filter(tab => allowedTabs.includes(tab.key));
+  // Filter visible tabs based on permissions and hidden tabs toggle
+  const visibleTabs = TAB_CONFIG.filter(tab => {
+    const hasPermission = allowedTabs.includes(tab.key);
+    const isHidden = HIDDEN_TABS.includes(tab.key);
+    return hasPermission && (!isHidden || showHiddenTabs);
+  });
   const defaultTab = visibleTabs[0]?.key || 'context';
 
   return (
@@ -54,22 +63,44 @@ export default function Planning2026() {
               Planejamento Estratégico
             </h1>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="gap-2">
-                  <User className="h-4 w-4" />
-                  <span className="hidden sm:inline">
-                    {user?.user_metadata?.full_name || user?.email}
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleSignOut}>
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sair
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div className="flex items-center gap-2">
+              {/* Hidden tabs toggle */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowHiddenTabs(!showHiddenTabs)}
+                className="gap-2 text-muted-foreground"
+              >
+                {showHiddenTabs ? (
+                  <>
+                    <EyeOff className="h-4 w-4" />
+                    <span className="hidden sm:inline">Ocultar abas extras</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-4 w-4" />
+                    <span className="hidden sm:inline">Mostrar abas ocultas</span>
+                  </>
+                )}
+              </Button>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="gap-2">
+                    <User className="h-4 w-4" />
+                    <span className="hidden sm:inline">
+                      {user?.user_metadata?.full_name || user?.email}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleSignOut}>
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sair
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </header>
 

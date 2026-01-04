@@ -12,13 +12,14 @@ import { Loader2, Pencil, Save, Shield, Trash2, User } from 'lucide-react';
 import { CreateUserForm } from './CreateUserForm';
 import { EditUserDialog } from './EditUserDialog';
 import { DeleteUserDialog } from './DeleteUserDialog';
+import { ChangePasswordDialog } from './ChangePasswordDialog';
 
 const TAB_OPTIONS: { key: TabKey; label: string }[] = [
-  { key: 'context', label: 'Contexto 2025' },
-  { key: 'goals', label: 'Metas 2026' },
-  { key: 'monthly', label: 'Faturamento Mensal' },
-  { key: 'sales', label: 'Dashboard Metas' },
-  { key: 'media', label: 'Investimento Mídia' },
+  { key: 'context', label: 'Macro 2025' },
+  { key: 'goals', label: 'Macro 2026' },
+  { key: 'monthly', label: 'Meta por BU' },
+  { key: 'sales', label: 'Controle Metas' },
+  { key: 'media', label: 'Plan Growth' },
   { key: 'marketing', label: 'Marketing' },
   { key: 'structure', label: 'Estrutura' },
 ];
@@ -125,7 +126,7 @@ export function AdminTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-2xl font-display font-bold text-gradient mb-2">
             Gerenciar Usuários
@@ -134,10 +135,13 @@ export function AdminTab() {
             Controle quais abas cada usuário pode acessar
           </p>
         </div>
-        <CreateUserForm 
-          onCreateUser={handleCreateUser}
-          isLoading={createUser.isPending}
-        />
+        <div className="flex items-center gap-3">
+          <ChangePasswordDialog />
+          <CreateUserForm 
+            onCreateUser={handleCreateUser}
+            isLoading={createUser.isPending}
+          />
+        </div>
       </div>
 
       <div className="grid gap-4">
