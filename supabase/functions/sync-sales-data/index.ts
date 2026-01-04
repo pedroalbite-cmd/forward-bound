@@ -38,6 +38,56 @@ Deno.serve(async (req) => {
   try {
     console.log("Starting sales data sync...");
 
+    // Local Supabase credentials
+    const localUrl = Deno.env.get("SUPABASE_URL")!;
+    const localServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // ========== AUTHENTICATION CHECK ==========
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      console.error("No authorization header provided");
+      return new Response(
+        JSON.stringify({ error: "No authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Create local Supabase client for auth verification
+    const localSupabase = createClient(localUrl, localServiceKey);
+
+    // Verify the user's JWT token
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await localSupabase.auth.getUser(token);
+
+    if (authError || !user) {
+      console.error("Authentication failed:", authError?.message || "Invalid token");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`User authenticated: ${user.id}`);
+
+    // Check if user has admin role
+    const { data: roleData, error: roleError } = await localSupabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .single();
+
+    if (roleError || !roleData) {
+      console.error("Admin role check failed:", roleError?.message || "User is not an admin");
+      return new Response(
+        JSON.stringify({ error: "Admin access required" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log("Admin role verified, proceeding with sync...");
+    // ========== END AUTHENTICATION CHECK ==========
+
     // External Supabase credentials
     const externalUrl = Deno.env.get("EXTERNAL_SUPABASE_URL");
     const externalKey = Deno.env.get("EXTERNAL_SUPABASE_KEY");
@@ -50,13 +100,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Local Supabase credentials
-    const localUrl = Deno.env.get("SUPABASE_URL")!;
-    const localServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    // Create clients
+    // Create external client
     const externalSupabase = createClient(externalUrl, externalKey);
-    const localSupabase = createClient(localUrl, localServiceKey);
 
     // Fetch aggregated data from external project with JOINs
     console.log("Fetching aggregated sales data from external project...");
