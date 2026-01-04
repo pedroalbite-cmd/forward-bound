@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Target, TrendingUp, TrendingDown, Building2, DollarSign, Expand, BarChart3, LineChart } from "lucide-react";
+import { Target, TrendingUp, TrendingDown, Building2, DollarSign, Expand, BarChart3, LineChart, Rocket, Users } from "lucide-react";
 import { useSalesRealized } from "@/hooks/useSalesRealized";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { 
@@ -17,6 +17,7 @@ import {
 import { SalesGoalsCards } from "./SalesGoalsCards";
 import { SalesGoalsTable } from "./SalesGoalsTable";
 import { SalesGoalsCharts } from "./SalesGoalsCharts";
+import { ExpansaoBreakdown } from "./ExpansaoBreakdown";
 
 const buIcons: Record<DashboardBUKey, React.ReactNode> = {
   modelo_atual: <Building2 className="h-5 w-5" />,
@@ -165,6 +166,17 @@ export function SalesGoalsTab() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Expansão Breakdown - Show when Expansão O2 is selected */}
+      {selectedBU === 'expansao_o2' && (
+        <ExpansaoBreakdown
+          projectedOxyHacker={metasPorBU.oxy_hacker}
+          projectedFranquia={metasPorBU.franquia}
+          realizedOxyHacker={realizedByBU.oxy_hacker || {}}
+          realizedFranquia={realizedByBU.franquia || {}}
+          isLoading={isLoading}
+        />
+      )}
 
       {/* Cards Section */}
       <SalesGoalsCards 
