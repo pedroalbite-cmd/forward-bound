@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Indicadores de 2025 (base para projeção)
 const indicators2025 = {
@@ -315,6 +316,17 @@ const PIE_COLORS = [
   "hsl(var(--secondary))",
 ];
 
+// Interface para indicadores por BU
+interface BUIndicators {
+  ticketMedio: number;
+  cpmql: number;
+  cpv: number;
+  mqlToRm: number;
+  rmToRr: number;
+  rrToProp: number;
+  propToVenda: number;
+}
+
 interface BUInvestmentTableProps {
   title: string;
   icon: React.ReactNode;
@@ -365,7 +377,7 @@ function BUInvestmentTable({
             </Badge>
             {showMrrBase ? (
               <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
-                CPV: {formatCurrency(indicators2025.cpv)}
+                CPV: {formatCurrency(metrics.cpv || indicators2025.cpv)}
               </Badge>
             ) : (
               <Badge variant="outline" className="text-xs">
@@ -497,14 +509,148 @@ function BUInvestmentTable({
   );
 }
 
+// Componente para editar indicadores de uma BU
+interface BUIndicatorEditorProps {
+  indicators: BUIndicators;
+  onChange: (indicators: BUIndicators) => void;
+  buName: string;
+  buIcon: React.ReactNode;
+}
+
+function BUIndicatorEditor({ indicators, onChange, buName, buIcon }: BUIndicatorEditorProps) {
+  const handleChange = (key: keyof BUIndicators, value: number) => {
+    onChange({ ...indicators, [key]: value });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 mb-4">
+        {buIcon}
+        <h4 className="font-semibold text-lg">{buName}</h4>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Valores Monetários */}
+        <div className="space-y-4">
+          <h5 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Valores</h5>
+          
+          <div className="space-y-2">
+            <Label>Ticket Médio</Label>
+            <Input
+              type="number"
+              value={indicators.ticketMedio}
+              onChange={(e) => handleChange('ticketMedio', Number(e.target.value))}
+              className="font-mono"
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Custo por MQL (CPMQL)</Label>
+            <Input
+              type="number"
+              value={indicators.cpmql}
+              onChange={(e) => handleChange('cpmql', Number(e.target.value))}
+              className="font-mono"
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label>CPV (Custo por Venda)</Label>
+            <Input
+              type="number"
+              value={indicators.cpv}
+              onChange={(e) => handleChange('cpv', Number(e.target.value))}
+              className="font-mono"
+            />
+          </div>
+        </div>
+
+        {/* Taxas de Conversão - Parte 1 */}
+        <div className="space-y-4">
+          <h5 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Conversão (Topo)</h5>
+          
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <Label>MQL → RM</Label>
+              <span className="font-mono text-primary">{(indicators.mqlToRm * 100).toFixed(0)}%</span>
+            </div>
+            <Slider
+              value={[indicators.mqlToRm * 100]}
+              onValueChange={(v) => handleChange('mqlToRm', v[0] / 100)}
+              max={100}
+              step={1}
+              className="w-full"
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <Label>RM → RR</Label>
+              <span className="font-mono text-primary">{(indicators.rmToRr * 100).toFixed(0)}%</span>
+            </div>
+            <Slider
+              value={[indicators.rmToRr * 100]}
+              onValueChange={(v) => handleChange('rmToRr', v[0] / 100)}
+              max={100}
+              step={1}
+              className="w-full"
+            />
+          </div>
+        </div>
+
+        {/* Taxas de Conversão - Parte 2 */}
+        <div className="space-y-4">
+          <h5 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Conversão (Fundo)</h5>
+          
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <Label>RR → Proposta</Label>
+              <span className="font-mono text-primary">{(indicators.rrToProp * 100).toFixed(0)}%</span>
+            </div>
+            <Slider
+              value={[indicators.rrToProp * 100]}
+              onValueChange={(v) => handleChange('rrToProp', v[0] / 100)}
+              max={100}
+              step={1}
+              className="w-full"
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <Label>Proposta → Venda</Label>
+              <span className="font-mono text-primary">{(indicators.propToVenda * 100).toFixed(0)}%</span>
+            </div>
+            <Slider
+              value={[indicators.propToVenda * 100]}
+              onValueChange={(v) => handleChange('propToVenda', v[0] / 100)}
+              max={100}
+              step={1}
+              className="w-full"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Resumo de conversão */}
+      <div className="bg-muted/30 rounded-lg p-3 mt-4">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Conversão Total (MQL → Venda)</span>
+          <span className="font-mono font-bold text-primary">
+            {((indicators.mqlToRm * indicators.rmToRr * indicators.rrToProp * indicators.propToVenda) * 100).toFixed(2)}%
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MediaInvestmentTab() {
-  // Estados editáveis - Taxas
+  // Estados editáveis - Taxas gerais (Modelo Atual - backward compatibility)
   const [mrrBase, setMrrBase] = useState(700000);
-  const [valorVenderInicial, setValorVenderInicial] = useState(400000); // Valor A Vender fixo para Janeiro
-  const [ticketMedio, setTicketMedio] = useState(17000);
+  const [valorVenderInicial, setValorVenderInicial] = useState(400000);
   const [churnMensal, setChurnMensal] = useState(0.06);
   const [retencaoVendas, setRetencaoVendas] = useState(0.25);
-  const [cpv, setCpv] = useState(indicators2025.cpv);
   
   // Estados editáveis - Metas trimestrais
   const [metasTrimestrais, setMetasTrimestrais] = useState({
@@ -513,17 +659,44 @@ export function MediaInvestmentTab() {
     Q3: 6000000,
     Q4: 8000000,
   });
-  
-  // Estados editáveis - Taxas de conversão do funil
-  const [taxasConversao, setTaxasConversao] = useState({
-    leadToMql: 0.43,
-    mqlToRm: 0.49,
-    rmToRr: 0.72,
-    rrToProp: 0.88,
-    propToVenda: 0.24,
+
+  // Estados editáveis - Indicadores por BU
+  const [indicadoresPorBU, setIndicadoresPorBU] = useState<{
+    modeloAtual: BUIndicators;
+    o2Tax: BUIndicators;
+    expansao: BUIndicators;
+  }>({
+    modeloAtual: {
+      ticketMedio: 17000,
+      cpmql: 472.72,
+      cpv: 6517.05,
+      mqlToRm: 0.49,
+      rmToRr: 0.72,
+      rrToProp: 0.88,
+      propToVenda: 0.24,
+    },
+    o2Tax: {
+      ticketMedio: 15000,
+      cpmql: 600,
+      cpv: 2500,
+      mqlToRm: 0.45,
+      rmToRr: 0.65,
+      rrToProp: 0.80,
+      propToVenda: 0.20,
+    },
+    expansao: {
+      ticketMedio: 54000, // Média ponderada Oxy Hacker e Franquia
+      cpmql: 800,
+      cpv: 5000,
+      mqlToRm: 0.40,
+      rmToRr: 0.60,
+      rrToProp: 0.75,
+      propToVenda: 0.15,
+    },
   });
 
   const [configOpen, setConfigOpen] = useState(false);
+  const [selectedBUTab, setSelectedBUTab] = useState("modeloAtual");
 
   // Quarterly totals para outras BUs
   const quarterlyTotalsOutrasBUs = useMemo(() => ({
@@ -532,33 +705,33 @@ export function MediaInvestmentTab() {
     franquia: { Q1: 2 * 140000, Q2: 3 * 140000, Q3: 6 * 140000, Q4: 9 * 140000 },
   }), []);
 
-  // Funnel metrics dinâmicos
+  // Funnel metrics dinâmicos usando indicadores por BU
   const funnelMetrics = useMemo(() => ({
     modeloAtual: {
       name: "Modelo Atual",
-      ticketMedio: ticketMedio,
-      leadToMql: taxasConversao.leadToMql,
-      mqlToRm: taxasConversao.mqlToRm,
-      rmToRr: taxasConversao.rmToRr,
-      rrToProp: taxasConversao.rrToProp,
-      propToVenda: taxasConversao.propToVenda,
-      cpmql: indicators2025.cpmql,
+      ticketMedio: indicadoresPorBU.modeloAtual.ticketMedio,
+      leadToMql: 0.43, // Fixed for now
+      mqlToRm: indicadoresPorBU.modeloAtual.mqlToRm,
+      rmToRr: indicadoresPorBU.modeloAtual.rmToRr,
+      rrToProp: indicadoresPorBU.modeloAtual.rrToProp,
+      propToVenda: indicadoresPorBU.modeloAtual.propToVenda,
+      cpmql: indicadoresPorBU.modeloAtual.cpmql,
       cprr: indicators2025.cprr,
       cac: indicators2025.cac,
-      cpv: cpv,
+      cpv: indicadoresPorBU.modeloAtual.cpv,
       color: "hsl(var(--primary))",
       icon: <Building2 className="h-5 w-5 text-primary" />,
     },
     o2Tax: {
       name: "O2 TAX",
-      ticketMedio: 15000,
-      cpv: 2500,
+      ticketMedio: indicadoresPorBU.o2Tax.ticketMedio,
+      cpv: indicadoresPorBU.o2Tax.cpv,
       leadToMql: 0.35,
-      mqlToRm: 0.45,
-      rmToRr: 0.65,
-      rrToProp: 0.80,
-      propToVenda: 0.20,
-      cpmql: 600,
+      mqlToRm: indicadoresPorBU.o2Tax.mqlToRm,
+      rmToRr: indicadoresPorBU.o2Tax.rmToRr,
+      rrToProp: indicadoresPorBU.o2Tax.rrToProp,
+      propToVenda: indicadoresPorBU.o2Tax.propToVenda,
+      cpmql: indicadoresPorBU.o2Tax.cpmql,
       cprr: 1800,
       cac: 12000,
       color: "hsl(var(--warning))",
@@ -566,14 +739,14 @@ export function MediaInvestmentTab() {
     },
     oxyHacker: {
       name: "Oxy Hacker",
-      ticketMedio: 54000,
-      cpv: 5000,
+      ticketMedio: indicadoresPorBU.expansao.ticketMedio,
+      cpv: indicadoresPorBU.expansao.cpv,
       leadToMql: 0.25,
-      mqlToRm: 0.40,
-      rmToRr: 0.60,
-      rrToProp: 0.75,
-      propToVenda: 0.15,
-      cpmql: 800,
+      mqlToRm: indicadoresPorBU.expansao.mqlToRm,
+      rmToRr: indicadoresPorBU.expansao.rmToRr,
+      rrToProp: indicadoresPorBU.expansao.rrToProp,
+      propToVenda: indicadoresPorBU.expansao.propToVenda,
+      cpmql: indicadoresPorBU.expansao.cpmql,
       cprr: 2500,
       cac: 18000,
       color: "hsl(var(--accent))",
@@ -581,20 +754,20 @@ export function MediaInvestmentTab() {
     },
     franquia: {
       name: "Franquia",
-      ticketMedio: 140000,
+      ticketMedio: 140000, // Franquia mantém ticket próprio
       cpv: 12000,
       leadToMql: 0.20,
-      mqlToRm: 0.35,
-      rmToRr: 0.55,
-      rrToProp: 0.70,
-      propToVenda: 0.18,
+      mqlToRm: indicadoresPorBU.expansao.mqlToRm,
+      rmToRr: indicadoresPorBU.expansao.rmToRr,
+      rrToProp: indicadoresPorBU.expansao.rrToProp,
+      propToVenda: indicadoresPorBU.expansao.propToVenda,
       cpmql: 1200,
       cprr: 4000,
       cac: 25000,
       color: "hsl(var(--secondary))",
       icon: <Users className="h-5 w-5 text-secondary-foreground" />,
     },
-  }), [ticketMedio, taxasConversao]);
+  }), [indicadoresPorBU]);
 
   // Metas mensais distribuídas (fonte da verdade: meta trimestral)
   const metasMensaisModeloAtual = useMemo(() => 
@@ -603,17 +776,16 @@ export function MediaInvestmentTab() {
   );
 
   // Calcula MRR dinâmico e "A Vender" a partir das metas fixas
-  // valorVenderInicial > 0 fixa janeiro em R$ 400k e calcula MRR base automaticamente
   const mrrDynamic = useMemo(() => 
     calculateMrrAndRevenueToSell(
       mrrBase, 
       churnMensal, 
       retencaoVendas,
       metasMensaisModeloAtual,
-      ticketMedio,
+      indicadoresPorBU.modeloAtual.ticketMedio,
       valorVenderInicial
     ),
-    [mrrBase, churnMensal, retencaoVendas, metasMensaisModeloAtual, ticketMedio, valorVenderInicial]
+    [mrrBase, churnMensal, retencaoVendas, metasMensaisModeloAtual, indicadoresPorBU.modeloAtual.ticketMedio, valorVenderInicial]
   );
 
   // Receitas outras BUs
@@ -638,9 +810,9 @@ export function MediaInvestmentTab() {
       mrrDynamic.mrrPorMes, 
       true, 
       metasMensaisModeloAtual,
-      cpv
+      indicadoresPorBU.modeloAtual.cpv
     ),
-    [mrrDynamic, funnelMetrics.modeloAtual, metasMensaisModeloAtual, cpv]
+    [mrrDynamic, funnelMetrics.modeloAtual, metasMensaisModeloAtual, indicadoresPorBU.modeloAtual.cpv]
   );
   
   const o2TaxFunnel = useMemo(() => 
@@ -720,6 +892,10 @@ export function MediaInvestmentTab() {
     setMetasTrimestrais(prev => ({ ...prev, [quarter]: numValue }));
   };
 
+  const handleBUIndicatorChange = (bu: 'modeloAtual' | 'o2Tax' | 'expansao', indicators: BUIndicators) => {
+    setIndicadoresPorBU(prev => ({ ...prev, [bu]: indicators }));
+  };
+
   return (
     <div className="space-y-10 animate-fade-in">
       {/* Hero Section */}
@@ -770,7 +946,7 @@ export function MediaInvestmentTab() {
               <div>
                 <h4 className="font-semibold mb-4 flex items-center gap-2">
                   <Target className="h-4 w-4" />
-                  Metas Trimestrais (Total: {formatCurrency(metaAnualTotal)})
+                  Metas Trimestrais Modelo Atual (Total: {formatCurrency(metaAnualTotal)})
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {(['Q1', 'Q2', 'Q3', 'Q4'] as const).map((quarter) => (
@@ -788,10 +964,10 @@ export function MediaInvestmentTab() {
                 </div>
               </div>
 
-              {/* Parâmetros Base */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Parâmetros Base do Modelo Atual */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
-                  <h4 className="font-semibold">Parâmetros Base</h4>
+                  <h4 className="font-semibold">Parâmetros MRR (Modelo Atual)</h4>
                   
                   <div className="space-y-2">
                     <Label>Valor A Vender Inicial (Jan)</Label>
@@ -805,30 +981,10 @@ export function MediaInvestmentTab() {
                       MRR Base Jan calculado: {formatCurrency(metasMensaisModeloAtual["Jan"] - valorVenderInicial)}
                     </p>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Ticket Médio</Label>
-                    <Input
-                      type="number"
-                      value={ticketMedio}
-                      onChange={(e) => setTicketMedio(Number(e.target.value))}
-                      className="font-mono"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>CPV (Custo por Venda)</Label>
-                    <Input
-                      type="number"
-                      value={cpv}
-                      onChange={(e) => setCpv(Number(e.target.value))}
-                      className="font-mono"
-                    />
-                  </div>
                 </div>
 
                 <div className="space-y-4">
-                  <h4 className="font-semibold">Taxas de Retenção</h4>
+                  <h4 className="font-semibold">Taxas de Retenção (Modelo Atual)</h4>
                   
                   <div className="space-y-2">
                     <div className="flex justify-between">
@@ -858,37 +1014,61 @@ export function MediaInvestmentTab() {
                     />
                   </div>
                 </div>
+              </div>
 
-                <div className="space-y-4">
-                  <h4 className="font-semibold">Taxas de Conversão do Funil</h4>
-                  
-                  {[
-                    { key: 'leadToMql', label: 'Lead → MQL' },
-                    { key: 'mqlToRm', label: 'MQL → RM' },
-                    { key: 'rmToRr', label: 'RM → RR' },
-                    { key: 'rrToProp', label: 'RR → Proposta' },
-                    { key: 'propToVenda', label: 'Proposta → Venda' },
-                  ].map(({ key, label }) => (
-                    <div key={key} className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <Label>{label}</Label>
-                        <span className="font-mono text-primary">
-                          {(taxasConversao[key as keyof typeof taxasConversao] * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <Slider
-                        value={[taxasConversao[key as keyof typeof taxasConversao] * 100]}
-                        onValueChange={(v) => setTaxasConversao(prev => ({ 
-                          ...prev, 
-                          [key]: v[0] / 100 
-                        }))}
-                        max={100}
-                        step={1}
-                        className="w-full"
-                      />
-                    </div>
-                  ))}
-                </div>
+              {/* Indicadores por BU - Tabs */}
+              <div className="border-t pt-6">
+                <h4 className="font-semibold mb-4 flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4" />
+                  Indicadores por BU (Ticket, CPMQL, CPV, Taxas de Conversão)
+                </h4>
+                
+                <Tabs value={selectedBUTab} onValueChange={setSelectedBUTab}>
+                  <TabsList className="grid w-full grid-cols-3 mb-6">
+                    <TabsTrigger value="modeloAtual" className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4" />
+                      Modelo Atual
+                    </TabsTrigger>
+                    <TabsTrigger value="o2Tax" className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" />
+                      O2 Tax
+                    </TabsTrigger>
+                    <TabsTrigger value="expansao" className="flex items-center gap-2">
+                      <Rocket className="h-4 w-4" />
+                      Expansão O2
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="modeloAtual">
+                    <BUIndicatorEditor
+                      indicators={indicadoresPorBU.modeloAtual}
+                      onChange={(ind) => handleBUIndicatorChange('modeloAtual', ind)}
+                      buName="Modelo Atual"
+                      buIcon={<Building2 className="h-5 w-5 text-primary" />}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="o2Tax">
+                    <BUIndicatorEditor
+                      indicators={indicadoresPorBU.o2Tax}
+                      onChange={(ind) => handleBUIndicatorChange('o2Tax', ind)}
+                      buName="O2 Tax"
+                      buIcon={<DollarSign className="h-5 w-5 text-warning" />}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="expansao">
+                    <BUIndicatorEditor
+                      indicators={indicadoresPorBU.expansao}
+                      onChange={(ind) => handleBUIndicatorChange('expansao', ind)}
+                      buName="Expansão O2 (Oxy Hacker + Franquia)"
+                      buIcon={<Rocket className="h-5 w-5 text-accent-foreground" />}
+                    />
+                    <p className="text-xs text-muted-foreground mt-4">
+                      * Os indicadores de Expansão O2 são aplicados tanto para Oxy Hacker quanto para Franquia (exceto ticket médio da Franquia que permanece R$ 140.000).
+                    </p>
+                  </TabsContent>
+                </Tabs>
               </div>
             </CardContent>
           </CollapsibleContent>
