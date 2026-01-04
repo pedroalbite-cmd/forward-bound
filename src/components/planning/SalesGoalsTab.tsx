@@ -1,14 +1,13 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Target, TrendingUp, TrendingDown, Building2, DollarSign, Expand, BarChart3, LineChart } from "lucide-react";
 import { useSalesRealized } from "@/hooks/useSalesRealized";
+import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { 
   dashboardBuConfigs, 
-  dashboardProjectedData,
-  calculateDashboardBUTotal,
-  calculateDashboardGrandTotal,
+  dashboardProjectedData as fallbackProjectedData,
   aggregateRealizedForDashboard,
   formatCurrency,
   formatCompact,
@@ -28,11 +27,43 @@ const buIcons: Record<DashboardBUKey, React.ReactNode> = {
 export function SalesGoalsTab() {
   const [selectedBU, setSelectedBU] = useState<DashboardBUKey | 'all'>('all');
   const { realizedByBU, totalRealized, isLoading, error } = useSalesRealized(2026);
+  const { metasPorBU, isLoaded: metasLoaded } = useMediaMetas();
   
   // Aggregate realized data for dashboard (combines oxy_hacker + franquia into expansao_o2)
   const dashboardRealizedByBU = aggregateRealizedForDashboard(realizedByBU);
   
-  const grandTotalProjected = calculateDashboardGrandTotal();
+  // Build projected data from MediaMetas context or use fallback
+  const dashboardProjectedData = useMemo(() => {
+    // Check if context has data (any BU has values)
+    const hasContextData = metasLoaded && Object.keys(metasPorBU.modelo_atual).length > 0;
+    
+    if (!hasContextData) {
+      return fallbackProjectedData;
+    }
+    
+    // Build dashboard projected data from context
+    // Aggregate oxy_hacker + franquia into expansao_o2
+    const expansao_o2: Record<string, number> = {};
+    months.forEach(month => {
+      expansao_o2[month] = (metasPorBU.oxy_hacker[month] || 0) + (metasPorBU.franquia[month] || 0);
+    });
+    
+    return {
+      modelo_atual: metasPorBU.modelo_atual,
+      o2_tax: metasPorBU.o2_tax,
+      expansao_o2,
+    };
+  }, [metasPorBU, metasLoaded]);
+  
+  // Calculate totals using current projected data
+  const calculateDashboardBUTotal = (buKey: DashboardBUKey): number => {
+    return Object.values(dashboardProjectedData[buKey] || {}).reduce((a, b) => a + b, 0);
+  };
+  
+  const grandTotalProjected = dashboardBuConfigs.reduce(
+    (sum, bu) => sum + calculateDashboardBUTotal(bu.key), 
+    0
+  );
 
   // Calculate achievement rate
   const achievementRate = grandTotalProjected > 0 
