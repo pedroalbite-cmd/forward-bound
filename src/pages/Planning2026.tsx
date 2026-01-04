@@ -11,6 +11,7 @@ import { SalesGoalsTab } from "@/components/planning/SalesGoalsTab";
 import { AdminTab } from "@/components/planning/AdminTab";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserPermissions, TabKey } from "@/hooks/useUserPermissions";
+import { MediaMetasProvider } from "@/contexts/MediaMetasContext";
 import { Calendar, BarChart3, LineChart, Megaphone, Lightbulb, Users, Target, Settings, LogOut, User, Loader2 } from "lucide-react";
 
 const TAB_CONFIG: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -44,100 +45,102 @@ export default function Planning2026() {
   const defaultTab = visibleTabs[0]?.key || 'context';
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <h1 className="font-display text-xl font-bold text-gradient">
-            Planejamento Estratégico
-          </h1>
+    <MediaMetasProvider>
+      <div className="min-h-screen bg-background">
+        {/* Header */}
+        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="container flex h-16 items-center justify-between">
+            <h1 className="font-display text-xl font-bold text-gradient">
+              Planejamento Estratégico
+            </h1>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="gap-2">
-                <User className="h-4 w-4" />
-                <span className="hidden sm:inline">
-                  {user?.user_metadata?.full_name || user?.email}
-                </span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleSignOut}>
-                <LogOut className="h-4 w-4 mr-2" />
-                Sair
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="gap-2">
+                  <User className="h-4 w-4" />
+                  <span className="hidden sm:inline">
+                    {user?.user_metadata?.full_name || user?.email}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleSignOut}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sair
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
 
-      {/* Main Content */}
-      <main className="container py-8">
-        {visibleTabs.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">
-              Você não tem acesso a nenhuma aba. Contate o administrador.
+        {/* Main Content */}
+        <main className="container py-8">
+          {visibleTabs.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">
+                Você não tem acesso a nenhuma aba. Contate o administrador.
+              </p>
+            </div>
+          ) : (
+            <Tabs defaultValue={defaultTab} className="w-full">
+              <TabsList className={`grid w-full max-w-6xl mb-8`} style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, minmax(0, 1fr))` }}>
+                {visibleTabs.map(tab => {
+                  const Icon = tab.icon;
+                  return (
+                    <TabsTrigger key={tab.key} value={tab.key} className="gap-2">
+                      <Icon className="h-4 w-4" />
+                      <span className="hidden lg:inline">{tab.label}</span>
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+
+              <TabsContent value="context" className="mt-0">
+                <Context2025Tab />
+              </TabsContent>
+
+              <TabsContent value="goals" className="mt-0">
+                <Goals2026Tab />
+              </TabsContent>
+
+              <TabsContent value="monthly" className="mt-0">
+                <MonthlyRevenueTab />
+              </TabsContent>
+
+              <TabsContent value="sales" className="mt-0">
+                <SalesGoalsTab />
+              </TabsContent>
+
+              <TabsContent value="media" className="mt-0">
+                <MediaInvestmentTab />
+              </TabsContent>
+
+              <TabsContent value="marketing" className="mt-0">
+                <MarketingPlanTab />
+              </TabsContent>
+
+              <TabsContent value="structure" className="mt-0">
+                <StructureTab />
+              </TabsContent>
+
+              {isAdmin && (
+                <TabsContent value="admin" className="mt-0">
+                  <AdminTab />
+                </TabsContent>
+              )}
+            </Tabs>
+          )}
+        </main>
+
+        {/* Footer */}
+        <footer className="border-t py-6 mt-12">
+          <div className="container flex flex-col items-center justify-center gap-2">
+            <p className="text-sm text-muted-foreground">
+              Planejamento Estratégico 2026
             </p>
           </div>
-        ) : (
-          <Tabs defaultValue={defaultTab} className="w-full">
-            <TabsList className={`grid w-full max-w-6xl mb-8`} style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, minmax(0, 1fr))` }}>
-              {visibleTabs.map(tab => {
-                const Icon = tab.icon;
-                return (
-                  <TabsTrigger key={tab.key} value={tab.key} className="gap-2">
-                    <Icon className="h-4 w-4" />
-                    <span className="hidden lg:inline">{tab.label}</span>
-                  </TabsTrigger>
-                );
-              })}
-            </TabsList>
-
-            <TabsContent value="context" className="mt-0">
-              <Context2025Tab />
-            </TabsContent>
-
-            <TabsContent value="goals" className="mt-0">
-              <Goals2026Tab />
-            </TabsContent>
-
-            <TabsContent value="monthly" className="mt-0">
-              <MonthlyRevenueTab />
-            </TabsContent>
-
-            <TabsContent value="sales" className="mt-0">
-              <SalesGoalsTab />
-            </TabsContent>
-
-            <TabsContent value="media" className="mt-0">
-              <MediaInvestmentTab />
-            </TabsContent>
-
-            <TabsContent value="marketing" className="mt-0">
-              <MarketingPlanTab />
-            </TabsContent>
-
-            <TabsContent value="structure" className="mt-0">
-              <StructureTab />
-            </TabsContent>
-
-            {isAdmin && (
-              <TabsContent value="admin" className="mt-0">
-                <AdminTab />
-              </TabsContent>
-            )}
-          </Tabs>
-        )}
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t py-6 mt-12">
-        <div className="container flex flex-col items-center justify-center gap-2">
-          <p className="text-sm text-muted-foreground">
-            Planejamento Estratégico 2026
-          </p>
-        </div>
-      </footer>
-    </div>
+        </footer>
+      </div>
+    </MediaMetasProvider>
   );
 }

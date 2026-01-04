@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useMediaMetas } from "@/contexts/MediaMetasContext";
 
 // Indicadores de 2025 (base para projeção)
 const indicators2025 = {
@@ -846,6 +847,26 @@ export function MediaInvestmentTab() {
   const metaAnualTotal = metasTrimestrais.Q1 + metasTrimestrais.Q2 + metasTrimestrais.Q3 + metasTrimestrais.Q4;
 
   const overallROI = totalFaturamento / totalInvestimento;
+
+  // Publish metas to context for SalesGoalsTab consumption
+  const { setMetasPorBU } = useMediaMetas();
+  
+  useEffect(() => {
+    setMetasPorBU({
+      modelo_atual: Object.fromEntries(
+        modeloAtualFunnel.map(d => [d.month, d.faturamentoMeta])
+      ),
+      o2_tax: Object.fromEntries(
+        o2TaxFunnel.map(d => [d.month, d.faturamentoMeta])
+      ),
+      oxy_hacker: Object.fromEntries(
+        oxyHackerFunnel.map(d => [d.month, d.faturamentoMeta])
+      ),
+      franquia: Object.fromEntries(
+        franquiaFunnel.map(d => [d.month, d.faturamentoMeta])
+      ),
+    });
+  }, [modeloAtualFunnel, o2TaxFunnel, oxyHackerFunnel, franquiaFunnel, setMetasPorBU]);
 
   // Chart data for stacked area
   const investmentChartData = months.map((month, index) => ({
