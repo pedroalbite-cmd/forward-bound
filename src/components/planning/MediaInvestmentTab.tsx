@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Legend, Line } from "recharts";
-import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3, Info, Settings } from "lucide-react";
+import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3, Info, Settings, Filter } from "lucide-react";
+import { SalesFunnelVisual } from "./SalesFunnelVisual";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -846,6 +847,74 @@ export function MediaInvestmentTab() {
     [franquiaMonthly, funnelMetrics.franquia]
   );
 
+  // Consolidated funnel for 2026 visual
+  const consolidatedFunnelTotals = useMemo(() => {
+    const totalLeads = modeloAtualFunnel.reduce((s, d) => s + d.leads, 0) +
+                       o2TaxFunnel.reduce((s, d) => s + d.leads, 0) +
+                       oxyHackerFunnel.reduce((s, d) => s + d.leads, 0) +
+                       franquiaFunnel.reduce((s, d) => s + d.leads, 0);
+    const totalMqls = modeloAtualFunnel.reduce((s, d) => s + d.mqls, 0) +
+                      o2TaxFunnel.reduce((s, d) => s + d.mqls, 0) +
+                      oxyHackerFunnel.reduce((s, d) => s + d.mqls, 0) +
+                      franquiaFunnel.reduce((s, d) => s + d.mqls, 0);
+    const totalRms = modeloAtualFunnel.reduce((s, d) => s + d.rms, 0) +
+                     o2TaxFunnel.reduce((s, d) => s + d.rms, 0) +
+                     oxyHackerFunnel.reduce((s, d) => s + d.rms, 0) +
+                     franquiaFunnel.reduce((s, d) => s + d.rms, 0);
+    const totalRrs = modeloAtualFunnel.reduce((s, d) => s + d.rrs, 0) +
+                     o2TaxFunnel.reduce((s, d) => s + d.rrs, 0) +
+                     oxyHackerFunnel.reduce((s, d) => s + d.rrs, 0) +
+                     franquiaFunnel.reduce((s, d) => s + d.rrs, 0);
+    const totalPropostas = modeloAtualFunnel.reduce((s, d) => s + d.propostas, 0) +
+                           o2TaxFunnel.reduce((s, d) => s + d.propostas, 0) +
+                           oxyHackerFunnel.reduce((s, d) => s + d.propostas, 0) +
+                           franquiaFunnel.reduce((s, d) => s + d.propostas, 0);
+    const totalVendas = modeloAtualFunnel.reduce((s, d) => s + d.vendas, 0) +
+                        o2TaxFunnel.reduce((s, d) => s + d.vendas, 0) +
+                        oxyHackerFunnel.reduce((s, d) => s + d.vendas, 0) +
+                        franquiaFunnel.reduce((s, d) => s + d.vendas, 0);
+
+    // Calculate conversion rates from totals
+    const leadToMql = totalLeads > 0 ? totalMqls / totalLeads : 0;
+    const mqlToRm = totalMqls > 0 ? totalRms / totalMqls : 0;
+    const rmToRr = totalRms > 0 ? totalRrs / totalRms : 0;
+    const rrToProp = totalRrs > 0 ? totalPropostas / totalRrs : 0;
+    const propToVenda = totalPropostas > 0 ? totalVendas / totalPropostas : 0;
+
+    return {
+      leads: totalLeads,
+      mqls: totalMqls,
+      rms: totalRms,
+      rrs: totalRrs,
+      propostas: totalPropostas,
+      vendas: totalVendas,
+      leadToMql,
+      mqlToRm,
+      rmToRr,
+      rrToProp,
+      propToVenda,
+    };
+  }, [modeloAtualFunnel, o2TaxFunnel, oxyHackerFunnel, franquiaFunnel]);
+
+  // Build funnel stages for each BU
+  const buildFunnelStages = (funnelData: FunnelData[], metrics: FunnelMetrics) => {
+    const totalLeads = funnelData.reduce((s, d) => s + d.leads, 0);
+    const totalMqls = funnelData.reduce((s, d) => s + d.mqls, 0);
+    const totalRms = funnelData.reduce((s, d) => s + d.rms, 0);
+    const totalRrs = funnelData.reduce((s, d) => s + d.rrs, 0);
+    const totalPropostas = funnelData.reduce((s, d) => s + d.propostas, 0);
+    const totalVendas = funnelData.reduce((s, d) => s + d.vendas, 0);
+
+    return [
+      { stage: "Leads", value: totalLeads, percent: "-" },
+      { stage: "MQL", value: totalMqls, percent: `${(metrics.leadToMql * 100).toFixed(0)}%` },
+      { stage: "RM", value: totalRms, percent: `${(metrics.mqlToRm * 100).toFixed(0)}%` },
+      { stage: "RR", value: totalRrs, percent: `${(metrics.rmToRr * 100).toFixed(0)}%` },
+      { stage: "Proposta", value: totalPropostas, percent: `${(metrics.rrToProp * 100).toFixed(0)}%` },
+      { stage: "Venda", value: totalVendas, percent: `${(metrics.propToVenda * 100).toFixed(0)}%` },
+    ];
+  };
+
   // Calculate totals
   const totalInvestimento = 
     modeloAtualFunnel.reduce((s, d) => s + d.investimento, 0) +
@@ -1531,6 +1600,69 @@ export function MediaInvestmentTab() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Funil de Vendas Projetado 2026 */}
+      <div>
+        <h3 className="font-display text-2xl font-bold mb-6 flex items-center gap-2">
+          <Filter className="h-6 w-6 text-primary" />
+          Funil de Vendas Projetado 2026
+        </h3>
+
+        {/* Consolidated Funnel */}
+        <div className="mb-8">
+          <SalesFunnelVisual
+            title="Consolidado 2026"
+            icon={<Target className="h-5 w-5 text-primary" />}
+            stages={[
+              { stage: "Leads", value: consolidatedFunnelTotals.leads, percent: "-" },
+              { stage: "MQL", value: consolidatedFunnelTotals.mqls, percent: `${(consolidatedFunnelTotals.leadToMql * 100).toFixed(0)}%` },
+              { stage: "RM", value: consolidatedFunnelTotals.rms, percent: `${(consolidatedFunnelTotals.mqlToRm * 100).toFixed(0)}%` },
+              { stage: "RR", value: consolidatedFunnelTotals.rrs, percent: `${(consolidatedFunnelTotals.rmToRr * 100).toFixed(0)}%` },
+              { stage: "Proposta", value: consolidatedFunnelTotals.propostas, percent: `${(consolidatedFunnelTotals.rrToProp * 100).toFixed(0)}%` },
+              { stage: "Venda", value: consolidatedFunnelTotals.vendas, percent: `${(consolidatedFunnelTotals.propToVenda * 100).toFixed(0)}%` },
+            ]}
+            mqlToVenda={consolidatedFunnelTotals.mqlToRm * consolidatedFunnelTotals.rmToRr * consolidatedFunnelTotals.rrToProp * consolidatedFunnelTotals.propToVenda}
+            leadToVenda={consolidatedFunnelTotals.leadToMql * consolidatedFunnelTotals.mqlToRm * consolidatedFunnelTotals.rmToRr * consolidatedFunnelTotals.rrToProp * consolidatedFunnelTotals.propToVenda}
+            color="hsl(var(--primary))"
+          />
+        </div>
+
+        {/* BU Funnels */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SalesFunnelVisual
+            title="Modelo Atual"
+            icon={<Building2 className="h-5 w-5 text-primary" />}
+            stages={buildFunnelStages(modeloAtualFunnel, funnelMetrics.modeloAtual)}
+            mqlToVenda={funnelMetrics.modeloAtual.mqlToRm * funnelMetrics.modeloAtual.rmToRr * funnelMetrics.modeloAtual.rrToProp * funnelMetrics.modeloAtual.propToVenda}
+            leadToVenda={funnelMetrics.modeloAtual.leadToMql * funnelMetrics.modeloAtual.mqlToRm * funnelMetrics.modeloAtual.rmToRr * funnelMetrics.modeloAtual.rrToProp * funnelMetrics.modeloAtual.propToVenda}
+            color="hsl(var(--primary))"
+          />
+          <SalesFunnelVisual
+            title="O2 TAX"
+            icon={<DollarSign className="h-5 w-5 text-warning" />}
+            stages={buildFunnelStages(o2TaxFunnel, funnelMetrics.o2Tax)}
+            mqlToVenda={funnelMetrics.o2Tax.mqlToRm * funnelMetrics.o2Tax.rmToRr * funnelMetrics.o2Tax.rrToProp * funnelMetrics.o2Tax.propToVenda}
+            leadToVenda={funnelMetrics.o2Tax.leadToMql * funnelMetrics.o2Tax.mqlToRm * funnelMetrics.o2Tax.rmToRr * funnelMetrics.o2Tax.rrToProp * funnelMetrics.o2Tax.propToVenda}
+            color="hsl(var(--warning))"
+          />
+          <SalesFunnelVisual
+            title="Oxy Hacker"
+            icon={<Rocket className="h-5 w-5 text-accent-foreground" />}
+            stages={buildFunnelStages(oxyHackerFunnel, funnelMetrics.oxyHacker)}
+            mqlToVenda={funnelMetrics.oxyHacker.mqlToRm * funnelMetrics.oxyHacker.rmToRr * funnelMetrics.oxyHacker.rrToProp * funnelMetrics.oxyHacker.propToVenda}
+            leadToVenda={funnelMetrics.oxyHacker.leadToMql * funnelMetrics.oxyHacker.mqlToRm * funnelMetrics.oxyHacker.rmToRr * funnelMetrics.oxyHacker.rrToProp * funnelMetrics.oxyHacker.propToVenda}
+            color="hsl(var(--accent))"
+          />
+          <SalesFunnelVisual
+            title="Franquia"
+            icon={<Users className="h-5 w-5 text-secondary-foreground" />}
+            stages={buildFunnelStages(franquiaFunnel, funnelMetrics.franquia)}
+            mqlToVenda={funnelMetrics.franquia.mqlToRm * funnelMetrics.franquia.rmToRr * funnelMetrics.franquia.rrToProp * funnelMetrics.franquia.propToVenda}
+            leadToVenda={funnelMetrics.franquia.leadToMql * funnelMetrics.franquia.mqlToRm * funnelMetrics.franquia.rmToRr * funnelMetrics.franquia.rrToProp * funnelMetrics.franquia.propToVenda}
+            color="hsl(var(--secondary))"
+          />
+        </div>
       </div>
 
       {/* BU Detail Tables */}
