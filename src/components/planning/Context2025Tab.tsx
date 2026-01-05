@@ -313,7 +313,7 @@ export function Context2025Tab() {
                   <div key={item.stage} className="flex items-center w-full max-w-3xl mb-2">
                     {/* Conversion percentage on the left */}
                     <div className="w-20 text-right pr-4">
-                      {index > 0 && item.percent !== "-" && (
+                      {index > 0 && funnelData[index - 1].percent !== "-" && (
                         <Badge variant="outline" className="text-xs">
                           {funnelData[index - 1].percent}
                         </Badge>
@@ -349,7 +349,10 @@ export function Context2025Tab() {
                 );
               })}
             </div>
-            <div className="flex justify-center mt-6">
+            <div className="flex justify-center gap-4 mt-6 flex-wrap">
+              <Badge className="bg-primary/20 text-primary border-primary/30">
+                Conversão MQL → Venda: 7%
+              </Badge>
               <Badge className="bg-primary/20 text-primary border-primary/30">
                 Conversão Lead → Venda: 2.9%
               </Badge>
