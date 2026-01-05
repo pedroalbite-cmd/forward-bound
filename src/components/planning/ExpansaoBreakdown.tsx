@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Rocket, Users, TrendingUp, Target } from "lucide-react";
+import { Rocket, Users, TrendingUp, Target, CheckCircle2, XCircle } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency, formatCompact, months } from "./salesData";
 
 interface ExpansaoBreakdownProps {
@@ -9,6 +10,35 @@ interface ExpansaoBreakdownProps {
   realizedOxyHacker: Record<string, number>;
   realizedFranquia: Record<string, number>;
   isLoading: boolean;
+}
+
+// Get quarter for a month
+const getQuarter = (monthIndex: number): number => Math.floor(monthIndex / 3) + 1;
+
+// Variation Badge component
+function VariationBadge({ projected, realized }: { projected: number; realized: number }) {
+  if (projected === 0 && realized === 0) return <span className="text-muted-foreground">-</span>;
+  const variation = projected > 0 ? ((realized - projected) / projected) * 100 : 0;
+  const isPositive = variation >= 0;
+  return (
+    <Badge 
+      variant="outline" 
+      className={`text-xs ${
+        isPositive 
+          ? 'bg-success/10 text-success border-success/30' 
+          : 'bg-destructive/10 text-destructive border-destructive/30'
+      }`}
+    >
+      {isPositive ? '+' : ''}{variation.toFixed(1)}%
+    </Badge>
+  );
+}
+
+// Status Icon component
+function StatusIcon({ rate }: { rate: number }) {
+  if (rate >= 80) return <CheckCircle2 className="h-4 w-4 text-success" />;
+  if (rate >= 50) return <CheckCircle2 className="h-4 w-4 text-warning" />;
+  return <XCircle className="h-4 w-4 text-destructive" />;
 }
 
 export function ExpansaoBreakdown({
@@ -74,6 +104,24 @@ export function ExpansaoBreakdown({
     );
   }
 
+  // Calculate quarterly totals for a product
+  const calculateQuarterlyTotals = (projectedByMonth: Record<string, number>, realizedByMonth: Record<string, number>) => {
+    const quarters: { [key: number]: { projected: number; realized: number } } = {
+      1: { projected: 0, realized: 0 },
+      2: { projected: 0, realized: 0 },
+      3: { projected: 0, realized: 0 },
+      4: { projected: 0, realized: 0 },
+    };
+    
+    months.forEach((month, index) => {
+      const q = getQuarter(index);
+      quarters[q].projected += projectedByMonth[month] || 0;
+      quarters[q].realized += realizedByMonth[month] || 0;
+    });
+    
+    return quarters;
+  };
+
   return (
     <div className="space-y-6 mb-6">
       <div className="flex items-center gap-2 text-muted-foreground">
@@ -81,6 +129,7 @@ export function ExpansaoBreakdown({
         <span className="text-sm font-medium">Detalhamento por Produto - Expansão O2</span>
       </div>
 
+      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {products.map((product) => {
           const isPositive = product.rate >= 80;
@@ -166,6 +215,113 @@ export function ExpansaoBreakdown({
           );
         })}
       </div>
+
+      {/* Detailed Tables */}
+      {products.map((product) => {
+        const quarterlyTotals = calculateQuarterlyTotals(product.projectedByMonth, product.realizedByMonth);
+        const isPositive = product.rate >= 80;
+        const isWarning = product.rate >= 50 && product.rate < 80;
+        
+        return (
+          <Card key={`table-${product.key}`} className="glass-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                {product.icon}
+                <span className="font-display text-lg">{product.label} - Detalhamento Mensal</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-lg border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="font-semibold">Mês</TableHead>
+                      <TableHead className="text-right font-semibold">Previsto</TableHead>
+                      <TableHead className="text-right font-semibold">Realizado</TableHead>
+                      <TableHead className="text-center font-semibold">Variação</TableHead>
+                      <TableHead className="text-center font-semibold">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {months.map((month, index) => {
+                      const projected = product.projectedByMonth[month] || 0;
+                      const realized = product.realizedByMonth[month] || 0;
+                      const monthRate = projected > 0 ? (realized / projected) * 100 : 0;
+                      const quarter = getQuarter(index);
+                      const isQuarterEnd = (index + 1) % 3 === 0;
+                      
+                      return (
+                        <>
+                          <TableRow key={month} className="hover:bg-muted/30">
+                            <TableCell className="font-medium capitalize">{month}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(projected)}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(realized)}</TableCell>
+                            <TableCell className="text-center">
+                              <VariationBadge projected={projected} realized={realized} />
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className="flex justify-center">
+                                <StatusIcon rate={monthRate} />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                          {isQuarterEnd && (
+                            <TableRow key={`q${quarter}`} className="bg-muted/30 font-semibold border-t-2">
+                              <TableCell className="text-primary">Q{quarter} Total</TableCell>
+                              <TableCell className="text-right text-primary">
+                                {formatCurrency(quarterlyTotals[quarter].projected)}
+                              </TableCell>
+                              <TableCell className="text-right text-primary">
+                                {formatCurrency(quarterlyTotals[quarter].realized)}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <VariationBadge 
+                                  projected={quarterlyTotals[quarter].projected} 
+                                  realized={quarterlyTotals[quarter].realized} 
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <div className="flex justify-center">
+                                  <StatusIcon 
+                                    rate={quarterlyTotals[quarter].projected > 0 
+                                      ? (quarterlyTotals[quarter].realized / quarterlyTotals[quarter].projected) * 100 
+                                      : 0
+                                    } 
+                                  />
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </>
+                      );
+                    })}
+                    {/* Annual Total Row */}
+                    <TableRow className={`font-bold border-t-4 ${
+                      isPositive 
+                        ? 'bg-success/10' 
+                        : isWarning 
+                          ? 'bg-warning/10' 
+                          : 'bg-destructive/10'
+                    }`}>
+                      <TableCell className="text-lg">Total Anual</TableCell>
+                      <TableCell className="text-right text-lg">{formatCurrency(product.projected)}</TableCell>
+                      <TableCell className="text-right text-lg">{formatCurrency(product.realized)}</TableCell>
+                      <TableCell className="text-center">
+                        <VariationBadge projected={product.projected} realized={product.realized} />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex justify-center">
+                          <StatusIcon rate={product.rate} />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }
