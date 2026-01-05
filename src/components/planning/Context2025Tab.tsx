@@ -55,11 +55,12 @@ const formatCurrency = (value: number) => {
 
 // Sales Funnel Data
 const funnelData = [
-  { stage: "MQL", description: "Marketing Qualified Lead (>200k mês)", percent: "43%", label: "Lead → MQL" },
-  { stage: "Reunião Marcada", description: "Agendamentos confirmados", percent: "49%", label: "MQL → RM" },
-  { stage: "Reunião Realizada", description: "Reuniões efetivamente realizadas", percent: "72%", label: "RM → RR" },
-  { stage: "Proposta Enviada", description: "Propostas comerciais enviadas", percent: "88%", label: "RR → Prop" },
-  { stage: "Venda", description: "Contratos fechados", percent: "24%", label: "Prop → Venda" },
+  { stage: "Leads", description: "Leads gerados", percent: "42%", label: "Lead → MQL", value: 5619 },
+  { stage: "MQL", description: "Marketing Qualified Lead (>200k mês)", percent: "48%", label: "MQL → RM", value: 2303 },
+  { stage: "Reunião Marcada", description: "Agendamentos confirmados", percent: "73%", label: "RM → RR", value: 1095 },
+  { stage: "Reunião Realizada", description: "Reuniões efetivamente realizadas", percent: "87%", label: "RR → Prop", value: 798 },
+  { stage: "Proposta Enviada", description: "Propostas comerciais enviadas", percent: "24%", label: "Prop → Venda", value: 693 },
+  { stage: "Venda", description: "Contratos fechados", percent: "-", label: "", value: 164 },
 ];
 
 const indicators = [
@@ -307,14 +308,14 @@ export function Context2025Tab() {
           <CardContent className="p-6">
             <div className="flex flex-col items-center">
               {funnelData.map((item, index) => {
-                const widthPercent = 100 - (index * 15);
+                const widthPercent = 100 - (index * 12);
                 return (
-                  <div key={item.stage} className="flex items-center w-full max-w-2xl mb-2">
+                  <div key={item.stage} className="flex items-center w-full max-w-3xl mb-2">
                     {/* Conversion percentage on the left */}
                     <div className="w-20 text-right pr-4">
-                      {index > 0 && (
+                      {index > 0 && item.percent !== "-" && (
                         <Badge variant="outline" className="text-xs">
-                          {item.percent}
+                          {funnelData[index - 1].percent}
                         </Badge>
                       )}
                     </div>
@@ -324,7 +325,7 @@ export function Context2025Tab() {
                       className="relative py-4 text-center transition-all duration-300 hover:scale-105"
                       style={{ 
                         width: `${widthPercent}%`,
-                        background: `linear-gradient(135deg, hsl(var(--primary) / ${1 - index * 0.15}), hsl(var(--accent) / ${1 - index * 0.15}))`,
+                        background: `linear-gradient(135deg, hsl(var(--primary) / ${1 - index * 0.12}), hsl(var(--accent) / ${1 - index * 0.12}))`,
                         borderRadius: '8px',
                         marginLeft: 'auto',
                         marginRight: 'auto'
@@ -338,15 +339,19 @@ export function Context2025Tab() {
                       </p>
                     </div>
                     
-                    {/* Empty space on the right for symmetry */}
-                    <div className="w-20" />
+                    {/* Absolute value on the right */}
+                    <div className="w-24 text-left pl-4">
+                      <Badge className="bg-primary/20 text-primary border-primary/30 font-mono">
+                        {item.value.toLocaleString('pt-BR')}
+                      </Badge>
+                    </div>
                   </div>
                 );
               })}
             </div>
             <div className="flex justify-center mt-6">
               <Badge className="bg-primary/20 text-primary border-primary/30">
-                Conversão MQL → Venda: 7%
+                Conversão Lead → Venda: 2.9%
               </Badge>
             </div>
           </CardContent>
