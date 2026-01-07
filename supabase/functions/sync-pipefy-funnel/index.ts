@@ -10,7 +10,6 @@ const corsHeaders = {
 const PIPEFY_API_URL = 'https://api.pipefy.com/graphql';
 
 // Map BU names to their pipe IDs (to be configured)
-// TODO: Update with actual pipe IDs from user
 const BU_PIPE_CONFIG: Record<string, { pipeId: string; buKey: string }> = {
   'Modelo Atual': { pipeId: '', buKey: 'modelo_atual' },
   'O2 TAX': { pipeId: '', buKey: 'o2_tax' },
@@ -68,6 +67,13 @@ interface PipefyPipeResponse {
   };
 }
 
+interface DailyRecord {
+  bu: string;
+  indicator: string;
+  date: string;
+  value: number;
+}
+
 async function fetchPipeData(pipeId: string, apiKey: string): Promise<PipefyPipeResponse | null> {
   if (!pipeId) return null;
 
@@ -120,41 +126,57 @@ async function fetchPipeData(pipeId: string, apiKey: string): Promise<PipefyPipe
   }
 }
 
-function processCardsToMonthly(
-  phases: PipefyPhase[],
-  year: number
-): Record<string, Record<string, number>> {
-  const result: Record<string, Record<string, number>> = {};
+// Process Pipefy cards to daily records (used when real Pipefy data is available)
 
-  // Initialize all indicators with all months
-  Object.values(PHASE_TO_INDICATOR).forEach((indicator) => {
-    if (!result[indicator]) {
-      result[indicator] = {};
-      Object.values(MONTH_MAP).forEach((month) => {
-        result[indicator][month] = 0;
+function generateMockDailyData(buKey: string, year: number): DailyRecord[] {
+  const results: DailyRecord[] = [];
+  const indicators = ['mql', 'rm', 'rr', 'proposta', 'venda'];
+  
+  // Generate data for each day of the year
+  for (let month = 1; month <= 12; month++) {
+    const daysInMonth = new Date(year, month, 0).getDate();
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const date = new Date(dateStr);
+      const dayOfWeek = date.getDay();
+      
+      // Weekend factor - less activity on weekends
+      const weekendFactor = (dayOfWeek === 0 || dayOfWeek === 6) ? 0.3 : 1;
+      
+      // Seasonal factor - more activity mid-year
+      const seasonalFactor = 0.7 + 0.6 * Math.sin((month - 1) * Math.PI / 12);
+      
+      indicators.forEach((indicator) => {
+        // Base daily values by indicator type
+        let baseValue = 0;
+        switch (indicator) {
+          case 'mql': baseValue = 3; break;
+          case 'rm': baseValue = 2; break;
+          case 'rr': baseValue = 1.5; break;
+          case 'proposta': baseValue = 1; break;
+          case 'venda': baseValue = 0.5; break;
+        }
+        
+        // Apply factors and add randomness
+        const adjustedValue = baseValue * weekendFactor * seasonalFactor;
+        const randomFactor = 0.5 + Math.random();
+        const finalValue = Math.max(0, Math.round(adjustedValue * randomFactor));
+        
+        // Only add record if value > 0
+        if (finalValue > 0) {
+          results.push({
+            bu: buKey,
+            indicator,
+            date: dateStr,
+            value: finalValue,
+          });
+        }
       });
     }
-  });
-
-  phases.forEach((phase) => {
-    const indicator = PHASE_TO_INDICATOR[phase.name];
-    if (!indicator) return;
-
-    phase.cards.edges.forEach(({ node: card }) => {
-      const createdDate = new Date(card.created_at);
-      const cardYear = createdDate.getFullYear();
-      const cardMonth = createdDate.getMonth() + 1;
-
-      if (cardYear === year) {
-        const monthName = MONTH_MAP[cardMonth];
-        if (monthName) {
-          result[indicator][monthName]++;
-        }
-      }
-    });
-  });
-
-  return result;
+  }
+  
+  return results;
 }
 
 serve(async (req) => {
@@ -188,37 +210,14 @@ serve(async (req) => {
 
     console.log(`Syncing Pipefy funnel data for year ${year}...`);
 
-    const results: Array<{ bu: string; indicator: string; month: string; value: number }> = [];
+    const allResults: DailyRecord[] = [];
 
     // Process each BU
     for (const [buName, config] of Object.entries(BU_PIPE_CONFIG)) {
       if (!config.pipeId) {
-        console.log(`Skipping ${buName}: no pipe ID configured`);
-        
-        // Generate mock data for demo purposes when pipe ID is not set
-        const indicators = ['mql', 'rm', 'rr', 'proposta', 'venda'];
-        const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-        
-        indicators.forEach((indicator) => {
-          months.forEach((month) => {
-            // Generate realistic mock data based on indicator type
-            let baseValue = 0;
-            switch (indicator) {
-              case 'mql': baseValue = Math.floor(Math.random() * 50) + 20; break;
-              case 'rm': baseValue = Math.floor(Math.random() * 30) + 10; break;
-              case 'rr': baseValue = Math.floor(Math.random() * 20) + 5; break;
-              case 'proposta': baseValue = Math.floor(Math.random() * 15) + 3; break;
-              case 'venda': baseValue = Math.floor(Math.random() * 8) + 1; break;
-            }
-            
-            results.push({
-              bu: config.buKey,
-              indicator,
-              month,
-              value: baseValue,
-            });
-          });
-        });
+        console.log(`Generating mock daily data for ${buName}...`);
+        const mockData = generateMockDailyData(config.buKey, year);
+        allResults.push(...mockData);
         continue;
       }
 
@@ -230,35 +229,50 @@ serve(async (req) => {
         continue;
       }
 
-      const monthlyData = processCardsToMonthly(pipeData.data.pipe.phases, year);
+      // Process real Pipefy data to daily records
+      const phases = pipeData.data.pipe.phases;
+      phases.forEach((phase) => {
+        const indicator = PHASE_TO_INDICATOR[phase.name];
+        if (!indicator) return;
 
-      Object.entries(monthlyData).forEach(([indicator, months]) => {
-        Object.entries(months).forEach(([month, value]) => {
-          results.push({
-            bu: config.buKey,
-            indicator,
-            month,
-            value,
-          });
+        phase.cards.edges.forEach(({ node: card }) => {
+          const createdDate = new Date(card.created_at);
+          const cardYear = createdDate.getFullYear();
+
+          if (cardYear === year) {
+            const dateStr = createdDate.toISOString().split('T')[0];
+            allResults.push({
+              bu: config.buKey,
+              indicator,
+              date: dateStr,
+              value: 1,
+            });
+          }
         });
       });
     }
 
-    console.log(`Upserting ${results.length} records...`);
+    console.log(`Upserting ${allResults.length} daily records...`);
 
-    // Upsert all records
-    for (const record of results) {
+    // Batch upsert for better performance
+    const batchSize = 100;
+    for (let i = 0; i < allResults.length; i += batchSize) {
+      const batch = allResults.slice(i, i + batchSize);
+      
+      const records = batch.map(record => ({
+        bu: record.bu,
+        date: record.date,
+        indicator: record.indicator,
+        month: MONTH_MAP[parseInt(record.date.split('-')[1])],
+        year,
+        value: record.value,
+        updated_at: new Date().toISOString(),
+      }));
+
       const { error } = await supabase
         .from('funnel_realized')
-        .upsert({
-          bu: record.bu,
-          month: record.month,
-          year,
-          indicator: record.indicator,
-          value: record.value,
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'bu,month,year,indicator',
+        .upsert(records, {
+          onConflict: 'bu,date,indicator',
         });
 
       if (error) {
@@ -271,7 +285,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Synced ${results.length} records`,
+        message: `Synced ${allResults.length} daily records`,
         year,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
