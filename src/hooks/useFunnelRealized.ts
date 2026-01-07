@@ -56,8 +56,10 @@ export function useFunnelRealized(startDate?: Date, endDate?: Date) {
     if (grouping === 'daily') {
       return eachDayOfInterval({ start: startDate, end: endDate }).map(d => format(d, 'dd/MM', { locale: ptBR }));
     } else if (grouping === 'weekly') {
-      const weeks = eachWeekOfInterval({ start: startDate, end: endDate }, { weekStartsOn: 1 });
-      return weeks.map((_, i) => `S${i + 1}`);
+      // Calculate actual number of weeks in the selected period
+      const totalDays = differenceInDays(endDate, startDate) + 1;
+      const numWeeks = Math.ceil(totalDays / 7);
+      return Array.from({ length: numWeeks }, (_, i) => `S${i + 1}`);
     } else {
       return eachMonthOfInterval({ start: startDate, end: endDate }).map(d => format(d, 'MMM', { locale: ptBR }));
     }
@@ -79,9 +81,14 @@ export function useFunnelRealized(startDate?: Date, endDate?: Date) {
         return filteredData.filter(r => r.date === dayStr).reduce((sum, r) => sum + r.value, 0);
       });
     } else if (grouping === 'weekly') {
-      const weeks = eachWeekOfInterval({ start: startDate, end: endDate }, { weekStartsOn: 1 });
-      return weeks.map((weekStart, i) => {
-        const weekEnd = i < weeks.length - 1 ? addDays(weeks[i + 1], -1) : endDate;
+      // Group data into weeks starting from the actual startDate
+      const totalDays = differenceInDays(endDate, startDate) + 1;
+      const numWeeks = Math.ceil(totalDays / 7);
+      
+      return Array.from({ length: numWeeks }, (_, i) => {
+        const weekStart = addDays(startDate, i * 7);
+        const weekEnd = i < numWeeks - 1 ? addDays(weekStart, 6) : endDate;
+        
         return filteredData.filter(r => {
           if (!r.date) return false;
           const recordDate = parseISO(r.date);

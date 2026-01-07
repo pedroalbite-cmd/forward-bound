@@ -8,7 +8,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tool
 import { RefreshCw, Loader2, CalendarIcon } from "lucide-react";
 import { useFunnelRealized, IndicatorType, BUType } from "@/hooks/useFunnelRealized";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
-import { format, startOfYear, endOfYear, differenceInDays } from "date-fns";
+import { format, startOfYear, endOfYear, differenceInDays, eachMonthOfInterval, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
@@ -125,8 +125,35 @@ export function IndicatorsTab() {
 
   const buildChartData = (indicator: IndicatorConfig) => {
     const realizedValues = getGroupedData(indicator.key, selectedBU);
-    const metaPerPeriod = getMetaForIndicator(indicator.annualMeta) / (chartLabels.length || 1);
-    return chartLabels.map((label, index) => ({ label, realizado: realizedValues[index] || 0, meta: Math.round(metaPerPeriod) }));
+    const metaDiaria = indicator.annualMeta / 365;
+    
+    // Calculate meta per data point based on grouping
+    const getMetaPerPoint = (index: number): number => {
+      if (grouping === 'daily') {
+        return metaDiaria;
+      } else if (grouping === 'weekly') {
+        const totalDays = daysInPeriod;
+        const numWeeks = chartLabels.length;
+        const fullWeekDays = 7;
+        const lastWeekDays = totalDays - (numWeeks - 1) * 7;
+        // Last week may have fewer days
+        return metaDiaria * (index === numWeeks - 1 ? lastWeekDays : fullWeekDays);
+      } else {
+        // Monthly: calculate days in each month within the period
+        const months = eachMonthOfInterval({ start: startDate, end: endDate });
+        if (index >= months.length) return 0;
+        const monthStart = months[index];
+        const monthEnd = index < months.length - 1 ? addDays(months[index + 1], -1) : endDate;
+        const daysInMonth = differenceInDays(monthEnd, monthStart) + 1;
+        return metaDiaria * daysInMonth;
+      }
+    };
+    
+    return chartLabels.map((label, index) => ({ 
+      label, 
+      realizado: realizedValues[index] || 0, 
+      meta: Math.round(getMetaPerPoint(index)) 
+    }));
   };
 
   return (
