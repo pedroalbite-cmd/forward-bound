@@ -10,9 +10,29 @@ export interface MediaMetasState {
   franquia: Record<string, number>;
 }
 
+export interface FunnelDataItem {
+  month: string;
+  leads: number;
+  mqls: number;
+  rms: number;
+  rrs: number;
+  propostas: number;
+  vendas: number;
+  investimento: number;
+}
+
+export interface FunnelDataByBU {
+  modeloAtual: FunnelDataItem[];
+  o2Tax: FunnelDataItem[];
+  oxyHacker: FunnelDataItem[];
+  franquia: FunnelDataItem[];
+}
+
 interface MediaMetasContextType {
   metasPorBU: MediaMetasState;
   setMetasPorBU: (metas: MediaMetasState) => void;
+  funnelData: FunnelDataByBU | null;
+  setFunnelData: (data: FunnelDataByBU) => void;
   isLoaded: boolean;
 }
 
@@ -27,6 +47,7 @@ const MediaMetasContext = createContext<MediaMetasContextType | undefined>(undef
 
 export function MediaMetasProvider({ children }: { children: ReactNode }) {
   const [metasPorBU, setMetasPorBU] = useState<MediaMetasState>(defaultMetas);
+  const [funnelData, setFunnelData] = useState<FunnelDataByBU | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
   const handleSetMetas = (metas: MediaMetasState) => {
@@ -35,7 +56,13 @@ export function MediaMetasProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <MediaMetasContext.Provider value={{ metasPorBU, setMetasPorBU: handleSetMetas, isLoaded }}>
+    <MediaMetasContext.Provider value={{ 
+      metasPorBU, 
+      setMetasPorBU: handleSetMetas, 
+      funnelData,
+      setFunnelData,
+      isLoaded 
+    }}>
       {children}
     </MediaMetasContext.Provider>
   );
