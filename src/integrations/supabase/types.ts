@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           bu: string
           created_at: string
+          date: string | null
           id: string
           indicator: string
           month: string
@@ -28,6 +29,7 @@ export type Database = {
         Insert: {
           bu: string
           created_at?: string
+          date?: string | null
           id?: string
           indicator: string
           month: string
@@ -38,6 +40,7 @@ export type Database = {
         Update: {
           bu?: string
           created_at?: string
+          date?: string | null
           id?: string
           indicator?: string
           month?: string

@@ -1,9 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { format, differenceInDays, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, isWithinInterval, parseISO, addDays } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export type IndicatorType = 'mql' | 'rm' | 'rr' | 'proposta' | 'venda';
 export type BUType = 'modelo_atual' | 'o2_tax' | 'oxy_hacker' | 'franquia';
+export type ChartGrouping = 'daily' | 'weekly' | 'monthly';
 
 export interface FunnelRealizedRecord {
   id: string;
@@ -12,95 +15,99 @@ export interface FunnelRealizedRecord {
   year: number;
   indicator: string;
   value: number;
+  date: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface FunnelRealizedByIndicator {
-  [indicator: string]: {
-    [month: string]: number;
-  };
-}
-
-export interface FunnelRealizedByBU {
-  [bu: string]: FunnelRealizedByIndicator;
-}
-
-const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-
-export function useFunnelRealized(year: number = 2026) {
+export function useFunnelRealized(startDate?: Date, endDate?: Date) {
   const queryClient = useQueryClient();
 
   const { data: rawData, isLoading, error, refetch } = useQuery({
-    queryKey: ['funnel-realized', year],
+    queryKey: ['funnel-realized', startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('funnel_realized')
-        .select('*')
-        .eq('year', year);
+      let query = supabase.from('funnel_realized').select('*');
+      
+      if (startDate) {
+        query = query.gte('date', format(startDate, 'yyyy-MM-dd'));
+      }
+      if (endDate) {
+        query = query.lte('date', format(endDate, 'yyyy-MM-dd'));
+      }
 
+      const { data, error } = await query;
       if (error) throw error;
       return data as FunnelRealizedRecord[];
     },
   });
 
-  // Structure data by BU and indicator
-  const dataByBU: FunnelRealizedByBU = {};
-  
-  if (rawData) {
-    rawData.forEach((record) => {
-      if (!dataByBU[record.bu]) {
-        dataByBU[record.bu] = {};
-      }
-      if (!dataByBU[record.bu][record.indicator]) {
-        dataByBU[record.bu][record.indicator] = {};
-      }
-      dataByBU[record.bu][record.indicator][record.month] = record.value;
-    });
-  }
-
-  // Get value for a specific BU, indicator, and month
-  const getValue = (bu: BUType, indicator: IndicatorType, month: string): number => {
-    return dataByBU[bu]?.[indicator]?.[month] ?? 0;
+  const getChartGrouping = (): ChartGrouping => {
+    if (!startDate || !endDate) return 'monthly';
+    const diffDays = differenceInDays(endDate, startDate);
+    if (diffDays <= 31) return 'daily';
+    if (diffDays <= 90) return 'weekly';
+    return 'monthly';
   };
 
-  // Get total for a BU and indicator across all months
-  const getTotal = (bu: BUType, indicator: IndicatorType): number => {
-    const indicatorData = dataByBU[bu]?.[indicator];
-    if (!indicatorData) return 0;
-    return Object.values(indicatorData).reduce((sum, val) => sum + val, 0);
+  const getChartLabels = (): string[] => {
+    if (!startDate || !endDate) return [];
+    const grouping = getChartGrouping();
+    
+    if (grouping === 'daily') {
+      return eachDayOfInterval({ start: startDate, end: endDate }).map(d => format(d, 'dd/MM', { locale: ptBR }));
+    } else if (grouping === 'weekly') {
+      const weeks = eachWeekOfInterval({ start: startDate, end: endDate }, { weekStartsOn: 1 });
+      return weeks.map((_, i) => `S${i + 1}`);
+    } else {
+      return eachMonthOfInterval({ start: startDate, end: endDate }).map(d => format(d, 'MMM', { locale: ptBR }));
+    }
   };
 
-  // Get total for all BUs for a specific indicator
-  const getGrandTotal = (indicator: IndicatorType): number => {
-    let total = 0;
-    Object.keys(dataByBU).forEach((bu) => {
-      total += getTotal(bu as BUType, indicator);
+  const getGroupedData = (indicator: IndicatorType, filterBU?: BUType | 'all'): number[] => {
+    if (!rawData || !startDate || !endDate) return [];
+    
+    const grouping = getChartGrouping();
+    const filteredData = rawData.filter(r => {
+      if (r.indicator !== indicator) return false;
+      if (filterBU && filterBU !== 'all' && r.bu !== filterBU) return false;
+      return true;
     });
-    return total;
+
+    if (grouping === 'daily') {
+      return eachDayOfInterval({ start: startDate, end: endDate }).map(day => {
+        const dayStr = format(day, 'yyyy-MM-dd');
+        return filteredData.filter(r => r.date === dayStr).reduce((sum, r) => sum + r.value, 0);
+      });
+    } else if (grouping === 'weekly') {
+      const weeks = eachWeekOfInterval({ start: startDate, end: endDate }, { weekStartsOn: 1 });
+      return weeks.map((weekStart, i) => {
+        const weekEnd = i < weeks.length - 1 ? addDays(weeks[i + 1], -1) : endDate;
+        return filteredData.filter(r => {
+          if (!r.date) return false;
+          const recordDate = parseISO(r.date);
+          return isWithinInterval(recordDate, { start: weekStart, end: weekEnd });
+        }).reduce((sum, r) => sum + r.value, 0);
+      });
+    } else {
+      const months = eachMonthOfInterval({ start: startDate, end: endDate });
+      return months.map((monthStart, i) => {
+        const nextMonth = i < months.length - 1 ? months[i + 1] : addDays(endDate, 1);
+        return filteredData.filter(r => {
+          if (!r.date) return false;
+          const recordDate = parseISO(r.date);
+          return isWithinInterval(recordDate, { start: monthStart, end: addDays(nextMonth, -1) });
+        }).reduce((sum, r) => sum + r.value, 0);
+      });
+    }
   };
 
-  // Get monthly totals for an indicator across all BUs or filtered BU
-  const getMonthlyTotals = (indicator: IndicatorType, filterBU?: BUType | 'all'): Record<string, number> => {
-    const totals: Record<string, number> = {};
-    months.forEach((month) => {
-      totals[month] = 0;
-    });
-
-    Object.keys(dataByBU).forEach((bu) => {
-      if (filterBU && filterBU !== 'all' && bu !== filterBU) return;
-      const indicatorData = dataByBU[bu]?.[indicator];
-      if (indicatorData) {
-        Object.entries(indicatorData).forEach(([month, value]) => {
-          totals[month] = (totals[month] || 0) + value;
-        });
-      }
-    });
-
-    return totals;
+  const getTotal = (indicator: IndicatorType, filterBU?: BUType | 'all'): number => {
+    if (!rawData) return 0;
+    return rawData
+      .filter(r => r.indicator === indicator && (filterBU === 'all' || !filterBU || r.bu === filterBU))
+      .reduce((sum, r) => sum + r.value, 0);
   };
 
-  // Sync mutation
   const syncMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('sync-pipefy-funnel');
@@ -108,7 +115,7 @@ export function useFunnelRealized(year: number = 2026) {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['funnel-realized', year] });
+      queryClient.invalidateQueries({ queryKey: ['funnel-realized'] });
       toast.success('Dados sincronizados com sucesso!');
     },
     onError: (error) => {
@@ -119,14 +126,13 @@ export function useFunnelRealized(year: number = 2026) {
 
   return {
     data: rawData,
-    dataByBU,
     isLoading,
     error,
     refetch,
-    getValue,
     getTotal,
-    getGrandTotal,
-    getMonthlyTotals,
+    getChartGrouping,
+    getChartLabels,
+    getGroupedData,
     syncWithPipefy: syncMutation.mutate,
     isSyncing: syncMutation.isPending,
   };
