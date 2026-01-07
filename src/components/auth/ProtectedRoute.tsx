@@ -1,16 +1,12 @@
-// TEMPORARY: Authentication disabled - remove this bypass to restore login
-// import { Navigate } from 'react-router-dom';
-// import { useAuth } from '@/hooks/useAuth';
-// import { Loader2 } from 'lucide-react';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  // TEMPORARY BYPASS: Authentication disabled
-  // To restore login, uncomment the original code below:
-  /*
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -24,7 +20,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
-  */
 
   return <>{children}</>;
 }
