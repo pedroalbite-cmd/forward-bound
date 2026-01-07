@@ -1,3 +1,15 @@
+// TEMPORARY: Authentication disabled - redirect directly to app
+import { Navigate } from 'react-router-dom';
+
+export default function Auth() {
+  // TEMPORARY BYPASS: Redirect directly to main application
+  // To restore login, uncomment the original Auth component code below
+  return <Navigate to="/" replace />;
+}
+
+/*
+// ORIGINAL AUTH COMPONENT CODE - UNCOMMENT TO RESTORE LOGIN
+
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
@@ -409,3 +421,4 @@ export default function Auth() {
     </div>
   );
 }
+*/
