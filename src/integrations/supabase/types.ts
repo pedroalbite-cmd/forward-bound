@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      funnel_realized: {
+        Row: {
+          bu: string
+          created_at: string
+          id: string
+          indicator: string
+          month: string
+          updated_at: string
+          value: number
+          year: number
+        }
+        Insert: {
+          bu: string
+          created_at?: string
+          id?: string
+          indicator: string
+          month: string
+          updated_at?: string
+          value?: number
+          year?: number
+        }
+        Update: {
+          bu?: string
+          created_at?: string
+          id?: string
+          indicator?: string
+          month?: string
+          updated_at?: string
+          value?: number
+          year?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
