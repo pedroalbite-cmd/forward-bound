@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Cell, LabelList } from "recharts";
 import { useFunnelRealized, BUType } from "@/hooks/useFunnelRealized";
-import { format, eachDayOfInterval, differenceInDays, addDays, parseISO, isWithinInterval } from "date-fns";
+import { format, eachDayOfInterval, differenceInDays, addDays, parseISO, isWithinInterval, eachMonthOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface LeadsMqlsStackedChartProps {
@@ -44,12 +44,13 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU, metaMqls
         };
       });
     } else {
-      // Monthly - use month names
-      return mqlsData.map((mqls, index) => ({
-        label: format(addDays(startDate, index * 30), "MMM", { locale: ptBR }),
-        mqls,
-        leads: leadsData[index] || 0,
-      }));
+    // Monthly - use actual months from the interval
+    const months = eachMonthOfInterval({ start: startDate, end: endDate });
+    return months.map((monthDate, index) => ({
+      label: format(monthDate, "MMM", { locale: ptBR }),
+      mqls: mqlsData[index] || 0,
+      leads: leadsData[index] || 0,
+    }));
     }
   };
 
