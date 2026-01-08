@@ -205,8 +205,18 @@ export function IndicatorsTab() {
               </Popover>
             </div>
 
-            <Button onClick={handleSync} disabled={isSyncing} variant="outline" size="icon" title="Sincronizar Pipefy">
-              {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            <Button onClick={handleSync} disabled={isSyncing} variant="outline" className="gap-2" title="Sincronizar Pipefy">
+              {isSyncing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="hidden sm:inline">Sincronizando...</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4" />
+                  <span className="hidden sm:inline">Sincronizar</span>
+                </>
+              )}
             </Button>
           </div>
         </div>
