@@ -1,0 +1,114 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useFunnelRealized, BUType, IndicatorType } from "@/hooks/useFunnelRealized";
+
+interface PeriodFunnelChartProps {
+  startDate: Date;
+  endDate: Date;
+  selectedBU: BUType | 'all';
+  ticketMedio?: number;
+}
+
+const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Math.round(value));
+const formatCurrency = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0 }).format(value);
+
+interface FunnelStage {
+  number: number;
+  name: string;
+  indicator: IndicatorType;
+  value: number;
+  conversionPercent: number;
+}
+
+export function PeriodFunnelChart({ startDate, endDate, selectedBU, ticketMedio = 50000 }: PeriodFunnelChartProps) {
+  const { getAllTotals } = useFunnelRealized(startDate, endDate);
+  
+  const totals = getAllTotals(selectedBU);
+
+  // Calculate conversions
+  const stages: FunnelStage[] = [
+    { number: 1, name: 'MQL', indicator: 'mql', value: totals.mql, conversionPercent: 100 },
+    { number: 2, name: 'Reuniões Agendadas', indicator: 'rm', value: totals.rm, conversionPercent: totals.mql > 0 ? (totals.rm / totals.mql) * 100 : 0 },
+    { number: 3, name: 'Reunião realizada', indicator: 'rr', value: totals.rr, conversionPercent: totals.rm > 0 ? (totals.rr / totals.rm) * 100 : 0 },
+    { number: 4, name: 'Proposta Enviada', indicator: 'proposta', value: totals.proposta, conversionPercent: totals.rr > 0 ? (totals.proposta / totals.rr) * 100 : 0 },
+    { number: 5, name: 'Contrato Assinado', indicator: 'venda', value: totals.venda, conversionPercent: totals.proposta > 0 ? (totals.venda / totals.proposta) * 100 : 0 },
+  ];
+
+  // Calculate monetary values
+  const propostaValue = totals.proposta * ticketMedio;
+  const vendaValue = totals.venda * ticketMedio;
+
+  // Width percentages for funnel visualization
+  const widthPercentages = [100, 75, 55, 40, 25];
+
+  // Colors for each stage
+  const stageColors = [
+    'from-emerald-400 to-cyan-500',
+    'from-cyan-500 to-blue-500',
+    'from-blue-500 to-blue-600',
+    'from-blue-600 to-slate-500',
+    'from-slate-500 to-slate-600',
+  ];
+
+  return (
+    <Card className="bg-card border-border">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base font-semibold text-foreground">Funil do Período</CardTitle>
+        <div className="grid grid-cols-2 gap-4 mt-3">
+          <div className="bg-muted/50 rounded-lg p-3 text-center">
+            <p className="text-xs text-muted-foreground mb-1">Proposta Enviada</p>
+            <p className="text-lg font-bold text-foreground">{formatCurrency(propostaValue)}</p>
+          </div>
+          <div className="bg-muted/50 rounded-lg p-3 text-center">
+            <p className="text-xs text-muted-foreground mb-1">Contratos Assinados</p>
+            <p className="text-lg font-bold text-foreground">{formatCurrency(vendaValue)}</p>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-4">
+        <div className="flex flex-col gap-1">
+          {stages.map((stage, index) => (
+            <div key={stage.indicator} className="relative flex items-center justify-center">
+              {/* Funnel stage container */}
+              <div
+                className={`relative h-12 bg-gradient-to-r ${stageColors[index]} rounded-sm transition-all duration-300 flex items-center justify-center ${
+                  index === stages.length - 1 ? 'ring-2 ring-pink-500 ring-offset-2 ring-offset-background' : ''
+                }`}
+                style={{ width: `${widthPercentages[index]}%` }}
+              >
+                {/* Stage content */}
+                <div className="flex items-center gap-2 text-white text-sm font-medium">
+                  <span className="bg-white/20 rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                    {stage.number}
+                  </span>
+                  <span className="hidden sm:inline">{stage.name}</span>
+                  <span className="font-bold">{formatNumber(stage.value)}</span>
+                  {index > 0 && (
+                    <span className="text-white/80 text-xs">
+                      ({stage.conversionPercent.toFixed(1)}%)
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Legend */}
+        <div className="mt-4 pt-4 border-t border-border">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+            {stages.slice(1).map((stage, index) => (
+              <div key={stage.indicator} className="flex items-center gap-2">
+                <span className="text-muted-foreground">
+                  {stages[index].name} → {stage.name}:
+                </span>
+                <span className="font-medium text-foreground">
+                  {stage.conversionPercent.toFixed(1)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

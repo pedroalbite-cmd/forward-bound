@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { format, differenceInDays, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, isWithinInterval, parseISO, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-export type IndicatorType = 'mql' | 'rm' | 'rr' | 'proposta' | 'venda';
+export type IndicatorType = 'leads' | 'mql' | 'rm' | 'rr' | 'proposta' | 'venda';
 export type BUType = 'modelo_atual' | 'o2_tax' | 'oxy_hacker' | 'franquia';
 export type ChartGrouping = 'daily' | 'weekly' | 'monthly';
 
@@ -115,6 +115,14 @@ export function useFunnelRealized(startDate?: Date, endDate?: Date) {
       .reduce((sum, r) => sum + r.value, 0);
   };
 
+  const getAllTotals = (filterBU?: BUType | 'all'): Record<IndicatorType, number> => {
+    const indicators: IndicatorType[] = ['leads', 'mql', 'rm', 'rr', 'proposta', 'venda'];
+    return indicators.reduce((acc, ind) => ({
+      ...acc,
+      [ind]: getTotal(ind, filterBU)
+    }), {} as Record<IndicatorType, number>);
+  };
+
   const syncMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('sync-pipefy-funnel');
@@ -137,6 +145,7 @@ export function useFunnelRealized(startDate?: Date, endDate?: Date) {
     error,
     refetch,
     getTotal,
+    getAllTotals,
     getChartGrouping,
     getChartLabels,
     getGroupedData,
