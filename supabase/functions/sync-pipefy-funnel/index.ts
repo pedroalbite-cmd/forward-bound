@@ -132,8 +132,51 @@ interface ProcessedCard {
   saleDate?: string;
 }
 
+// Normalize API key: trim whitespace and remove "Bearer " prefix if present
+function normalizeApiKey(key: string): string {
+  let normalized = key.trim();
+  if (normalized.toLowerCase().startsWith('bearer ')) {
+    normalized = normalized.substring(7).trim();
+  }
+  return normalized;
+}
+
+// Test Pipefy API connection with a simple query
+async function testPipefyConnection(apiKey: string): Promise<{ success: boolean; error?: string }> {
+  const query = `query { me { id name } }`;
+  
+  try {
+    const response = await fetch(PIPEFY_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`Pipefy auth test failed - Status: ${response.status}, Body: ${errorBody}`);
+      return { success: false, error: `HTTP ${response.status}: ${errorBody}` };
+    }
+
+    const result = await response.json();
+    if (result.errors?.length) {
+      console.error('Pipefy auth test errors:', result.errors);
+      return { success: false, error: result.errors.map((e: { message: string }) => e.message).join(', ') };
+    }
+
+    console.log(`Pipefy connection OK - User: ${result.data?.me?.name || 'Unknown'}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Pipefy auth test exception:', error);
+    return { success: false, error: String(error) };
+  }
+}
+
 // Fetch all cards from a pipe with pagination
-async function fetchAllCards(pipeId: string, apiKey: string): Promise<PipefyCard[]> {
+async function fetchAllCards(pipeId: string, apiKey: string): Promise<{ cards: PipefyCard[]; error?: string }> {
   const allCards: PipefyCard[] = [];
   let hasNextPage = true;
   let cursor: string | null = null;
@@ -180,15 +223,16 @@ async function fetchAllCards(pipeId: string, apiKey: string): Promise<PipefyCard
       });
 
       if (!response.ok) {
-        console.error(`Pipefy API HTTP error: ${response.status}`);
-        break;
+        const errorBody = await response.text();
+        console.error(`Pipefy API HTTP error: ${response.status} - Body: ${errorBody}`);
+        return { cards: allCards, error: `HTTP ${response.status}: Authentication failed` };
       }
 
       const result: PipefyCardsResponse = await response.json();
 
       if (result.errors?.length) {
         console.error('Pipefy API errors:', result.errors);
-        break;
+        return { cards: allCards, error: result.errors.map(e => e.message).join(', ') };
       }
 
       const edges = result.data?.allCards?.edges || [];
@@ -200,11 +244,11 @@ async function fetchAllCards(pipeId: string, apiKey: string): Promise<PipefyCard
       console.log(`Fetched ${edges.length} cards, total: ${allCards.length}, hasNextPage: ${hasNextPage}`);
     } catch (error) {
       console.error('Error fetching cards:', error);
-      break;
+      return { cards: allCards, error: String(error) };
     }
   }
 
-  return allCards;
+  return { cards: allCards };
 }
 
 // Get field value by label
@@ -343,12 +387,30 @@ serve(async (req) => {
     console.log('Admin role verified, proceeding with sync...');
     // ========== END AUTHENTICATION CHECK ==========
 
-    const pipefyApiKey = Deno.env.get('PIPEFY_API_KEY');
-    if (!pipefyApiKey) {
+    const rawPipefyApiKey = Deno.env.get('PIPEFY_API_KEY');
+    if (!rawPipefyApiKey) {
       console.error('PIPEFY_API_KEY not configured');
       return new Response(
         JSON.stringify({ error: 'PIPEFY_API_KEY not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Normalize the API key
+    const pipefyApiKey = normalizeApiKey(rawPipefyApiKey);
+    console.log(`API key length after normalization: ${pipefyApiKey.length} chars`);
+
+    // Test connection before processing
+    const connectionTest = await testPipefyConnection(pipefyApiKey);
+    if (!connectionTest.success) {
+      console.error('Pipefy connection test failed:', connectionTest.error);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Falha de autenticação com Pipefy', 
+          details: connectionTest.error 
+        }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -366,13 +428,24 @@ serve(async (req) => {
 
     const allRecords: DailyRecord[] = [];
     const pipeResults: Record<string, { cards: number; success: boolean; error?: string }> = {};
+    let hasAuthError = false;
 
     // Process each pipe
     for (const [pipeKey, config] of Object.entries(PIPE_CONFIG)) {
       console.log(`\n===== Processing pipe: ${pipeKey} (ID: ${config.pipeId}) =====`);
 
       try {
-        const cards = await fetchAllCards(config.pipeId, pipefyApiKey);
+        const { cards, error: fetchError } = await fetchAllCards(config.pipeId, pipefyApiKey);
+        
+        if (fetchError) {
+          console.error(`Pipe ${pipeKey} fetch error: ${fetchError}`);
+          pipeResults[pipeKey] = { cards: 0, success: false, error: fetchError };
+          if (fetchError.includes('401') || fetchError.includes('Authentication')) {
+            hasAuthError = true;
+          }
+          continue;
+        }
+        
         console.log(`Fetched ${cards.length} total cards from ${pipeKey}`);
 
         let processedCount = 0;
@@ -475,15 +548,23 @@ serve(async (req) => {
 
     console.log('Summary by BU:', JSON.stringify(buSummary, null, 2));
 
+    const overallSuccess = !hasAuthError && Object.values(pipeResults).some(p => p.success);
+    
     return new Response(
       JSON.stringify({
-        success: true,
-        message: `Synced ${insertedCount} records from Pipefy`,
+        success: overallSuccess,
+        message: overallSuccess 
+          ? `Sincronizados ${insertedCount} registros do Pipefy` 
+          : 'Falha na sincronização - verifique a chave de API',
         year,
+        insertedCount,
         pipeResults,
         summary: buSummary,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: overallSuccess ? 200 : 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
     );
 
   } catch (error) {

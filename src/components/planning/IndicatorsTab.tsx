@@ -110,10 +110,15 @@ const IndicatorChartSection = ({ title, realizedLabel, realizedTotal, metaTotal,
 );
 
 export function IndicatorsTab() {
-  const currentYear = 2026;
+  const currentYear = new Date().getFullYear();
   const [selectedBU, setSelectedBU] = useState<FilterBU>('all');
   const [startDate, setStartDate] = useState<Date>(startOfYear(new Date(currentYear, 0, 1)));
   const [endDate, setEndDate] = useState<Date>(endOfYear(new Date(currentYear, 0, 1)));
+
+  const handleSync = () => {
+    // Use the year from the start date for sync
+    syncWithPipefy(startDate.getFullYear());
+  };
 
   const { getTotal, getChartLabels, getGroupedData, getChartGrouping, syncWithPipefy, isSyncing, isLoading } = useFunnelRealized(startDate, endDate);
 
@@ -200,7 +205,7 @@ export function IndicatorsTab() {
               </Popover>
             </div>
 
-            <Button onClick={() => syncWithPipefy()} disabled={isSyncing} variant="outline" size="icon" title="Sincronizar Pipefy">
+            <Button onClick={handleSync} disabled={isSyncing} variant="outline" size="icon" title="Sincronizar Pipefy">
               {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             </Button>
           </div>
