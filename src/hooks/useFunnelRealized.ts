@@ -125,17 +125,32 @@ export function useFunnelRealized(startDate?: Date, endDate?: Date) {
 
   const syncMutation = useMutation({
     mutationFn: async (year?: number) => {
-      const { data, error } = await supabase.functions.invoke('sync-pipefy-funnel', {
-        body: { year: year || new Date().getFullYear() }
-      });
-      if (error) throw error;
+      // Create AbortController with 120s timeout for large syncs
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
       
-      // Check if the response indicates failure
-      if (data && !data.success) {
-        throw new Error(data.message || 'Falha na sincronização');
+      try {
+        const { data, error } = await supabase.functions.invoke('sync-pipefy-funnel', {
+          body: { year: year || new Date().getFullYear() }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (error) throw error;
+        
+        // Check if the response indicates failure
+        if (data && !data.success) {
+          throw new Error(data.message || 'Falha na sincronização');
+        }
+        
+        return data;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw new Error('Timeout: a sincronização demorou mais de 2 minutos');
+        }
+        throw err;
       }
-      
-      return data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['funnel-realized'] });

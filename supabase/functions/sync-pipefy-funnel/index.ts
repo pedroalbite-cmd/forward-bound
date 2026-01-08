@@ -175,16 +175,24 @@ async function testPipefyConnection(apiKey: string): Promise<{ success: boolean;
   }
 }
 
-// Fetch all cards from a pipe with pagination
-async function fetchAllCards(pipeId: string, apiKey: string): Promise<{ cards: PipefyCard[]; error?: string }> {
+// Fetch all cards from a pipe with pagination and date filter
+async function fetchAllCards(pipeId: string, apiKey: string, year: number): Promise<{ cards: PipefyCard[]; error?: string }> {
   const allCards: PipefyCard[] = [];
   let hasNextPage = true;
   let cursor: string | null = null;
+  const startDate = `${year}-01-01`;
+  const endDate = `${year}-12-31`;
 
   while (hasNextPage) {
+    // Use larger batch size (100) and filter by date range to reduce API calls
     const query = `
       query {
-        allCards(pipeId: ${pipeId}, first: 50${cursor ? `, after: "${cursor}"` : ''}) {
+        allCards(
+          pipeId: ${pipeId}, 
+          first: 100
+          ${cursor ? `, after: "${cursor}"` : ''}
+          filter: { created_at: { from: "${startDate}", to: "${endDate}" } }
+        ) {
           edges {
             node {
               id
@@ -430,35 +438,29 @@ serve(async (req) => {
     const pipeResults: Record<string, { cards: number; success: boolean; error?: string }> = {};
     let hasAuthError = false;
 
-    // Process each pipe
-    for (const [pipeKey, config] of Object.entries(PIPE_CONFIG)) {
+    console.log(`Starting parallel fetch for all pipes (year: ${year})...`);
+    const startTime = Date.now();
+
+    // Process all pipes in parallel for faster execution
+    const pipeEntries = Object.entries(PIPE_CONFIG);
+    const pipePromises = pipeEntries.map(async ([pipeKey, config]) => {
       console.log(`\n===== Processing pipe: ${pipeKey} (ID: ${config.pipeId}) =====`);
 
       try {
-        const { cards, error: fetchError } = await fetchAllCards(config.pipeId, pipefyApiKey);
+        const { cards, error: fetchError } = await fetchAllCards(config.pipeId, pipefyApiKey, year);
         
         if (fetchError) {
           console.error(`Pipe ${pipeKey} fetch error: ${fetchError}`);
-          pipeResults[pipeKey] = { cards: 0, success: false, error: fetchError };
-          if (fetchError.includes('401') || fetchError.includes('Authentication')) {
-            hasAuthError = true;
-          }
-          continue;
+          return { pipeKey, result: { cards: 0, success: false, error: fetchError }, records: [] as DailyRecord[] };
         }
         
-        console.log(`Fetched ${cards.length} total cards from ${pipeKey}`);
+        console.log(`Fetched ${cards.length} cards from ${pipeKey} for year ${year}`);
 
         let processedCount = 0;
         let skippedCount = 0;
+        const pipeRecords: DailyRecord[] = [];
 
         cards.forEach(card => {
-          const createdYear = new Date(card.created_at).getFullYear();
-          
-          // Only process cards from the target year
-          if (createdYear !== year) {
-            return;
-          }
-
           const processed = processCard(card, pipeKey);
           if (!processed) {
             skippedCount++;
@@ -474,7 +476,7 @@ serve(async (req) => {
               ? processed.saleDate 
               : processed.createdDate;
 
-            allRecords.push({
+            pipeRecords.push({
               bu: processed.bu!,
               indicator,
               date: recordDate,
@@ -484,13 +486,28 @@ serve(async (req) => {
         });
 
         console.log(`Pipe ${pipeKey}: processed ${processedCount}, skipped ${skippedCount}`);
-        pipeResults[pipeKey] = { cards: processedCount, success: true };
+        return { pipeKey, result: { cards: processedCount, success: true }, records: pipeRecords };
 
       } catch (error) {
         console.error(`Error processing pipe ${pipeKey}:`, error);
-        pipeResults[pipeKey] = { cards: 0, success: false, error: String(error) };
+        return { pipeKey, result: { cards: 0, success: false, error: String(error) }, records: [] as DailyRecord[] };
       }
-    }
+    });
+
+    // Wait for all pipes to complete
+    const pipeResultsArray = await Promise.all(pipePromises);
+    
+    // Collect results
+    pipeResultsArray.forEach(({ pipeKey, result, records }) => {
+      pipeResults[pipeKey] = result;
+      allRecords.push(...records);
+      if (result.error?.includes('401') || result.error?.includes('Authentication')) {
+        hasAuthError = true;
+      }
+    });
+
+    const fetchTime = Date.now() - startTime;
+    console.log(`\nParallel fetch completed in ${fetchTime}ms`);
 
     // Aggregate records
     const aggregatedRecords = aggregateRecords(allRecords);
