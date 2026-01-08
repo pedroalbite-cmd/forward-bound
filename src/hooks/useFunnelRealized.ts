@@ -124,18 +124,35 @@ export function useFunnelRealized(startDate?: Date, endDate?: Date) {
   };
 
   const syncMutation = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('sync-pipefy-funnel');
+    mutationFn: async (year?: number) => {
+      const { data, error } = await supabase.functions.invoke('sync-pipefy-funnel', {
+        body: { year: year || new Date().getFullYear() }
+      });
       if (error) throw error;
+      
+      // Check if the response indicates failure
+      if (data && !data.success) {
+        throw new Error(data.message || 'Falha na sincronização');
+      }
+      
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['funnel-realized'] });
-      toast.success('Dados sincronizados com sucesso!');
+      const count = data?.insertedCount || 0;
+      if (count > 0) {
+        toast.success(`Sincronizados ${count} registros do Pipefy!`);
+      } else {
+        toast.warning('Sincronização concluída, mas nenhum registro encontrado para o período.');
+      }
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error('Sync error:', error);
-      toast.error('Erro ao sincronizar dados do Pipefy');
+      if (error.message.includes('autenticação') || error.message.includes('API')) {
+        toast.error('Falha de autenticação com Pipefy. Verifique a chave de API.');
+      } else {
+        toast.error(error.message || 'Erro ao sincronizar dados do Pipefy');
+      }
     },
   });
 
