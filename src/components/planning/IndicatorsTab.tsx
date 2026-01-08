@@ -11,6 +11,8 @@ import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { format, startOfYear, endOfYear, differenceInDays, eachMonthOfInterval, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { LeadsMqlsStackedChart } from "./LeadsMqlsStackedChart";
+import { PeriodFunnelChart } from "./PeriodFunnelChart";
 
 type FilterBU = BUType | 'all';
 
@@ -213,6 +215,12 @@ export function IndicatorsTab() {
         {indicatorConfigs.map((indicator) => (
           <RadialProgressCard key={indicator.key} title={indicator.label} realized={getTotal(indicator.key, selectedBU)} meta={getMetaForIndicator(indicator.annualMeta)} />
         ))}
+      </div>
+
+      {/* New Charts - Leads/MQLs and Funnel */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <LeadsMqlsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
+        <PeriodFunnelChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
       </div>
 
       {/* Charts */}

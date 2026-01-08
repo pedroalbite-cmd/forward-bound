@@ -130,7 +130,7 @@ async function fetchPipeData(pipeId: string, apiKey: string): Promise<PipefyPipe
 
 function generateMockDailyData(buKey: string, year: number): DailyRecord[] {
   const results: DailyRecord[] = [];
-  const indicators = ['mql', 'rm', 'rr', 'proposta', 'venda'];
+  const indicators = ['leads', 'mql', 'rm', 'rr', 'proposta', 'venda'];
   
   // Generate data for each day of the year
   for (let month = 1; month <= 12; month++) {
@@ -151,6 +151,7 @@ function generateMockDailyData(buKey: string, year: number): DailyRecord[] {
         // Base daily values by indicator type
         let baseValue = 0;
         switch (indicator) {
+          case 'leads': baseValue = 5; break;
           case 'mql': baseValue = 3; break;
           case 'rm': baseValue = 2; break;
           case 'rr': baseValue = 1.5; break;
