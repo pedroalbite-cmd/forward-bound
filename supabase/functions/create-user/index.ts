@@ -1,9 +1,21 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
+
+// Valid tab keys for permissions
+const VALID_TAB_KEYS = ['context', 'goals', 'monthly', 'sales', 'media', 'marketing', 'structure', 'indicators'] as const;
+
+// Input validation schema
+const createUserSchema = z.object({
+  email: z.string().email().max(255),
+  password: z.string().min(6).max(100),
+  fullName: z.string().max(100).optional(),
+  permissions: z.array(z.enum(VALID_TAB_KEYS)).optional(),
+});
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -59,15 +71,23 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Parse request body
-    const { email, password, fullName, permissions } = await req.json();
-
-    if (!email || !password) {
-      return new Response(
-        JSON.stringify({ error: 'Email e senha são obrigatórios' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Parse and validate request body
+    let validatedData;
+    try {
+      const body = await req.json();
+      validatedData = createUserSchema.parse(body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.error('Validation error:', error.errors);
+        return new Response(
+          JSON.stringify({ error: 'Dados inválidos', details: error.errors.map(e => e.message) }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      throw error;
     }
+
+    const { email, password, fullName, permissions } = validatedData;
 
     console.log('Creating user with email:', email);
 
@@ -91,7 +111,7 @@ Deno.serve(async (req) => {
 
     // Add tab permissions if provided
     if (permissions && permissions.length > 0) {
-      const permissionRows = permissions.map((tab: string) => ({
+      const permissionRows = permissions.map((tab) => ({
         user_id: newUser.user.id,
         tab_key: tab
       }));
