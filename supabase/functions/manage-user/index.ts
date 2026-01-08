@@ -1,9 +1,40 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Valid tab keys for permissions
+const VALID_TAB_KEYS = ['context', 'goals', 'monthly', 'sales', 'media', 'marketing', 'structure', 'indicators'] as const;
+
+// Input validation schemas
+const createUserSchema = z.object({
+  action: z.literal('create'),
+  email: z.string().email().max(255),
+  password: z.string().min(6).max(100),
+  fullName: z.string().max(100).optional(),
+  permissions: z.array(z.enum(VALID_TAB_KEYS)).optional(),
+});
+
+const updateUserSchema = z.object({
+  action: z.literal('update'),
+  userId: z.string().uuid(),
+  email: z.string().email().max(255).optional(),
+  fullName: z.string().max(100).optional(),
+});
+
+const deleteUserSchema = z.object({
+  action: z.literal('delete'),
+  userId: z.string().uuid(),
+});
+
+const requestSchema = z.discriminatedUnion('action', [
+  createUserSchema,
+  updateUserSchema,
+  deleteUserSchema,
+]);
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -64,19 +95,28 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Parse request body
-    const { action, userId, email, password, fullName, permissions } = await req.json();
-    console.log('Action:', action, 'Target userId:', userId);
+    // Parse and validate request body
+    let validatedData;
+    try {
+      const body = await req.json();
+      validatedData = requestSchema.parse(body);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.error('Validation error:', error.errors);
+        return new Response(
+          JSON.stringify({ error: 'Invalid input', details: error.errors.map(e => e.message) }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      throw error;
+    }
+
+    console.log('Action:', validatedData.action);
 
     // Handle different actions
-    switch (action) {
+    switch (validatedData.action) {
       case 'create': {
-        if (!email || !password) {
-          return new Response(
-            JSON.stringify({ error: 'Email and password are required' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
+        const { email, password, fullName, permissions } = validatedData;
 
         // Create the user
         const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -98,7 +138,7 @@ Deno.serve(async (req) => {
 
         // Add initial permissions if provided
         if (permissions && permissions.length > 0) {
-          const permissionsToInsert = permissions.map((tab: string) => ({
+          const permissionsToInsert = permissions.map((tab) => ({
             user_id: newUser.user.id,
             tab_key: tab,
           }));
@@ -119,12 +159,7 @@ Deno.serve(async (req) => {
       }
 
       case 'update': {
-        if (!userId) {
-          return new Response(
-            JSON.stringify({ error: 'User ID is required for update' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
+        const { userId, email, fullName } = validatedData;
 
         // Update auth user if email is provided
         if (email) {
@@ -171,12 +206,7 @@ Deno.serve(async (req) => {
       }
 
       case 'delete': {
-        if (!userId) {
-          return new Response(
-            JSON.stringify({ error: 'User ID is required for delete' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
+        const { userId } = validatedData;
 
         // Prevent admin from deleting themselves
         if (userId === user.id) {
@@ -207,7 +237,7 @@ Deno.serve(async (req) => {
 
       default:
         return new Response(
-          JSON.stringify({ error: 'Invalid action. Use: create, update, or delete' }),
+          JSON.stringify({ error: 'Invalid action' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,6 +36,11 @@ const MONTH_MAP: Record<number, string> = {
   5: 'Mai', 6: 'Jun', 7: 'Jul', 8: 'Ago',
   9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez',
 };
+
+// Input validation schema
+const requestBodySchema = z.object({
+  year: z.number().int().min(2020).max(2100).optional(),
+}).optional();
 
 interface PipefyCard {
   id: string;
@@ -187,6 +193,53 @@ serve(async (req) => {
   }
 
   try {
+    // ========== AUTHENTICATION CHECK ==========
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('No authorization header provided');
+      return new Response(
+        JSON.stringify({ error: 'No authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Verify the user's JWT token
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      console.error('Authentication failed:', authError?.message || 'Invalid token');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`User authenticated: ${user.id}`);
+
+    // Check if user has admin role
+    const { data: roleData, error: roleError } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .single();
+
+    if (roleError || !roleData) {
+      console.error('Admin role check failed:', roleError?.message || 'User is not an admin');
+      return new Response(
+        JSON.stringify({ error: 'Admin access required' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Admin role verified, proceeding with sync...');
+    // ========== END AUTHENTICATION CHECK ==========
+
     const pipefyApiKey = Deno.env.get('PIPEFY_API_KEY');
     if (!pipefyApiKey) {
       console.error('PIPEFY_API_KEY not configured');
@@ -196,16 +249,19 @@ serve(async (req) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Parse request body for optional parameters
+    // Parse and validate request body
     let year = 2026;
     try {
       const body = await req.json();
-      if (body.year) year = body.year;
-    } catch {
+      const validated = requestBodySchema.parse(body);
+      if (validated?.year) year = validated.year;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid input', details: error.errors }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       // No body or invalid JSON, use defaults
     }
 
@@ -294,9 +350,8 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Sync error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
