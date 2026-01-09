@@ -125,48 +125,35 @@ export function useFunnelRealized(startDate?: Date, endDate?: Date) {
 
   const syncMutation = useMutation({
     mutationFn: async (year?: number) => {
-      // Create AbortController with 120s timeout for large syncs
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      // Use sync-from-sheets (faster, 2-5s) instead of sync-pipefy-funnel (slow, 3-5min)
+      const { data, error } = await supabase.functions.invoke('sync-from-sheets', {
+        body: { year: year || new Date().getFullYear() }
+      });
       
-      try {
-        const { data, error } = await supabase.functions.invoke('sync-pipefy-funnel', {
-          body: { year: year || new Date().getFullYear() }
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (error) throw error;
-        
-        // Check if the response indicates failure
-        if (data && !data.success) {
-          throw new Error(data.message || 'Falha na sincronização');
-        }
-        
-        return data;
-      } catch (err) {
-        clearTimeout(timeoutId);
-        if (err instanceof Error && err.name === 'AbortError') {
-          throw new Error('Timeout: a sincronização demorou mais de 2 minutos');
-        }
-        throw err;
+      if (error) throw error;
+      
+      // Check if the response indicates failure
+      if (data && !data.success) {
+        throw new Error(data.message || 'Falha na sincronização');
       }
+      
+      return data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['funnel-realized'] });
       const count = data?.insertedCount || 0;
       if (count > 0) {
-        toast.success(`Sincronizados ${count} registros do Pipefy!`);
+        toast.success(`Sincronizados ${count} registros em ${data.timeMs || 0}ms!`);
       } else {
         toast.warning('Sincronização concluída, mas nenhum registro encontrado para o período.');
       }
     },
     onError: (error: Error) => {
       console.error('Sync error:', error);
-      if (error.message.includes('autenticação') || error.message.includes('API')) {
-        toast.error('Falha de autenticação com Pipefy. Verifique a chave de API.');
+      if (error.message.includes('GOOGLE_SHEET_ID')) {
+        toast.error('Configure o GOOGLE_SHEET_ID nas configurações do projeto.');
       } else {
-        toast.error(error.message || 'Erro ao sincronizar dados do Pipefy');
+        toast.error(error.message || 'Erro ao sincronizar dados');
       }
     },
   });
