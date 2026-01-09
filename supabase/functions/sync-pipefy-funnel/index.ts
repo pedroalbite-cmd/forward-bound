@@ -175,20 +175,25 @@ async function testPipefyConnection(apiKey: string): Promise<{ success: boolean;
   }
 }
 
-// Fetch all cards from a pipe with pagination
-async function fetchAllCards(pipeId: string, apiKey: string): Promise<{ cards: PipefyCard[]; error?: string }> {
+// Fetch all cards from a pipe with pagination and year filter
+async function fetchAllCards(pipeId: string, apiKey: string, year: number): Promise<{ cards: PipefyCard[]; error?: string }> {
   const allCards: PipefyCard[] = [];
   let hasNextPage = true;
   let cursor: string | null = null;
+  
+  // Use Pipefy's correct filter syntax for date range
+  const startDate = `${year}-01-01T00:00:00Z`;
+  const endDate = `${year}-12-31T23:59:59Z`;
 
   while (hasNextPage) {
-    // Use larger batch size (100) to reduce API calls
+    // Use larger batch size (100) and filter by created_at to only get cards from target year
     const query = `
       query {
         allCards(
           pipeId: ${pipeId}, 
           first: 100
           ${cursor ? `, after: "${cursor}"` : ''}
+          filter: { field: "created_at", operator: gte, value: "${startDate}" }
         ) {
           edges {
             node {
@@ -444,23 +449,22 @@ serve(async (req) => {
       console.log(`\n===== Processing pipe: ${pipeKey} (ID: ${config.pipeId}) =====`);
 
       try {
-        const { cards, error: fetchError } = await fetchAllCards(config.pipeId, pipefyApiKey);
+        const { cards, error: fetchError } = await fetchAllCards(config.pipeId, pipefyApiKey, year);
         
         if (fetchError) {
           console.error(`Pipe ${pipeKey} fetch error: ${fetchError}`);
           return { pipeKey, result: { cards: 0, success: false, error: fetchError }, records: [] as DailyRecord[] };
         }
         
-        console.log(`Fetched ${cards.length} total cards from ${pipeKey}`);
+        console.log(`Fetched ${cards.length} cards from ${pipeKey} for year ${year}`);
 
         let processedCount = 0;
         let skippedCount = 0;
         const pipeRecords: DailyRecord[] = [];
 
         cards.forEach(card => {
+          // Filter out cards beyond the target year (since we only filter gte, not lte)
           const createdYear = new Date(card.created_at).getFullYear();
-          
-          // Only process cards from the target year
           if (createdYear !== year) {
             return;
           }
