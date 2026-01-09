@@ -7,11 +7,13 @@ const corsHeaders = {
 
 // Mapeamento de fases do Pipefy para indicadores do funil
 const PHASE_TO_INDICATOR: Record<string, string> = {
-  // Fases de Lead
+  // Fases de Lead (novos leads + material isca)
   'lead': 'leads',
   'leads': 'leads',
   'novo lead': 'leads',
   'new lead': 'leads',
+  'novos leads': 'leads',
+  'material isca': 'leads',
   'entrada': 'leads',
   'inbox': 'leads',
   'caixa de entrada': 'leads',
@@ -19,7 +21,7 @@ const PHASE_TO_INDICATOR: Record<string, string> = {
   'início': 'leads',
   'novo': 'leads',
   
-  // Fases de MQL (Marketing Qualified Lead)
+  // Fases de MQL (Marketing Qualified Lead / Tentativas de contato)
   'mql': 'mql',
   'qualificado': 'mql',
   'qualified': 'mql',
@@ -31,8 +33,9 @@ const PHASE_TO_INDICATOR: Record<string, string> = {
   'fit identificado': 'mql',
   'análise': 'mql',
   'triagem': 'mql',
+  'tentativas de contato': 'mql',
   
-  // Fases de RM (Reunião Marcada)
+  // Fases de RM (Reunião Marcada / Qualificado)
   'rm': 'rm',
   'reunião marcada': 'rm',
   'meeting scheduled': 'rm',
@@ -43,6 +46,10 @@ const PHASE_TO_INDICATOR: Record<string, string> = {
   'contato': 'rm',
   'contato realizado': 'rm',
   'em contato': 'rm',
+  'reunião agendada / qualificado': 'rm',
+  'reuniao agendada / qualificado': 'rm',
+  'remarcar reunião / no show': 'rm',
+  'remarcar reuniao / no show': 'rm',
   
   // Fases de RR (Reunião Realizada)
   'rr': 'rr',
@@ -69,6 +76,8 @@ const PHASE_TO_INDICATOR: Record<string, string> = {
   'apresentação': 'proposta',
   'orçamento': 'proposta',
   'orçamento enviado': 'proposta',
+  'proposta enviada / follow up': 'proposta',
+  'enviar proposta': 'proposta',
   
   // Fases de Venda
   'venda': 'venda',
@@ -193,7 +202,27 @@ function parseGoogleSheetsResponse(text: string): SheetTable {
 function normalizeIndicator(phase: string): string | null {
   if (!phase) return null;
   const normalized = phase.toLowerCase().trim();
-  return PHASE_TO_INDICATOR[normalized] || null;
+  
+  // Try exact match first
+  if (PHASE_TO_INDICATOR[normalized]) {
+    return PHASE_TO_INDICATOR[normalized];
+  }
+  
+  // Try with accent normalization (remove accents for comparison)
+  const normalizedNoAccents = normalized
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  
+  for (const [key, value] of Object.entries(PHASE_TO_INDICATOR)) {
+    const keyNoAccents = key
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    if (keyNoAccents === normalizedNoAccents) {
+      return value;
+    }
+  }
+  
+  return null;
 }
 
 // Normalize BU from pipe/bu name
