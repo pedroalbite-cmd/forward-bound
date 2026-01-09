@@ -12,29 +12,63 @@ const PHASE_TO_INDICATOR: Record<string, string> = {
   'leads': 'leads',
   'novo lead': 'leads',
   'new lead': 'leads',
+  'entrada': 'leads',
+  'inbox': 'leads',
+  'caixa de entrada': 'leads',
+  'start form': 'leads',
+  'início': 'leads',
+  'novo': 'leads',
   
-  // Fases de MQL
+  // Fases de MQL (Marketing Qualified Lead)
   'mql': 'mql',
   'qualificado': 'mql',
   'qualified': 'mql',
+  'qualificação': 'mql',
+  'pré-qualificação': 'mql',
+  'pré qualificação': 'mql',
+  'em qualificação': 'mql',
+  'lead qualificado': 'mql',
+  'fit identificado': 'mql',
+  'análise': 'mql',
+  'triagem': 'mql',
   
   // Fases de RM (Reunião Marcada)
   'rm': 'rm',
   'reunião marcada': 'rm',
   'meeting scheduled': 'rm',
   'agendamento': 'rm',
+  'agendado': 'rm',
+  'reunião agendada': 'rm',
+  'agendar reunião': 'rm',
+  'contato': 'rm',
+  'contato realizado': 'rm',
+  'em contato': 'rm',
   
   // Fases de RR (Reunião Realizada)
   'rr': 'rr',
   'reunião realizada': 'rr',
   'meeting done': 'rr',
   'diagnóstico': 'rr',
+  'diagnóstico realizado': 'rr',
+  'discovery': 'rr',
+  'entendimento': 'rr',
+  'levantamento': 'rr',
+  'análise de negócio': 'rr',
+  'reunião feita': 'rr',
   
   // Fases de Proposta
   'proposta': 'proposta',
   'proposal': 'proposta',
   'proposta enviada': 'proposta',
   'negociação': 'proposta',
+  'em negociação': 'proposta',
+  'proposta apresentada': 'proposta',
+  'aguardando retorno': 'proposta',
+  'follow up': 'proposta',
+  'follow-up': 'proposta',
+  'apresentação': 'proposta',
+  'orçamento': 'proposta',
+  'orçamento enviado': 'proposta',
   
   // Fases de Venda
   'venda': 'venda',
@@ -44,20 +78,49 @@ const PHASE_TO_INDICATOR: Record<string, string> = {
   'fechado': 'venda',
   'closed won': 'venda',
   'assinatura': 'venda',
+  'contrato assinado': 'venda',
+  'cliente': 'venda',
+  'onboarding': 'venda',
+  'implantação': 'venda',
+  'sucesso': 'venda',
+  'concluído': 'venda',
+  'finalizado': 'venda',
 };
 
-// Mapeamento de BU (Business Unit)
+// Mapeamento de BU (Business Unit) - expandido com nomes de pipes comuns
 const BU_MAPPING: Record<string, string> = {
+  // Modelo Atual
   'modelo_atual': 'modelo_atual',
   'modelo atual': 'modelo_atual',
   'atual': 'modelo_atual',
+  'comercial modelo atual': 'modelo_atual',
+  'pipe modelo atual': 'modelo_atual',
+  'vendas modelo atual': 'modelo_atual',
+  'ma': 'modelo_atual',
+  
+  // O2 Tax
   'o2_tax': 'o2_tax',
   'o2 tax': 'o2_tax',
   'o2tax': 'o2_tax',
   'tax': 'o2_tax',
+  'pipe o2 tax': 'o2_tax',
+  'comercial o2 tax': 'o2_tax',
+  'vendas o2 tax': 'o2_tax',
+  'o2': 'o2_tax',
+  
+  // Expansão
   'expansao': 'expansao',
   'expansão': 'expansao',
   'exp': 'expansao',
+  'pipe expansão': 'expansao',
+  'pipe expansao': 'expansao',
+  'comercial expansão': 'expansao',
+  'comercial expansao': 'expansao',
+  'vendas expansão': 'expansao',
+  'vendas expansao': 'expansao',
+  'upsell': 'expansao',
+  'cross sell': 'expansao',
+  'cross-sell': 'expansao',
 };
 
 interface SheetRow {
@@ -68,6 +131,20 @@ interface SheetRow {
   faturamento?: number;
   produto?: string;
   dataAssinatura?: string;
+}
+
+interface DebugStats {
+  totalRows: number;
+  rowsWithInsufficientCols: number;
+  rowsWithInvalidDate: number;
+  rowsWithWrongYear: number;
+  rowsWithUnknownBU: number;
+  rowsWithUnknownPhase: number;
+  validRows: number;
+  unknownBUs: Record<string, number>;
+  unknownPhases: Record<string, number>;
+  yearsFound: Record<number, number>;
+  sampleRows: any[];
 }
 
 // Parse Google Sheets JSON response
@@ -97,35 +174,58 @@ function parseGoogleSheetsResponse(text: string): any[][] {
 
 // Normalize indicator from phase name
 function normalizeIndicator(phase: string): string | null {
+  if (!phase) return null;
   const normalized = phase.toLowerCase().trim();
   return PHASE_TO_INDICATOR[normalized] || null;
 }
 
 // Normalize BU from pipe/bu name
 function normalizeBU(bu: string): string | null {
+  if (!bu) return null;
   const normalized = bu.toLowerCase().trim();
   return BU_MAPPING[normalized] || null;
 }
 
 // Parse date from various formats
-function parseDate(dateStr: string): Date | null {
+function parseDate(dateStr: string | number | Date): Date | null {
   if (!dateStr) return null;
   
+  // If it's already a Date object (from Google Sheets)
+  if (dateStr instanceof Date) {
+    return isNaN(dateStr.getTime()) ? null : dateStr;
+  }
+  
+  // If it's a number (Google Sheets serial date)
+  if (typeof dateStr === 'number') {
+    // Google Sheets epoch is December 30, 1899
+    const date = new Date(1899, 11, 30);
+    date.setDate(date.getDate() + dateStr);
+    return isNaN(date.getTime()) ? null : date;
+  }
+  
+  const str = String(dateStr).trim();
+  
   // Try ISO format
-  let date = new Date(dateStr);
+  let date = new Date(str);
   if (!isNaN(date.getTime())) return date;
   
   // Try DD/MM/YYYY
-  const dmyMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const dmyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (dmyMatch) {
     date = new Date(parseInt(dmyMatch[3]), parseInt(dmyMatch[2]) - 1, parseInt(dmyMatch[1]));
     if (!isNaN(date.getTime())) return date;
   }
   
-  // Try Google Sheets date (days since epoch)
-  if (typeof dateStr === 'number' || !isNaN(Number(dateStr))) {
-    const days = Number(dateStr);
-    // Google Sheets epoch is December 30, 1899
+  // Try Google Sheets date string format "Date(year,month,day)"
+  const dateMatch = str.match(/Date\((\d+),(\d+),(\d+)\)/);
+  if (dateMatch) {
+    date = new Date(parseInt(dateMatch[1]), parseInt(dateMatch[2]), parseInt(dateMatch[3]));
+    if (!isNaN(date.getTime())) return date;
+  }
+  
+  // Try numeric string
+  if (!isNaN(Number(str))) {
+    const days = Number(str);
     date = new Date(1899, 11, 30);
     date.setDate(date.getDate() + days);
     if (!isNaN(date.getTime())) return date;
@@ -163,7 +263,6 @@ Deno.serve(async (req) => {
     }
 
     // Fetch data from Google Sheets using public export URL
-    // Sheet must be shared as "Anyone with the link can view"
     const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json`;
     console.log(`Fetching from: ${sheetUrl}`);
 
@@ -193,6 +292,15 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Log first row (headers) and sample data rows for debugging
+    console.log('=== DEBUG: Column headers ===');
+    console.log('Headers:', JSON.stringify(rows[0]));
+    
+    console.log('=== DEBUG: Sample data rows (first 5) ===');
+    for (let i = 1; i <= Math.min(5, rows.length - 1); i++) {
+      console.log(`Row ${i}:`, JSON.stringify(rows[i]));
+    }
+
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -203,14 +311,41 @@ Deno.serve(async (req) => {
     // Skip first row (header)
     const dataRows = rows.slice(1);
     
+    // Initialize debug stats
+    const debugStats: DebugStats = {
+      totalRows: dataRows.length,
+      rowsWithInsufficientCols: 0,
+      rowsWithInvalidDate: 0,
+      rowsWithWrongYear: 0,
+      rowsWithUnknownBU: 0,
+      rowsWithUnknownPhase: 0,
+      validRows: 0,
+      unknownBUs: {},
+      unknownPhases: {},
+      yearsFound: {},
+      sampleRows: [],
+    };
+
+    // Collect sample rows for debug output
+    for (let i = 0; i < Math.min(5, dataRows.length); i++) {
+      const row = dataRows[i];
+      if (row && row.length >= 4) {
+        debugStats.sampleRows.push({
+          index: i + 2,
+          pipe: row[0],
+          cardId: row[1],
+          dataCriacao: row[2],
+          faseAtual: row[3],
+        });
+      }
+    }
+
     const records: any[] = [];
-    const errors: string[] = [];
-    let skippedCount = 0;
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
       if (!row || row.length < 4) {
-        skippedCount++;
+        debugStats.rowsWithInsufficientCols++;
         continue;
       }
 
@@ -219,32 +354,42 @@ Deno.serve(async (req) => {
       // Parse creation date
       const createdDate = parseDate(dataCriacao);
       if (!createdDate) {
-        skippedCount++;
+        debugStats.rowsWithInvalidDate++;
+        if (i < 10) {
+          console.log(`Row ${i + 2}: Invalid date: "${dataCriacao}" (type: ${typeof dataCriacao})`);
+        }
         continue;
       }
 
+      // Track years found
+      const rowYear = createdDate.getFullYear();
+      debugStats.yearsFound[rowYear] = (debugStats.yearsFound[rowYear] || 0) + 1;
+
       // Filter by year
-      if (createdDate.getFullYear() !== year) {
-        skippedCount++;
+      if (rowYear !== year) {
+        debugStats.rowsWithWrongYear++;
         continue;
       }
 
       // Normalize BU
       const bu = normalizeBU(pipe);
       if (!bu) {
-        errors.push(`Row ${i + 2}: BU não reconhecida: "${pipe}"`);
-        skippedCount++;
+        debugStats.rowsWithUnknownBU++;
+        const pipeStr = String(pipe || '').toLowerCase().trim();
+        debugStats.unknownBUs[pipeStr] = (debugStats.unknownBUs[pipeStr] || 0) + 1;
         continue;
       }
 
       // Normalize indicator from phase
       const indicator = normalizeIndicator(faseAtual);
       if (!indicator) {
-        // Log unknown phases for debugging
-        console.log(`Row ${i + 2}: Fase desconhecida: "${faseAtual}"`);
-        skippedCount++;
+        debugStats.rowsWithUnknownPhase++;
+        const phaseStr = String(faseAtual || '').toLowerCase().trim();
+        debugStats.unknownPhases[phaseStr] = (debugStats.unknownPhases[phaseStr] || 0) + 1;
         continue;
       }
+
+      debugStats.validRows++;
 
       const dateStr = createdDate.toISOString().split('T')[0];
       const month = createdDate.toLocaleString('en-US', { month: 'short' }).toLowerCase();
@@ -254,24 +399,56 @@ Deno.serve(async (req) => {
         month,
         year,
         indicator,
-        value: 1, // Each card is 1 unit
+        value: 1,
         date: dateStr,
       });
     }
 
-    console.log(`Processed ${records.length} valid records, skipped ${skippedCount}`);
-    if (errors.length > 0) {
-      console.log(`Errors (first 10): ${errors.slice(0, 10).join('; ')}`);
-    }
+    // Log detailed debug stats
+    console.log('=== DEBUG: Processing Statistics ===');
+    console.log(`Total data rows: ${debugStats.totalRows}`);
+    console.log(`Rows with insufficient columns: ${debugStats.rowsWithInsufficientCols}`);
+    console.log(`Rows with invalid date: ${debugStats.rowsWithInvalidDate}`);
+    console.log(`Rows with wrong year (not ${year}): ${debugStats.rowsWithWrongYear}`);
+    console.log(`Rows with unknown BU: ${debugStats.rowsWithUnknownBU}`);
+    console.log(`Rows with unknown phase: ${debugStats.rowsWithUnknownPhase}`);
+    console.log(`Valid rows: ${debugStats.validRows}`);
+    
+    console.log('=== DEBUG: Years found in data ===');
+    console.log(JSON.stringify(debugStats.yearsFound));
+    
+    // Log top unknown BUs
+    const topUnknownBUs = Object.entries(debugStats.unknownBUs)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+    console.log('=== DEBUG: Top unknown BUs ===');
+    console.log(JSON.stringify(topUnknownBUs));
+    
+    // Log top unknown phases
+    const topUnknownPhases = Object.entries(debugStats.unknownPhases)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+    console.log('=== DEBUG: Top unknown phases ===');
+    console.log(JSON.stringify(topUnknownPhases));
+
+    console.log(`Processed ${records.length} valid records`);
 
     if (records.length === 0) {
       return new Response(
         JSON.stringify({ 
-          success: true, 
+          success: false, 
           message: `Nenhum registro válido para ${year}`,
-          insertedCount: 0,
-          skippedCount,
-          errors: errors.slice(0, 10)
+          debug: {
+            totalRows: debugStats.totalRows,
+            yearsFound: debugStats.yearsFound,
+            rowsWithWrongYear: debugStats.rowsWithWrongYear,
+            rowsWithUnknownBU: debugStats.rowsWithUnknownBU,
+            rowsWithUnknownPhase: debugStats.rowsWithUnknownPhase,
+            rowsWithInvalidDate: debugStats.rowsWithInvalidDate,
+            topUnknownBUs: topUnknownBUs,
+            topUnknownPhases: topUnknownPhases,
+            sampleRows: debugStats.sampleRows,
+          }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -330,7 +507,11 @@ Deno.serve(async (req) => {
         year,
         insertedCount,
         totalRecords: records.length,
-        skippedCount,
+        debug: {
+          yearsFound: debugStats.yearsFound,
+          topUnknownBUs: topUnknownBUs.length > 0 ? topUnknownBUs : undefined,
+          topUnknownPhases: topUnknownPhases.length > 0 ? topUnknownPhases : undefined,
+        },
         timeMs: totalTime,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
