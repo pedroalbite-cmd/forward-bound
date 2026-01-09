@@ -175,25 +175,20 @@ async function testPipefyConnection(apiKey: string): Promise<{ success: boolean;
   }
 }
 
-// Fetch all cards from a pipe with pagination and year filter
-async function fetchAllCards(pipeId: string, apiKey: string, year: number): Promise<{ cards: PipefyCard[]; error?: string }> {
+// Fetch all cards from a pipe with pagination
+async function fetchAllCards(pipeId: string, apiKey: string): Promise<{ cards: PipefyCard[]; error?: string }> {
   const allCards: PipefyCard[] = [];
   let hasNextPage = true;
   let cursor: string | null = null;
-  
-  // Use Pipefy's correct filter syntax for date range
-  const startDate = `${year}-01-01T00:00:00Z`;
-  const endDate = `${year}-12-31T23:59:59Z`;
 
   while (hasNextPage) {
-    // Use larger batch size (100) and filter by created_at to only get cards from target year
+    // Use larger batch size (100) to reduce API calls
     const query = `
       query {
         allCards(
           pipeId: ${pipeId}, 
           first: 100
           ${cursor ? `, after: "${cursor}"` : ''}
-          filter: { field: "created_at", operator: gte, value: "${startDate}" }
         ) {
           edges {
             node {
@@ -449,7 +444,7 @@ serve(async (req) => {
       console.log(`\n===== Processing pipe: ${pipeKey} (ID: ${config.pipeId}) =====`);
 
       try {
-        const { cards, error: fetchError } = await fetchAllCards(config.pipeId, pipefyApiKey, year);
+        const { cards, error: fetchError } = await fetchAllCards(config.pipeId, pipefyApiKey);
         
         if (fetchError) {
           console.error(`Pipe ${pipeKey} fetch error: ${fetchError}`);
