@@ -138,38 +138,55 @@ interface DebugStats {
   rowsWithInsufficientCols: number;
   rowsWithInvalidDate: number;
   rowsWithWrongYear: number;
-  rowsWithUnknownBU: number;
   rowsWithUnknownPhase: number;
   validRows: number;
-  unknownBUs: Record<string, number>;
   unknownPhases: Record<string, number>;
   yearsFound: Record<number, number>;
   sampleRows: any[];
+  resolvedColumnIndexes: {
+    createdAtIdx: number;
+    phaseIdx: number;
+  };
+  columnLabels: string[];
 }
 
-// Parse Google Sheets JSON response
-function parseGoogleSheetsResponse(text: string): any[][] {
+interface SheetCol {
+  label: string;
+  type?: string;
+}
+
+interface SheetTable {
+  cols: SheetCol[];
+  rows: any[][];
+}
+
+// Parse Google Sheets JSON response (Google Visualization API)
+function parseGoogleSheetsResponse(text: string): SheetTable {
+  const parseTable = (data: any): SheetTable => {
+    const table = data?.table;
+    const cols: SheetCol[] = (table?.cols || []).map((c: any, idx: number) => ({
+      label: (c?.label && String(c.label).trim()) || `col_${idx}`,
+      type: c?.type,
+    }));
+
+    const rows = (table?.rows || []).map((row: any) =>
+      row.c?.map((cell: any) => (cell === null ? null : cell.v)) || []
+    );
+
+    return { cols, rows };
+  };
+
   // Google Sheets returns JSONP-like response, need to extract JSON
   const jsonMatch = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?$/);
   if (!jsonMatch) {
-    // Try direct JSON parse if it's already clean JSON
     try {
-      const data = JSON.parse(text);
-      return data.table?.rows?.map((row: any) => row.c?.map((cell: any) => cell?.v)) || [];
+      return parseTable(JSON.parse(text));
     } catch {
       throw new Error('Formato de resposta inválido do Google Sheets');
     }
   }
-  
-  const jsonData = JSON.parse(jsonMatch[1]);
-  const rows = jsonData.table?.rows || [];
-  
-  return rows.map((row: any) => {
-    return row.c?.map((cell: any) => {
-      if (cell === null) return null;
-      return cell.v;
-    }) || [];
-  });
+
+  return parseTable(JSON.parse(jsonMatch[1]));
 }
 
 // Normalize indicator from phase name
@@ -243,21 +260,26 @@ Deno.serve(async (req) => {
   console.log('=== Starting sync from Google Sheets ===');
 
   try {
-    const { year } = await req.json().catch(() => ({ year: new Date().getFullYear() }));
-    console.log(`Target year: ${year}`);
+    const body = (await req.json().catch(() => ({}))) as any;
+    const year = typeof body?.year === 'number' ? body.year : new Date().getFullYear();
+    const requestedBU = typeof body?.bu === 'string' ? body.bu : 'modelo_atual';
+    const bu = normalizeBU(requestedBU) ?? 'modelo_atual';
+
+    console.log(`Target year: ${year} | BU: ${bu}`);
 
     // Get Sheet ID from environment
     const sheetId = Deno.env.get('GOOGLE_SHEET_ID');
     if (!sheetId) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
+        JSON.stringify({
+          success: false,
           message: 'GOOGLE_SHEET_ID não configurado. Por favor, configure o secret com o ID da planilha.',
-          howTo: 'Vá em Configurações > Secrets e adicione GOOGLE_SHEET_ID com o valor do ID da sua planilha (parte da URL: docs.google.com/spreadsheets/d/SEU_ID_AQUI/edit)'
+          howTo:
+            'Vá em Configurações > Secrets e adicione GOOGLE_SHEET_ID com o valor do ID da sua planilha (parte da URL: docs.google.com/spreadsheets/d/SEU_ID_AQUI/edit)',
         }),
-        { 
+        {
           status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
     }
@@ -268,9 +290,11 @@ Deno.serve(async (req) => {
 
     const startTime = Date.now();
     const response = await fetch(sheetUrl);
-    
+
     if (!response.ok) {
-      throw new Error(`Falha ao acessar planilha: ${response.status} ${response.statusText}. Verifique se a planilha está compartilhada como "Qualquer pessoa com o link pode ver".`);
+      throw new Error(
+        `Falha ao acessar planilha: ${response.status} ${response.statusText}. Verifique se a planilha está compartilhada como "Qualquer pessoa com o link pode ver".`
+      );
     }
 
     const text = await response.text();
@@ -278,113 +302,118 @@ Deno.serve(async (req) => {
     console.log(`Sheet fetched in ${fetchTime}ms`);
 
     // Parse the response
-    const rows = parseGoogleSheetsResponse(text);
+    const table = parseGoogleSheetsResponse(text);
+    const rows = table.rows;
+    const columnLabels = table.cols.map((c) => c.label);
+
     console.log(`Parsed ${rows.length} rows from sheet`);
 
     if (rows.length === 0) {
       return new Response(
-        JSON.stringify({ 
-          success: true, 
+        JSON.stringify({
+          success: true,
           message: 'Planilha vazia ou sem dados',
-          insertedCount: 0 
+          insertedCount: 0,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Log first row (headers) and sample data rows for debugging
-    console.log('=== DEBUG: Column headers ===');
-    console.log('Headers:', JSON.stringify(rows[0]));
-    
-    console.log('=== DEBUG: Sample data rows (first 5) ===');
-    for (let i = 1; i <= Math.min(5, rows.length - 1); i++) {
-      console.log(`Row ${i}:`, JSON.stringify(rows[i]));
-    }
+    const normalizeLabel = (s: string) =>
+      s
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+
+    const findColumnIndex = (needles: string[]): number | null => {
+      const normalizedNeedles = needles.map(normalizeLabel);
+      for (let i = 0; i < columnLabels.length; i++) {
+        const lbl = normalizeLabel(columnLabels[i] || '');
+        if (!lbl) continue;
+        if (normalizedNeedles.some((n) => lbl.includes(n))) return i;
+      }
+      return null;
+    };
+
+    // ✅ Conforme você indicou: a coluna O (index 14) contém Data Criação
+    const createdAtIdx =
+      findColumnIndex(['data criacao', 'data criação', 'data de criacao', 'created', 'created at']) ?? 14;
+
+    // Tentativa automática por label; fallback para index 2 (pelo sample que vimos)
+    const phaseIdx = findColumnIndex(['fase atual', 'fase', 'etapa', 'stage', 'status']) ?? 2;
+
+    console.log('=== DEBUG: Columns resolved ===');
+    console.log(`createdAtIdx=${createdAtIdx} label="${columnLabels[createdAtIdx] ?? 'N/A'}"`);
+    console.log(`phaseIdx=${phaseIdx} label="${columnLabels[phaseIdx] ?? 'N/A'}"`);
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Process rows into funnel records
-    // Expected columns: Pipe | Card ID | Data Criação | Fase Atual | Faturamento | Produto | Data Assinatura
-    // Skip first row (header)
-    const dataRows = rows.slice(1);
-    
-    // Initialize debug stats
     const debugStats: DebugStats = {
-      totalRows: dataRows.length,
+      totalRows: rows.length,
       rowsWithInsufficientCols: 0,
       rowsWithInvalidDate: 0,
       rowsWithWrongYear: 0,
-      rowsWithUnknownBU: 0,
       rowsWithUnknownPhase: 0,
       validRows: 0,
-      unknownBUs: {},
       unknownPhases: {},
       yearsFound: {},
       sampleRows: [],
+      resolvedColumnIndexes: { createdAtIdx, phaseIdx },
+      columnLabels,
     };
 
-    // Collect sample rows for debug output
-    for (let i = 0; i < Math.min(5, dataRows.length); i++) {
-      const row = dataRows[i];
-      if (row && row.length >= 4) {
-        debugStats.sampleRows.push({
-          index: i + 2,
-          pipe: row[0],
-          cardId: row[1],
-          dataCriacao: row[2],
-          faseAtual: row[3],
-        });
-      }
+    // Sample rows (first 5)
+    for (let i = 0; i < Math.min(5, rows.length); i++) {
+      const row = rows[i];
+      debugStats.sampleRows.push({
+        index: i + 1,
+        createdAtRaw: row?.[createdAtIdx] ?? null,
+        phaseRaw: row?.[phaseIdx] ?? null,
+        col0: row?.[0] ?? null,
+        col1: row?.[1] ?? null,
+      });
     }
 
+    const requiredIdx = Math.max(createdAtIdx, phaseIdx);
     const records: any[] = [];
 
-    for (let i = 0; i < dataRows.length; i++) {
-      const row = dataRows[i];
-      if (!row || row.length < 4) {
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || row.length <= requiredIdx) {
         debugStats.rowsWithInsufficientCols++;
         continue;
       }
 
-      const [pipe, cardId, dataCriacao, faseAtual, faturamento, produto, dataAssinatura] = row;
+      const createdAtRaw = row[createdAtIdx];
+      const phaseRaw = row[phaseIdx];
 
-      // Parse creation date
-      const createdDate = parseDate(dataCriacao);
+      const createdDate = parseDate(createdAtRaw);
       if (!createdDate) {
         debugStats.rowsWithInvalidDate++;
         if (i < 10) {
-          console.log(`Row ${i + 2}: Invalid date: "${dataCriacao}" (type: ${typeof dataCriacao})`);
+          console.log(
+            `Row ${i + 1}: Invalid date at col ${createdAtIdx}: "${createdAtRaw}" (type: ${typeof createdAtRaw})`
+          );
         }
         continue;
       }
 
-      // Track years found
       const rowYear = createdDate.getFullYear();
       debugStats.yearsFound[rowYear] = (debugStats.yearsFound[rowYear] || 0) + 1;
 
-      // Filter by year
       if (rowYear !== year) {
         debugStats.rowsWithWrongYear++;
         continue;
       }
 
-      // Normalize BU
-      const bu = normalizeBU(pipe);
-      if (!bu) {
-        debugStats.rowsWithUnknownBU++;
-        const pipeStr = String(pipe || '').toLowerCase().trim();
-        debugStats.unknownBUs[pipeStr] = (debugStats.unknownBUs[pipeStr] || 0) + 1;
-        continue;
-      }
-
-      // Normalize indicator from phase
-      const indicator = normalizeIndicator(faseAtual);
+      const indicator = normalizeIndicator(String(phaseRaw ?? ''));
       if (!indicator) {
         debugStats.rowsWithUnknownPhase++;
-        const phaseStr = String(faseAtual || '').toLowerCase().trim();
+        const phaseStr = String(phaseRaw ?? '').toLowerCase().trim();
         debugStats.unknownPhases[phaseStr] = (debugStats.unknownPhases[phaseStr] || 0) + 1;
         continue;
       }
@@ -395,7 +424,7 @@ Deno.serve(async (req) => {
       const month = createdDate.toLocaleString('en-US', { month: 'short' }).toLowerCase();
 
       records.push({
-        bu,
+        bu, // ✅ planilha atual é somente Modelo Atual
         month,
         year,
         indicator,
@@ -404,30 +433,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Log detailed debug stats
+    const topUnknownPhases = (Object.entries(debugStats.unknownPhases) as [string, number][]) // typed
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
     console.log('=== DEBUG: Processing Statistics ===');
     console.log(`Total data rows: ${debugStats.totalRows}`);
     console.log(`Rows with insufficient columns: ${debugStats.rowsWithInsufficientCols}`);
     console.log(`Rows with invalid date: ${debugStats.rowsWithInvalidDate}`);
     console.log(`Rows with wrong year (not ${year}): ${debugStats.rowsWithWrongYear}`);
-    console.log(`Rows with unknown BU: ${debugStats.rowsWithUnknownBU}`);
     console.log(`Rows with unknown phase: ${debugStats.rowsWithUnknownPhase}`);
     console.log(`Valid rows: ${debugStats.validRows}`);
-    
     console.log('=== DEBUG: Years found in data ===');
     console.log(JSON.stringify(debugStats.yearsFound));
-    
-    // Log top unknown BUs
-    const topUnknownBUs = Object.entries(debugStats.unknownBUs)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10);
-    console.log('=== DEBUG: Top unknown BUs ===');
-    console.log(JSON.stringify(topUnknownBUs));
-    
-    // Log top unknown phases
-    const topUnknownPhases = Object.entries(debugStats.unknownPhases)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10);
     console.log('=== DEBUG: Top unknown phases ===');
     console.log(JSON.stringify(topUnknownPhases));
 
@@ -435,20 +453,13 @@ Deno.serve(async (req) => {
 
     if (records.length === 0) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
+        JSON.stringify({
+          success: false,
           message: `Nenhum registro válido para ${year}`,
           debug: {
-            totalRows: debugStats.totalRows,
-            yearsFound: debugStats.yearsFound,
-            rowsWithWrongYear: debugStats.rowsWithWrongYear,
-            rowsWithUnknownBU: debugStats.rowsWithUnknownBU,
-            rowsWithUnknownPhase: debugStats.rowsWithUnknownPhase,
-            rowsWithInvalidDate: debugStats.rowsWithInvalidDate,
-            topUnknownBUs: topUnknownBUs,
-            topUnknownPhases: topUnknownPhases,
-            sampleRows: debugStats.sampleRows,
-          }
+            ...debugStats,
+            topUnknownPhases,
+          },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -508,9 +519,12 @@ Deno.serve(async (req) => {
         insertedCount,
         totalRecords: records.length,
         debug: {
+          bu,
           yearsFound: debugStats.yearsFound,
-          topUnknownBUs: topUnknownBUs.length > 0 ? topUnknownBUs : undefined,
-          topUnknownPhases: topUnknownPhases.length > 0 ? topUnknownPhases : undefined,
+          resolvedColumnIndexes: debugStats.resolvedColumnIndexes,
+          topUnknownPhases: (Object.entries(debugStats.unknownPhases) as [string, number][]) // typed
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10),
         },
         timeMs: totalTime,
       }),
