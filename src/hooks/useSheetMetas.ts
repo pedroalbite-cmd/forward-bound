@@ -69,17 +69,22 @@ export function useSheetMetas(startDate?: Date, endDate?: Date) {
   const getMqlsMetaForPeriod = (start?: Date, end?: Date): number => {
     if (!data?.mqls || data.mqls.length === 0) return 0;
     
-    const startTime = start?.getTime() ?? 0;
-    const endTime = end?.getTime() ?? Date.now();
+    // Normalize dates to start of day for proper comparison
+    const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
+    const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
     
     // Sum up daily metas within the period
     let totalMeta = 0;
+    let matchedDays = 0;
     for (const row of data.mqls) {
       const rowTime = row.date.getTime();
       if (rowTime >= startTime && rowTime <= endTime) {
         totalMeta += row.meta;
+        matchedDays++;
       }
     }
+    
+    console.log(`[useSheetMetas] Period ${start?.toISOString()} to ${end?.toISOString()}: matched ${matchedDays} days, totalMeta = ${totalMeta}`);
     
     // If no data in range, calculate proportionally from available data
     if (totalMeta === 0 && data.mqls.length > 0) {
@@ -87,6 +92,7 @@ export function useSheetMetas(startDate?: Date, endDate?: Date) {
       const avgDailyMeta = data.mqls.reduce((sum, r) => sum + r.meta, 0) / data.mqls.length;
       const daysInPeriod = Math.ceil((endTime - startTime) / (1000 * 60 * 60 * 24)) + 1;
       totalMeta = avgDailyMeta * daysInPeriod;
+      console.log(`[useSheetMetas] No data in range, using fallback: avgDaily=${avgDailyMeta}, days=${daysInPeriod}, total=${totalMeta}`);
     }
     
     return Math.round(totalMeta);
