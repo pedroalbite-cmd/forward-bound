@@ -8,6 +8,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tool
 import { RefreshCw, Loader2, CalendarIcon } from "lucide-react";
 import { useFunnelRealized, IndicatorType, BUType } from "@/hooks/useFunnelRealized";
 import { useSheetMetas } from "@/hooks/useSheetMetas";
+import { useClosersMetas } from "@/hooks/useClosersMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { format, startOfYear, endOfYear, differenceInDays, eachMonthOfInterval, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -22,15 +23,16 @@ interface IndicatorConfig {
   label: string;
   shortLabel: string;
   annualMeta: number;
-  useSheetMeta?: boolean; // Flag to use meta from Google Sheets
+  useSheetMeta?: boolean; // Flag to use meta from Google Sheets (MQLs)
+  useClosersMeta?: boolean; // Flag to use meta from closers sheet (RM, RR, Proposta, Venda)
 }
 
 const indicatorConfigs: IndicatorConfig[] = [
   { key: 'mql', label: 'MQLs', shortLabel: 'MQLs', annualMeta: 2400, useSheetMeta: true },
-  { key: 'rm', label: 'Reuniões Agendadas', shortLabel: 'Agendadas', annualMeta: 1200 },
-  { key: 'rr', label: 'Reuniões Realizadas', shortLabel: 'Realizadas', annualMeta: 960 },
-  { key: 'proposta', label: 'Propostas Enviadas', shortLabel: 'Propostas', annualMeta: 480 },
-  { key: 'venda', label: 'Vendas', shortLabel: 'Vendas', annualMeta: 240 },
+  { key: 'rm', label: 'Reuniões Agendadas', shortLabel: 'Agendadas', annualMeta: 1200, useClosersMeta: true },
+  { key: 'rr', label: 'Reuniões Realizadas', shortLabel: 'Realizadas', annualMeta: 960, useClosersMeta: true },
+  { key: 'proposta', label: 'Propostas Enviadas', shortLabel: 'Propostas', annualMeta: 480, useClosersMeta: true },
+  { key: 'venda', label: 'Vendas', shortLabel: 'Vendas', annualMeta: 240, useClosersMeta: true },
 ];
 
 const buOptions: { value: FilterBU; label: string }[] = [
@@ -124,25 +126,33 @@ export function IndicatorsTab() {
 
   const { getTotal, getChartLabels, getGroupedData, getChartGrouping, syncWithPipefy, isSyncing, isLoading } = useFunnelRealized(startDate, endDate);
   const { getMqlsMetaForPeriod, getMqlsQtyForPeriod, isLoading: isLoadingMetas } = useSheetMetas(startDate, endDate);
+  const { getQtyForPeriod: getClosersQty, getMetaForPeriod: getClosersMeta, isLoading: isLoadingClosers } = useClosersMetas(startDate, endDate);
 
   const daysInPeriod = differenceInDays(endDate, startDate) + 1;
   const periodFraction = daysInPeriod / 365;
 
-  // Get meta for indicator - uses sheet meta for MQLs, calculated meta for others
+  // Get meta for indicator - uses sheet meta for MQLs, closers meta for others
   const getMetaForIndicator = (indicator: IndicatorConfig) => {
     if (indicator.useSheetMeta && indicator.key === 'mql') {
       const sheetMeta = getMqlsMetaForPeriod(startDate, endDate);
-      // If sheet meta is available, use it; otherwise fallback to calculated
       if (sheetMeta > 0) return sheetMeta;
+    }
+    if (indicator.useClosersMeta && (indicator.key === 'rm' || indicator.key === 'rr' || indicator.key === 'proposta' || indicator.key === 'venda')) {
+      const closersMeta = getClosersMeta(indicator.key, startDate, endDate);
+      if (closersMeta > 0) return closersMeta;
     }
     return Math.round(indicator.annualMeta * periodFraction);
   };
 
-  // Get realized value for indicator - uses sheet qty for MQLs
+  // Get realized value for indicator - uses sheet qty for MQLs, closers qty for others
   const getRealizedForIndicator = (indicator: IndicatorConfig) => {
     if (indicator.useSheetMeta && indicator.key === 'mql') {
       const sheetQty = getMqlsQtyForPeriod(startDate, endDate);
       if (sheetQty > 0) return sheetQty;
+    }
+    if (indicator.useClosersMeta && (indicator.key === 'rm' || indicator.key === 'rr' || indicator.key === 'proposta' || indicator.key === 'venda')) {
+      const closersQty = getClosersQty(indicator.key, startDate, endDate);
+      if (closersQty > 0) return closersQty;
     }
     return getTotal(indicator.key, selectedBU);
   };
