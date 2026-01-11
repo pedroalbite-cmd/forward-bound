@@ -123,7 +123,7 @@ export function IndicatorsTab() {
   };
 
   const { getTotal, getChartLabels, getGroupedData, getChartGrouping, syncWithPipefy, isSyncing, isLoading } = useFunnelRealized(startDate, endDate);
-  const { getMqlsMetaForPeriod, isLoading: isLoadingMetas } = useSheetMetas(startDate, endDate);
+  const { getMqlsMetaForPeriod, getMqlsQtyForPeriod, isLoading: isLoadingMetas } = useSheetMetas(startDate, endDate);
 
   const daysInPeriod = differenceInDays(endDate, startDate) + 1;
   const periodFraction = daysInPeriod / 365;
@@ -136,6 +136,15 @@ export function IndicatorsTab() {
       if (sheetMeta > 0) return sheetMeta;
     }
     return Math.round(indicator.annualMeta * periodFraction);
+  };
+
+  // Get realized value for indicator - uses sheet qty for MQLs
+  const getRealizedForIndicator = (indicator: IndicatorConfig) => {
+    if (indicator.useSheetMeta && indicator.key === 'mql') {
+      const sheetQty = getMqlsQtyForPeriod(startDate, endDate);
+      if (sheetQty > 0) return sheetQty;
+    }
+    return getTotal(indicator.key, selectedBU);
   };
 
   const chartLabels = getChartLabels();
@@ -255,7 +264,7 @@ export function IndicatorsTab() {
       {/* Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
         {indicatorConfigs.map((indicator) => (
-          <RadialProgressCard key={indicator.key} title={indicator.label} realized={getTotal(indicator.key, selectedBU)} meta={getMetaForIndicator(indicator)} />
+          <RadialProgressCard key={indicator.key} title={indicator.label} realized={getRealizedForIndicator(indicator)} meta={getMetaForIndicator(indicator)} />
         ))}
       </div>
 
@@ -269,7 +278,7 @@ export function IndicatorsTab() {
       <div className="space-y-4">
         {indicatorConfigs.map((indicator) => (
           <IndicatorChartSection key={indicator.key} title={indicator.label} realizedLabel={indicator.shortLabel}
-            realizedTotal={getTotal(indicator.key, selectedBU)} metaTotal={getMetaForIndicator(indicator)}
+            realizedTotal={getRealizedForIndicator(indicator)} metaTotal={getMetaForIndicator(indicator)}
             chartData={buildChartData(indicator)} gradientId={`gradient-${indicator.key}`} />
         ))}
       </div>
