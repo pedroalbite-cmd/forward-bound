@@ -151,8 +151,8 @@ export function useClosersMetas(startDate?: Date, endDate?: Date) {
             }
           }
         }
-        qtyArray.push(dayQty);
-        metaArray.push(dayMeta);
+        qtyArray.push(Math.round(dayQty));
+        metaArray.push(Math.round(dayMeta));
       }
     } else if (grouping === 'weekly') {
       const totalDays = differenceInDays(end, start) + 1;
@@ -177,8 +177,8 @@ export function useClosersMetas(startDate?: Date, endDate?: Date) {
             }
           }
         }
-        qtyArray.push(weekQty);
-        metaArray.push(weekMeta);
+        qtyArray.push(Math.round(weekQty));
+        metaArray.push(Math.round(weekMeta));
       }
     } else {
       // Monthly
@@ -200,8 +200,8 @@ export function useClosersMetas(startDate?: Date, endDate?: Date) {
             }
           }
         }
-        qtyArray.push(monthQty);
-        metaArray.push(monthMeta);
+        qtyArray.push(Math.round(monthQty));
+        metaArray.push(Math.round(monthMeta));
       }
     }
 

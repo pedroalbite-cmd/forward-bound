@@ -145,8 +145,8 @@ export function useSheetMetas(startDate?: Date, endDate?: Date) {
             dayMeta += row.meta;
           }
         }
-        qtyArray.push(dayQty);
-        metaArray.push(dayMeta);
+        qtyArray.push(Math.round(dayQty));
+        metaArray.push(Math.round(dayMeta));
       }
     } else if (grouping === 'weekly') {
       const totalDays = differenceInDays(end, start) + 1;
@@ -168,8 +168,8 @@ export function useSheetMetas(startDate?: Date, endDate?: Date) {
             weekMeta += row.meta;
           }
         }
-        qtyArray.push(weekQty);
-        metaArray.push(weekMeta);
+        qtyArray.push(Math.round(weekQty));
+        metaArray.push(Math.round(weekMeta));
       }
     } else {
       // Monthly
@@ -188,8 +188,8 @@ export function useSheetMetas(startDate?: Date, endDate?: Date) {
             monthMeta += row.meta;
           }
         }
-        qtyArray.push(monthQty);
-        metaArray.push(monthMeta);
+        qtyArray.push(Math.round(monthQty));
+        metaArray.push(Math.round(monthMeta));
       }
     }
 
