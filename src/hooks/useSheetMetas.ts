@@ -98,10 +98,33 @@ export function useSheetMetas(startDate?: Date, endDate?: Date) {
     return Math.round(totalMeta);
   };
 
+  // Calculate total qty (realized MQLs) for a date range
+  const getMqlsQtyForPeriod = (start?: Date, end?: Date): number => {
+    if (!data?.mqls || data.mqls.length === 0) return 0;
+    
+    // Normalize dates to start of day for proper comparison
+    const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
+    const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
+    
+    // Sum up daily qty within the period
+    let totalQty = 0;
+    for (const row of data.mqls) {
+      const rowTime = row.date.getTime();
+      if (rowTime >= startTime && rowTime <= endTime) {
+        totalQty += row.qty;
+      }
+    }
+    
+    console.log(`[useSheetMetas] getMqlsQtyForPeriod ${start?.toISOString()} to ${end?.toISOString()}: totalQty = ${totalQty}`);
+    
+    return Math.round(totalQty);
+  };
+
   return {
     mqls: data?.mqls ?? [],
     isLoading,
     error,
     getMqlsMetaForPeriod,
+    getMqlsQtyForPeriod,
   };
 }
