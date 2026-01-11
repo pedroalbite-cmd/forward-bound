@@ -1,7 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Cell, LabelList } from "recharts";
-import { useFunnelRealized, BUType } from "@/hooks/useFunnelRealized";
-import { format, eachDayOfInterval, differenceInDays, addDays, parseISO, isWithinInterval, eachMonthOfInterval } from "date-fns";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, LabelList } from "recharts";
+import { BUType } from "@/hooks/useFunnelRealized";
+import { useSheetMetas, ChartGrouping } from "@/hooks/useSheetMetas";
+import { format, eachDayOfInterval, differenceInDays, addDays, eachMonthOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface LeadsMqlsStackedChartProps {
@@ -13,24 +14,27 @@ interface LeadsMqlsStackedChartProps {
 
 const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Math.round(value));
 
-export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU, metaMqls = 2400 }: LeadsMqlsStackedChartProps) {
-  const { getGroupedData, getChartGrouping } = useFunnelRealized(startDate, endDate);
+export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsMqlsStackedChartProps) {
+  const { getMqlsGroupedData, getMqlsMetaForPeriod, getMqlsQtyForPeriod } = useSheetMetas(startDate, endDate);
   
-  const grouping = getChartGrouping();
-  const leadsData = getGroupedData('leads', selectedBU);
-  const mqlsData = getGroupedData('mql', selectedBU);
-
-  // Calculate period meta
+  // Determine grouping based on period length
   const daysInPeriod = differenceInDays(endDate, startDate) + 1;
-  const periodMeta = Math.round(metaMqls * (daysInPeriod / 365));
+  const grouping: ChartGrouping = daysInPeriod <= 31 ? 'daily' : daysInPeriod <= 90 ? 'weekly' : 'monthly';
+
+  // Get grouped MQL data from sheet
+  const sheetData = getMqlsGroupedData(startDate, endDate, grouping);
+  
+  // Get total meta for the period
+  const periodMeta = getMqlsMetaForPeriod(startDate, endDate);
+  const totalRealized = getMqlsQtyForPeriod(startDate, endDate);
 
   // Build chart data with proper date labels
   const buildChartData = () => {
     if (grouping === 'daily') {
       return eachDayOfInterval({ start: startDate, end: endDate }).map((day, index) => ({
         label: format(day, "d 'de' MMM", { locale: ptBR }),
-        mqls: mqlsData[index] || 0,
-        leads: leadsData[index] || 0,
+        mqls: sheetData.qty[index] || 0,
+        meta: sheetData.meta[index] || 0,
       }));
     } else if (grouping === 'weekly') {
       const totalDays = differenceInDays(endDate, startDate) + 1;
@@ -39,18 +43,18 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU, metaMqls
         const weekStart = addDays(startDate, i * 7);
         return {
           label: format(weekStart, "d 'de' MMM", { locale: ptBR }),
-          mqls: mqlsData[i] || 0,
-          leads: leadsData[i] || 0,
+          mqls: sheetData.qty[i] || 0,
+          meta: sheetData.meta[i] || 0,
         };
       });
     } else {
-    // Monthly - use actual months from the interval
-    const months = eachMonthOfInterval({ start: startDate, end: endDate });
-    return months.map((monthDate, index) => ({
-      label: format(monthDate, "MMM", { locale: ptBR }),
-      mqls: mqlsData[index] || 0,
-      leads: leadsData[index] || 0,
-    }));
+      // Monthly - use actual months from the interval
+      const months = eachMonthOfInterval({ start: startDate, end: endDate });
+      return months.map((monthDate, index) => ({
+        label: format(monthDate, "MMM", { locale: ptBR }),
+        mqls: sheetData.qty[index] || 0,
+        meta: sheetData.meta[index] || 0,
+      }));
     }
   };
 
@@ -76,19 +80,20 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU, metaMqls
     <Card className="bg-card border-2 border-chart-2">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-semibold text-foreground">Qtd MQLs e Novos Leads</CardTitle>
-          <span className="text-sm text-muted-foreground">
-            Meta: <span className="font-medium text-foreground">{formatNumber(periodMeta)}</span>
-          </span>
+          <CardTitle className="text-base font-semibold text-foreground">Qtd MQLs</CardTitle>
+          <div className="flex items-center gap-4 text-sm">
+            <span className="text-muted-foreground">
+              Realizado: <span className="font-medium text-foreground">{formatNumber(totalRealized)}</span>
+            </span>
+            <span className="text-muted-foreground">
+              Meta: <span className="font-medium text-foreground">{formatNumber(periodMeta)}</span>
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-6 mt-2">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-sm bg-chart-2" />
-            <span className="text-xs text-muted-foreground">MQLs</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-sm bg-destructive" />
-            <span className="text-xs text-muted-foreground">Novos Leads</span>
+            <span className="text-xs text-muted-foreground">MQLs Realizados</span>
           </div>
         </div>
       </CardHeader>
@@ -110,11 +115,8 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU, metaMqls
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} 
               />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="mqls" stackId="a" fill="hsl(var(--chart-2))" name="MQLs" radius={[0, 0, 0, 0]}>
-                <LabelList dataKey="mqls" position="inside" fill="white" fontSize={10} formatter={(v: number) => v > 0 ? v : ''} />
-              </Bar>
-              <Bar dataKey="leads" stackId="a" fill="hsl(var(--destructive))" name="Novos Leads" radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="leads" position="inside" fill="white" fontSize={10} formatter={(v: number) => v > 0 ? v : ''} />
+              <Bar dataKey="mqls" fill="hsl(var(--chart-2))" name="MQLs" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="mqls" position="top" fill="hsl(var(--muted-foreground))" fontSize={10} formatter={(v: number) => v > 0 ? v : ''} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>

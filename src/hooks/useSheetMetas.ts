@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { eachDayOfInterval, eachMonthOfInterval, addDays, differenceInDays, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from "date-fns";
 
 interface SheetMetaRow {
   date: Date;
@@ -10,6 +11,8 @@ interface SheetMetaRow {
 interface SheetMetasResult {
   mqls: SheetMetaRow[];
 }
+
+export type ChartGrouping = 'daily' | 'weekly' | 'monthly';
 
 // Parse Google Sheets date format "Date(year,month,day)" to JS Date
 function parseGoogleDate(dateValue: any): Date | null {
@@ -120,11 +123,85 @@ export function useSheetMetas(startDate?: Date, endDate?: Date) {
     return Math.round(totalQty);
   };
 
+  // Get grouped data for charts (returns array of values per period)
+  const getMqlsGroupedData = (start: Date, end: Date, grouping: ChartGrouping): { qty: number[]; meta: number[] } => {
+    if (!data?.mqls || data.mqls.length === 0) return { qty: [], meta: [] };
+
+    const qtyArray: number[] = [];
+    const metaArray: number[] = [];
+
+    if (grouping === 'daily') {
+      const days = eachDayOfInterval({ start, end });
+      for (const day of days) {
+        const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
+        const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59, 999).getTime();
+        
+        let dayQty = 0;
+        let dayMeta = 0;
+        for (const row of data.mqls) {
+          const rowTime = row.date.getTime();
+          if (rowTime >= dayStart && rowTime <= dayEnd) {
+            dayQty += row.qty;
+            dayMeta += row.meta;
+          }
+        }
+        qtyArray.push(dayQty);
+        metaArray.push(dayMeta);
+      }
+    } else if (grouping === 'weekly') {
+      const totalDays = differenceInDays(end, start) + 1;
+      const numWeeks = Math.ceil(totalDays / 7);
+      
+      for (let i = 0; i < numWeeks; i++) {
+        const weekStart = addDays(start, i * 7);
+        const weekEnd = i === numWeeks - 1 ? end : addDays(weekStart, 6);
+        
+        const weekStartTime = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate()).getTime();
+        const weekEndTime = new Date(weekEnd.getFullYear(), weekEnd.getMonth(), weekEnd.getDate(), 23, 59, 59, 999).getTime();
+        
+        let weekQty = 0;
+        let weekMeta = 0;
+        for (const row of data.mqls) {
+          const rowTime = row.date.getTime();
+          if (rowTime >= weekStartTime && rowTime <= weekEndTime) {
+            weekQty += row.qty;
+            weekMeta += row.meta;
+          }
+        }
+        qtyArray.push(weekQty);
+        metaArray.push(weekMeta);
+      }
+    } else {
+      // Monthly
+      const months = eachMonthOfInterval({ start, end });
+      for (const monthDate of months) {
+        const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getTime();
+        const lastDay = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+        const monthEnd = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate(), 23, 59, 59, 999).getTime();
+        
+        let monthQty = 0;
+        let monthMeta = 0;
+        for (const row of data.mqls) {
+          const rowTime = row.date.getTime();
+          if (rowTime >= monthStart && rowTime <= monthEnd) {
+            monthQty += row.qty;
+            monthMeta += row.meta;
+          }
+        }
+        qtyArray.push(monthQty);
+        metaArray.push(monthMeta);
+      }
+    }
+
+    return { qty: qtyArray, meta: metaArray };
+  };
+
   return {
     mqls: data?.mqls ?? [],
     isLoading,
     error,
     getMqlsMetaForPeriod,
     getMqlsQtyForPeriod,
+    getMqlsGroupedData,
   };
 }

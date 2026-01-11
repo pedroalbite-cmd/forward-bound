@@ -1,5 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useFunnelRealized, BUType, IndicatorType } from "@/hooks/useFunnelRealized";
+import { useSheetMetas } from "@/hooks/useSheetMetas";
+import { useClosersMetas, CloserIndicator } from "@/hooks/useClosersMetas";
+import { BUType, IndicatorType } from "@/hooks/useFunnelRealized";
 
 interface PeriodFunnelChartProps {
   startDate: Date;
@@ -20,9 +22,17 @@ interface FunnelStage {
 }
 
 export function PeriodFunnelChart({ startDate, endDate, selectedBU, ticketMedio = 50000 }: PeriodFunnelChartProps) {
-  const { getAllTotals } = useFunnelRealized(startDate, endDate);
+  const { getMqlsQtyForPeriod } = useSheetMetas(startDate, endDate);
+  const { getQtyForPeriod: getClosersQty } = useClosersMetas(startDate, endDate);
   
-  const totals = getAllTotals(selectedBU);
+  // Get totals from sheets
+  const totals = {
+    mql: getMqlsQtyForPeriod(startDate, endDate),
+    rm: getClosersQty('rm', startDate, endDate),
+    rr: getClosersQty('rr', startDate, endDate),
+    proposta: getClosersQty('proposta', startDate, endDate),
+    venda: getClosersQty('venda', startDate, endDate),
+  };
 
   // Calculate conversions
   const stages: FunnelStage[] = [

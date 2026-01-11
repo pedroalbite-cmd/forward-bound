@@ -7,10 +7,10 @@ import { Calendar } from "@/components/ui/calendar";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Line, ComposedChart, RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
 import { RefreshCw, Loader2, CalendarIcon } from "lucide-react";
 import { useFunnelRealized, IndicatorType, BUType } from "@/hooks/useFunnelRealized";
-import { useSheetMetas } from "@/hooks/useSheetMetas";
-import { useClosersMetas } from "@/hooks/useClosersMetas";
+import { useSheetMetas, ChartGrouping } from "@/hooks/useSheetMetas";
+import { useClosersMetas, CloserIndicator } from "@/hooks/useClosersMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
-import { format, startOfYear, endOfYear, differenceInDays, eachMonthOfInterval, addDays } from "date-fns";
+import { format, startOfYear, endOfYear, differenceInDays, eachMonthOfInterval, addDays, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { LeadsMqlsStackedChart } from "./LeadsMqlsStackedChart";
@@ -124,12 +124,36 @@ export function IndicatorsTab() {
     syncWithPipefy(startDate.getFullYear());
   };
 
-  const { getTotal, getChartLabels, getGroupedData, getChartGrouping, syncWithPipefy, isSyncing, isLoading } = useFunnelRealized(startDate, endDate);
-  const { getMqlsMetaForPeriod, getMqlsQtyForPeriod, isLoading: isLoadingMetas } = useSheetMetas(startDate, endDate);
-  const { getQtyForPeriod: getClosersQty, getMetaForPeriod: getClosersMeta, isLoading: isLoadingClosers } = useClosersMetas(startDate, endDate);
+  const { getTotal, syncWithPipefy, isSyncing, isLoading } = useFunnelRealized(startDate, endDate);
+  const { getMqlsMetaForPeriod, getMqlsQtyForPeriod, getMqlsGroupedData, isLoading: isLoadingMetas } = useSheetMetas(startDate, endDate);
+  const { getQtyForPeriod: getClosersQty, getMetaForPeriod: getClosersMeta, getGroupedData: getClosersGroupedData, isLoading: isLoadingClosers } = useClosersMetas(startDate, endDate);
 
   const daysInPeriod = differenceInDays(endDate, startDate) + 1;
   const periodFraction = daysInPeriod / 365;
+  
+  // Determine grouping based on period length
+  const grouping: ChartGrouping = daysInPeriod <= 31 ? 'daily' : daysInPeriod <= 90 ? 'weekly' : 'monthly';
+
+  // Generate chart labels based on grouping
+  const getChartLabels = (): string[] => {
+    if (grouping === 'daily') {
+      return eachDayOfInterval({ start: startDate, end: endDate }).map(day => 
+        format(day, "d 'de' MMM", { locale: ptBR })
+      );
+    } else if (grouping === 'weekly') {
+      const numWeeks = Math.ceil(daysInPeriod / 7);
+      return Array.from({ length: numWeeks }, (_, i) => {
+        const weekStart = addDays(startDate, i * 7);
+        return format(weekStart, "d 'de' MMM", { locale: ptBR });
+      });
+    } else {
+      return eachMonthOfInterval({ start: startDate, end: endDate }).map(monthDate => 
+        format(monthDate, "MMM", { locale: ptBR })
+      );
+    }
+  };
+
+  const chartLabels = getChartLabels();
 
   // Get meta for indicator - uses sheet meta for MQLs, closers meta for others
   const getMetaForIndicator = (indicator: IndicatorConfig) => {
@@ -157,42 +181,39 @@ export function IndicatorsTab() {
     return getTotal(indicator.key, selectedBU);
   };
 
-  const chartLabels = getChartLabels();
-  const grouping = getChartGrouping();
-
   const buildChartData = (indicator: IndicatorConfig) => {
-    const realizedValues = getGroupedData(indicator.key, selectedBU);
-    
-    // For MQLs with sheet meta, use proportional distribution based on total meta
+    // For MQLs, use sheet data
     if (indicator.useSheetMeta && indicator.key === 'mql') {
-      const totalMeta = getMqlsMetaForPeriod(startDate, endDate);
-      if (totalMeta > 0) {
-        // Distribute meta proportionally across chart points
-        const metaPerPoint = totalMeta / chartLabels.length;
-        return chartLabels.map((label, index) => ({ 
-          label, 
-          realizado: realizedValues[index] || 0, 
-          meta: Math.round(metaPerPoint) 
-        }));
-      }
+      const sheetData = getMqlsGroupedData(startDate, endDate, grouping);
+      return chartLabels.map((label, index) => ({ 
+        label, 
+        realizado: sheetData.qty[index] || 0, 
+        meta: sheetData.meta[index] || 0 
+      }));
     }
     
-    // Default behavior for other indicators
+    // For closers indicators (RM, RR, Proposta, Venda), use closers sheet data
+    if (indicator.useClosersMeta && (indicator.key === 'rm' || indicator.key === 'rr' || indicator.key === 'proposta' || indicator.key === 'venda')) {
+      const closersData = getClosersGroupedData(indicator.key as CloserIndicator, startDate, endDate, grouping);
+      return chartLabels.map((label, index) => ({ 
+        label, 
+        realizado: closersData.qty[index] || 0, 
+        meta: closersData.meta[index] || 0 
+      }));
+    }
+    
+    // Fallback for other indicators (shouldn't be reached with current config)
     const metaDiaria = indicator.annualMeta / 365;
     
-    // Calculate meta per data point based on grouping
     const getMetaPerPoint = (index: number): number => {
       if (grouping === 'daily') {
         return metaDiaria;
       } else if (grouping === 'weekly') {
-        const totalDays = daysInPeriod;
         const numWeeks = chartLabels.length;
         const fullWeekDays = 7;
-        const lastWeekDays = totalDays - (numWeeks - 1) * 7;
-        // Last week may have fewer days
+        const lastWeekDays = daysInPeriod - (numWeeks - 1) * 7;
         return metaDiaria * (index === numWeeks - 1 ? lastWeekDays : fullWeekDays);
       } else {
-        // Monthly: calculate days in each month within the period
         const months = eachMonthOfInterval({ start: startDate, end: endDate });
         if (index >= months.length) return 0;
         const monthStart = months[index];
@@ -204,7 +225,7 @@ export function IndicatorsTab() {
     
     return chartLabels.map((label, index) => ({ 
       label, 
-      realizado: realizedValues[index] || 0, 
+      realizado: 0, 
       meta: Math.round(getMetaPerPoint(index)) 
     }));
   };
