@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSheetMetas } from "@/hooks/useSheetMetas";
 import { useClosersMetas, CloserIndicator } from "@/hooks/useClosersMetas";
+import { useExpansaoMetas, ExpansaoIndicator } from "@/hooks/useExpansaoMetas";
 import { BUType, IndicatorType } from "@/hooks/useFunnelRealized";
 
 interface PeriodFunnelChartProps {
@@ -24,9 +25,22 @@ interface FunnelStage {
 export function PeriodFunnelChart({ startDate, endDate, selectedBU, ticketMedio = 50000 }: PeriodFunnelChartProps) {
   const { getMqlsQtyForPeriod } = useSheetMetas(startDate, endDate);
   const { getQtyForPeriod: getClosersQty } = useClosersMetas(startDate, endDate);
+  const { getQtyForPeriod: getExpansaoQty } = useExpansaoMetas(startDate, endDate);
   
-  // Get totals from sheets
-  const totals = {
+  // Check if we should use expansão data (for Franquia BU)
+  const useExpansaoData = selectedBU === 'franquia';
+  
+  // Franquia uses a higher ticket (R$ 140.000)
+  const effectiveTicket = useExpansaoData ? 140000 : ticketMedio;
+  
+  // Get totals based on selected BU
+  const totals = useExpansaoData ? {
+    mql: getExpansaoQty('mql', startDate, endDate),
+    rm: getExpansaoQty('rm', startDate, endDate),
+    rr: getExpansaoQty('rr', startDate, endDate),
+    proposta: getExpansaoQty('proposta', startDate, endDate),
+    venda: getExpansaoQty('venda', startDate, endDate),
+  } : {
     mql: getMqlsQtyForPeriod(startDate, endDate),
     rm: getClosersQty('rm', startDate, endDate),
     rr: getClosersQty('rr', startDate, endDate),
@@ -44,8 +58,8 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU, ticketMedio 
   ];
 
   // Calculate monetary values
-  const propostaValue = totals.proposta * ticketMedio;
-  const vendaValue = totals.venda * ticketMedio;
+  const propostaValue = totals.proposta * effectiveTicket;
+  const vendaValue = totals.venda * effectiveTicket;
 
   // Width percentages for funnel visualization
   const widthPercentages = [100, 75, 55, 40, 25];
