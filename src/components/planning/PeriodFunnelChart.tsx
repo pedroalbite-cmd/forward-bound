@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSheetMetas } from "@/hooks/useSheetMetas";
 import { useClosersMetas, CloserIndicator } from "@/hooks/useClosersMetas";
 import { useExpansaoMetas, ExpansaoIndicator } from "@/hooks/useExpansaoMetas";
+import { useO2TaxMetas, O2TaxIndicator } from "@/hooks/useO2TaxMetas";
 import { BUType, IndicatorType } from "@/hooks/useFunnelRealized";
 
 interface PeriodFunnelChartProps {
@@ -26,12 +27,14 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU, ticketMedio 
   const { getMqlsQtyForPeriod } = useSheetMetas(startDate, endDate);
   const { getQtyForPeriod: getClosersQty } = useClosersMetas(startDate, endDate);
   const { getQtyForPeriod: getExpansaoQty } = useExpansaoMetas(startDate, endDate);
+  const { getQtyForPeriod: getO2TaxQty } = useO2TaxMetas(startDate, endDate);
   
-  // Check if we should use expansão data (for Franquia BU)
+  // Check if we should use external database data
   const useExpansaoData = selectedBU === 'franquia';
+  const useO2TaxData = selectedBU === 'o2_tax';
   
-  // Franquia uses a higher ticket (R$ 140.000)
-  const effectiveTicket = useExpansaoData ? 140000 : ticketMedio;
+  // Different tickets per BU: Franquia R$140k, O2 TAX R$15k
+  const effectiveTicket = useExpansaoData ? 140000 : useO2TaxData ? 15000 : ticketMedio;
   
   // Get totals based on selected BU
   const totals = useExpansaoData ? {
@@ -40,6 +43,12 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU, ticketMedio 
     rr: getExpansaoQty('rr', startDate, endDate),
     proposta: getExpansaoQty('proposta', startDate, endDate),
     venda: getExpansaoQty('venda', startDate, endDate),
+  } : useO2TaxData ? {
+    mql: getO2TaxQty('mql', startDate, endDate),
+    rm: getO2TaxQty('rm', startDate, endDate),
+    rr: getO2TaxQty('rr', startDate, endDate),
+    proposta: getO2TaxQty('proposta', startDate, endDate),
+    venda: getO2TaxQty('venda', startDate, endDate),
   } : {
     mql: getMqlsQtyForPeriod(startDate, endDate),
     rm: getClosersQty('rm', startDate, endDate),

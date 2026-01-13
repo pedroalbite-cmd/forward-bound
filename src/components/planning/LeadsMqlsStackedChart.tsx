@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Toolti
 import { BUType } from "@/hooks/useFunnelRealized";
 import { useSheetMetas, ChartGrouping } from "@/hooks/useSheetMetas";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
+import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { format, eachDayOfInterval, differenceInDays, addDays, eachMonthOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -18,9 +19,11 @@ const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Ma
 export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsMqlsStackedChartProps) {
   const { getMqlsGroupedData, getMqlsMetaForPeriod, getMqlsQtyForPeriod } = useSheetMetas(startDate, endDate);
   const { getGroupedData: getExpansaoGroupedData, getMetaForPeriod: getExpansaoMeta, getQtyForPeriod: getExpansaoQty } = useExpansaoMetas(startDate, endDate);
+  const { getGroupedData: getO2TaxGroupedData, getMetaForPeriod: getO2TaxMeta, getQtyForPeriod: getO2TaxQty } = useO2TaxMetas(startDate, endDate);
   
-  // Check if we should use expansão data (for Franquia BU)
+  // Check if we should use external database data
   const useExpansaoData = selectedBU === 'franquia';
+  const useO2TaxData = selectedBU === 'o2_tax';
   
   // Determine grouping based on period length
   const daysInPeriod = differenceInDays(endDate, startDate) + 1;
@@ -29,14 +32,20 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsM
   // Get grouped data based on selected BU
   const sheetData = useExpansaoData 
     ? getExpansaoGroupedData('mql', startDate, endDate, grouping)
+    : useO2TaxData
+    ? getO2TaxGroupedData('mql', startDate, endDate, grouping)
     : getMqlsGroupedData(startDate, endDate, grouping);
   
   // Get total meta and realized for the period
   const periodMeta = useExpansaoData 
     ? getExpansaoMeta('mql', startDate, endDate)
+    : useO2TaxData
+    ? getO2TaxMeta('mql', startDate, endDate)
     : getMqlsMetaForPeriod(startDate, endDate);
   const totalRealized = useExpansaoData 
     ? getExpansaoQty('mql', startDate, endDate)
+    : useO2TaxData
+    ? getO2TaxQty('mql', startDate, endDate)
     : getMqlsQtyForPeriod(startDate, endDate);
 
   // Build chart data with proper date labels
