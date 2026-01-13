@@ -17,54 +17,36 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Parse request body first to check for diagnostic mode
+    // Parse request body
     const body = await req.json();
-    const { table, action = 'preview', limit = 100, diagnostic = false } = body;
+    const { table, action = 'preview', limit = 100 } = body;
     
-    // For diagnostic mode, skip auth (temporary for debugging)
-    if (!diagnostic) {
-      // Verify admin authorization
-      const authHeader = req.headers.get('Authorization');
-      if (!authHeader) {
-        console.error('No authorization header provided');
-        return new Response(
-          JSON.stringify({ error: 'Authorization header required' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
-
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-      
-      if (authError || !user) {
-        console.error('Auth error:', authError);
-        return new Response(
-          JSON.stringify({ error: 'Invalid token' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // Check if user is admin
-      const { data: roleData, error: roleError } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .single();
-
-      if (roleError || roleData?.role !== 'admin') {
-        console.error('User is not admin:', roleError);
-        return new Response(
-          JSON.stringify({ error: 'Admin access required' }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+    // Verify user is authenticated (any authenticated user can read expansão data)
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('No authorization header provided');
+      return new Response(
+        JSON.stringify({ error: 'Authorization header required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
-    console.log(`Action: ${action}, Table: ${table}, Limit: ${limit}, Diagnostic: ${diagnostic}`);
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      return new Response(
+        JSON.stringify({ error: 'Invalid token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`User ${user.email} - Action: ${action}, Table: ${table}, Limit: ${limit}`);
 
     // Get external database credentials
     const host = Deno.env.get('EXTERNAL_PG_HOST');
