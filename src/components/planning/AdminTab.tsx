@@ -13,7 +13,7 @@ import { CreateUserForm } from './CreateUserForm';
 import { EditUserDialog } from './EditUserDialog';
 import { DeleteUserDialog } from './DeleteUserDialog';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
-import { ExternalDbExplorer } from './ExternalDbExplorer';
+
 
 const TAB_OPTIONS: { key: TabKey; label: string }[] = [
   { key: 'context', label: 'Macro 2025' },
@@ -291,9 +291,6 @@ export function AdminTab() {
         user={selectedUser}
         onDelete={handleDeleteUser}
       />
-
-      {/* External Database Explorer */}
-      <ExternalDbExplorer />
     </div>
   );
 }

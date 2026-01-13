@@ -9,6 +9,7 @@ import { RefreshCw, Loader2, CalendarIcon } from "lucide-react";
 import { useFunnelRealized, IndicatorType, BUType } from "@/hooks/useFunnelRealized";
 import { useSheetMetas, ChartGrouping } from "@/hooks/useSheetMetas";
 import { useClosersMetas, CloserIndicator } from "@/hooks/useClosersMetas";
+import { useExpansaoMetas, ExpansaoIndicator } from "@/hooks/useExpansaoMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { format, startOfYear, endOfYear, differenceInDays, eachMonthOfInterval, addDays, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -127,6 +128,10 @@ export function IndicatorsTab() {
   const { getTotal, syncWithPipefy, isSyncing, isLoading } = useFunnelRealized(startDate, endDate);
   const { getMqlsMetaForPeriod, getMqlsQtyForPeriod, getMqlsGroupedData, isLoading: isLoadingMetas } = useSheetMetas(startDate, endDate);
   const { getQtyForPeriod: getClosersQty, getMetaForPeriod: getClosersMeta, getGroupedData: getClosersGroupedData, isLoading: isLoadingClosers } = useClosersMetas(startDate, endDate);
+  const { getQtyForPeriod: getExpansaoQty, getMetaForPeriod: getExpansaoMeta, getGroupedData: getExpansaoGroupedData, isLoading: isLoadingExpansao, refetch: refetchExpansao } = useExpansaoMetas(startDate, endDate);
+
+  // Check if we should use expansão data (for Franquia BU)
+  const useExpansaoData = selectedBU === 'franquia';
 
   const daysInPeriod = differenceInDays(endDate, startDate) + 1;
   const periodFraction = daysInPeriod / 365;
@@ -155,8 +160,13 @@ export function IndicatorsTab() {
 
   const chartLabels = getChartLabels();
 
-  // Get meta for indicator - uses sheet meta for MQLs, closers meta for others
+  // Get meta for indicator - uses expansão data for Franquia, sheet meta for MQLs, closers meta for others
   const getMetaForIndicator = (indicator: IndicatorConfig) => {
+    // For Franquia BU, use expansão data from external database
+    if (useExpansaoData) {
+      return getExpansaoMeta(indicator.key as ExpansaoIndicator, startDate, endDate);
+    }
+    
     if (indicator.useSheetMeta && indicator.key === 'mql') {
       const sheetMeta = getMqlsMetaForPeriod(startDate, endDate);
       if (sheetMeta > 0) return sheetMeta;
@@ -168,8 +178,13 @@ export function IndicatorsTab() {
     return Math.round(indicator.annualMeta * periodFraction);
   };
 
-  // Get realized value for indicator - uses sheet qty for MQLs, closers qty for others
+  // Get realized value for indicator - uses expansão data for Franquia, sheet qty for MQLs, closers qty for others
   const getRealizedForIndicator = (indicator: IndicatorConfig) => {
+    // For Franquia BU, use expansão data from external database
+    if (useExpansaoData) {
+      return getExpansaoQty(indicator.key as ExpansaoIndicator, startDate, endDate);
+    }
+    
     if (indicator.useSheetMeta && indicator.key === 'mql') {
       const sheetQty = getMqlsQtyForPeriod(startDate, endDate);
       if (sheetQty > 0) return sheetQty;
@@ -182,6 +197,16 @@ export function IndicatorsTab() {
   };
 
   const buildChartData = (indicator: IndicatorConfig) => {
+    // For Franquia BU, use expansão data from external database
+    if (useExpansaoData) {
+      const expansaoData = getExpansaoGroupedData(indicator.key as ExpansaoIndicator, startDate, endDate, grouping);
+      return chartLabels.map((label, index) => ({ 
+        label, 
+        realizado: expansaoData.qty[index] || 0, 
+        meta: expansaoData.meta[index] || 0 
+      }));
+    }
+    
     // For MQLs, use sheet data
     if (indicator.useSheetMeta && indicator.key === 'mql') {
       const sheetData = getMqlsGroupedData(startDate, endDate, grouping);
@@ -314,7 +339,7 @@ export function IndicatorsTab() {
         ))}
       </div>
 
-      {isLoading && (
+      {(isLoading || isLoadingExpansao) && (
         <div className="fixed inset-0 bg-background/50 flex items-center justify-center z-50">
           <div className="flex items-center gap-2 bg-card p-4 rounded-lg shadow-lg"><Loader2 className="h-5 w-5 animate-spin" /><span>Carregando dados...</span></div>
         </div>
