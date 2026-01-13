@@ -2,10 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { eachDayOfInterval, eachMonthOfInterval, addDays, differenceInDays } from "date-fns";
 
-export type ExpansaoIndicator = 'mql' | 'rm' | 'rr' | 'proposta' | 'venda';
+export type OxyHackerIndicator = 'mql' | 'rm' | 'rr' | 'proposta' | 'venda';
 export type ChartGrouping = 'daily' | 'weekly' | 'monthly';
 
-interface ExpansaoCard {
+interface OxyHackerCard {
   id: string;
   titulo: string;
   faseAtual: string;
@@ -16,12 +16,12 @@ interface ExpansaoCard {
   produto: string;
 }
 
-interface ExpansaoMetasResult {
-  cards: ExpansaoCard[];
+interface OxyHackerMetasResult {
+  cards: OxyHackerCard[];
 }
 
 // Map Pipefy phase names to indicator keys
-const PHASE_TO_INDICATOR: Record<string, ExpansaoIndicator> = {
+const PHASE_TO_INDICATOR: Record<string, OxyHackerIndicator> = {
   'MQL': 'mql',
   'Reunião agendada / Qualificado': 'rm',
   'Reunião Realizada': 'rr',
@@ -36,16 +36,16 @@ function parseDate(dateValue: string | null): Date | null {
   return isNaN(date.getTime()) ? null : date;
 }
 
-export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
+export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['expansao-metas', startDate?.toISOString(), endDate?.toISOString()],
-    queryFn: async (): Promise<ExpansaoMetasResult> => {
+    queryKey: ['oxy-hacker-metas', startDate?.toISOString(), endDate?.toISOString()],
+    queryFn: async (): Promise<OxyHackerMetasResult> => {
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
         body: { table: 'pipefy_cards_expansao', action: 'preview', limit: 1000 }
       });
 
       if (fetchError) {
-        console.error('Error fetching expansao data:', fetchError);
+        console.error('Error fetching oxy hacker data:', fetchError);
         throw fetchError;
       }
 
@@ -55,16 +55,16 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
       }
 
       // Parse the data - group by ID and track phase transitions
-      const cardMap = new Map<string, ExpansaoCard[]>();
+      const cardMap = new Map<string, OxyHackerCard[]>();
       
       for (const row of responseData.data) {
         const id = String(row.ID);
         const produto = row['Produtos'] || '';
         
-        // Filter only "Franquia" products for this hook
-        if (produto !== 'Franquia') continue;
+        // Filter only "Oxy Hacker" products for this hook
+        if (produto !== 'Oxy Hacker') continue;
         
-        const card: ExpansaoCard = {
+        const card: OxyHackerCard = {
           id,
           titulo: row['Título'] || '',
           faseAtual: row['Fase Atual'] || '',
@@ -82,14 +82,14 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
       }
 
       // For each card, we want to count each phase transition as an event
-      const cards: ExpansaoCard[] = [];
+      const cards: OxyHackerCard[] = [];
       cardMap.forEach((cardVersions) => {
         // Sort by dataUltimaFase to get chronological order
         cardVersions.sort((a, b) => a.dataUltimaFase.getTime() - b.dataUltimaFase.getTime());
         cards.push(...cardVersions);
       });
 
-      console.log(`[useExpansaoMetas] Loaded ${cards.length} Franquia card events from external db`);
+      console.log(`[useOxyHackerMetas] Loaded ${cards.length} Oxy Hacker card events from external db`);
       return { cards };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -97,7 +97,7 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
   });
 
   // Get total qty for a specific indicator and date range
-  const getQtyForPeriod = (indicator: ExpansaoIndicator, start?: Date, end?: Date): number => {
+  const getQtyForPeriod = (indicator: OxyHackerIndicator, start?: Date, end?: Date): number => {
     if (!data?.cards || data.cards.length === 0) return 0;
     
     const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
@@ -114,44 +114,44 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
       }
     }
     
-    console.log(`[useExpansaoMetas] getQtyForPeriod ${indicator}: ${total}`);
+    console.log(`[useOxyHackerMetas] getQtyForPeriod ${indicator}: ${total}`);
     return total;
   };
 
   // Get total meta for a specific indicator and date range
-  // For expansão, we use fixed monthly metas based on planning
-  const getMetaForPeriod = (indicator: ExpansaoIndicator, start?: Date, end?: Date): number => {
+  // For Oxy Hacker, we use fixed metas based on planning (100 units/year)
+  const getMetaForPeriod = (indicator: OxyHackerIndicator, start?: Date, end?: Date): number => {
     if (!start || !end) return 0;
     
     const daysInPeriod = differenceInDays(end, start) + 1;
     const periodFraction = daysInPeriod / 365;
     
-    // Annual metas based on planning (Franquia: 20 units/year)
-    const annualMetas: Record<ExpansaoIndicator, number> = {
-      mql: 200,       // ~17/month for 20 sales
-      rm: 100,        // 50% of MQLs
-      rr: 60,         // 60% of RMs
-      proposta: 40,   // 67% of RRs
-      venda: 20,      // 50% of propostas (target: 20 franquias/year)
+    // Annual metas based on planning (Oxy Hacker: 100 units/year)
+    const annualMetas: Record<OxyHackerIndicator, number> = {
+      mql: 1000,      // ~83/month for 100 sales (10x)
+      rm: 500,        // 50% of MQLs
+      rr: 300,        // 60% of RMs
+      proposta: 200,  // 67% of RRs
+      venda: 100,     // 50% of propostas (target: 100 Oxy Hacker/year)
     };
     
     return Math.round(annualMetas[indicator] * periodFraction);
   };
 
   // Get grouped data for charts (returns array of values per period)
-  const getGroupedData = (indicator: ExpansaoIndicator, start: Date, end: Date, grouping: ChartGrouping): { qty: number[]; meta: number[] } => {
+  const getGroupedData = (indicator: OxyHackerIndicator, start: Date, end: Date, grouping: ChartGrouping): { qty: number[]; meta: number[] } => {
     if (!data?.cards || data.cards.length === 0) return { qty: [], meta: [] };
 
     const qtyArray: number[] = [];
     const metaArray: number[] = [];
     
     const daysInYear = 365;
-    const annualMetas: Record<ExpansaoIndicator, number> = {
-      mql: 200,
-      rm: 100,
-      rr: 60,
-      proposta: 40,
-      venda: 20,
+    const annualMetas: Record<OxyHackerIndicator, number> = {
+      mql: 1000,
+      rm: 500,
+      rr: 300,
+      proposta: 200,
+      venda: 100,
     };
     const dailyMeta = annualMetas[indicator] / daysInYear;
 
