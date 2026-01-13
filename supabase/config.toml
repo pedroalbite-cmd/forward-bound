@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.sync-from-sheets]
 verify_jwt = false
+
+[functions.read-sheet-tab]
+verify_jwt = false
+
+[functions.query-external-db]
+verify_jwt = false
