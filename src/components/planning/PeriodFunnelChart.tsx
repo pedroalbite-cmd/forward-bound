@@ -3,6 +3,7 @@ import { useSheetMetas } from "@/hooks/useSheetMetas";
 import { useClosersMetas, CloserIndicator } from "@/hooks/useClosersMetas";
 import { useExpansaoMetas, ExpansaoIndicator } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas, O2TaxIndicator } from "@/hooks/useO2TaxMetas";
+import { useOxyHackerMetas, OxyHackerIndicator } from "@/hooks/useOxyHackerMetas";
 import { BUType, IndicatorType } from "@/hooks/useFunnelRealized";
 
 interface PeriodFunnelChartProps {
@@ -28,13 +29,15 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU, ticketMedio 
   const { getQtyForPeriod: getClosersQty } = useClosersMetas(startDate, endDate);
   const { getQtyForPeriod: getExpansaoQty } = useExpansaoMetas(startDate, endDate);
   const { getQtyForPeriod: getO2TaxQty } = useO2TaxMetas(startDate, endDate);
+  const { getQtyForPeriod: getOxyHackerQty } = useOxyHackerMetas(startDate, endDate);
   
   // Check if we should use external database data
   const useExpansaoData = selectedBU === 'franquia';
   const useO2TaxData = selectedBU === 'o2_tax';
+  const useOxyHackerData = selectedBU === 'oxy_hacker';
   
-  // Different tickets per BU: Franquia R$140k, O2 TAX R$15k
-  const effectiveTicket = useExpansaoData ? 140000 : useO2TaxData ? 15000 : ticketMedio;
+  // Different tickets per BU: Franquia R$140k, O2 TAX R$15k, Oxy Hacker R$54k
+  const effectiveTicket = useExpansaoData ? 140000 : useO2TaxData ? 15000 : useOxyHackerData ? 54000 : ticketMedio;
   
   // Get totals based on selected BU
   const totals = useExpansaoData ? {
@@ -49,6 +52,12 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU, ticketMedio 
     rr: getO2TaxQty('rr', startDate, endDate),
     proposta: getO2TaxQty('proposta', startDate, endDate),
     venda: getO2TaxQty('venda', startDate, endDate),
+  } : useOxyHackerData ? {
+    mql: getOxyHackerQty('mql', startDate, endDate),
+    rm: getOxyHackerQty('rm', startDate, endDate),
+    rr: getOxyHackerQty('rr', startDate, endDate),
+    proposta: getOxyHackerQty('proposta', startDate, endDate),
+    venda: getOxyHackerQty('venda', startDate, endDate),
   } : {
     mql: getMqlsQtyForPeriod(startDate, endDate),
     rm: getClosersQty('rm', startDate, endDate),

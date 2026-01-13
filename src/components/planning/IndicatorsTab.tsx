@@ -11,6 +11,7 @@ import { useSheetMetas, ChartGrouping } from "@/hooks/useSheetMetas";
 import { useClosersMetas, CloserIndicator } from "@/hooks/useClosersMetas";
 import { useExpansaoMetas, ExpansaoIndicator } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas, O2TaxIndicator } from "@/hooks/useO2TaxMetas";
+import { useOxyHackerMetas, OxyHackerIndicator } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { format, startOfYear, endOfYear, differenceInDays, eachMonthOfInterval, addDays, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -131,10 +132,12 @@ export function IndicatorsTab() {
   const { getQtyForPeriod: getClosersQty, getMetaForPeriod: getClosersMeta, getGroupedData: getClosersGroupedData, isLoading: isLoadingClosers } = useClosersMetas(startDate, endDate);
   const { getQtyForPeriod: getExpansaoQty, getMetaForPeriod: getExpansaoMeta, getGroupedData: getExpansaoGroupedData, isLoading: isLoadingExpansao, refetch: refetchExpansao } = useExpansaoMetas(startDate, endDate);
   const { getQtyForPeriod: getO2TaxQty, getMetaForPeriod: getO2TaxMeta, getGroupedData: getO2TaxGroupedData, isLoading: isLoadingO2Tax } = useO2TaxMetas(startDate, endDate);
+  const { getQtyForPeriod: getOxyHackerQty, getMetaForPeriod: getOxyHackerMeta, getGroupedData: getOxyHackerGroupedData, isLoading: isLoadingOxyHacker } = useOxyHackerMetas(startDate, endDate);
 
   // Check if we should use external database data
   const useExpansaoData = selectedBU === 'franquia';
   const useO2TaxData = selectedBU === 'o2_tax';
+  const useOxyHackerData = selectedBU === 'oxy_hacker';
 
   const daysInPeriod = differenceInDays(endDate, startDate) + 1;
   const periodFraction = daysInPeriod / 365;
@@ -163,7 +166,7 @@ export function IndicatorsTab() {
 
   const chartLabels = getChartLabels();
 
-  // Get meta for indicator - uses external db data for Franquia/O2 TAX, sheet meta for MQLs, closers meta for others
+  // Get meta for indicator - uses external db data for Franquia/O2 TAX/Oxy Hacker, sheet meta for MQLs, closers meta for others
   const getMetaForIndicator = (indicator: IndicatorConfig) => {
     // For Franquia BU, use expansão data from external database
     if (useExpansaoData) {
@@ -173,6 +176,11 @@ export function IndicatorsTab() {
     // For O2 TAX BU, use O2 TAX data from external database
     if (useO2TaxData) {
       return getO2TaxMeta(indicator.key as O2TaxIndicator, startDate, endDate);
+    }
+    
+    // For Oxy Hacker BU, use Oxy Hacker data from external database
+    if (useOxyHackerData) {
+      return getOxyHackerMeta(indicator.key as OxyHackerIndicator, startDate, endDate);
     }
     
     if (indicator.useSheetMeta && indicator.key === 'mql') {
@@ -186,7 +194,7 @@ export function IndicatorsTab() {
     return Math.round(indicator.annualMeta * periodFraction);
   };
 
-  // Get realized value for indicator - uses external db data for Franquia/O2 TAX, sheet qty for MQLs, closers qty for others
+  // Get realized value for indicator - uses external db data for Franquia/O2 TAX/Oxy Hacker, sheet qty for MQLs, closers qty for others
   const getRealizedForIndicator = (indicator: IndicatorConfig) => {
     // For Franquia BU, use expansão data from external database
     if (useExpansaoData) {
@@ -196,6 +204,11 @@ export function IndicatorsTab() {
     // For O2 TAX BU, use O2 TAX data from external database
     if (useO2TaxData) {
       return getO2TaxQty(indicator.key as O2TaxIndicator, startDate, endDate);
+    }
+    
+    // For Oxy Hacker BU, use Oxy Hacker data from external database
+    if (useOxyHackerData) {
+      return getOxyHackerQty(indicator.key as OxyHackerIndicator, startDate, endDate);
     }
     
     if (indicator.useSheetMeta && indicator.key === 'mql') {
@@ -227,6 +240,16 @@ export function IndicatorsTab() {
         label, 
         realizado: o2taxData.qty[index] || 0, 
         meta: o2taxData.meta[index] || 0 
+      }));
+    }
+    
+    // For Oxy Hacker BU, use Oxy Hacker data from external database
+    if (useOxyHackerData) {
+      const oxyHackerData = getOxyHackerGroupedData(indicator.key as OxyHackerIndicator, startDate, endDate, grouping);
+      return chartLabels.map((label, index) => ({ 
+        label, 
+        realizado: oxyHackerData.qty[index] || 0, 
+        meta: oxyHackerData.meta[index] || 0 
       }));
     }
     
