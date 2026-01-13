@@ -23,7 +23,7 @@ interface ExpansaoMetasResult {
 const PHASE_TO_INDICATOR: Record<string, ExpansaoIndicator> = {
   'MQL': 'mql',
   'Reunião agendada / Qualificado': 'rm',
-  '1° Reunião Realizada - Apresentação': 'rr',
+  'Reunião Realizada': 'rr',
   'Proposta enviada / Follow Up': 'proposta',
   'Ganho': 'venda',
 };
