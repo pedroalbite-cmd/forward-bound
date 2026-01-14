@@ -11,6 +11,7 @@ import { StructureTab } from "@/components/planning/StructureTab";
 import { SalesGoalsTab } from "@/components/planning/SalesGoalsTab";
 import { AdminTab } from "@/components/planning/AdminTab";
 import { IndicatorsTab } from "@/components/planning/IndicatorsTab";
+import { PlanGrowthDataLoader } from "@/components/planning/PlanGrowthDataLoader";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserPermissions, TabKey } from "@/hooks/useUserPermissions";
 import { MediaMetasProvider } from "@/contexts/MediaMetasContext";
@@ -57,6 +58,7 @@ export default function Planning2026() {
 
   return (
     <MediaMetasProvider>
+      <PlanGrowthDataLoader />
       <div className="min-h-screen bg-background">
         {/* Header */}
         <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
