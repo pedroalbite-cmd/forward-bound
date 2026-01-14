@@ -933,7 +933,7 @@ export function MediaInvestmentTab() {
   const overallROI = totalFaturamento / totalInvestimento;
 
   // Publish metas to context for SalesGoalsTab consumption
-  const { setMetasPorBU } = useMediaMetas();
+  const { setMetasPorBU, setFunnelData } = useMediaMetas();
   
   useEffect(() => {
     setMetasPorBU({
@@ -950,7 +950,51 @@ export function MediaInvestmentTab() {
         franquiaFunnel.map(d => [d.month, d.faturamentoMeta])
       ),
     });
-  }, [modeloAtualFunnel, o2TaxFunnel, oxyHackerFunnel, franquiaFunnel, setMetasPorBU]);
+    
+    // Publish full funnel data for IndicatorsTab consumption
+    setFunnelData({
+      modeloAtual: modeloAtualFunnel.map(d => ({
+        month: d.month,
+        leads: Math.round(d.leads),
+        mqls: Math.round(d.mqls),
+        rms: Math.round(d.rms),
+        rrs: Math.round(d.rrs),
+        propostas: Math.round(d.propostas),
+        vendas: Math.round(d.vendas),
+        investimento: Math.round(d.investimento),
+      })),
+      o2Tax: o2TaxFunnel.map(d => ({
+        month: d.month,
+        leads: Math.round(d.leads),
+        mqls: Math.round(d.mqls),
+        rms: Math.round(d.rms),
+        rrs: Math.round(d.rrs),
+        propostas: Math.round(d.propostas),
+        vendas: Math.round(d.vendas),
+        investimento: Math.round(d.investimento),
+      })),
+      oxyHacker: oxyHackerFunnel.map(d => ({
+        month: d.month,
+        leads: Math.round(d.leads),
+        mqls: Math.round(d.mqls),
+        rms: Math.round(d.rms),
+        rrs: Math.round(d.rrs),
+        propostas: Math.round(d.propostas),
+        vendas: Math.round(d.vendas),
+        investimento: Math.round(d.investimento),
+      })),
+      franquia: franquiaFunnel.map(d => ({
+        month: d.month,
+        leads: Math.round(d.leads),
+        mqls: Math.round(d.mqls),
+        rms: Math.round(d.rms),
+        rrs: Math.round(d.rrs),
+        propostas: Math.round(d.propostas),
+        vendas: Math.round(d.vendas),
+        investimento: Math.round(d.investimento),
+      })),
+    });
+  }, [modeloAtualFunnel, o2TaxFunnel, oxyHackerFunnel, franquiaFunnel, setMetasPorBU, setFunnelData]);
 
   // Chart data for stacked area
   const investmentChartData = months.map((month, index) => ({
