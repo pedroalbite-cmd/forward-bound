@@ -10,7 +10,6 @@ interface PeriodFunnelChartProps {
   startDate: Date;
   endDate: Date;
   selectedBU: BUType | 'all';
-  ticketMedio?: number;
 }
 
 const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Math.round(value));
@@ -24,7 +23,7 @@ interface FunnelStage {
   conversionPercent: number;
 }
 
-export function PeriodFunnelChart({ startDate, endDate, selectedBU, ticketMedio = 50000 }: PeriodFunnelChartProps) {
+export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunnelChartProps) {
   const { getMqlsQtyForPeriod } = useSheetMetas(startDate, endDate);
   const { getQtyForPeriod: getClosersQty } = useClosersMetas(startDate, endDate);
   const { getQtyForPeriod: getExpansaoQty } = useExpansaoMetas(startDate, endDate);
@@ -36,8 +35,8 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU, ticketMedio 
   const useO2TaxData = selectedBU === 'o2_tax';
   const useOxyHackerData = selectedBU === 'oxy_hacker';
   
-  // Different tickets per BU: Franquia R$140k, O2 TAX R$15k, Oxy Hacker R$54k
-  const effectiveTicket = useExpansaoData ? 140000 : useO2TaxData ? 15000 : useOxyHackerData ? 54000 : ticketMedio;
+  // Different tickets per BU: Franquia R$140k, Oxy Hacker R$54k, O2 TAX R$15k, Modelo Atual/Consolidado R$17k
+  const effectiveTicket = useExpansaoData ? 140000 : useOxyHackerData ? 54000 : useO2TaxData ? 15000 : 17000;
   
   // Get totals based on selected BU
   const totals = useExpansaoData ? {
