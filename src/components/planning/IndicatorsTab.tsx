@@ -13,7 +13,7 @@ import { useExpansaoMetas, ExpansaoIndicator } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas, O2TaxIndicator } from "@/hooks/useO2TaxMetas";
 import { useOxyHackerMetas, OxyHackerIndicator } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
-import { format, startOfYear, endOfYear, differenceInDays, eachMonthOfInterval, addDays, eachDayOfInterval, getMonth } from "date-fns";
+import { format, startOfYear, endOfYear, differenceInDays, eachMonthOfInterval, addDays, eachDayOfInterval, getMonth, startOfMonth, endOfMonth } from "date-fns";
 import { FunnelDataItem } from "@/contexts/MediaMetasContext";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -141,7 +141,7 @@ export function IndicatorsTab() {
   // Month name mapping for funnelData lookup
   const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   
-  // Helper function to calculate meta from funnelData for a given period
+  // Helper function to calculate meta from funnelData for a given period (pro-rated for partial months)
   const calcularMetaDoPeriodo = (
     funnelItems: FunnelDataItem[] | undefined,
     indicatorKey: IndicatorType,
@@ -149,23 +149,41 @@ export function IndicatorsTab() {
     end: Date
   ): number => {
     if (!funnelItems || funnelItems.length === 0) return 0;
-    
+
+    const getItemValue = (item: FunnelDataItem): number => {
+      switch (indicatorKey) {
+        case 'mql': return item.mqls;
+        case 'rm': return item.rms;
+        case 'rr': return item.rrs;
+        case 'proposta': return item.propostas;
+        case 'venda': return item.vendas;
+        default: return 0;
+      }
+    };
+
     const monthsInPeriod = eachMonthOfInterval({ start, end });
     let total = 0;
-    
+
     for (const monthDate of monthsInPeriod) {
       const monthName = monthNames[getMonth(monthDate)];
       const item = funnelItems.find(f => f.month === monthName);
-      if (item) {
-        switch (indicatorKey) {
-          case 'mql': total += item.mqls; break;
-          case 'rm': total += item.rms; break;
-          case 'rr': total += item.rrs; break;
-          case 'proposta': total += item.propostas; break;
-          case 'venda': total += item.vendas; break;
-        }
-      }
+      if (!item) continue;
+
+      const monthStart = startOfMonth(monthDate);
+      const monthEnd = endOfMonth(monthDate);
+
+      const overlapStart = start > monthStart ? start : monthStart;
+      const overlapEnd = end < monthEnd ? end : monthEnd;
+
+      if (overlapStart > overlapEnd) continue;
+
+      const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
+      const daysInMonth = differenceInDays(monthEnd, monthStart) + 1;
+      const fraction = daysInMonth > 0 ? overlapDays / daysInMonth : 0;
+
+      total += getItemValue(item) * fraction;
     }
+
     return Math.round(total);
   };
   
@@ -284,39 +302,75 @@ export function IndicatorsTab() {
   };
 
   const buildChartData = (indicator: IndicatorConfig) => {
+    const getProratedMetaSeries = (totalMetaPeriodo: number): number[] => {
+      if (totalMetaPeriodo <= 0) return [];
+      const metaPorDia = totalMetaPeriodo / daysInPeriod;
+
+      if (grouping === 'daily') {
+        return chartLabels.map(() => Math.round(metaPorDia));
+      }
+
+      if (grouping === 'weekly') {
+        const numWeeks = chartLabels.length;
+        const lastWeekDays = daysInPeriod - (numWeeks - 1) * 7;
+        return chartLabels.map((_, index) => {
+          const days = index === numWeeks - 1 ? lastWeekDays : 7;
+          return Math.round(metaPorDia * days);
+        });
+      }
+
+      // monthly handled elsewhere
+      return [];
+    };
+
     // For Franquia BU, use funnelData metas from Plan Growth + realized from external db
     if (useExpansaoData) {
       const expansaoData = getExpansaoGroupedData(indicator.key as ExpansaoIndicator, startDate, endDate, grouping);
-      const funnelMetas = funnelData?.franquia ? getMonthlyMetasFromFunnel(funnelData.franquia, indicator.key, startDate, endDate) : [];
-      
-      return chartLabels.map((label, index) => ({ 
-        label, 
-        realizado: expansaoData.qty[index] || 0, 
-        meta: grouping === 'monthly' && funnelMetas[index] !== undefined ? funnelMetas[index] : expansaoData.meta[index] || 0 
+      const funnelMetasMensais = funnelData?.franquia ? getMonthlyMetasFromFunnel(funnelData.franquia, indicator.key, startDate, endDate) : [];
+      const metaPeriodo = funnelData?.franquia ? calcularMetaDoPeriodo(funnelData.franquia, indicator.key, startDate, endDate) : 0;
+      const metasProrateadas = grouping !== 'monthly' ? getProratedMetaSeries(metaPeriodo) : [];
+
+      return chartLabels.map((label, index) => ({
+        label,
+        realizado: expansaoData.qty[index] || 0,
+        meta:
+          grouping === 'monthly'
+            ? (funnelMetasMensais[index] ?? 0)
+            : (metasProrateadas[index] ?? 0),
       }));
     }
-    
+
     // For O2 TAX BU, use funnelData metas from Plan Growth + realized from external db
     if (useO2TaxData) {
       const o2taxData = getO2TaxGroupedData(indicator.key as O2TaxIndicator, startDate, endDate, grouping);
-      const funnelMetas = funnelData?.o2Tax ? getMonthlyMetasFromFunnel(funnelData.o2Tax, indicator.key, startDate, endDate) : [];
-      
-      return chartLabels.map((label, index) => ({ 
-        label, 
-        realizado: o2taxData.qty[index] || 0, 
-        meta: grouping === 'monthly' && funnelMetas[index] !== undefined ? funnelMetas[index] : o2taxData.meta[index] || 0 
+      const funnelMetasMensais = funnelData?.o2Tax ? getMonthlyMetasFromFunnel(funnelData.o2Tax, indicator.key, startDate, endDate) : [];
+      const metaPeriodo = funnelData?.o2Tax ? calcularMetaDoPeriodo(funnelData.o2Tax, indicator.key, startDate, endDate) : 0;
+      const metasProrateadas = grouping !== 'monthly' ? getProratedMetaSeries(metaPeriodo) : [];
+
+      return chartLabels.map((label, index) => ({
+        label,
+        realizado: o2taxData.qty[index] || 0,
+        meta:
+          grouping === 'monthly'
+            ? (funnelMetasMensais[index] ?? 0)
+            : (metasProrateadas[index] ?? 0),
       }));
     }
-    
+
     // For Oxy Hacker BU, use funnelData metas from Plan Growth + realized from external db
     if (useOxyHackerData) {
       const oxyHackerData = getOxyHackerGroupedData(indicator.key as OxyHackerIndicator, startDate, endDate, grouping);
-      const funnelMetas = funnelData?.oxyHacker ? getMonthlyMetasFromFunnel(funnelData.oxyHacker, indicator.key, startDate, endDate) : [];
-      
-      return chartLabels.map((label, index) => ({ 
-        label, 
-        realizado: oxyHackerData.qty[index] || 0, 
-        meta: grouping === 'monthly' && funnelMetas[index] !== undefined ? funnelMetas[index] : oxyHackerData.meta[index] || 0 
+      const funnelMetasMensais = funnelData?.oxyHacker ? getMonthlyMetasFromFunnel(funnelData.oxyHacker, indicator.key, startDate, endDate) : [];
+      const metaPeriodo = funnelData?.oxyHacker ? calcularMetaDoPeriodo(funnelData.oxyHacker, indicator.key, startDate, endDate) : 0;
+      const metasProrateadas = grouping !== 'monthly' ? getProratedMetaSeries(metaPeriodo) : [];
+
+      return chartLabels.map((label, index) => ({
+        label,
+        realizado: oxyHackerData.qty[index] || 0,
+        meta:
+          grouping === 'monthly'
+            ? (funnelMetasMensais[index] ?? 0)
+            : (metasProrateadas[index] ?? 0),
       }));
     }
     
