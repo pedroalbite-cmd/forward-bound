@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Line, ComposedChart, RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
-import { RefreshCw, Loader2, CalendarIcon } from "lucide-react";
+import { RefreshCw, Loader2, CalendarIcon, BarChart3, TrendingUp } from "lucide-react";
 import { useFunnelRealized, IndicatorType, BUType } from "@/hooks/useFunnelRealized";
 import { useSheetMetas, ChartGrouping } from "@/hooks/useSheetMetas";
 import { useClosersMetas, CloserIndicator } from "@/hooks/useClosersMetas";
@@ -19,6 +20,8 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { LeadsMqlsStackedChart } from "./LeadsMqlsStackedChart";
 import { PeriodFunnelChart } from "./PeriodFunnelChart";
+
+type ViewMode = 'daily' | 'accumulated';
 
 type FilterBU = BUType | 'all';
 
@@ -76,22 +79,27 @@ const RadialProgressCard = ({ title, realized, meta }: { title: string; realized
   );
 };
 
-const IndicatorChartSection = ({ title, realizedLabel, realizedTotal, metaTotal, chartData, gradientId }: {
+const IndicatorChartSection = ({ title, realizedLabel, realizedTotal, metaTotal, chartData, gradientId, isAccumulated }: {
   title: string; realizedLabel: string; realizedTotal: number; metaTotal: number;
-  chartData: { label: string; realizado: number; meta: number }[]; gradientId: string;
+  chartData: { label: string; realizado: number; meta: number }[]; gradientId: string; isAccumulated?: boolean;
 }) => (
   <Card className="bg-card border-border">
     <CardHeader className="pb-2">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <CardTitle className="text-base font-semibold text-foreground">{title}</CardTitle>
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-base font-semibold text-foreground">{title}</CardTitle>
+          {isAccumulated && (
+            <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">Acumulado</span>
+          )}
+        </div>
         <div className="flex items-center gap-6 text-sm">
           <span className="text-muted-foreground">{realizedLabel}: <span className="text-foreground font-medium">{formatNumber(realizedTotal)}</span></span>
           <span className="text-muted-foreground">Meta: <span className="text-foreground font-medium">{formatNumber(metaTotal)}</span></span>
         </div>
       </div>
       <div className="flex items-center gap-4 mt-2">
-        <div className="flex items-center gap-2"><div className="w-3 h-0.5 bg-chart-1 rounded" /><span className="text-xs text-muted-foreground">Meta</span></div>
-        <div className="flex items-center gap-2"><div className="w-3 h-0.5 bg-chart-2 rounded" /><span className="text-xs text-muted-foreground">Realizado</span></div>
+        <div className="flex items-center gap-2"><div className="w-3 h-0.5 bg-chart-1 rounded" /><span className="text-xs text-muted-foreground">{isAccumulated ? 'Meta Acumulada' : 'Meta'}</span></div>
+        <div className="flex items-center gap-2"><div className="w-3 h-0.5 bg-chart-2 rounded" /><span className="text-xs text-muted-foreground">{isAccumulated ? 'Realizado Acumulado' : 'Realizado'}</span></div>
       </div>
     </CardHeader>
     <CardContent className="pt-0">
@@ -108,8 +116,8 @@ const IndicatorChartSection = ({ title, realizedLabel, realizedTotal, metaTotal,
             <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
             <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
             <Tooltip contentStyle={{ backgroundColor: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: "8px", color: "hsl(var(--popover-foreground))" }} />
-            <Area type="monotone" dataKey="realizado" stroke="hsl(var(--chart-2))" strokeWidth={2} fill={`url(#${gradientId})`} name="Realizado" />
-            <Line type="monotone" dataKey="meta" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} name="Meta" />
+            <Area type="monotone" dataKey="realizado" stroke="hsl(var(--chart-2))" strokeWidth={2} fill={`url(#${gradientId})`} name={isAccumulated ? "Realizado Acumulado" : "Realizado"} />
+            <Line type="monotone" dataKey="meta" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} name={isAccumulated ? "Meta Acumulada" : "Meta"} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -122,6 +130,7 @@ export function IndicatorsTab() {
   const [selectedBU, setSelectedBU] = useState<FilterBU>('all');
   const [startDate, setStartDate] = useState<Date>(startOfYear(new Date(currentYear, 0, 1)));
   const [endDate, setEndDate] = useState<Date>(endOfYear(new Date(currentYear, 0, 1)));
+  const [viewMode, setViewMode] = useState<ViewMode>('daily');
 
   const handleSync = () => {
     // Use the year from the start date for sync
@@ -422,6 +431,27 @@ export function IndicatorsTab() {
     }));
   };
 
+  // Function to convert chart data to accumulated (running sum) view
+  const toAccumulatedData = (data: { label: string; realizado: number; meta: number }[]) => {
+    let accumulatedRealized = 0;
+    let accumulatedMeta = 0;
+    return data.map((item) => {
+      accumulatedRealized += item.realizado;
+      accumulatedMeta += item.meta;
+      return {
+        label: item.label,
+        realizado: Math.round(accumulatedRealized),
+        meta: Math.round(accumulatedMeta),
+      };
+    });
+  };
+
+  // Get chart data with optional accumulation based on viewMode
+  const getChartDataForIndicator = (indicator: IndicatorConfig) => {
+    const baseData = buildChartData(indicator);
+    return viewMode === 'accumulated' ? toAccumulatedData(baseData) : baseData;
+  };
+
   return (
     <div className="space-y-6">
       {/* Filters */}
@@ -497,12 +527,46 @@ export function IndicatorsTab() {
         <PeriodFunnelChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
       </div>
 
-      {/* Charts */}
+      {/* Charts Section with View Mode Toggle */}
       <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-foreground">Gráficos de Indicadores</h3>
+          <ToggleGroup 
+            type="single" 
+            value={viewMode} 
+            onValueChange={(v) => v && setViewMode(v as ViewMode)}
+            className="bg-muted rounded-lg p-1"
+          >
+            <ToggleGroupItem 
+              value="daily" 
+              aria-label="Meta Diária"
+              className="data-[state=on]:bg-background data-[state=on]:shadow-sm gap-2 px-3"
+            >
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Meta Diária</span>
+            </ToggleGroupItem>
+            <ToggleGroupItem 
+              value="accumulated" 
+              aria-label="Meta Acumulada"
+              className="data-[state=on]:bg-background data-[state=on]:shadow-sm gap-2 px-3"
+            >
+              <TrendingUp className="h-4 w-4" />
+              <span className="hidden sm:inline">Meta Acumulada</span>
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+        
         {indicatorConfigs.map((indicator) => (
-          <IndicatorChartSection key={indicator.key} title={indicator.label} realizedLabel={indicator.shortLabel}
-            realizedTotal={getRealizedForIndicator(indicator)} metaTotal={getMetaForIndicator(indicator)}
-            chartData={buildChartData(indicator)} gradientId={`gradient-${indicator.key}`} />
+          <IndicatorChartSection 
+            key={indicator.key} 
+            title={indicator.label} 
+            realizedLabel={indicator.shortLabel}
+            realizedTotal={getRealizedForIndicator(indicator)} 
+            metaTotal={getMetaForIndicator(indicator)}
+            chartData={getChartDataForIndicator(indicator)} 
+            gradientId={`gradient-${indicator.key}`}
+            isAccumulated={viewMode === 'accumulated'}
+          />
         ))}
       </div>
 
