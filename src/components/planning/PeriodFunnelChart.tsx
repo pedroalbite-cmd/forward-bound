@@ -79,7 +79,7 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
   const vendaValue = totals.venda * effectiveTicket;
 
   // Width percentages for funnel visualization
-  const widthPercentages = [100, 75, 55, 40, 25];
+  const widthPercentages = [100, 80, 60, 45, 35];
 
   // Colors for each stage
   const stageColors = [
@@ -111,20 +111,20 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
             <div key={stage.indicator} className="relative flex items-center justify-center">
               {/* Funnel stage container */}
               <div
-                className={`relative h-12 bg-gradient-to-r ${stageColors[index]} rounded-sm transition-all duration-300 flex items-center justify-center ${
+                className={`relative h-14 bg-gradient-to-r ${stageColors[index]} rounded-sm transition-all duration-300 flex items-center justify-center px-3 min-w-[180px] ${
                   index === stages.length - 1 ? 'ring-2 ring-pink-500 ring-offset-2 ring-offset-background' : ''
                 }`}
                 style={{ width: `${widthPercentages[index]}%` }}
               >
                 {/* Stage content */}
-                <div className="flex items-center gap-2 text-white text-sm font-medium">
-                  <span className="bg-white/20 rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                <div className="flex items-center gap-2 text-white text-sm font-medium whitespace-nowrap overflow-hidden">
+                  <span className="bg-white/20 rounded-full w-5 h-5 flex-shrink-0 flex items-center justify-center text-xs">
                     {stage.number}
                   </span>
-                  <span className="hidden sm:inline">{stage.name}</span>
-                  <span className="font-bold">{formatNumber(stage.value)}</span>
+                  <span className="hidden sm:inline truncate">{stage.name}</span>
+                  <span className="font-bold flex-shrink-0">{formatNumber(stage.value)}</span>
                   {index > 0 && (
-                    <span className="text-white/80 text-xs">
+                    <span className="text-white/80 text-xs flex-shrink-0">
                       ({stage.conversionPercent.toFixed(1)}%)
                     </span>
                   )}

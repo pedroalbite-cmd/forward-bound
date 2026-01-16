@@ -60,14 +60,14 @@ const RadialProgressCard = ({ title, realized, meta }: { title: string; realized
         <CardTitle className="text-sm font-medium text-muted-foreground text-center">{title}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col items-center pt-0">
-        <div className="relative w-24 h-24">
-          <RadialBarChart width={96} height={96} innerRadius="70%" outerRadius="100%" data={chartData} startAngle={90} endAngle={-270}>
+        <div className="relative w-32 h-32">
+          <RadialBarChart width={128} height={128} innerRadius="70%" outerRadius="100%" data={chartData} startAngle={90} endAngle={-270}>
             <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
             <RadialBar background={{ fill: "hsl(var(--muted))" }} dataKey="value" cornerRadius={10} />
           </RadialBarChart>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold text-foreground">{formatNumber(realized)}</span>
-            <span className={`text-xs font-medium ${isAboveMeta ? "text-chart-2" : "text-destructive"}`}>{Math.round(percentage)}%</span>
+            <span className="text-3xl font-bold text-foreground">{formatNumber(realized)}</span>
+            <span className={`text-sm font-medium ${isAboveMeta ? "text-chart-2" : "text-destructive"}`}>{Math.round(percentage)}%</span>
           </div>
         </div>
         <p className="text-sm text-muted-foreground mt-2">Meta: {formatNumber(meta)}</p>
