@@ -103,7 +103,7 @@ const IndicatorChartSection = ({ title, realizedLabel, realizedTotal, metaTotal,
       </div>
     </CardHeader>
     <CardContent className="pt-0">
-      <div className="h-48">
+      <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
@@ -237,13 +237,13 @@ export function IndicatorsTab() {
   const getChartLabels = (): string[] => {
     if (grouping === 'daily') {
       return eachDayOfInterval({ start: startDate, end: endDate }).map(day => 
-        format(day, "d 'de' MMM", { locale: ptBR })
+        format(day, "d")
       );
     } else if (grouping === 'weekly') {
       const numWeeks = Math.ceil(daysInPeriod / 7);
       return Array.from({ length: numWeeks }, (_, i) => {
         const weekStart = addDays(startDate, i * 7);
-        return format(weekStart, "d 'de' MMM", { locale: ptBR });
+        return format(weekStart, "d");
       });
     } else {
       return eachMonthOfInterval({ start: startDate, end: endDate }).map(monthDate => 
