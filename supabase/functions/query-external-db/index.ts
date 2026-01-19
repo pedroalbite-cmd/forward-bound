@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
       console.log(`Schema for ${table}:`, result.columns);
     } else if (action === 'preview') {
       // Get sample data
-      const validTables = ['pipefy_cards', 'pipefy_cards_expansao'];
+      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao'];
       if (!validTables.includes(table)) {
         await client.end();
         return new Response(
@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
       console.log(`Preview for ${table}: ${result.previewRows} rows of ${result.totalRows} total`);
     } else if (action === 'count') {
       // Just get count
-      const validTables = ['pipefy_cards', 'pipefy_cards_expansao'];
+      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao'];
       if (!validTables.includes(table)) {
         await client.end();
         return new Response(

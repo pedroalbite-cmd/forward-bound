@@ -5,18 +5,18 @@ import { eachDayOfInterval, eachMonthOfInterval, addDays, differenceInDays } fro
 export type O2TaxIndicator = 'mql' | 'rm' | 'rr' | 'proposta' | 'venda';
 export type ChartGrouping = 'daily' | 'weekly' | 'monthly';
 
-interface O2TaxCard {
+interface O2TaxMovement {
   id: string;
   titulo: string;
-  faseAtual: string;
-  dataCriacao: Date;
-  dataUltimaFase: Date;
+  fase: string;           // Phase name from movement
+  dataEntrada: Date;      // When entered this phase
+  dataSaida: Date | null; // When left this phase
   valorMRR: number | null;
   valorPontual: number | null;
 }
 
 interface O2TaxMetasResult {
-  cards: O2TaxCard[];
+  movements: O2TaxMovement[];
 }
 
 // Map Pipefy phase names to indicator keys
@@ -26,7 +26,9 @@ const PHASE_TO_INDICATOR: Record<string, O2TaxIndicator> = {
   'Reunião agendada / Qualificado': 'rm',
   '1° Reunião Realizada - Apresentação': 'rr',
   'Proposta enviada / Follow Up': 'proposta',
+  'Enviar para assinatura': 'proposta',
   'Ganho': 'venda',
+  'Contrato assinado': 'venda',
 };
 
 // Parse date string to JS Date
@@ -38,71 +40,65 @@ function parseDate(dateValue: string | null): Date | null {
 
 export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['o2tax-metas', startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ['o2tax-metas-movements', startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async (): Promise<O2TaxMetasResult> => {
+      // Use movements table for accurate phase tracking
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
-        body: { table: 'pipefy_cards', action: 'preview', limit: 1000 }
+        body: { table: 'pipefy_cards_movements', action: 'preview', limit: 5000 }
       });
 
       if (fetchError) {
-        console.error('Error fetching O2 TAX data:', fetchError);
+        console.error('Error fetching O2 TAX movements:', fetchError);
         throw fetchError;
       }
 
       if (!responseData?.data) {
-        console.warn('No data returned from external db for O2 TAX');
-        return { cards: [] };
+        console.warn('No data returned from external db for O2 TAX movements');
+        return { movements: [] };
       }
 
-      // Parse the data - group by ID and track phase transitions
-      const cardMap = new Map<string, O2TaxCard[]>();
+      // Parse movements - each row is a phase transition
+      const movements: O2TaxMovement[] = [];
       
       for (const row of responseData.data) {
-        const id = String(row.ID);
-        const card: O2TaxCard = {
-          id,
+        const movement: O2TaxMovement = {
+          id: String(row.ID),
           titulo: row['Título'] || '',
-          faseAtual: row['Fase Atual'] || '',
-          dataCriacao: parseDate(row['Data Criação']) || new Date(),
-          dataUltimaFase: parseDate(row['Data Última Fase']) || new Date(),
+          fase: row['Fase'] || '',  // This is the phase name from movement
+          dataEntrada: parseDate(row['Entrada']) || new Date(),
+          dataSaida: parseDate(row['Saída']),
           valorMRR: row['Valor MRR'] ? parseFloat(row['Valor MRR']) : null,
           valorPontual: row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : null,
         };
         
-        if (!cardMap.has(id)) {
-          cardMap.set(id, []);
-        }
-        cardMap.get(id)!.push(card);
+        movements.push(movement);
       }
 
-      // For each card, we want to count each phase transition as an event
-      const cards: O2TaxCard[] = [];
-      cardMap.forEach((cardVersions) => {
-        // Sort by dataUltimaFase to get chronological order
-        cardVersions.sort((a, b) => a.dataUltimaFase.getTime() - b.dataUltimaFase.getTime());
-        cards.push(...cardVersions);
-      });
-
-      console.log(`[useO2TaxMetas] Loaded ${cards.length} card events from external db`);
-      return { cards };
+      // Log unique phases for debugging
+      const uniquePhases = [...new Set(movements.map(m => m.fase))];
+      console.log(`[useO2TaxMetas] Loaded ${movements.length} movements from pipefy_cards_movements`);
+      console.log(`[useO2TaxMetas] Unique phases:`, uniquePhases);
+      
+      return { movements };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1,
   });
 
   // Get total qty for a specific indicator and date range
+  // Count movements that ENTERED a phase during the period
   const getQtyForPeriod = (indicator: O2TaxIndicator, start?: Date, end?: Date): number => {
-    if (!data?.cards || data.cards.length === 0) return 0;
+    if (!data?.movements || data.movements.length === 0) return 0;
     
     const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
     const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
     
     let total = 0;
-    for (const card of data.cards) {
-      const cardTime = card.dataUltimaFase.getTime();
-      if (cardTime >= startTime && cardTime <= endTime) {
-        const cardIndicator = PHASE_TO_INDICATOR[card.faseAtual];
-        if (cardIndicator === indicator) {
+    for (const movement of data.movements) {
+      const entryTime = movement.dataEntrada.getTime();
+      if (entryTime >= startTime && entryTime <= endTime) {
+        const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
+        if (movementIndicator === indicator) {
           total += 1;
         }
       }
@@ -113,20 +109,19 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
   };
 
   // Get total meta for a specific indicator and date range
-  // For O2 TAX, we use fixed monthly metas based on planning
   const getMetaForPeriod = (indicator: O2TaxIndicator, start?: Date, end?: Date): number => {
     if (!start || !end) return 0;
     
     const daysInPeriod = differenceInDays(end, start) + 1;
     const periodFraction = daysInPeriod / 365;
     
-    // Annual metas based on O2 TAX planning (estimated targets)
+    // Annual metas based on planning (updated to match real targets)
     const annualMetas: Record<O2TaxIndicator, number> = {
-      mql: 480,       // ~40/month
-      rm: 240,        // 50% of MQLs
-      rr: 144,        // 60% of RMs
-      proposta: 96,   // 67% of RRs
-      venda: 48,      // 50% of propostas
+      mql: 504,       // 42/month
+      rm: 180,        // 15/month
+      rr: 96,         // 8/month
+      proposta: 72,   // 6/month
+      venda: 12,      // 1/month
     };
     
     return Math.round(annualMetas[indicator] * periodFraction);
@@ -134,18 +129,18 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
 
   // Get grouped data for charts (returns array of values per period)
   const getGroupedData = (indicator: O2TaxIndicator, start: Date, end: Date, grouping: ChartGrouping): { qty: number[]; meta: number[] } => {
-    if (!data?.cards || data.cards.length === 0) return { qty: [], meta: [] };
+    if (!data?.movements || data.movements.length === 0) return { qty: [], meta: [] };
 
     const qtyArray: number[] = [];
     const metaArray: number[] = [];
     
     const daysInYear = 365;
     const annualMetas: Record<O2TaxIndicator, number> = {
-      mql: 480,
-      rm: 240,
-      rr: 144,
-      proposta: 96,
-      venda: 48,
+      mql: 504,
+      rm: 180,
+      rr: 96,
+      proposta: 72,
+      venda: 12,
     };
     const dailyMeta = annualMetas[indicator] / daysInYear;
 
@@ -156,11 +151,11 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
         const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59, 999).getTime();
         
         let dayQty = 0;
-        for (const card of data.cards) {
-          const cardTime = card.dataUltimaFase.getTime();
-          if (cardTime >= dayStart && cardTime <= dayEnd) {
-            const cardIndicator = PHASE_TO_INDICATOR[card.faseAtual];
-            if (cardIndicator === indicator) {
+        for (const movement of data.movements) {
+          const entryTime = movement.dataEntrada.getTime();
+          if (entryTime >= dayStart && entryTime <= dayEnd) {
+            const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
+            if (movementIndicator === indicator) {
               dayQty += 1;
             }
           }
@@ -180,11 +175,11 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
         const weekEndTime = new Date(weekEnd.getFullYear(), weekEnd.getMonth(), weekEnd.getDate(), 23, 59, 59, 999).getTime();
         
         let weekQty = 0;
-        for (const card of data.cards) {
-          const cardTime = card.dataUltimaFase.getTime();
-          if (cardTime >= weekStartTime && cardTime <= weekEndTime) {
-            const cardIndicator = PHASE_TO_INDICATOR[card.faseAtual];
-            if (cardIndicator === indicator) {
+        for (const movement of data.movements) {
+          const entryTime = movement.dataEntrada.getTime();
+          if (entryTime >= weekStartTime && entryTime <= weekEndTime) {
+            const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
+            if (movementIndicator === indicator) {
               weekQty += 1;
             }
           }
@@ -202,11 +197,11 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
         const monthEnd = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate(), 23, 59, 59, 999).getTime();
         
         let monthQty = 0;
-        for (const card of data.cards) {
-          const cardTime = card.dataUltimaFase.getTime();
-          if (cardTime >= monthStart && cardTime <= monthEnd) {
-            const cardIndicator = PHASE_TO_INDICATOR[card.faseAtual];
-            if (cardIndicator === indicator) {
+        for (const movement of data.movements) {
+          const entryTime = movement.dataEntrada.getTime();
+          if (entryTime >= monthStart && entryTime <= monthEnd) {
+            const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
+            if (movementIndicator === indicator) {
               monthQty += 1;
             }
           }
@@ -221,7 +216,7 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
   };
 
   return {
-    cards: data?.cards ?? [],
+    movements: data?.movements ?? [],
     isLoading,
     error,
     refetch,
