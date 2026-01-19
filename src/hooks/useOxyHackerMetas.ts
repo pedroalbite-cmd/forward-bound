@@ -28,7 +28,6 @@ const PHASE_TO_INDICATOR: Record<string, OxyHackerIndicator> = {
   'Proposta enviada / Follow Up': 'proposta',
   'Enviar para assinatura': 'proposta',
   'Ganho': 'venda',
-  'Contrato assinado': 'venda',
 };
 
 // Parse date string to JS Date
