@@ -103,20 +103,21 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
     for (const movement of data.movements) {
       const entryTime = movement.dataEntrada.getTime();
       if (entryTime >= startTime && entryTime <= endTime) {
+        const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
+        
         if (indicator === 'venda') {
-          // For "venda", count unique cards where faseAtual is "Ganho"
-          if (movement.faseAtual === 'Ganho') {
+          // For "venda", count unique cards that ENTERED "Ganho" phase during the period
+          if (movement.fase === 'Ganho') {
             uniqueCards.add(movement.id);
           }
         } else if (indicator === 'proposta') {
-          // For "proposta", count cards that passed through proposta OR are now in Ganho
-          const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
-          if (movementIndicator === 'proposta' || movement.faseAtual === 'Ganho') {
+          // For "proposta", count cards that passed through proposta phases OR entered Ganho
+          // (cards in Ganho implicitly had a proposal)
+          if (movementIndicator === 'proposta' || movement.fase === 'Ganho') {
             uniqueCards.add(movement.id);
           }
         } else {
           // For other indicators, count unique cards that passed through the phase
-          const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
           if (movementIndicator === indicator) {
             uniqueCards.add(movement.id);
           }
@@ -142,22 +143,21 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
     for (const movement of data.movements) {
       const entryTime = movement.dataEntrada.getTime();
       if (entryTime >= startTime && entryTime <= endTime) {
+        const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
         let shouldCount = false;
         
         if (indicator === 'venda') {
-          // For "venda", count unique cards where faseAtual is "Ganho"
-          if (movement.faseAtual === 'Ganho') {
+          // For "venda", count unique cards that ENTERED "Ganho" phase
+          if (movement.fase === 'Ganho') {
             shouldCount = true;
           }
         } else if (indicator === 'proposta') {
-          // For "proposta", count cards that passed through proposta OR are now in Ganho
-          const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
-          if (movementIndicator === 'proposta' || movement.faseAtual === 'Ganho') {
+          // For "proposta", count cards that passed through proposta OR entered Ganho
+          if (movementIndicator === 'proposta' || movement.fase === 'Ganho') {
             shouldCount = true;
           }
         } else {
           // For other indicators
-          const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
           if (movementIndicator === indicator) {
             shouldCount = true;
           }
@@ -221,17 +221,17 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
       for (const movement of data.movements) {
         const entryTime = movement.dataEntrada.getTime();
         if (entryTime >= periodStart && entryTime <= periodEnd) {
+          const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
+          
           if (indicator === 'venda') {
-            if (movement.faseAtual === 'Ganho') {
+            if (movement.fase === 'Ganho') {
               uniqueCards.add(movement.id);
             }
           } else if (indicator === 'proposta') {
-            const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
-            if (movementIndicator === 'proposta' || movement.faseAtual === 'Ganho') {
+            if (movementIndicator === 'proposta' || movement.fase === 'Ganho') {
               uniqueCards.add(movement.id);
             }
           } else {
-            const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
             if (movementIndicator === indicator) {
               uniqueCards.add(movement.id);
             }
