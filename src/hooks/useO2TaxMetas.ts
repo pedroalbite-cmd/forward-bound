@@ -13,6 +13,7 @@ interface O2TaxMovement {
   dataSaida: Date | null; // When left this phase
   valorMRR: number | null;
   valorPontual: number | null;
+  valorSetup: number | null;
 }
 
 interface O2TaxMetasResult {
@@ -68,6 +69,7 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
           dataSaida: parseDate(row['Saída']),
           valorMRR: row['Valor MRR'] ? parseFloat(row['Valor MRR']) : null,
           valorPontual: row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : null,
+          valorSetup: row['Valor Setup'] ? parseFloat(row['Valor Setup']) : null,
         };
         
         movements.push(movement);
@@ -105,6 +107,33 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
     
     console.log(`[useO2TaxMetas] getQtyForPeriod ${indicator}: ${total}`);
     return total;
+  };
+
+  // Get total monetary value for a specific indicator and date range
+  // Sums: Valor Pontual + Valor Setup + Valor MRR (1x) for each card
+  const getValueForPeriod = (indicator: O2TaxIndicator, start?: Date, end?: Date): number => {
+    if (!data?.movements || data.movements.length === 0) return 0;
+    
+    const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
+    const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
+    
+    let totalValue = 0;
+    for (const movement of data.movements) {
+      const entryTime = movement.dataEntrada.getTime();
+      if (entryTime >= startTime && entryTime <= endTime) {
+        const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
+        if (movementIndicator === indicator) {
+          // Sum: Valor Pontual + Valor Setup + Valor MRR (1x)
+          const pontual = movement.valorPontual || 0;
+          const setup = movement.valorSetup || 0;
+          const mrr = movement.valorMRR || 0;
+          totalValue += pontual + setup + mrr;
+        }
+      }
+    }
+    
+    console.log(`[useO2TaxMetas] getValueForPeriod ${indicator}: ${totalValue}`);
+    return totalValue;
   };
 
   // Get total meta for a specific indicator and date range
@@ -220,6 +249,7 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
     error,
     refetch,
     getQtyForPeriod,
+    getValueForPeriod,
     getMetaForPeriod,
     getGroupedData,
   };
