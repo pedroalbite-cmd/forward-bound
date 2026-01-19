@@ -26,17 +26,17 @@ interface FunnelStage {
 export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunnelChartProps) {
   const { getMqlsQtyForPeriod } = useSheetMetas(startDate, endDate);
   const { getQtyForPeriod: getClosersQty } = useClosersMetas(startDate, endDate);
-  const { getQtyForPeriod: getExpansaoQty } = useExpansaoMetas(startDate, endDate);
-  const { getQtyForPeriod: getO2TaxQty } = useO2TaxMetas(startDate, endDate);
-  const { getQtyForPeriod: getOxyHackerQty } = useOxyHackerMetas(startDate, endDate);
+  const { getQtyForPeriod: getExpansaoQty, getValueForPeriod: getExpansaoValue } = useExpansaoMetas(startDate, endDate);
+  const { getQtyForPeriod: getO2TaxQty, getValueForPeriod: getO2TaxValue } = useO2TaxMetas(startDate, endDate);
+  const { getQtyForPeriod: getOxyHackerQty, getValueForPeriod: getOxyHackerValue } = useOxyHackerMetas(startDate, endDate);
   
   // Check if we should use external database data
   const useExpansaoData = selectedBU === 'franquia';
   const useO2TaxData = selectedBU === 'o2_tax';
   const useOxyHackerData = selectedBU === 'oxy_hacker';
   
-  // Different tickets per BU: Franquia R$140k, Oxy Hacker R$54k, O2 TAX R$15k, Modelo Atual/Consolidado R$17k
-  const effectiveTicket = useExpansaoData ? 140000 : useOxyHackerData ? 54000 : useO2TaxData ? 15000 : 17000;
+  // Ticket for Modelo Atual/Consolidado (used only for these BUs)
+  const effectiveTicket = 17000;
   
   // Get totals based on selected BU
   const totals = useExpansaoData ? {
@@ -74,9 +74,23 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
     { number: 5, name: 'Contrato Assinado', indicator: 'venda', value: totals.venda, conversionPercent: totals.proposta > 0 ? (totals.venda / totals.proposta) * 100 : 0 },
   ];
 
-  // Calculate monetary values
-  const propostaValue = totals.proposta * effectiveTicket;
-  const vendaValue = totals.venda * effectiveTicket;
+  // Calculate monetary values using real values for O2 TAX, Franquia, Oxy Hacker
+  // Formula: Valor Pontual + Valor Setup + Valor MRR (1x) for each card
+  const propostaValue = useExpansaoData 
+    ? getExpansaoValue('proposta', startDate, endDate)
+    : useO2TaxData 
+      ? getO2TaxValue('proposta', startDate, endDate)
+      : useOxyHackerData 
+        ? getOxyHackerValue('proposta', startDate, endDate)
+        : totals.proposta * effectiveTicket; // Modelo Atual/Consolidado uses fixed ticket
+
+  const vendaValue = useExpansaoData 
+    ? getExpansaoValue('venda', startDate, endDate)
+    : useO2TaxData 
+      ? getO2TaxValue('venda', startDate, endDate)
+      : useOxyHackerData 
+        ? getOxyHackerValue('venda', startDate, endDate)
+        : totals.venda * effectiveTicket;
 
   // Width percentages for funnel visualization
   const widthPercentages = [100, 80, 60, 45, 35];
