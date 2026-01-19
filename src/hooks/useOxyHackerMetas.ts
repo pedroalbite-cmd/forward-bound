@@ -9,6 +9,7 @@ interface OxyHackerMovement {
   id: string;
   titulo: string;
   fase: string;           // Phase name from movement
+  faseAtual: string;      // Current phase of the card
   dataEntrada: Date;      // When entered this phase
   dataSaida: Date | null; // When left this phase
   valorMRR: number | null;
@@ -71,6 +72,7 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
           id: String(row.ID),
           titulo: row['Título'] || '',
           fase: row['Fase'] || '',  // This is the phase name from movement
+          faseAtual: row['Fase Atual'] || '', // Current phase of the card
           dataEntrada: parseDate(row['Entrada']) || new Date(),
           dataSaida: parseDate(row['Saída']),
           valorMRR: row['Valor MRR'] ? parseFloat(row['Valor MRR']) : null,
@@ -84,8 +86,10 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
 
       // Log unique phases for debugging
       const uniquePhases = [...new Set(movements.map(m => m.fase))];
+      const uniqueFasesAtuais = [...new Set(movements.map(m => m.faseAtual))];
       console.log(`[useOxyHackerMetas] Loaded ${movements.length} Oxy Hacker movements from pipefy_cards_movements_expansao`);
       console.log(`[useOxyHackerMetas] Unique phases:`, uniquePhases);
+      console.log(`[useOxyHackerMetas] Unique fases atuais:`, uniqueFasesAtuais);
       
       return { movements };
     },
@@ -94,51 +98,89 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
   });
 
   // Get total qty for a specific indicator and date range
-  // Count movements that ENTERED a phase during the period
+  // Count UNIQUE CARDS that entered a phase during the period
   const getQtyForPeriod = (indicator: OxyHackerIndicator, start?: Date, end?: Date): number => {
     if (!data?.movements || data.movements.length === 0) return 0;
     
     const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
     const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
     
-    let total = 0;
+    const uniqueCards = new Set<string>();
+    
     for (const movement of data.movements) {
       const entryTime = movement.dataEntrada.getTime();
       if (entryTime >= startTime && entryTime <= endTime) {
-        const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
-        if (movementIndicator === indicator) {
-          total += 1;
+        if (indicator === 'venda') {
+          // For "venda", count unique cards where faseAtual is "Ganho"
+          if (movement.faseAtual === 'Ganho') {
+            uniqueCards.add(movement.id);
+          }
+        } else if (indicator === 'proposta') {
+          // For "proposta", count cards that passed through proposta OR are now in Ganho
+          const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
+          if (movementIndicator === 'proposta' || movement.faseAtual === 'Ganho') {
+            uniqueCards.add(movement.id);
+          }
+        } else {
+          // For other indicators, count unique cards that passed through the phase
+          const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
+          if (movementIndicator === indicator) {
+            uniqueCards.add(movement.id);
+          }
         }
       }
     }
     
-    console.log(`[useOxyHackerMetas] getQtyForPeriod ${indicator}: ${total}`);
-    return total;
+    console.log(`[useOxyHackerMetas] getQtyForPeriod ${indicator}: ${uniqueCards.size} unique cards`);
+    return uniqueCards.size;
   };
 
   // Get total monetary value for a specific indicator and date range
-  // Sums: Valor Pontual + Valor Setup + Valor MRR (1x) for each card
+  // Sums: Valor Pontual + Valor Setup + Valor MRR (1x) for each UNIQUE card
   const getValueForPeriod = (indicator: OxyHackerIndicator, start?: Date, end?: Date): number => {
     if (!data?.movements || data.movements.length === 0) return 0;
     
     const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
     const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
     
-    let totalValue = 0;
+    // Use Map to track unique cards and their values
+    const cardValues = new Map<string, number>();
+    
     for (const movement of data.movements) {
       const entryTime = movement.dataEntrada.getTime();
       if (entryTime >= startTime && entryTime <= endTime) {
-        const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
-        if (movementIndicator === indicator) {
+        let shouldCount = false;
+        
+        if (indicator === 'venda') {
+          // For "venda", count unique cards where faseAtual is "Ganho"
+          if (movement.faseAtual === 'Ganho') {
+            shouldCount = true;
+          }
+        } else if (indicator === 'proposta') {
+          // For "proposta", count cards that passed through proposta OR are now in Ganho
+          const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
+          if (movementIndicator === 'proposta' || movement.faseAtual === 'Ganho') {
+            shouldCount = true;
+          }
+        } else {
+          // For other indicators
+          const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
+          if (movementIndicator === indicator) {
+            shouldCount = true;
+          }
+        }
+        
+        if (shouldCount && !cardValues.has(movement.id)) {
           // Sum: Valor Pontual + Valor Setup + Valor MRR (1x)
           const pontual = movement.valorPontual || 0;
           const setup = movement.valorSetup || 0;
           const mrr = movement.valorMRR || 0;
-          totalValue += pontual + setup + mrr;
+          cardValues.set(movement.id, pontual + setup + mrr);
         }
       }
     }
     
+    const totalValue = Array.from(cardValues.values()).reduce((sum, val) => sum + val, 0);
     console.log(`[useOxyHackerMetas] getValueForPeriod ${indicator}: ${totalValue}`);
     return totalValue;
   };
@@ -179,23 +221,41 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
     };
     const dailyMeta = annualMetas[indicator] / daysInYear;
 
+    // Helper function to count unique cards in a period
+    const countUniqueCardsInPeriod = (periodStart: number, periodEnd: number): number => {
+      const uniqueCards = new Set<string>();
+      
+      for (const movement of data.movements) {
+        const entryTime = movement.dataEntrada.getTime();
+        if (entryTime >= periodStart && entryTime <= periodEnd) {
+          if (indicator === 'venda') {
+            if (movement.faseAtual === 'Ganho') {
+              uniqueCards.add(movement.id);
+            }
+          } else if (indicator === 'proposta') {
+            const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
+            if (movementIndicator === 'proposta' || movement.faseAtual === 'Ganho') {
+              uniqueCards.add(movement.id);
+            }
+          } else {
+            const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
+            if (movementIndicator === indicator) {
+              uniqueCards.add(movement.id);
+            }
+          }
+        }
+      }
+      
+      return uniqueCards.size;
+    };
+
     if (grouping === 'daily') {
       const days = eachDayOfInterval({ start, end });
       for (const day of days) {
         const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
         const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59, 999).getTime();
         
-        let dayQty = 0;
-        for (const movement of data.movements) {
-          const entryTime = movement.dataEntrada.getTime();
-          if (entryTime >= dayStart && entryTime <= dayEnd) {
-            const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
-            if (movementIndicator === indicator) {
-              dayQty += 1;
-            }
-          }
-        }
-        qtyArray.push(dayQty);
+        qtyArray.push(countUniqueCardsInPeriod(dayStart, dayEnd));
         metaArray.push(Math.round(dailyMeta));
       }
     } else if (grouping === 'weekly') {
@@ -209,18 +269,8 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
         const weekStartTime = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate()).getTime();
         const weekEndTime = new Date(weekEnd.getFullYear(), weekEnd.getMonth(), weekEnd.getDate(), 23, 59, 59, 999).getTime();
         
-        let weekQty = 0;
-        for (const movement of data.movements) {
-          const entryTime = movement.dataEntrada.getTime();
-          if (entryTime >= weekStartTime && entryTime <= weekEndTime) {
-            const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
-            if (movementIndicator === indicator) {
-              weekQty += 1;
-            }
-          }
-        }
         const daysInWeek = differenceInDays(weekEnd, weekStart) + 1;
-        qtyArray.push(weekQty);
+        qtyArray.push(countUniqueCardsInPeriod(weekStartTime, weekEndTime));
         metaArray.push(Math.round(dailyMeta * daysInWeek));
       }
     } else {
@@ -231,18 +281,8 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
         const lastDay = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
         const monthEnd = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate(), 23, 59, 59, 999).getTime();
         
-        let monthQty = 0;
-        for (const movement of data.movements) {
-          const entryTime = movement.dataEntrada.getTime();
-          if (entryTime >= monthStart && entryTime <= monthEnd) {
-            const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
-            if (movementIndicator === indicator) {
-              monthQty += 1;
-            }
-          }
-        }
         const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
-        qtyArray.push(monthQty);
+        qtyArray.push(countUniqueCardsInPeriod(monthStart, monthEnd));
         metaArray.push(Math.round(dailyMeta * daysInMonth));
       }
     }
