@@ -22,6 +22,26 @@ const franquiaUnits: Record<string, number> = {
   Out: 3, Nov: 3, Dez: 3,
 };
 
+// Annual funnel targets for external BUs (aligned with reference baseline)
+// These are the OPERATIONAL targets, not derived from reverse funnel calculations
+const externalBUAnnualMetas = {
+  o2Tax: { mql: 504, rm: 180, rr: 96, proposta: 72, venda: 12 },     // 42, 15, 8, 6, 1 per month
+  franquia: { mql: 360, rm: 144, rr: 72, proposta: 48, venda: 12 }, // 30, 12, 6, 4, 1 per month
+  oxyHacker: { mql: 300, rm: 120, rr: 60, proposta: 36, venda: 12 }, // 25, 10, 5, 3, 1 per month
+};
+
+// Distribute annual targets evenly across months
+function distributeAnnualToMonthly(annualMetas: { mql: number; rm: number; rr: number; proposta: number; venda: number }) {
+  return months.map(month => ({
+    month,
+    mqls: Math.round(annualMetas.mql / 12),
+    rms: Math.round(annualMetas.rm / 12),
+    rrs: Math.round(annualMetas.rr / 12),
+    propostas: Math.round(annualMetas.proposta / 12),
+    vendas: Math.round(annualMetas.venda / 12),
+  }));
+}
+
 // BU Indicators configuration
 interface BUIndicators {
   ticketMedio: number;
@@ -378,6 +398,11 @@ export function usePlanGrowthData() {
       ),
     });
     
+    // Use fixed operational targets for external BUs instead of reverse funnel calculations
+    const o2TaxOperationalMetas = distributeAnnualToMonthly(externalBUAnnualMetas.o2Tax);
+    const oxyHackerOperationalMetas = distributeAnnualToMonthly(externalBUAnnualMetas.oxyHacker);
+    const franquiaOperationalMetas = distributeAnnualToMonthly(externalBUAnnualMetas.franquia);
+    
     setFunnelData({
       modeloAtual: modeloAtualFunnel.map(d => ({
         month: d.month,
@@ -389,35 +414,38 @@ export function usePlanGrowthData() {
         vendas: Math.round(d.vendas),
         investimento: Math.round(d.investimento),
       })),
-      o2Tax: o2TaxFunnel.map(d => ({
-        month: d.month,
-        leads: Math.round(d.leads),
-        mqls: Math.round(d.mqls),
-        rms: Math.round(d.rms),
-        rrs: Math.round(d.rrs),
-        propostas: Math.round(d.propostas),
-        vendas: Math.round(d.vendas),
-        investimento: Math.round(d.investimento),
+      // Use operational targets for O2 TAX (42 MQL/mo, 15 RM/mo, etc.)
+      o2Tax: o2TaxOperationalMetas.map((metas, index) => ({
+        month: metas.month,
+        leads: Math.round(metas.mqls / indicadoresPorBU.o2Tax.leadToMql),
+        mqls: metas.mqls,
+        rms: metas.rms,
+        rrs: metas.rrs,
+        propostas: metas.propostas,
+        vendas: metas.vendas,
+        investimento: Math.round(o2TaxFunnel[index]?.investimento || 0),
       })),
-      oxyHacker: oxyHackerFunnel.map(d => ({
-        month: d.month,
-        leads: Math.round(d.leads),
-        mqls: Math.round(d.mqls),
-        rms: Math.round(d.rms),
-        rrs: Math.round(d.rrs),
-        propostas: Math.round(d.propostas),
-        vendas: Math.round(d.vendas),
-        investimento: Math.round(d.investimento),
+      // Use operational targets for Oxy Hacker (25 MQL/mo, 10 RM/mo, etc.)
+      oxyHacker: oxyHackerOperationalMetas.map((metas, index) => ({
+        month: metas.month,
+        leads: Math.round(metas.mqls / indicadoresPorBU.oxyHacker.leadToMql),
+        mqls: metas.mqls,
+        rms: metas.rms,
+        rrs: metas.rrs,
+        propostas: metas.propostas,
+        vendas: metas.vendas,
+        investimento: Math.round(oxyHackerFunnel[index]?.investimento || 0),
       })),
-      franquia: franquiaFunnel.map(d => ({
-        month: d.month,
-        leads: Math.round(d.leads),
-        mqls: Math.round(d.mqls),
-        rms: Math.round(d.rms),
-        rrs: Math.round(d.rrs),
-        propostas: Math.round(d.propostas),
-        vendas: Math.round(d.vendas),
-        investimento: Math.round(d.investimento),
+      // Use operational targets for Franquia (30 MQL/mo, 12 RM/mo, etc.)
+      franquia: franquiaOperationalMetas.map((metas, index) => ({
+        month: metas.month,
+        leads: Math.round(metas.mqls / indicadoresPorBU.franquia.leadToMql),
+        mqls: metas.mqls,
+        rms: metas.rms,
+        rrs: metas.rrs,
+        propostas: metas.propostas,
+        vendas: metas.vendas,
+        investimento: Math.round(franquiaFunnel[index]?.investimento || 0),
       })),
     });
   }, [modeloAtualFunnel, o2TaxFunnel, oxyHackerFunnel, franquiaFunnel, setMetasPorBU, setFunnelData, isLoaded]);
