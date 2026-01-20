@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
-import { UserX, ExternalLink } from "lucide-react";
+import { UserX, ExternalLink, Loader2 } from "lucide-react";
 import { DetailSheet, DetailItem, columnFormatters } from "./DetailSheet";
+import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 
 interface NoShowWidgetProps {
   buKey: string;
+  startDate: Date;
+  endDate: Date;
 }
 
-// Mock data - will be replaced with real data fetching
+// Mock data for non-O2 TAX BUs
 const mockTrendData = [
   { day: 1, value: 2 },
   { day: 2, value: 1 },
@@ -23,19 +26,32 @@ const mockNoShowDetails: DetailItem[] = [
   { id: "1", name: "João Silva", company: "Tech Solutions Ltda", date: "2026-01-15", responsible: "Carlos Mendes", revenueRange: "R$ 50k - 200k" },
   { id: "2", name: "Maria Santos", company: "Inovação Digital SA", date: "2026-01-14", responsible: "Ana Paula", revenueRange: "R$ 200k - 1M" },
   { id: "3", name: "Pedro Costa", company: "Startup XYZ", date: "2026-01-13", responsible: "Carlos Mendes", revenueRange: "Até R$ 50k" },
-  { id: "4", name: "Fernanda Lima", company: "Mega Corp", date: "2026-01-12", responsible: "Roberto Silva", revenueRange: "Acima de 1M" },
-  { id: "5", name: "Ricardo Alves", company: "Alpha Services", date: "2026-01-10", responsible: "Ana Paula", revenueRange: "R$ 50k - 200k" },
-  { id: "6", name: "Juliana Martins", company: "Beta Tech", date: "2026-01-09", responsible: "Carlos Mendes", revenueRange: "R$ 200k - 1M" },
-  { id: "7", name: "André Oliveira", company: "Gamma Solutions", date: "2026-01-08", responsible: "Roberto Silva", revenueRange: "Até R$ 50k" },
-  { id: "8", name: "Camila Souza", company: "Delta Inc", date: "2026-01-07", responsible: "Ana Paula", revenueRange: "R$ 50k - 200k" },
 ];
 
-export function NoShowWidget({ buKey }: NoShowWidgetProps) {
+export function NoShowWidget({ buKey, startDate, endDate }: NoShowWidgetProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   
-  const noShows = mockNoShowDetails.length;
-  const totalMeetings = 67;
-  const noShowRate = Math.round((noShows / totalMeetings) * 100);
+  const isO2Tax = buKey === 'o2_tax';
+  const { getNoShows, toDetailItem, isLoading } = useO2TaxAnalytics(startDate, endDate);
+  
+  const noShows = isO2Tax ? getNoShows.count : mockNoShowDetails.length;
+  const totalMeetings = isO2Tax ? getNoShows.totalMeetings : 67;
+  const noShowRate = isO2Tax ? getNoShows.rate : Math.round((noShows / totalMeetings) * 100);
+
+  const getDetailItems = (): DetailItem[] => {
+    if (isO2Tax) {
+      return getNoShows.cards.map(toDetailItem);
+    }
+    return mockNoShowDetails;
+  };
+
+  if (isO2Tax && isLoading) {
+    return (
+      <Card className="bg-card border-border h-full flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -95,7 +111,7 @@ export function NoShowWidget({ buKey }: NoShowWidgetProps) {
         onOpenChange={setSheetOpen}
         title="No Shows - Reuniões não realizadas"
         description={`${noShows} reuniões agendadas que não aconteceram no período`}
-        items={mockNoShowDetails}
+        items={getDetailItems()}
         columns={[
           { key: "name", label: "Lead" },
           { key: "company", label: "Empresa" },

@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
-import { TrendingUp, TrendingDown, ExternalLink } from "lucide-react";
+import { TrendingUp, TrendingDown, ExternalLink, Loader2 } from "lucide-react";
 import { DetailSheet, DetailItem, columnFormatters } from "./DetailSheet";
+import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 
 interface DealsWonWidgetProps {
   buKey: string;
+  startDate: Date;
+  endDate: Date;
 }
 
-// Mock data - will be replaced with real data fetching
+// Mock data for non-O2 TAX BUs
 const mockTrendData = [
   { day: 1, value: 1 },
   { day: 2, value: 2 },
@@ -17,38 +20,44 @@ const mockTrendData = [
   { day: 5, value: 4 },
   { day: 6, value: 5 },
   { day: 7, value: 6 },
-  { day: 8, value: 7 },
-  { day: 9, value: 8 },
-  { day: 10, value: 9 },
-  { day: 11, value: 10 },
-  { day: 12, value: 12 },
 ];
 
 const mockDealsWon: DetailItem[] = [
   { id: "1", name: "Tech Solutions Ltda", company: "João Silva", value: 25000, date: "2026-01-15", responsible: "Carlos Mendes" },
   { id: "2", name: "Inovação Digital SA", company: "Maria Santos", value: 18000, date: "2026-01-14", responsible: "Ana Paula" },
   { id: "3", name: "Startup XYZ", company: "Pedro Costa", value: 12000, date: "2026-01-13", responsible: "Carlos Mendes" },
-  { id: "4", name: "Mega Corp", company: "Fernanda Lima", value: 35000, date: "2026-01-12", responsible: "Roberto Silva" },
-  { id: "5", name: "Alpha Services", company: "Ricardo Alves", value: 15000, date: "2026-01-10", responsible: "Ana Paula" },
-  { id: "6", name: "Beta Tech", company: "Juliana Martins", value: 22000, date: "2026-01-09", responsible: "Carlos Mendes" },
-  { id: "7", name: "Gamma Solutions", company: "André Oliveira", value: 8000, date: "2026-01-08", responsible: "Roberto Silva" },
-  { id: "8", name: "Delta Inc", company: "Camila Souza", value: 14000, date: "2026-01-07", responsible: "Ana Paula" },
-  { id: "9", name: "Epsilon SA", company: "Bruno Ferreira", value: 11000, date: "2026-01-06", responsible: "Carlos Mendes" },
-  { id: "10", name: "Zeta Corp", company: "Larissa Gomes", value: 9000, date: "2026-01-05", responsible: "Roberto Silva" },
-  { id: "11", name: "Omega Ltd", company: "Rafael Santos", value: 6000, date: "2026-01-04", responsible: "Ana Paula" },
-  { id: "12", name: "Sigma Tech", company: "Patricia Lima", value: 5000, date: "2026-01-03", responsible: "Carlos Mendes" },
 ];
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(value);
 
-export function DealsWonWidget({ buKey }: DealsWonWidgetProps) {
+export function DealsWonWidget({ buKey, startDate, endDate }: DealsWonWidgetProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   
-  const dealsWon = mockDealsWon.length;
-  const totalValue = mockDealsWon.reduce((acc, deal) => acc + (deal.value || 0), 0);
-  const trend = 15; // percentage vs previous period
+  const isO2Tax = buKey === 'o2_tax';
+  const { getDealsWon, toDetailItem, isLoading } = useO2TaxAnalytics(startDate, endDate);
+  
+  const dealsWon = isO2Tax ? getDealsWon.count : mockDealsWon.length;
+  const totalValue = isO2Tax 
+    ? getDealsWon.totalValue 
+    : mockDealsWon.reduce((acc, deal) => acc + (deal.value || 0), 0);
+  const trend = isO2Tax ? getDealsWon.trend : 15;
   const isPositiveTrend = trend >= 0;
+
+  const getDetailItems = (): DetailItem[] => {
+    if (isO2Tax) {
+      return getDealsWon.cards.map(toDetailItem);
+    }
+    return mockDealsWon;
+  };
+
+  if (isO2Tax && isLoading) {
+    return (
+      <Card className="bg-card border-border h-full flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -72,17 +81,19 @@ export function DealsWonWidget({ buKey }: DealsWonWidgetProps) {
               <div className="mt-1">
                 <span className="text-lg font-semibold text-chart-2">{formatCurrency(totalValue)}</span>
               </div>
-              <div className="flex items-center gap-1 mt-2">
-                {isPositiveTrend ? (
-                  <TrendingUp className="h-4 w-4 text-chart-2" />
-                ) : (
-                  <TrendingDown className="h-4 w-4 text-destructive" />
-                )}
-                <span className={`text-sm font-medium ${isPositiveTrend ? "text-chart-2" : "text-destructive"}`}>
-                  {isPositiveTrend ? "+" : ""}{trend}%
-                </span>
-                <span className="text-xs text-muted-foreground">vs anterior</span>
-              </div>
+              {trend !== 0 && (
+                <div className="flex items-center gap-1 mt-2">
+                  {isPositiveTrend ? (
+                    <TrendingUp className="h-4 w-4 text-chart-2" />
+                  ) : (
+                    <TrendingDown className="h-4 w-4 text-destructive" />
+                  )}
+                  <span className={`text-sm font-medium ${isPositiveTrend ? "text-chart-2" : "text-destructive"}`}>
+                    {isPositiveTrend ? "+" : ""}{trend}%
+                  </span>
+                  <span className="text-xs text-muted-foreground">vs anterior</span>
+                </div>
+              )}
               <p className="text-xs text-muted-foreground mt-1">
                 Clique para ver detalhes
               </p>
@@ -125,7 +136,7 @@ export function DealsWonWidget({ buKey }: DealsWonWidgetProps) {
         onOpenChange={setSheetOpen}
         title="Negócios Ganhos"
         description={`${dealsWon} negócios fechados totalizando ${formatCurrency(totalValue)}`}
-        items={mockDealsWon}
+        items={getDetailItems()}
         columns={[
           { key: "name", label: "Empresa" },
           { key: "company", label: "Contato" },

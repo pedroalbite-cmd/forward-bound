@@ -1,35 +1,51 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingDown, XCircle, ExternalLink } from "lucide-react";
+import { TrendingDown, XCircle, ExternalLink, Loader2 } from "lucide-react";
 import { DetailSheet, DetailItem, columnFormatters } from "./DetailSheet";
+import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 
 interface LostDealsWidgetProps {
   buKey: string;
+  startDate: Date;
+  endDate: Date;
 }
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(value);
 
-// Mock data - will be replaced with real data fetching
+// Mock data for non-O2 TAX BUs
 const mockLostDeals: DetailItem[] = [
   { id: "1", name: "João Silva", company: "Tech Solutions Ltda", value: 25000, reason: "Preço", date: "2026-01-15", phase: "Proposta" },
   { id: "2", name: "Maria Santos", company: "Inovação Digital SA", value: 45000, reason: "Timing", date: "2026-01-14", phase: "Proposta" },
   { id: "3", name: "Pedro Costa", company: "Startup XYZ", value: 12000, reason: "Concorrência", date: "2026-01-13", phase: "RR" },
-  { id: "4", name: "Fernanda Lima", company: "Mega Corp", value: 85000, reason: "Preço", date: "2026-01-12", phase: "Assinatura" },
-  { id: "5", name: "Ricardo Alves", company: "Alpha Services", value: 18000, reason: "Sem resposta", date: "2026-01-10", phase: "Proposta" },
-  { id: "6", name: "Juliana Martins", company: "Beta Tech", value: 32000, reason: "Timing", date: "2026-01-09", phase: "RR" },
-  { id: "7", name: "André Oliveira", company: "Gamma Solutions", value: 28000, reason: "Preço", date: "2026-01-08", phase: "Proposta" },
-  { id: "8", name: "Camila Souza", company: "Delta Inc", value: 15000, reason: "Concorrência", date: "2026-01-07", phase: "RM" },
-  { id: "9", name: "Bruno Ferreira", company: "Epsilon SA", value: 22000, reason: "Timing", date: "2026-01-06", phase: "Proposta" },
-  { id: "10", name: "Larissa Gomes", company: "Zeta Corp", value: 63000, reason: "Preço", date: "2026-01-05", phase: "Assinatura" },
 ];
 
-export function LostDealsWidget({ buKey }: LostDealsWidgetProps) {
+export function LostDealsWidget({ buKey, startDate, endDate }: LostDealsWidgetProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   
-  const lostDeals = mockLostDeals.length;
-  const lostValue = mockLostDeals.reduce((acc, deal) => acc + (deal.value || 0), 0);
-  const trend = -8; // percentage vs previous period
+  const isO2Tax = buKey === 'o2_tax';
+  const { getLostDeals, toDetailItem, isLoading } = useO2TaxAnalytics(startDate, endDate);
+  
+  const lostDeals = isO2Tax ? getLostDeals.count : mockLostDeals.length;
+  const lostValue = isO2Tax 
+    ? getLostDeals.totalValue 
+    : mockLostDeals.reduce((acc, deal) => acc + (deal.value || 0), 0);
+  const trend = isO2Tax ? getLostDeals.trend : -8;
+
+  const getDetailItems = (): DetailItem[] => {
+    if (isO2Tax) {
+      return getLostDeals.cards.map(toDetailItem);
+    }
+    return mockLostDeals;
+  };
+
+  if (isO2Tax && isLoading) {
+    return (
+      <Card className="bg-card border-border h-full flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -54,11 +70,13 @@ export function LostDealsWidget({ buKey }: LostDealsWidgetProps) {
           <div className="mt-1">
             <span className="text-lg font-semibold text-destructive">{formatCurrency(lostValue)}</span>
           </div>
-          <div className="flex items-center gap-1 mt-2">
-            <TrendingDown className="h-4 w-4 text-chart-2" />
-            <span className="text-sm font-medium text-chart-2">{trend}%</span>
-            <span className="text-xs text-muted-foreground">vs período anterior</span>
-          </div>
+          {trend !== 0 && (
+            <div className="flex items-center gap-1 mt-2">
+              <TrendingDown className="h-4 w-4 text-chart-2" />
+              <span className="text-sm font-medium text-chart-2">{trend}%</span>
+              <span className="text-xs text-muted-foreground">vs período anterior</span>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground mt-2">
             Clique para ver detalhes
           </p>
@@ -70,7 +88,7 @@ export function LostDealsWidget({ buKey }: LostDealsWidgetProps) {
         onOpenChange={setSheetOpen}
         title="Negócios Perdidos"
         description={`${lostDeals} negócios perdidos totalizando ${formatCurrency(lostValue)}`}
-        items={mockLostDeals}
+        items={getDetailItems()}
         columns={[
           { key: "name", label: "Lead" },
           { key: "company", label: "Empresa" },
