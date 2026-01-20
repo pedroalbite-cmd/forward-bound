@@ -316,7 +316,8 @@ export function IndicatorsTab() {
       const metaPorDia = totalMetaPeriodo / daysInPeriod;
 
       if (grouping === 'daily') {
-        return chartLabels.map(() => Math.round(metaPorDia));
+        // Keep decimals to avoid rounding errors when accumulating
+        return chartLabels.map(() => metaPorDia);
       }
 
       if (grouping === 'weekly') {
@@ -324,7 +325,8 @@ export function IndicatorsTab() {
         const lastWeekDays = daysInPeriod - (numWeeks - 1) * 7;
         return chartLabels.map((_, index) => {
           const days = index === numWeeks - 1 ? lastWeekDays : 7;
-          return Math.round(metaPorDia * days);
+          // Keep decimals to avoid rounding errors when accumulating
+          return metaPorDia * days;
         });
       }
 
