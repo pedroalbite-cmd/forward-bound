@@ -111,9 +111,8 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
             uniqueCards.add(movement.id);
           }
         } else if (indicator === 'proposta') {
-          // For "proposta", count cards that passed through proposta phases OR entered Ganho
-          // (cards in Ganho implicitly had a proposal)
-          if (movementIndicator === 'proposta' || movement.fase === 'Ganho') {
+          // For "proposta", count ONLY cards that explicitly passed through proposta phases
+          if (movementIndicator === 'proposta') {
             uniqueCards.add(movement.id);
           }
         } else {
@@ -152,8 +151,8 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
             shouldCount = true;
           }
         } else if (indicator === 'proposta') {
-          // For "proposta", count cards that passed through proposta OR entered Ganho
-          if (movementIndicator === 'proposta' || movement.fase === 'Ganho') {
+          // For "proposta", count ONLY cards that explicitly passed through proposta phases
+          if (movementIndicator === 'proposta') {
             shouldCount = true;
           }
         } else {
@@ -228,7 +227,7 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
               uniqueCards.add(movement.id);
             }
           } else if (indicator === 'proposta') {
-            if (movementIndicator === 'proposta' || movement.fase === 'Ganho') {
+            if (movementIndicator === 'proposta') {
               uniqueCards.add(movement.id);
             }
           } else {
