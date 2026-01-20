@@ -20,6 +20,7 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { LeadsMqlsStackedChart } from "./LeadsMqlsStackedChart";
 import { PeriodFunnelChart } from "./PeriodFunnelChart";
+import { AnalyticsSection } from "./indicators/AnalyticsSection";
 
 type ViewMode = 'daily' | 'accumulated';
 
@@ -571,6 +572,9 @@ export function IndicatorsTab() {
           />
         ))}
       </div>
+
+      {/* Analytics Section */}
+      <AnalyticsSection buKey={selectedBU} />
 
       {(isLoading || isLoadingExpansao || isLoadingO2Tax) && (
         <div className="fixed inset-0 bg-background/50 flex items-center justify-center z-50">
