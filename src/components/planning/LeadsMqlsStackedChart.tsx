@@ -5,7 +5,8 @@ import { useSheetMetas, ChartGrouping } from "@/hooks/useSheetMetas";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
-import { format, eachDayOfInterval, differenceInDays, addDays, eachMonthOfInterval } from "date-fns";
+import { useMediaMetas, FunnelDataItem } from "@/contexts/MediaMetasContext";
+import { format, eachDayOfInterval, differenceInDays, addDays, eachMonthOfInterval, getMonth, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface LeadsMqlsStackedChartProps {
@@ -17,11 +18,47 @@ interface LeadsMqlsStackedChartProps {
 
 const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Math.round(value));
 
+// Month name mapping for funnelData lookup
+const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
 export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsMqlsStackedChartProps) {
   const { getMqlsGroupedData, getMqlsMetaForPeriod, getMqlsQtyForPeriod } = useSheetMetas(startDate, endDate);
-  const { getGroupedData: getExpansaoGroupedData, getMetaForPeriod: getExpansaoMeta, getQtyForPeriod: getExpansaoQty } = useExpansaoMetas(startDate, endDate);
-  const { getGroupedData: getO2TaxGroupedData, getMetaForPeriod: getO2TaxMeta, getQtyForPeriod: getO2TaxQty } = useO2TaxMetas(startDate, endDate);
-  const { getGroupedData: getOxyHackerGroupedData, getMetaForPeriod: getOxyHackerMeta, getQtyForPeriod: getOxyHackerQty } = useOxyHackerMetas(startDate, endDate);
+  const { getGroupedData: getExpansaoGroupedData, getQtyForPeriod: getExpansaoQty } = useExpansaoMetas(startDate, endDate);
+  const { getGroupedData: getO2TaxGroupedData, getQtyForPeriod: getO2TaxQty } = useO2TaxMetas(startDate, endDate);
+  const { getGroupedData: getOxyHackerGroupedData, getQtyForPeriod: getOxyHackerQty } = useOxyHackerMetas(startDate, endDate);
+  
+  // Get funnelData from MediaMetasContext for dynamic metas
+  const { funnelData } = useMediaMetas();
+  
+  // Helper function to calculate meta from funnelData for a given period (pro-rated for partial months)
+  const calcularMetaDoPeriodo = (funnelItems: FunnelDataItem[] | undefined): number => {
+    if (!funnelItems || funnelItems.length === 0) return 0;
+    
+    const monthsInPeriod = eachMonthOfInterval({ start: startDate, end: endDate });
+    let total = 0;
+    
+    for (const monthDate of monthsInPeriod) {
+      const monthName = monthNames[getMonth(monthDate)];
+      const item = funnelItems.find(f => f.month === monthName);
+      if (!item) continue;
+      
+      const monthStart = startOfMonth(monthDate);
+      const monthEnd = endOfMonth(monthDate);
+      
+      const overlapStart = startDate > monthStart ? startDate : monthStart;
+      const overlapEnd = endDate < monthEnd ? endDate : monthEnd;
+      
+      if (overlapStart > overlapEnd) continue;
+      
+      const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
+      const daysInMonth = differenceInDays(monthEnd, monthStart) + 1;
+      const fraction = daysInMonth > 0 ? overlapDays / daysInMonth : 0;
+      
+      total += item.mqls * fraction;
+    }
+    
+    return Math.round(total);
+  };
   
   // Check if we should use external database data
   const useExpansaoData = selectedBU === 'franquia';
@@ -41,14 +78,15 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsM
     ? getOxyHackerGroupedData('mql', startDate, endDate, grouping)
     : getMqlsGroupedData(startDate, endDate, grouping);
   
-  // Get total meta and realized for the period
+  // Get total meta from funnelData (Plan Growth) for external BUs, otherwise from sheets
   const periodMeta = useExpansaoData 
-    ? getExpansaoMeta('mql', startDate, endDate)
+    ? calcularMetaDoPeriodo(funnelData?.franquia)
     : useO2TaxData
-    ? getO2TaxMeta('mql', startDate, endDate)
+    ? calcularMetaDoPeriodo(funnelData?.o2Tax)
     : useOxyHackerData
-    ? getOxyHackerMeta('mql', startDate, endDate)
+    ? calcularMetaDoPeriodo(funnelData?.oxyHacker)
     : getMqlsMetaForPeriod(startDate, endDate);
+    
   const totalRealized = useExpansaoData 
     ? getExpansaoQty('mql', startDate, endDate)
     : useO2TaxData
