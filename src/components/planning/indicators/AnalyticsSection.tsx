@@ -9,9 +9,11 @@ import { SegmentationTab } from "./SegmentationTab";
 
 interface AnalyticsSectionProps {
   buKey: string;
+  startDate: Date;
+  endDate: Date;
 }
 
-export function AnalyticsSection({ buKey }: AnalyticsSectionProps) {
+export function AnalyticsSection({ buKey, startDate, endDate }: AnalyticsSectionProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -56,16 +58,16 @@ export function AnalyticsSection({ buKey }: AnalyticsSectionProps) {
               </TabsTrigger>
             </TabsList>
             <TabsContent value="pipeline">
-              <PipelineTab buKey={buKey} />
+              <PipelineTab buKey={buKey} startDate={startDate} endDate={endDate} />
             </TabsContent>
             <TabsContent value="conversions">
-              <ConversionsTab buKey={buKey} />
+              <ConversionsTab buKey={buKey} startDate={startDate} endDate={endDate} />
             </TabsContent>
             <TabsContent value="losses">
-              <LossesTab buKey={buKey} />
+              <LossesTab buKey={buKey} startDate={startDate} endDate={endDate} />
             </TabsContent>
             <TabsContent value="segmentation">
-              <SegmentationTab buKey={buKey} />
+              <SegmentationTab buKey={buKey} startDate={startDate} endDate={endDate} />
             </TabsContent>
           </Tabs>
         </div>

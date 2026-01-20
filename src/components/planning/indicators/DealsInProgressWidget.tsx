@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { TrendingUp, ExternalLink } from "lucide-react";
+import { TrendingUp, ExternalLink, Loader2 } from "lucide-react";
 import { DetailSheet, DetailItem, columnFormatters } from "./DetailSheet";
+import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 
 interface DealsInProgressWidgetProps {
   buKey: string;
+  startDate: Date;
+  endDate: Date;
 }
 
-// Mock data - will be replaced with real data fetching
+// Mock data for non-O2 TAX BUs
 const mockData = [
   { phase: "RM", value: 12, color: "hsl(var(--chart-1))" },
   { phase: "RR", value: 8, color: "hsl(var(--chart-2))" },
@@ -21,26 +24,38 @@ const mockDealsInProgress: DetailItem[] = [
   { id: "2", name: "Inovação Digital SA", company: "Maria Santos", phase: "RR", value: 18000, date: "2026-01-14", responsible: "Ana Paula" },
   { id: "3", name: "Startup XYZ", company: "Pedro Costa", phase: "RM", value: 12000, date: "2026-01-13", responsible: "Carlos" },
   { id: "4", name: "Mega Corp", company: "Fernanda Lima", phase: "Assinatura", value: 85000, date: "2026-01-12", responsible: "Roberto" },
-  { id: "5", name: "Alpha Services", company: "Ricardo Alves", phase: "RM", value: 15000, date: "2026-01-10", responsible: "Ana Paula" },
-  { id: "6", name: "Beta Tech", company: "Juliana Martins", phase: "RR", value: 22000, date: "2026-01-09", responsible: "Carlos" },
-  { id: "7", name: "Gamma Solutions", company: "André Oliveira", phase: "Proposta", value: 28000, date: "2026-01-08", responsible: "Roberto" },
-  { id: "8", name: "Delta Inc", company: "Camila Souza", phase: "RM", value: 14000, date: "2026-01-07", responsible: "Ana Paula" },
-  { id: "9", name: "Epsilon SA", company: "Bruno Ferreira", phase: "RR", value: 32000, date: "2026-01-06", responsible: "Carlos" },
-  { id: "10", name: "Zeta Corp", company: "Larissa Gomes", phase: "Assinatura", value: 45000, date: "2026-01-05", responsible: "Roberto" },
-  { id: "11", name: "Omega Ltd", company: "Rafael Santos", phase: "RM", value: 16000, date: "2026-01-04", responsible: "Ana Paula" },
-  { id: "12", name: "Sigma Tech", company: "Patricia Lima", phase: "Proposta", value: 19000, date: "2026-01-03", responsible: "Carlos" },
-  { id: "13", name: "Lambda SA", company: "Diego Costa", phase: "RM", value: 11000, date: "2026-01-02", responsible: "Roberto" },
-  { id: "14", name: "Kappa Inc", company: "Amanda Silva", phase: "RR", value: 27000, date: "2026-01-01", responsible: "Ana Paula" },
 ];
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(value);
 
-export function DealsInProgressWidget({ buKey }: DealsInProgressWidgetProps) {
+export function DealsInProgressWidget({ buKey, startDate, endDate }: DealsInProgressWidgetProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   
-  const totalDeals = mockDealsInProgress.length;
-  const totalValue = mockDealsInProgress.reduce((acc, deal) => acc + (deal.value || 0), 0);
+  const isO2Tax = buKey === 'o2_tax';
+  const { getDealsInProgress, toDetailItem, isLoading } = useO2TaxAnalytics(startDate, endDate);
+  
+  // Use real data for O2 TAX, mock data for others
+  const pieData = isO2Tax ? getDealsInProgress.phaseData : mockData;
+  const totalDeals = isO2Tax ? getDealsInProgress.count : mockDealsInProgress.length;
+  const totalValue = isO2Tax 
+    ? getDealsInProgress.totalValue 
+    : mockDealsInProgress.reduce((acc, deal) => acc + (deal.value || 0), 0);
+
+  const getDetailItems = (): DetailItem[] => {
+    if (isO2Tax) {
+      return getDealsInProgress.cards.map(toDetailItem);
+    }
+    return mockDealsInProgress;
+  };
+
+  if (isO2Tax && isLoading) {
+    return (
+      <Card className="bg-card border-border h-full flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -73,7 +88,7 @@ export function DealsInProgressWidget({ buKey }: DealsInProgressWidgetProps) {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={mockData}
+                    data={pieData}
                     dataKey="value"
                     nameKey="phase"
                     cx="50%"
@@ -83,7 +98,7 @@ export function DealsInProgressWidget({ buKey }: DealsInProgressWidgetProps) {
                     strokeWidth={2}
                     stroke="hsl(var(--background))"
                   >
-                    {mockData.map((entry, index) => (
+                    {pieData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
@@ -100,7 +115,7 @@ export function DealsInProgressWidget({ buKey }: DealsInProgressWidgetProps) {
             </div>
           </div>
           <div className="flex flex-wrap gap-2 mt-4">
-            {mockData.map((item, index) => (
+            {pieData.map((item, index) => (
               <div key={index} className="flex items-center gap-1.5 text-xs">
                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
                 <span className="text-muted-foreground">{item.phase}: {item.value}</span>
@@ -115,7 +130,7 @@ export function DealsInProgressWidget({ buKey }: DealsInProgressWidgetProps) {
         onOpenChange={setSheetOpen}
         title="Negócios em Andamento"
         description={`${totalDeals} negócios ativos totalizando ${formatCurrency(totalValue)} em potencial`}
-        items={mockDealsInProgress}
+        items={getDetailItems()}
         columns={[
           { key: "name", label: "Empresa" },
           { key: "company", label: "Contato" },

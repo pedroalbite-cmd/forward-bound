@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Loader2 } from "lucide-react";
 import { DetailSheet, DetailItem, columnFormatters } from "./DetailSheet";
+import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 
 interface LossReasonsWidgetProps {
   buKey: string;
+  startDate: Date;
+  endDate: Date;
 }
 
-// Mock data - will be replaced with real data fetching
+// Mock data for non-O2 TAX BUs
 const mockData = [
   { reason: "Preço", count: 8, percentage: 35, color: "hsl(var(--chart-1))" },
   { reason: "Timing", count: 6, percentage: 26, color: "hsl(var(--chart-2))" },
@@ -21,30 +24,47 @@ const mockLostByReason: DetailItem[] = [
   { id: "1", name: "Tech Solutions", company: "João Silva", reason: "Preço", value: 25000, date: "2026-01-15" },
   { id: "2", name: "Inovação Digital", company: "Maria Santos", reason: "Preço", value: 45000, date: "2026-01-14" },
   { id: "3", name: "Startup XYZ", company: "Pedro Costa", reason: "Timing", value: 12000, date: "2026-01-13" },
-  { id: "4", name: "Mega Corp", company: "Fernanda Lima", reason: "Concorrência", value: 85000, date: "2026-01-12" },
-  { id: "5", name: "Alpha Services", company: "Ricardo Alves", reason: "Preço", value: 18000, date: "2026-01-10" },
-  { id: "6", name: "Beta Tech", company: "Juliana Martins", reason: "Timing", value: 32000, date: "2026-01-09" },
-  { id: "7", name: "Gamma Solutions", company: "André Oliveira", reason: "Sem resposta", value: 28000, date: "2026-01-08" },
-  { id: "8", name: "Delta Inc", company: "Camila Souza", reason: "Concorrência", value: 15000, date: "2026-01-07" },
 ];
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(value);
 
-export function LossReasonsWidget({ buKey }: LossReasonsWidgetProps) {
+export function LossReasonsWidget({ buKey, startDate, endDate }: LossReasonsWidgetProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   
-  const total = mockData.reduce((acc, item) => acc + item.count, 0);
+  const isO2Tax = buKey === 'o2_tax';
+  const { getLossReasons, toDetailItem, isLoading } = useO2TaxAnalytics(startDate, endDate);
+  
+  const chartData = isO2Tax ? getLossReasons : mockData;
+  const total = chartData.reduce((acc, item) => acc + item.count, 0);
 
   const handleReasonClick = (reason: string) => {
     setSelectedReason(reason);
     setSheetOpen(true);
   };
 
-  const filteredItems = selectedReason 
-    ? mockLostByReason.filter(item => item.reason === selectedReason)
-    : mockLostByReason;
+  const getFilteredItems = (): DetailItem[] => {
+    if (isO2Tax) {
+      const filtered = selectedReason 
+        ? getLossReasons.find(r => r.reason === selectedReason)?.cards || []
+        : getLossReasons.flatMap(r => r.cards);
+      return filtered.map(toDetailItem);
+    }
+    return selectedReason 
+      ? mockLostByReason.filter(item => item.reason === selectedReason)
+      : mockLostByReason;
+  };
+
+  const filteredItems = getFilteredItems();
+
+  if (isO2Tax && isLoading) {
+    return (
+      <Card className="bg-card border-border h-full flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -67,7 +87,7 @@ export function LossReasonsWidget({ buKey }: LossReasonsWidgetProps) {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={mockData}
+                    data={chartData}
                     dataKey="count"
                     nameKey="reason"
                     cx="50%"
@@ -77,7 +97,7 @@ export function LossReasonsWidget({ buKey }: LossReasonsWidgetProps) {
                     strokeWidth={2}
                     stroke="hsl(var(--background))"
                   >
-                    {mockData.map((entry, index) => (
+                    {chartData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
@@ -94,7 +114,7 @@ export function LossReasonsWidget({ buKey }: LossReasonsWidgetProps) {
               </ResponsiveContainer>
             </div>
             <div className="flex-1 space-y-2">
-              {mockData.map((item, index) => (
+              {chartData.map((item, index) => (
                 <div 
                   key={index} 
                   className="flex items-center justify-between cursor-pointer hover:bg-muted/50 rounded px-2 py-1 -mx-2 transition-colors"

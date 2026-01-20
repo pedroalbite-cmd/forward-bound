@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Loader2 } from "lucide-react";
 import { DetailSheet, DetailItem, columnFormatters } from "./DetailSheet";
+import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 
 interface MqlsByRevenueWidgetProps {
   buKey: string;
+  startDate: Date;
+  endDate: Date;
 }
 
-// Mock data - will be replaced with real data fetching
+// Mock data for non-O2 TAX BUs
 const mockData = [
   { range: "Até R$ 50k", count: 35, percentage: 40, color: "hsl(var(--chart-1))" },
   { range: "R$ 50k - 200k", count: 28, percentage: 32, color: "hsl(var(--chart-2))" },
@@ -20,29 +23,44 @@ const mockMqlsByRevenue: DetailItem[] = [
   { id: "1", name: "Tech Solutions", company: "João Silva", revenueRange: "R$ 50k - 200k", date: "2026-01-15", responsible: "Marketing" },
   { id: "2", name: "Inovação Digital", company: "Maria Santos", revenueRange: "R$ 200k - 1M", date: "2026-01-14", responsible: "Marketing" },
   { id: "3", name: "Startup XYZ", company: "Pedro Costa", revenueRange: "Até R$ 50k", date: "2026-01-13", responsible: "SDR" },
-  { id: "4", name: "Mega Corp", company: "Fernanda Lima", revenueRange: "Acima de 1M", date: "2026-01-12", responsible: "Marketing" },
-  { id: "5", name: "Alpha Services", company: "Ricardo Alves", revenueRange: "R$ 50k - 200k", date: "2026-01-10", responsible: "SDR" },
-  { id: "6", name: "Beta Tech", company: "Juliana Martins", revenueRange: "R$ 200k - 1M", date: "2026-01-09", responsible: "Marketing" },
-  { id: "7", name: "Gamma Solutions", company: "André Oliveira", revenueRange: "Até R$ 50k", date: "2026-01-08", responsible: "SDR" },
-  { id: "8", name: "Delta Inc", company: "Camila Souza", revenueRange: "R$ 50k - 200k", date: "2026-01-07", responsible: "Marketing" },
-  { id: "9", name: "Epsilon SA", company: "Bruno Ferreira", revenueRange: "Até R$ 50k", date: "2026-01-06", responsible: "SDR" },
-  { id: "10", name: "Zeta Corp", company: "Larissa Gomes", revenueRange: "R$ 50k - 200k", date: "2026-01-05", responsible: "Marketing" },
 ];
 
-export function MqlsByRevenueWidget({ buKey }: MqlsByRevenueWidgetProps) {
+export function MqlsByRevenueWidget({ buKey, startDate, endDate }: MqlsByRevenueWidgetProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedRange, setSelectedRange] = useState<string | null>(null);
   
-  const total = mockData.reduce((acc, item) => acc + item.count, 0);
+  const isO2Tax = buKey === 'o2_tax';
+  const { getMqlsByRevenue, toDetailItem, isLoading } = useO2TaxAnalytics(startDate, endDate);
+  
+  const chartData = isO2Tax ? getMqlsByRevenue : mockData;
+  const total = chartData.reduce((acc, item) => acc + item.count, 0);
 
   const handleBarClick = (data: any) => {
     setSelectedRange(data.range);
     setSheetOpen(true);
   };
 
-  const filteredItems = selectedRange 
-    ? mockMqlsByRevenue.filter(item => item.revenueRange === selectedRange)
-    : mockMqlsByRevenue;
+  const getFilteredItems = (): DetailItem[] => {
+    if (isO2Tax) {
+      const filtered = selectedRange 
+        ? getMqlsByRevenue.find(r => r.range === selectedRange)?.cards || []
+        : getMqlsByRevenue.flatMap(r => r.cards);
+      return filtered.map(toDetailItem);
+    }
+    return selectedRange 
+      ? mockMqlsByRevenue.filter(item => item.revenueRange === selectedRange)
+      : mockMqlsByRevenue;
+  };
+
+  const filteredItems = getFilteredItems();
+
+  if (isO2Tax && isLoading) {
+    return (
+      <Card className="bg-card border-border h-full flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -63,7 +81,7 @@ export function MqlsByRevenueWidget({ buKey }: MqlsByRevenueWidgetProps) {
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={mockData}
+                data={chartData}
                 layout="vertical"
                 margin={{ top: 0, right: 40, left: 0, bottom: 0 }}
                 onClick={(e) => e?.activePayload && handleBarClick(e.activePayload[0].payload)}
@@ -85,12 +103,12 @@ export function MqlsByRevenueWidget({ buKey }: MqlsByRevenueWidgetProps) {
                     color: "hsl(var(--popover-foreground))"
                   }}
                   formatter={(value: number, name: string, props: any) => {
-                    const item = mockData.find(d => d.count === value);
+                    const item = chartData.find(d => d.count === value);
                     return [`${value} (${item?.percentage}%)`, "MQLs"];
                   }}
                 />
                 <Bar dataKey="count" radius={[0, 4, 4, 0]} className="cursor-pointer">
-                  {mockData.map((entry, index) => (
+                  {chartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Bar>
@@ -98,7 +116,7 @@ export function MqlsByRevenueWidget({ buKey }: MqlsByRevenueWidgetProps) {
             </ResponsiveContainer>
           </div>
           <div className="flex flex-wrap gap-3 mt-4">
-            {mockData.map((item, index) => (
+            {chartData.map((item, index) => (
               <div 
                 key={index} 
                 className="flex items-center gap-1.5 text-xs cursor-pointer hover:opacity-70 transition-opacity"
