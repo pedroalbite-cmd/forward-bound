@@ -255,8 +255,22 @@ export function IndicatorsTab() {
 
   const chartLabels = getChartLabels();
 
-  // Get meta for indicator - uses funnelData from Plan Growth for O2 TAX/Oxy Hacker/Franquia
+  // Get meta for indicator - uses funnelData from Plan Growth for all BUs
   const getMetaForIndicator = (indicator: IndicatorConfig) => {
+    // For Consolidado (all), sum metas from all BUs in funnelData
+    if (selectedBU === 'all' && funnelData) {
+      const metaModeloAtual = funnelData.modeloAtual ? calcularMetaDoPeriodo(funnelData.modeloAtual, indicator.key, startDate, endDate) : 0;
+      const metaO2Tax = funnelData.o2Tax ? calcularMetaDoPeriodo(funnelData.o2Tax, indicator.key, startDate, endDate) : 0;
+      const metaOxyHacker = funnelData.oxyHacker ? calcularMetaDoPeriodo(funnelData.oxyHacker, indicator.key, startDate, endDate) : 0;
+      const metaFranquia = funnelData.franquia ? calcularMetaDoPeriodo(funnelData.franquia, indicator.key, startDate, endDate) : 0;
+      return metaModeloAtual + metaO2Tax + metaOxyHacker + metaFranquia;
+    }
+    
+    // For Modelo Atual BU, use funnelData from Plan Growth
+    if (selectedBU === 'modelo_atual' && funnelData?.modeloAtual) {
+      return calcularMetaDoPeriodo(funnelData.modeloAtual, indicator.key, startDate, endDate);
+    }
+    
     // For Franquia BU, use funnelData from Plan Growth
     if (useExpansaoData && funnelData?.franquia) {
       return calcularMetaDoPeriodo(funnelData.franquia, indicator.key, startDate, endDate);
@@ -272,6 +286,7 @@ export function IndicatorsTab() {
       return calcularMetaDoPeriodo(funnelData.oxyHacker, indicator.key, startDate, endDate);
     }
     
+    // Fallback to sheet metas (shouldn't be reached with current config)
     if (indicator.useSheetMeta && indicator.key === 'mql') {
       const sheetMeta = getMqlsMetaForPeriod(startDate, endDate);
       if (sheetMeta > 0) return sheetMeta;
@@ -386,7 +401,74 @@ export function IndicatorsTab() {
       }));
     }
     
-    // For MQLs, use sheet data
+    // For Modelo Atual BU, use funnelData metas from Plan Growth + realized from sheets
+    if (selectedBU === 'modelo_atual' && funnelData?.modeloAtual) {
+      const sheetRealizedData = indicator.key === 'mql'
+        ? getMqlsGroupedData(startDate, endDate, grouping)
+        : getClosersGroupedData(indicator.key as CloserIndicator, startDate, endDate, grouping);
+      
+      const funnelMetasMensais = getMonthlyMetasFromFunnel(funnelData.modeloAtual, indicator.key, startDate, endDate);
+      const metaPeriodo = calcularMetaDoPeriodo(funnelData.modeloAtual, indicator.key, startDate, endDate);
+      const metasProrateadas = grouping !== 'monthly' ? getProratedMetaSeries(metaPeriodo) : [];
+
+      return chartLabels.map((label, index) => ({
+        label,
+        realizado: sheetRealizedData.qty[index] || 0,
+        meta: grouping === 'monthly'
+          ? (funnelMetasMensais[index] ?? 0)
+          : (metasProrateadas[index] ?? 0),
+      }));
+    }
+
+    // For Consolidado (all), sum metas from all BUs + realized from respective sources
+    if (selectedBU === 'all' && funnelData) {
+      const mqlSheetData = getMqlsGroupedData(startDate, endDate, grouping);
+      const closersSheetData = indicator.key !== 'mql' 
+        ? getClosersGroupedData(indicator.key as CloserIndicator, startDate, endDate, grouping)
+        : { qty: [], meta: [] };
+      
+      const o2taxData = getO2TaxGroupedData(indicator.key as O2TaxIndicator, startDate, endDate, grouping);
+      const oxyHackerData = getOxyHackerGroupedData(indicator.key as OxyHackerIndicator, startDate, endDate, grouping);
+      const expansaoData = getExpansaoGroupedData(indicator.key as ExpansaoIndicator, startDate, endDate, grouping);
+      
+      // Get monthly metas for each BU
+      const metasModeloAtual = funnelData.modeloAtual ? getMonthlyMetasFromFunnel(funnelData.modeloAtual, indicator.key, startDate, endDate) : [];
+      const metasO2Tax = funnelData.o2Tax ? getMonthlyMetasFromFunnel(funnelData.o2Tax, indicator.key, startDate, endDate) : [];
+      const metasOxyHacker = funnelData.oxyHacker ? getMonthlyMetasFromFunnel(funnelData.oxyHacker, indicator.key, startDate, endDate) : [];
+      const metasFranquia = funnelData.franquia ? getMonthlyMetasFromFunnel(funnelData.franquia, indicator.key, startDate, endDate) : [];
+      
+      // Get period metas for prorating
+      const metaPeriodoModeloAtual = funnelData.modeloAtual ? calcularMetaDoPeriodo(funnelData.modeloAtual, indicator.key, startDate, endDate) : 0;
+      const metaPeriodoO2Tax = funnelData.o2Tax ? calcularMetaDoPeriodo(funnelData.o2Tax, indicator.key, startDate, endDate) : 0;
+      const metaPeriodoOxyHacker = funnelData.oxyHacker ? calcularMetaDoPeriodo(funnelData.oxyHacker, indicator.key, startDate, endDate) : 0;
+      const metaPeriodoFranquia = funnelData.franquia ? calcularMetaDoPeriodo(funnelData.franquia, indicator.key, startDate, endDate) : 0;
+      const totalMetaPeriodo = metaPeriodoModeloAtual + metaPeriodoO2Tax + metaPeriodoOxyHacker + metaPeriodoFranquia;
+      
+      const metasProrateadas = grouping !== 'monthly' ? getProratedMetaSeries(totalMetaPeriodo) : [];
+
+      return chartLabels.map((label, index) => {
+        // Sum realized from all sources
+        const realizadoModeloAtual = indicator.key === 'mql' 
+          ? (mqlSheetData.qty[index] || 0)
+          : (closersSheetData.qty[index] || 0);
+        const realizadoO2Tax = o2taxData.qty[index] || 0;
+        const realizadoOxyHacker = oxyHackerData.qty[index] || 0;
+        const realizadoFranquia = expansaoData.qty[index] || 0;
+        
+        // Sum metas from all BUs
+        const metaTotal = grouping === 'monthly'
+          ? (metasModeloAtual[index] ?? 0) + (metasO2Tax[index] ?? 0) + (metasOxyHacker[index] ?? 0) + (metasFranquia[index] ?? 0)
+          : (metasProrateadas[index] ?? 0);
+
+        return {
+          label,
+          realizado: realizadoModeloAtual + realizadoO2Tax + realizadoOxyHacker + realizadoFranquia,
+          meta: metaTotal,
+        };
+      });
+    }
+    
+    // For MQLs (fallback), use sheet data
     if (indicator.useSheetMeta && indicator.key === 'mql') {
       const sheetData = getMqlsGroupedData(startDate, endDate, grouping);
       return chartLabels.map((label, index) => ({ 
@@ -396,7 +478,7 @@ export function IndicatorsTab() {
       }));
     }
     
-    // For closers indicators (RM, RR, Proposta, Venda), use closers sheet data
+    // For closers indicators (RM, RR, Proposta, Venda) fallback, use closers sheet data
     if (indicator.useClosersMeta && (indicator.key === 'rm' || indicator.key === 'rr' || indicator.key === 'proposta' || indicator.key === 'venda')) {
       const closersData = getClosersGroupedData(indicator.key as CloserIndicator, startDate, endDate, grouping);
       return chartLabels.map((label, index) => ({ 
