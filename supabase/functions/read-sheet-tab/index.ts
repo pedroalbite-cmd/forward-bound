@@ -56,8 +56,11 @@ Deno.serve(async (req) => {
     const body = (await req.json().catch(() => ({}))) as any;
     const sheetName = body?.sheetName || 'MQLs Meta';
     const maxRows = body?.maxRows || 50;
+    const startDate = body?.startDate; // format: "2026-01-01"
+    const endDate = body?.endDate;     // format: "2026-01-21"
+    const dateColumn = body?.dateColumn || 'D'; // Column letter for date filtering
 
-    console.log(`Requested sheet: "${sheetName}", maxRows: ${maxRows}`);
+    console.log(`Requested sheet: "${sheetName}", maxRows: ${maxRows}, startDate: ${startDate}, endDate: ${endDate}`);
 
     // Get Sheet ID from environment
     const sheetId = Deno.env.get('GOOGLE_SHEET_ID');
@@ -74,10 +77,19 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Build query parameter for date filtering
+    let queryParam = '';
+    if (startDate && endDate) {
+      // Use Google Visualization API SQL-like query to filter by date range
+      const query = `SELECT * WHERE ${dateColumn} >= date '${startDate}' AND ${dateColumn} <= date '${endDate}'`;
+      queryParam = `&tq=${encodeURIComponent(query)}`;
+      console.log(`Date filter query: ${query}`);
+    }
+
     // Fetch data from Google Sheets - specify sheet name
     // URL encode the sheet name for special characters
     const encodedSheetName = encodeURIComponent(sheetName);
-    const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodedSheetName}`;
+    const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodedSheetName}${queryParam}`;
     console.log(`Fetching from: ${sheetUrl}`);
 
     const response = await fetch(sheetUrl);
