@@ -54,8 +54,20 @@ export function useModeloAtualValues(startDate?: Date, endDate?: Date) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['modelo-atual-values', startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async (): Promise<ModeloAtualValuesResult> => {
+      // Format dates for Google Sheets query (YYYY-MM-DD)
+      const startDateStr = startDate ? startDate.toISOString().split('T')[0] : undefined;
+      const endDateStr = endDate ? endDate.toISOString().split('T')[0] : undefined;
+      
+      console.log(`[useModeloAtualValues] Fetching HISTÓRICO DE FASES for period: ${startDateStr} to ${endDateStr}`);
+      
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('read-sheet-tab', {
-        body: { sheetName: 'HISTÓRICO DE FASES', maxRows: 10000 }
+        body: { 
+          sheetName: 'HISTÓRICO DE FASES', 
+          maxRows: 50000,
+          startDate: startDateStr,
+          endDate: endDateStr,
+          dateColumn: 'D', // Column D = "Entrada"
+        }
       });
 
       if (fetchError) {
