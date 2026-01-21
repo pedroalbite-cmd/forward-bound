@@ -25,7 +25,7 @@ interface FunnelStage {
 
 export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunnelChartProps) {
   const { getMqlsQtyForPeriod } = useSheetMetas(startDate, endDate);
-  const { getQtyForPeriod: getClosersQty } = useClosersMetas(startDate, endDate);
+  const { getQtyForPeriod: getClosersQty, getValueForPeriod: getClosersValue } = useClosersMetas(startDate, endDate);
   const { getQtyForPeriod: getExpansaoQty, getValueForPeriod: getExpansaoValue } = useExpansaoMetas(startDate, endDate);
   const { getQtyForPeriod: getO2TaxQty, getValueForPeriod: getO2TaxValue } = useO2TaxMetas(startDate, endDate);
   const { getQtyForPeriod: getOxyHackerQty, getValueForPeriod: getOxyHackerValue } = useOxyHackerMetas(startDate, endDate);
@@ -34,9 +34,6 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
   const useExpansaoData = selectedBU === 'franquia';
   const useO2TaxData = selectedBU === 'o2_tax';
   const useOxyHackerData = selectedBU === 'oxy_hacker';
-  
-  // Ticket for Modelo Atual/Consolidado (used only for these BUs)
-  const effectiveTicket = 17000;
   
   // Get totals based on selected BU
   const totals = useExpansaoData ? {
@@ -74,7 +71,7 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
     { number: 5, name: 'Contrato Assinado', indicator: 'venda', value: totals.venda, conversionPercent: totals.proposta > 0 ? (totals.venda / totals.proposta) * 100 : 0 },
   ];
 
-  // Calculate monetary values using real values for O2 TAX, Franquia, Oxy Hacker
+  // Calculate monetary values using real values from each BU's data source
   // Formula: Valor Pontual + Valor Setup + Valor MRR (1x) for each card
   const propostaValue = useExpansaoData 
     ? getExpansaoValue('proposta', startDate, endDate)
@@ -82,7 +79,7 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
       ? getO2TaxValue('proposta', startDate, endDate)
       : useOxyHackerData 
         ? getOxyHackerValue('proposta', startDate, endDate)
-        : totals.proposta * effectiveTicket; // Modelo Atual/Consolidado uses fixed ticket
+        : getClosersValue('proposta', startDate, endDate); // Modelo Atual/Consolidado uses real sheet values
 
   const vendaValue = useExpansaoData 
     ? getExpansaoValue('venda', startDate, endDate)
@@ -90,7 +87,7 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
       ? getO2TaxValue('venda', startDate, endDate)
       : useOxyHackerData 
         ? getOxyHackerValue('venda', startDate, endDate)
-        : totals.venda * effectiveTicket;
+        : getClosersValue('venda', startDate, endDate);
 
   // Width percentages for funnel visualization
   const widthPercentages = [100, 80, 60, 45, 35];
