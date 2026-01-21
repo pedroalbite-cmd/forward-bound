@@ -10,6 +10,9 @@ interface CloserRow {
   fase: string;
   qty: number;
   meta: number;
+  valor: number;
+  valorSetup: number;
+  valorMrr: number;
 }
 
 interface ClosersMetasResult {
@@ -73,6 +76,9 @@ export function useClosersMetas(startDate?: Date, endDate?: Date) {
           fase,
           qty: typeof row.Qtd === 'number' ? row.Qtd : 0,
           meta: typeof row.Meta === 'number' ? row.Meta : 0,
+          valor: typeof row['Valor Pontual'] === 'number' ? row['Valor Pontual'] : (typeof row.Valor === 'number' ? row.Valor : 0),
+          valorSetup: typeof row['Valor Setup'] === 'number' ? row['Valor Setup'] : 0,
+          valorMrr: typeof row['Valor MRR'] === 'number' ? row['Valor MRR'] : 0,
         });
       }
 
@@ -123,6 +129,29 @@ export function useClosersMetas(startDate?: Date, endDate?: Date) {
     }
     
     console.log(`[useClosersMetas] getMetaForPeriod ${indicator}: ${total}`);
+    return Math.round(total);
+  };
+
+  // Get total monetary value for a specific indicator and date range
+  const getValueForPeriod = (indicator: CloserIndicator, start?: Date, end?: Date): number => {
+    if (!data?.rows || data.rows.length === 0) return 0;
+    
+    const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
+    const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
+    
+    let total = 0;
+    for (const row of data.rows) {
+      const rowTime = row.date.getTime();
+      if (rowTime >= startTime && rowTime <= endTime) {
+        const rowIndicator = PHASE_TO_INDICATOR[row.fase];
+        if (rowIndicator === indicator) {
+          // Soma: Valor Pontual + Valor Setup + Valor MRR (mesma lógica das outras BUs)
+          total += row.valor + row.valorSetup + row.valorMrr;
+        }
+      }
+    }
+    
+    console.log(`[useClosersMetas] getValueForPeriod ${indicator}: ${total}`);
     return Math.round(total);
   };
 
@@ -214,6 +243,7 @@ export function useClosersMetas(startDate?: Date, endDate?: Date) {
     error,
     getQtyForPeriod,
     getMetaForPeriod,
+    getValueForPeriod,
     getGroupedData,
   };
 }
