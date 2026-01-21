@@ -1,9 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useSheetMetas } from "@/hooks/useSheetMetas";
-import { useClosersMetas, CloserIndicator } from "@/hooks/useClosersMetas";
-import { useExpansaoMetas, ExpansaoIndicator } from "@/hooks/useExpansaoMetas";
-import { useO2TaxMetas, O2TaxIndicator } from "@/hooks/useO2TaxMetas";
-import { useOxyHackerMetas, OxyHackerIndicator } from "@/hooks/useOxyHackerMetas";
+import { useClosersMetas } from "@/hooks/useClosersMetas";
+import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
+import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
+import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
+import { useModeloAtualValues } from "@/hooks/useModeloAtualValues";
 import { BUType, IndicatorType } from "@/hooks/useFunnelRealized";
 
 interface PeriodFunnelChartProps {
@@ -25,10 +26,11 @@ interface FunnelStage {
 
 export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunnelChartProps) {
   const { getMqlsQtyForPeriod } = useSheetMetas(startDate, endDate);
-  const { getQtyForPeriod: getClosersQty, getValueForPeriod: getClosersValue } = useClosersMetas(startDate, endDate);
+  const { getQtyForPeriod: getClosersQty } = useClosersMetas(startDate, endDate);
   const { getQtyForPeriod: getExpansaoQty, getValueForPeriod: getExpansaoValue } = useExpansaoMetas(startDate, endDate);
   const { getQtyForPeriod: getO2TaxQty, getValueForPeriod: getO2TaxValue } = useO2TaxMetas(startDate, endDate);
   const { getQtyForPeriod: getOxyHackerQty, getValueForPeriod: getOxyHackerValue } = useOxyHackerMetas(startDate, endDate);
+  const { getValueForPeriod: getModeloAtualValue } = useModeloAtualValues(startDate, endDate);
   
   // Check if we should use external database data
   const useExpansaoData = selectedBU === 'franquia';
@@ -72,14 +74,14 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
   ];
 
   // Calculate monetary values using real values from each BU's data source
-  // Formula: Valor Pontual + Valor Setup + Valor MRR (1x) for each card
+  // Formula: Valor Pontual + Valor Setup + Valor MRR + Valor Educação for each card
   const propostaValue = useExpansaoData 
     ? getExpansaoValue('proposta', startDate, endDate)
     : useO2TaxData 
       ? getO2TaxValue('proposta', startDate, endDate)
       : useOxyHackerData 
         ? getOxyHackerValue('proposta', startDate, endDate)
-        : getClosersValue('proposta', startDate, endDate); // Modelo Atual/Consolidado uses real sheet values
+        : getModeloAtualValue('proposta', startDate, endDate); // Modelo Atual uses HISTÓRICO DE FASES
 
   const vendaValue = useExpansaoData 
     ? getExpansaoValue('venda', startDate, endDate)
@@ -87,7 +89,7 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
       ? getO2TaxValue('venda', startDate, endDate)
       : useOxyHackerData 
         ? getOxyHackerValue('venda', startDate, endDate)
-        : getClosersValue('venda', startDate, endDate);
+        : getModeloAtualValue('venda', startDate, endDate);
 
   // Width percentages for funnel visualization
   const widthPercentages = [100, 80, 60, 45, 35];
