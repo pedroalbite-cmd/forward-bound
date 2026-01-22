@@ -10,14 +10,12 @@ import { RefreshCw, Loader2, CalendarIcon, BarChart3, TrendingUp, ExternalLink }
 import { useFunnelRealized, IndicatorType, BUType } from "@/hooks/useFunnelRealized";
 import { useSheetMetas, ChartGrouping } from "@/hooks/useSheetMetas";
 import { useClosersMetas, CloserIndicator } from "@/hooks/useClosersMetas";
-import { useClosersAnalytics } from "@/hooks/useClosersAnalytics";
 import { useExpansaoMetas, ExpansaoIndicator } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas, O2TaxIndicator } from "@/hooks/useO2TaxMetas";
 import { useOxyHackerMetas, OxyHackerIndicator } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
-import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { format, startOfYear, endOfYear, differenceInDays, eachMonthOfInterval, addDays, eachDayOfInterval, getMonth, startOfMonth, endOfMonth } from "date-fns";
 import { FunnelDataItem } from "@/contexts/MediaMetasContext";
 import { ptBR } from "date-fns/locale";
@@ -179,10 +177,7 @@ export function IndicatorsTab() {
   
   // Analytics hooks for drill-down
   const modeloAtualAnalytics = useModeloAtualAnalytics(startDate, endDate);
-  const closersAnalytics = useClosersAnalytics(startDate, endDate);
   const o2TaxAnalytics = useO2TaxAnalytics(startDate, endDate);
-  const franquiaAnalytics = useExpansaoAnalytics(startDate, endDate, 'Franquia');
-  const oxyHackerAnalytics = useExpansaoAnalytics(startDate, endDate, 'Oxy Hacker');
   
   // Get funnelData from MediaMetasContext for dynamic metas
   const { funnelData } = useMediaMetas();
@@ -620,18 +615,7 @@ export function IndicatorsTab() {
   const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
     const useExpansaoData = selectedBU === 'franquia';
     const useO2TaxData = selectedBU === 'o2_tax';
-    const useOxyHackerData = selectedBU === 'oxy_hacker';
     const useConsolidado = selectedBU === 'all';
-
-    // For Franquia
-    if (useExpansaoData) {
-      return franquiaAnalytics.getDetailItemsForIndicator(indicatorKey);
-    }
-
-    // For Oxy Hacker
-    if (useOxyHackerData) {
-      return oxyHackerAnalytics.getDetailItemsForIndicator(indicatorKey);
-    }
 
     // For O2 TAX
     if (useO2TaxData) {
@@ -651,50 +635,30 @@ export function IndicatorsTab() {
       return phaseData?.cards.map(o2TaxAnalytics.toDetailItem) ?? [];
     }
 
-    // For Modelo Atual - use closersAnalytics for RM, RR, Proposta, Venda (same source as accelerometer)
-    if (selectedBU === 'modelo_atual') {
-      // MQL uses modeloAtualAnalytics (or returns empty - MQL drill-down not supported yet)
-      if (indicatorKey === 'mql' || indicatorKey === 'leads') {
-        return modeloAtualAnalytics.getDetailItemsForIndicator(indicatorKey);
-      }
-      // RM, RR, Proposta, Venda use closersAnalytics (same source as useClosersMetas)
-      return closersAnalytics.getDetailItemsForIndicator(indicatorKey);
-    }
-
-    // For Consolidado - aggregate all BUs
-    if (useConsolidado) {
-      // Modelo Atual items - use closersAnalytics for consistency
-      let modeloAtualItems: DetailItem[] = [];
-      if (indicatorKey === 'mql' || indicatorKey === 'leads') {
-        modeloAtualItems = modeloAtualAnalytics.getDetailItemsForIndicator(indicatorKey);
-      } else {
-        modeloAtualItems = closersAnalytics.getDetailItemsForIndicator(indicatorKey);
-      }
+    // For Modelo Atual or Consolidado
+    if (selectedBU === 'modelo_atual' || useConsolidado) {
+      const items = modeloAtualAnalytics.getDetailItemsForIndicator(indicatorKey);
       
-      const o2TaxPhaseMap: Record<string, string> = {
-        'mql': 'MQL',
-        'rm': 'RM',
-        'rr': 'RR',
-        'proposta': 'Proposta',
-        'venda': 'Ganho',
-      };
-      
-      // Add O2 TAX items
-      let o2TaxItems: DetailItem[] = [];
-      if (indicatorKey === 'venda') {
-        o2TaxItems = o2TaxAnalytics.getDealsWon.cards.map(o2TaxAnalytics.toDetailItem);
-      } else {
+      if (useConsolidado) {
+        const o2TaxPhaseMap: Record<string, string> = {
+          'mql': 'MQL',
+          'rm': 'RM',
+          'rr': 'RR',
+          'proposta': 'Proposta',
+          'venda': 'Ganho',
+        };
+        
+        if (indicatorKey === 'venda') {
+          const o2TaxItems = o2TaxAnalytics.getDealsWon.cards.map(o2TaxAnalytics.toDetailItem);
+          return [...items, ...o2TaxItems];
+        }
+        
         const phaseData = o2TaxAnalytics.getCardsByPhase.find(p => p.phase === o2TaxPhaseMap[indicatorKey]);
-        o2TaxItems = phaseData?.cards.map(o2TaxAnalytics.toDetailItem) ?? [];
+        const o2TaxItems = phaseData?.cards.map(o2TaxAnalytics.toDetailItem) ?? [];
+        return [...items, ...o2TaxItems];
       }
       
-      // Add Franquia items
-      const franquiaItems = franquiaAnalytics.getDetailItemsForIndicator(indicatorKey);
-      
-      // Add Oxy Hacker items
-      const oxyHackerItems = oxyHackerAnalytics.getDetailItemsForIndicator(indicatorKey);
-      
-      return [...modeloAtualItems, ...o2TaxItems, ...franquiaItems, ...oxyHackerItems];
+      return items;
     }
 
     return [];
