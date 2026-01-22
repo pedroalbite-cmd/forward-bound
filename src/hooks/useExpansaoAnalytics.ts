@@ -90,9 +90,8 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
         if (rowProduto !== produto) continue;
         
         const id = String(row.ID);
-        const dataEntrada = parseDate(row['Entrada']);
-        
-        if (!dataEntrada) continue;
+        // Use fallback date like useExpansaoMetas to avoid skipping records
+        const dataEntrada = parseDate(row['Entrada']) || new Date();
         
         const taxaFranquia = row['Taxa de franquia'] ? parseFloat(row['Taxa de franquia']) : 0;
         const valorMRR = row['Valor MRR'] ? parseFloat(row['Valor MRR']) : 0;
@@ -125,7 +124,9 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
         allMovements.push(movement);
       }
 
-      console.log(`[useExpansaoAnalytics] Loaded ${allMovements.length} ${produto} movements`);
+      const uniquePhases = [...new Set(allMovements.map(m => m.fase))];
+      console.log(`[useExpansaoAnalytics] Raw rows: ${responseData.data.length}, Filtered ${produto}: ${allMovements.length}`);
+      console.log(`[useExpansaoAnalytics] Unique phases:`, uniquePhases);
       return { movements: allMovements };
     },
     staleTime: 5 * 60 * 1000,
@@ -138,6 +139,8 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
   const getCardsForIndicator = useMemo(() => {
     return (indicator: IndicatorType): ExpansaoCard[] => {
       if (indicator === 'leads') return [];
+      
+      console.log(`[useExpansaoAnalytics] getCardsForIndicator(${indicator}): checking ${movements.length} movements, period ${new Date(startTime).toLocaleDateString()} - ${new Date(endTime).toLocaleDateString()}`);
       
       const seenIds = new Set<string>();
       const result: ExpansaoCard[] = [];
@@ -165,6 +168,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
         }
       }
       
+      console.log(`[useExpansaoAnalytics] getCardsForIndicator(${indicator}): found ${result.length} unique cards`);
       return result;
     };
   }, [movements, startTime, endTime]);
