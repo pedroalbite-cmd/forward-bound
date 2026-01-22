@@ -5,6 +5,7 @@ import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
 import { useModeloAtualValues } from "@/hooks/useModeloAtualValues";
+import { useLeadsMetas } from "@/hooks/useLeadsMetas";
 import { BUType, IndicatorType } from "@/hooks/useFunnelRealized";
 
 interface PeriodFunnelChartProps {
@@ -31,6 +32,7 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
   const { getQtyForPeriod: getO2TaxQty, getValueForPeriod: getO2TaxValue } = useO2TaxMetas(startDate, endDate);
   const { getQtyForPeriod: getOxyHackerQty, getValueForPeriod: getOxyHackerValue } = useOxyHackerMetas(startDate, endDate);
   const { getValueForPeriod: getModeloAtualValue } = useModeloAtualValues(startDate, endDate);
+  const { getLeadsQtyForPeriod } = useLeadsMetas(startDate, endDate);
   
   // Check if we should use external database data
   const useExpansaoData = selectedBU === 'franquia';
@@ -38,27 +40,34 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
   const useOxyHackerData = selectedBU === 'oxy_hacker';
   const useConsolidado = selectedBU === 'all';
   
+  // Get leads data (currently only available for Modelo Atual)
+  const leadsQty = getLeadsQtyForPeriod(startDate, endDate);
+  
   // Get totals based on selected BU
   const totals = useConsolidado ? {
     // Consolidado: sum all BUs (Modelo Atual + O2 TAX + Oxy Hacker + Franquia)
+    leads: leadsQty, // Leads data only from Modelo Atual for now
     mql: getMqlsQtyForPeriod(startDate, endDate) + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate),
     rm: getClosersQty('rm', startDate, endDate) + getO2TaxQty('rm', startDate, endDate) + getOxyHackerQty('rm', startDate, endDate) + getExpansaoQty('rm', startDate, endDate),
     rr: getClosersQty('rr', startDate, endDate) + getO2TaxQty('rr', startDate, endDate) + getOxyHackerQty('rr', startDate, endDate) + getExpansaoQty('rr', startDate, endDate),
     proposta: getClosersQty('proposta', startDate, endDate) + getO2TaxQty('proposta', startDate, endDate) + getOxyHackerQty('proposta', startDate, endDate) + getExpansaoQty('proposta', startDate, endDate),
     venda: getClosersQty('venda', startDate, endDate) + getO2TaxQty('venda', startDate, endDate) + getOxyHackerQty('venda', startDate, endDate) + getExpansaoQty('venda', startDate, endDate),
   } : useExpansaoData ? {
+    leads: 0, // No leads data for Franquia yet
     mql: getExpansaoQty('mql', startDate, endDate),
     rm: getExpansaoQty('rm', startDate, endDate),
     rr: getExpansaoQty('rr', startDate, endDate),
     proposta: getExpansaoQty('proposta', startDate, endDate),
     venda: getExpansaoQty('venda', startDate, endDate),
   } : useO2TaxData ? {
+    leads: 0, // No leads data for O2 TAX yet
     mql: getO2TaxQty('mql', startDate, endDate),
     rm: getO2TaxQty('rm', startDate, endDate),
     rr: getO2TaxQty('rr', startDate, endDate),
     proposta: getO2TaxQty('proposta', startDate, endDate),
     venda: getO2TaxQty('venda', startDate, endDate),
   } : useOxyHackerData ? {
+    leads: 0, // No leads data for Oxy Hacker yet
     mql: getOxyHackerQty('mql', startDate, endDate),
     rm: getOxyHackerQty('rm', startDate, endDate),
     rr: getOxyHackerQty('rr', startDate, endDate),
@@ -66,6 +75,7 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
     venda: getOxyHackerQty('venda', startDate, endDate),
   } : {
     // Modelo Atual only
+    leads: leadsQty,
     mql: getMqlsQtyForPeriod(startDate, endDate),
     rm: getClosersQty('rm', startDate, endDate),
     rr: getClosersQty('rr', startDate, endDate),
@@ -75,11 +85,12 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
 
   // Calculate conversions
   const stages: FunnelStage[] = [
-    { number: 1, name: 'MQL', indicator: 'mql', value: totals.mql, conversionPercent: 100 },
-    { number: 2, name: 'Reuniões Agendadas', indicator: 'rm', value: totals.rm, conversionPercent: totals.mql > 0 ? (totals.rm / totals.mql) * 100 : 0 },
-    { number: 3, name: 'Reunião realizada', indicator: 'rr', value: totals.rr, conversionPercent: totals.rm > 0 ? (totals.rr / totals.rm) * 100 : 0 },
-    { number: 4, name: 'Proposta Enviada', indicator: 'proposta', value: totals.proposta, conversionPercent: totals.rr > 0 ? (totals.proposta / totals.rr) * 100 : 0 },
-    { number: 5, name: 'Contrato Assinado', indicator: 'venda', value: totals.venda, conversionPercent: totals.proposta > 0 ? (totals.venda / totals.proposta) * 100 : 0 },
+    { number: 1, name: 'Leads', indicator: 'leads' as IndicatorType, value: totals.leads, conversionPercent: 100 },
+    { number: 2, name: 'MQL', indicator: 'mql', value: totals.mql, conversionPercent: totals.leads > 0 ? (totals.mql / totals.leads) * 100 : 100 },
+    { number: 3, name: 'Reuniões Agendadas', indicator: 'rm', value: totals.rm, conversionPercent: totals.mql > 0 ? (totals.rm / totals.mql) * 100 : 0 },
+    { number: 4, name: 'Reunião realizada', indicator: 'rr', value: totals.rr, conversionPercent: totals.rm > 0 ? (totals.rr / totals.rm) * 100 : 0 },
+    { number: 5, name: 'Proposta Enviada', indicator: 'proposta', value: totals.proposta, conversionPercent: totals.rr > 0 ? (totals.proposta / totals.rr) * 100 : 0 },
+    { number: 6, name: 'Contrato Assinado', indicator: 'venda', value: totals.venda, conversionPercent: totals.proposta > 0 ? (totals.venda / totals.proposta) * 100 : 0 },
   ];
 
   // Calculate monetary values using real values from each BU's data source
@@ -104,16 +115,17 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
           ? getOxyHackerValue('venda', startDate, endDate)
           : getModeloAtualValue('venda', startDate, endDate);
 
-  // Width percentages for funnel visualization
-  const widthPercentages = [100, 80, 60, 45, 35];
+  // Width percentages for funnel visualization (6 stages now)
+  const widthPercentages = [100, 85, 70, 55, 45, 35];
 
   // Colors for each stage
   const stageColors = [
-    'from-emerald-400 to-cyan-500',
-    'from-cyan-500 to-blue-500',
-    'from-blue-500 to-blue-600',
-    'from-blue-600 to-slate-500',
-    'from-slate-500 to-slate-600',
+    'from-orange-400 to-orange-500',   // Leads - LARANJA
+    'from-emerald-400 to-cyan-500',    // MQL
+    'from-cyan-500 to-blue-500',       // RM
+    'from-blue-500 to-blue-600',       // RR
+    'from-blue-600 to-slate-500',      // Proposta
+    'from-slate-500 to-slate-600',     // Venda
   ];
 
   return (
