@@ -15,6 +15,7 @@ interface ExpansaoMovement {
   valorMRR: number | null;
   valorPontual: number | null;
   valorSetup: number | null;
+  taxaFranquia: number | null; // Taxa de franquia (R$ 140.000 para Franquia)
   produto: string;
 }
 
@@ -78,6 +79,7 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
           valorMRR: row['Valor MRR'] ? parseFloat(row['Valor MRR']) : null,
           valorPontual: row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : null,
           valorSetup: row['Valor Setup'] ? parseFloat(row['Valor Setup']) : null,
+          taxaFranquia: row['Taxa de franquia'] ? parseFloat(row['Taxa de franquia']) : null,
           produto,
         };
         
@@ -167,10 +169,18 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
         }
         
         if (shouldCount && !cardValues.has(movement.id)) {
-          const pontual = movement.valorPontual || 0;
-          const setup = movement.valorSetup || 0;
-          const mrr = movement.valorMRR || 0;
-          cardValues.set(movement.id, pontual + setup + mrr);
+          // Priorizar "Taxa de franquia" se disponível (R$ 140.000 para Franquia)
+          const taxaFranquia = movement.taxaFranquia || 0;
+          
+          if (taxaFranquia > 0) {
+            cardValues.set(movement.id, taxaFranquia);
+          } else {
+            // Fallback para campos antigos
+            const pontual = movement.valorPontual || 0;
+            const setup = movement.valorSetup || 0;
+            const mrr = movement.valorMRR || 0;
+            cardValues.set(movement.id, pontual + setup + mrr);
+          }
         }
       }
     }
