@@ -77,11 +77,11 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
       }
 
       if (!responseData?.data) {
-        return { cards: [] };
+        return { movements: [] };
       }
 
-      // Group movements by card ID and get latest entry for each card
-      const cardMap = new Map<string, ExpansaoCard>();
+      // Keep ALL movements (not just latest per card) to match useExpansaoMetas logic
+      const allMovements: ExpansaoCard[] = [];
       
       for (const row of responseData.data) {
         const rowProduto = row['Produtos'] || '';
@@ -106,7 +106,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
           valor = sumValues > 0 ? sumValues : defaultTicket;
         }
         
-        const card: ExpansaoCard = {
+        const movement: ExpansaoCard = {
           id,
           titulo: row['Título'] || '',
           fase: row['Fase'] || '',
@@ -122,21 +122,17 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
           motivoPerda: row['Motivo da perda'] || null,
         };
         
-        // Keep the most recent entry for each card
-        const existing = cardMap.get(id);
-        if (!existing || card.dataEntrada > existing.dataEntrada) {
-          cardMap.set(id, card);
-        }
+        allMovements.push(movement);
       }
 
-      console.log(`[useExpansaoAnalytics] Loaded ${cardMap.size} unique ${produto} cards`);
-      return { cards: Array.from(cardMap.values()) };
+      console.log(`[useExpansaoAnalytics] Loaded ${allMovements.length} ${produto} movements`);
+      return { movements: allMovements };
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
 
-  const cards = data?.cards ?? [];
+  const movements = data?.movements ?? [];
 
   // Get unique cards that entered a specific indicator phase during the period
   const getCardsForIndicator = useMemo(() => {
@@ -146,34 +142,32 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
       const seenIds = new Set<string>();
       const result: ExpansaoCard[] = [];
       
-      // We need to re-fetch all movements to get cards that entered a phase
-      // For now, we work with the cards we have and filter by phase
-      for (const card of cards) {
-        const entryTime = card.dataEntrada.getTime();
+      for (const movement of movements) {
+        const entryTime = movement.dataEntrada.getTime();
         if (entryTime < startTime || entryTime > endTime) continue;
-        if (seenIds.has(card.id)) continue;
+        if (seenIds.has(movement.id)) continue;
         
-        const cardIndicator = PHASE_TO_INDICATOR[card.fase];
+        const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
         
-        if (indicator === 'venda') {
-          if (card.fase === 'Ganho') {
-            seenIds.add(card.id);
-            result.push(card);
-          }
-        } else if (indicator === 'proposta') {
-          if (cardIndicator === 'proposta') {
-            seenIds.add(card.id);
-            result.push(card);
-          }
-        } else if (cardIndicator === indicator) {
-          seenIds.add(card.id);
-          result.push(card);
+        // Check if movement matches the indicator
+        let matches = false;
+        if (indicator === 'venda' && movement.fase === 'Ganho') {
+          matches = true;
+        } else if (indicator === 'proposta' && movementIndicator === 'proposta') {
+          matches = true;
+        } else if (movementIndicator === indicator) {
+          matches = true;
+        }
+        
+        if (matches) {
+          seenIds.add(movement.id);
+          result.push(movement);
         }
       }
       
       return result;
     };
-  }, [cards, startTime, endTime]);
+  }, [movements, startTime, endTime]);
 
   // Helper function to convert ExpansaoCard to DetailItem
   const toDetailItem = (card: ExpansaoCard): DetailItem => ({
@@ -212,7 +206,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
   return {
     isLoading,
     error,
-    cards,
+    movements,
     getCardsForIndicator,
     toDetailItem,
     getDetailItemsForIndicator,
