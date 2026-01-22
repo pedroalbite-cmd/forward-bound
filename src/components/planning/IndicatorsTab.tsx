@@ -19,6 +19,7 @@ import { FunnelDataItem } from "@/contexts/MediaMetasContext";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { LeadsMqlsStackedChart } from "./LeadsMqlsStackedChart";
+import { LeadsStackedChart } from "./LeadsStackedChart";
 import { PeriodFunnelChart } from "./PeriodFunnelChart";
 import { AnalyticsSection } from "./indicators/AnalyticsSection";
 
@@ -622,9 +623,12 @@ export function IndicatorsTab() {
         ))}
       </div>
 
-      {/* New Charts - Leads/MQLs and Funnel */}
+      {/* New Charts - Leads, MQLs and Funnel */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <LeadsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
         <LeadsMqlsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
+      </div>
+      <div className="mt-4">
         <PeriodFunnelChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
       </div>
 
