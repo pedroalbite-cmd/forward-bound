@@ -169,17 +169,19 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
         }
         
         if (shouldCount && !cardValues.has(movement.id)) {
-          // Priorizar "Taxa de franquia" se disponível (R$ 54.000 para Oxy Hacker)
+          // Usar "Taxa de franquia" se disponível, senão usar valor padrão de R$ 54.000 para Oxy Hacker
           const taxaFranquia = movement.taxaFranquia || 0;
+          const defaultTicket = 54000; // R$ 54.000 para Oxy Hacker
           
           if (taxaFranquia > 0) {
             cardValues.set(movement.id, taxaFranquia);
           } else {
-            // Fallback para campos antigos
+            // Tentar campos antigos, senão usar ticket padrão
             const pontual = movement.valorPontual || 0;
             const setup = movement.valorSetup || 0;
             const mrr = movement.valorMRR || 0;
-            cardValues.set(movement.id, pontual + setup + mrr);
+            const sumValues = pontual + setup + mrr;
+            cardValues.set(movement.id, sumValues > 0 ? sumValues : defaultTicket);
           }
         }
       }
