@@ -149,7 +149,7 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
   };
 
   return (
-    <Card className="bg-card border-2 border-chart-4">
+    <Card className="bg-card border-2 border-orange-500">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-semibold text-foreground">Qtd Leads</CardTitle>
@@ -164,7 +164,7 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
         </div>
         <div className="flex items-center gap-6 mt-2">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-sm bg-chart-4" />
+            <div className="w-3 h-3 rounded-sm bg-orange-500" />
             <span className="text-xs text-muted-foreground">Leads Realizados</span>
           </div>
         </div>
@@ -187,7 +187,7 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} 
               />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="leads" fill="hsl(var(--chart-4))" name="Leads" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="leads" fill="#f97316" name="Leads" radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="leads" position="top" fill="hsl(var(--muted-foreground))" fontSize={10} formatter={(v: number) => v > 0 ? v : ''} />
               </Bar>
             </BarChart>
