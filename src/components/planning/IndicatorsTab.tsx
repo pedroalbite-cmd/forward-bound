@@ -623,12 +623,10 @@ export function IndicatorsTab() {
         ))}
       </div>
 
-      {/* New Charts - Leads, MQLs and Funnel */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <LeadsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
+      {/* New Charts - MQLs, Leads and Funnel */}
+      <div className="space-y-4">
         <LeadsMqlsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
-      </div>
-      <div className="mt-4">
+        <LeadsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
         <PeriodFunnelChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
       </div>
 
