@@ -16,6 +16,7 @@ import { useOxyHackerMetas, OxyHackerIndicator } from "@/hooks/useOxyHackerMetas
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
+import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { format, startOfYear, endOfYear, differenceInDays, eachMonthOfInterval, addDays, eachDayOfInterval, getMonth, startOfMonth, endOfMonth } from "date-fns";
 import { FunnelDataItem } from "@/contexts/MediaMetasContext";
 import { ptBR } from "date-fns/locale";
@@ -178,6 +179,8 @@ export function IndicatorsTab() {
   // Analytics hooks for drill-down
   const modeloAtualAnalytics = useModeloAtualAnalytics(startDate, endDate);
   const o2TaxAnalytics = useO2TaxAnalytics(startDate, endDate);
+  const franquiaAnalytics = useExpansaoAnalytics(startDate, endDate, 'Franquia');
+  const oxyHackerAnalytics = useExpansaoAnalytics(startDate, endDate, 'Oxy Hacker');
   
   // Get funnelData from MediaMetasContext for dynamic metas
   const { funnelData } = useMediaMetas();
@@ -615,7 +618,18 @@ export function IndicatorsTab() {
   const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
     const useExpansaoData = selectedBU === 'franquia';
     const useO2TaxData = selectedBU === 'o2_tax';
+    const useOxyHackerData = selectedBU === 'oxy_hacker';
     const useConsolidado = selectedBU === 'all';
+
+    // For Franquia
+    if (useExpansaoData) {
+      return franquiaAnalytics.getDetailItemsForIndicator(indicatorKey);
+    }
+
+    // For Oxy Hacker
+    if (useOxyHackerData) {
+      return oxyHackerAnalytics.getDetailItemsForIndicator(indicatorKey);
+    }
 
     // For O2 TAX
     if (useO2TaxData) {
@@ -648,14 +662,22 @@ export function IndicatorsTab() {
           'venda': 'Ganho',
         };
         
+        // Add O2 TAX items
+        let o2TaxItems: DetailItem[] = [];
         if (indicatorKey === 'venda') {
-          const o2TaxItems = o2TaxAnalytics.getDealsWon.cards.map(o2TaxAnalytics.toDetailItem);
-          return [...items, ...o2TaxItems];
+          o2TaxItems = o2TaxAnalytics.getDealsWon.cards.map(o2TaxAnalytics.toDetailItem);
+        } else {
+          const phaseData = o2TaxAnalytics.getCardsByPhase.find(p => p.phase === o2TaxPhaseMap[indicatorKey]);
+          o2TaxItems = phaseData?.cards.map(o2TaxAnalytics.toDetailItem) ?? [];
         }
         
-        const phaseData = o2TaxAnalytics.getCardsByPhase.find(p => p.phase === o2TaxPhaseMap[indicatorKey]);
-        const o2TaxItems = phaseData?.cards.map(o2TaxAnalytics.toDetailItem) ?? [];
-        return [...items, ...o2TaxItems];
+        // Add Franquia items
+        const franquiaItems = franquiaAnalytics.getDetailItemsForIndicator(indicatorKey);
+        
+        // Add Oxy Hacker items
+        const oxyHackerItems = oxyHackerAnalytics.getDetailItemsForIndicator(indicatorKey);
+        
+        return [...items, ...o2TaxItems, ...franquiaItems, ...oxyHackerItems];
       }
       
       return items;
