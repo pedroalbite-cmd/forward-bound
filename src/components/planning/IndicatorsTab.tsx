@@ -300,6 +300,21 @@ export function IndicatorsTab() {
 
   // Get realized value for indicator - uses external db data for Franquia/O2 TAX/Oxy Hacker, sheet qty for MQLs, closers qty for others
   const getRealizedForIndicator = (indicator: IndicatorConfig) => {
+    // For Consolidado (all), sum realized from ALL BUs
+    if (selectedBU === 'all') {
+      // Modelo Atual: MQLs from Sheet, others from Closers
+      const modeloAtualQty = indicator.key === 'mql'
+        ? getMqlsQtyForPeriod(startDate, endDate)
+        : getClosersQty(indicator.key as CloserIndicator, startDate, endDate);
+      
+      // External BUs from external database
+      const o2TaxQty = getO2TaxQty(indicator.key as O2TaxIndicator, startDate, endDate);
+      const oxyHackerQty = getOxyHackerQty(indicator.key as OxyHackerIndicator, startDate, endDate);
+      const franquiaQty = getExpansaoQty(indicator.key as ExpansaoIndicator, startDate, endDate);
+      
+      return modeloAtualQty + o2TaxQty + oxyHackerQty + franquiaQty;
+    }
+    
     // For Franquia BU, use expansão data from external database
     if (useExpansaoData) {
       return getExpansaoQty(indicator.key as ExpansaoIndicator, startDate, endDate);
@@ -315,6 +330,7 @@ export function IndicatorsTab() {
       return getOxyHackerQty(indicator.key as OxyHackerIndicator, startDate, endDate);
     }
     
+    // For Modelo Atual, use sheet data
     if (indicator.useSheetMeta && indicator.key === 'mql') {
       const sheetQty = getMqlsQtyForPeriod(startDate, endDate);
       if (sheetQty > 0) return sheetQty;
