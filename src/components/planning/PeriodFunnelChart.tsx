@@ -36,9 +36,17 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
   const useExpansaoData = selectedBU === 'franquia';
   const useO2TaxData = selectedBU === 'o2_tax';
   const useOxyHackerData = selectedBU === 'oxy_hacker';
+  const useConsolidado = selectedBU === 'all';
   
   // Get totals based on selected BU
-  const totals = useExpansaoData ? {
+  const totals = useConsolidado ? {
+    // Consolidado: sum all BUs (Modelo Atual + O2 TAX + Oxy Hacker + Franquia)
+    mql: getMqlsQtyForPeriod(startDate, endDate) + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate),
+    rm: getClosersQty('rm', startDate, endDate) + getO2TaxQty('rm', startDate, endDate) + getOxyHackerQty('rm', startDate, endDate) + getExpansaoQty('rm', startDate, endDate),
+    rr: getClosersQty('rr', startDate, endDate) + getO2TaxQty('rr', startDate, endDate) + getOxyHackerQty('rr', startDate, endDate) + getExpansaoQty('rr', startDate, endDate),
+    proposta: getClosersQty('proposta', startDate, endDate) + getO2TaxQty('proposta', startDate, endDate) + getOxyHackerQty('proposta', startDate, endDate) + getExpansaoQty('proposta', startDate, endDate),
+    venda: getClosersQty('venda', startDate, endDate) + getO2TaxQty('venda', startDate, endDate) + getOxyHackerQty('venda', startDate, endDate) + getExpansaoQty('venda', startDate, endDate),
+  } : useExpansaoData ? {
     mql: getExpansaoQty('mql', startDate, endDate),
     rm: getExpansaoQty('rm', startDate, endDate),
     rr: getExpansaoQty('rr', startDate, endDate),
@@ -57,6 +65,7 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
     proposta: getOxyHackerQty('proposta', startDate, endDate),
     venda: getOxyHackerQty('venda', startDate, endDate),
   } : {
+    // Modelo Atual only
     mql: getMqlsQtyForPeriod(startDate, endDate),
     rm: getClosersQty('rm', startDate, endDate),
     rr: getClosersQty('rr', startDate, endDate),
@@ -74,22 +83,26 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
   ];
 
   // Calculate monetary values using real values from each BU's data source
-  // Formula: Valor Pontual + Valor Setup + Valor MRR + Valor Educação for each card
-  const propostaValue = useExpansaoData 
-    ? getExpansaoValue('proposta', startDate, endDate)
-    : useO2TaxData 
-      ? getO2TaxValue('proposta', startDate, endDate)
-      : useOxyHackerData 
-        ? getOxyHackerValue('proposta', startDate, endDate)
-        : getModeloAtualValue('proposta', startDate, endDate); // Modelo Atual uses HISTÓRICO DE FASES
+  // For Consolidado, sum values from all BUs
+  const propostaValue = useConsolidado
+    ? getModeloAtualValue('proposta', startDate, endDate) + getO2TaxValue('proposta', startDate, endDate) + getOxyHackerValue('proposta', startDate, endDate) + getExpansaoValue('proposta', startDate, endDate)
+    : useExpansaoData 
+      ? getExpansaoValue('proposta', startDate, endDate)
+      : useO2TaxData 
+        ? getO2TaxValue('proposta', startDate, endDate)
+        : useOxyHackerData 
+          ? getOxyHackerValue('proposta', startDate, endDate)
+          : getModeloAtualValue('proposta', startDate, endDate);
 
-  const vendaValue = useExpansaoData 
-    ? getExpansaoValue('venda', startDate, endDate)
-    : useO2TaxData 
-      ? getO2TaxValue('venda', startDate, endDate)
-      : useOxyHackerData 
-        ? getOxyHackerValue('venda', startDate, endDate)
-        : getModeloAtualValue('venda', startDate, endDate);
+  const vendaValue = useConsolidado
+    ? getModeloAtualValue('venda', startDate, endDate) + getO2TaxValue('venda', startDate, endDate) + getOxyHackerValue('venda', startDate, endDate) + getExpansaoValue('venda', startDate, endDate)
+    : useExpansaoData 
+      ? getExpansaoValue('venda', startDate, endDate)
+      : useO2TaxData 
+        ? getO2TaxValue('venda', startDate, endDate)
+        : useOxyHackerData 
+          ? getOxyHackerValue('venda', startDate, endDate)
+          : getModeloAtualValue('venda', startDate, endDate);
 
   // Width percentages for funnel visualization
   const widthPercentages = [100, 80, 60, 45, 35];
