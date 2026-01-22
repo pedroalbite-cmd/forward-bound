@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Line, ComposedChart, RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
-import { RefreshCw, Loader2, CalendarIcon, BarChart3, TrendingUp, ExternalLink } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Line, ComposedChart, RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
+import { RefreshCw, Loader2, CalendarIcon, BarChart3, TrendingUp } from "lucide-react";
 import { useFunnelRealized, IndicatorType, BUType } from "@/hooks/useFunnelRealized";
 import { useSheetMetas, ChartGrouping } from "@/hooks/useSheetMetas";
 import { useClosersMetas, CloserIndicator } from "@/hooks/useClosersMetas";
@@ -14,17 +14,14 @@ import { useExpansaoMetas, ExpansaoIndicator } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas, O2TaxIndicator } from "@/hooks/useO2TaxMetas";
 import { useOxyHackerMetas, OxyHackerIndicator } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
-import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
-import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 import { format, startOfYear, endOfYear, differenceInDays, eachMonthOfInterval, addDays, eachDayOfInterval, getMonth, startOfMonth, endOfMonth } from "date-fns";
 import { FunnelDataItem } from "@/contexts/MediaMetasContext";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { LeadsMqlsStackedChart } from "./LeadsMqlsStackedChart";
 import { LeadsStackedChart } from "./LeadsStackedChart";
-import { ClickableFunnelChart } from "./ClickableFunnelChart";
+import { PeriodFunnelChart } from "./PeriodFunnelChart";
 import { AnalyticsSection } from "./indicators/AnalyticsSection";
-import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
 
 type ViewMode = 'daily' | 'accumulated';
 
@@ -57,32 +54,13 @@ const buOptions: { value: FilterBU; label: string }[] = [
 
 const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Math.round(value));
 
-interface RadialProgressCardProps {
-  title: string;
-  realized: number;
-  meta: number;
-  onClick?: () => void;
-  isClickable?: boolean;
-}
-
-const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = false }: RadialProgressCardProps) => {
+const RadialProgressCard = ({ title, realized, meta }: { title: string; realized: number; meta: number }) => {
   const percentage = meta > 0 ? (realized / meta) * 100 : 0;
   const isAboveMeta = percentage >= 100;
   const chartData = [{ value: Math.min(percentage, 100), fill: isAboveMeta ? "hsl(var(--chart-2))" : "hsl(var(--destructive))" }];
 
   return (
-    <Card 
-      className={cn(
-        "bg-card border-border relative group transition-all duration-200",
-        isClickable && "cursor-pointer hover:border-primary/50 hover:shadow-md"
-      )}
-      onClick={onClick}
-    >
-      {isClickable && (
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <ExternalLink className="h-4 w-4 text-muted-foreground" />
-        </div>
-      )}
+    <Card className="bg-card border-border">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground text-center">{title}</CardTitle>
       </CardHeader>
@@ -155,13 +133,6 @@ export function IndicatorsTab() {
   const [startDate, setStartDate] = useState<Date>(startOfYear(new Date(currentYear, 0, 1)));
   const [endDate, setEndDate] = useState<Date>(endOfYear(new Date(currentYear, 0, 1)));
   const [viewMode, setViewMode] = useState<ViewMode>('daily');
-  
-  // Detail sheet state for radial cards drill-down
-  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
-  const [detailSheetTitle, setDetailSheetTitle] = useState('');
-  const [detailSheetDescription, setDetailSheetDescription] = useState('');
-  const [detailSheetItems, setDetailSheetItems] = useState<DetailItem[]>([]);
-  const [detailSheetColumns, setDetailSheetColumns] = useState<{ key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[]>([]);
 
   const handleSync = () => {
     // Use the year from the start date for sync
@@ -174,10 +145,6 @@ export function IndicatorsTab() {
   const { getQtyForPeriod: getExpansaoQty, getGroupedData: getExpansaoGroupedData, isLoading: isLoadingExpansao, refetch: refetchExpansao } = useExpansaoMetas(startDate, endDate);
   const { getQtyForPeriod: getO2TaxQty, getGroupedData: getO2TaxGroupedData, isLoading: isLoadingO2Tax } = useO2TaxMetas(startDate, endDate);
   const { getQtyForPeriod: getOxyHackerQty, getGroupedData: getOxyHackerGroupedData, isLoading: isLoadingOxyHacker } = useOxyHackerMetas(startDate, endDate);
-  
-  // Analytics hooks for drill-down
-  const modeloAtualAnalytics = useModeloAtualAnalytics(startDate, endDate);
-  const o2TaxAnalytics = useO2TaxAnalytics(startDate, endDate);
   
   // Get funnelData from MediaMetasContext for dynamic metas
   const { funnelData } = useMediaMetas();
@@ -587,96 +554,6 @@ export function IndicatorsTab() {
     return viewMode === 'accumulated' ? toAccumulatedData(baseData) : baseData;
   };
 
-  // Get columns for indicator type
-  const getColumnsForIndicator = (indicatorKey: IndicatorType): { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] => {
-    const baseColumns: { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] = [
-      { key: 'name', label: 'Título' },
-      { key: 'company', label: 'Empresa/Contato' },
-      { key: 'phase', label: 'Fase', format: columnFormatters.phase },
-      { key: 'date', label: 'Data', format: columnFormatters.date },
-    ];
-
-    if (indicatorKey === 'proposta' || indicatorKey === 'venda') {
-      return [
-        ...baseColumns,
-        { key: 'value' as keyof DetailItem, label: 'Valor', format: columnFormatters.currency },
-        { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
-      ];
-    }
-
-    return [
-      ...baseColumns,
-      { key: 'revenueRange' as keyof DetailItem, label: 'Faixa Faturamento' },
-      { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
-    ];
-  };
-
-  // Get detail items for an indicator based on selected BU
-  const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
-    const useExpansaoData = selectedBU === 'franquia';
-    const useO2TaxData = selectedBU === 'o2_tax';
-    const useConsolidado = selectedBU === 'all';
-
-    // For O2 TAX
-    if (useO2TaxData) {
-      const o2TaxPhaseMap: Record<string, string> = {
-        'mql': 'MQL',
-        'rm': 'RM',
-        'rr': 'RR',
-        'proposta': 'Proposta',
-        'venda': 'Ganho',
-      };
-      
-      if (indicatorKey === 'venda') {
-        return o2TaxAnalytics.getDealsWon.cards.map(o2TaxAnalytics.toDetailItem);
-      }
-      
-      const phaseData = o2TaxAnalytics.getCardsByPhase.find(p => p.phase === o2TaxPhaseMap[indicatorKey]);
-      return phaseData?.cards.map(o2TaxAnalytics.toDetailItem) ?? [];
-    }
-
-    // For Modelo Atual or Consolidado
-    if (selectedBU === 'modelo_atual' || useConsolidado) {
-      const items = modeloAtualAnalytics.getDetailItemsForIndicator(indicatorKey);
-      
-      if (useConsolidado) {
-        const o2TaxPhaseMap: Record<string, string> = {
-          'mql': 'MQL',
-          'rm': 'RM',
-          'rr': 'RR',
-          'proposta': 'Proposta',
-          'venda': 'Ganho',
-        };
-        
-        if (indicatorKey === 'venda') {
-          const o2TaxItems = o2TaxAnalytics.getDealsWon.cards.map(o2TaxAnalytics.toDetailItem);
-          return [...items, ...o2TaxItems];
-        }
-        
-        const phaseData = o2TaxAnalytics.getCardsByPhase.find(p => p.phase === o2TaxPhaseMap[indicatorKey]);
-        const o2TaxItems = phaseData?.cards.map(o2TaxAnalytics.toDetailItem) ?? [];
-        return [...items, ...o2TaxItems];
-      }
-      
-      return items;
-    }
-
-    return [];
-  };
-
-  // Handle radial card click
-  const handleRadialCardClick = (indicator: IndicatorConfig) => {
-    const items = getItemsForIndicator(indicator.key);
-    const columns = getColumnsForIndicator(indicator.key);
-    const realized = getRealizedForIndicator(indicator);
-    
-    setDetailSheetTitle(indicator.label);
-    setDetailSheetDescription(`${formatNumber(realized)} registros no período selecionado`);
-    setDetailSheetItems(items);
-    setDetailSheetColumns(columns);
-    setDetailSheetOpen(true);
-  };
-
   return (
     <div className="space-y-6">
       {/* Filters */}
@@ -742,14 +619,7 @@ export function IndicatorsTab() {
       {/* Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
         {indicatorConfigs.map((indicator) => (
-          <RadialProgressCard 
-            key={indicator.key} 
-            title={indicator.label} 
-            realized={getRealizedForIndicator(indicator)} 
-            meta={getMetaForIndicator(indicator)} 
-            isClickable={true}
-            onClick={() => handleRadialCardClick(indicator)}
-          />
+          <RadialProgressCard key={indicator.key} title={indicator.label} realized={getRealizedForIndicator(indicator)} meta={getMetaForIndicator(indicator)} />
         ))}
       </div>
 
@@ -759,7 +629,7 @@ export function IndicatorsTab() {
           <LeadsMqlsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
           <LeadsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
         </div>
-        <ClickableFunnelChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
+        <PeriodFunnelChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
       </div>
 
       {/* Charts Section with View Mode Toggle */}
@@ -813,16 +683,6 @@ export function IndicatorsTab() {
           <div className="flex items-center gap-2 bg-card p-4 rounded-lg shadow-lg"><Loader2 className="h-5 w-5 animate-spin" /><span>Carregando dados...</span></div>
         </div>
       )}
-
-      {/* Detail Sheet for Radial Cards */}
-      <DetailSheet
-        open={detailSheetOpen}
-        onOpenChange={setDetailSheetOpen}
-        title={detailSheetTitle}
-        description={detailSheetDescription}
-        items={detailSheetItems}
-        columns={detailSheetColumns}
-      />
     </div>
   );
 }

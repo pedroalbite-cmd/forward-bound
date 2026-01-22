@@ -34,7 +34,7 @@ const formatCurrency = (value: number) =>
 export function DetailSheet({ open, onOpenChange, title, description, items, columns }: DetailSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-full sm:max-w-2xl">
+      <SheetContent className="w-full sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle className="text-xl">{title}</SheetTitle>
           {description && (
