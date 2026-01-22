@@ -9,6 +9,7 @@ import { useModeloAtualValues } from "@/hooks/useModeloAtualValues";
 import { useLeadsMetas } from "@/hooks/useLeadsMetas";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
+import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { BUType, IndicatorType } from "@/hooks/useFunnelRealized";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
 import { ExternalLink } from "lucide-react";
@@ -49,6 +50,8 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
   // Analytics hooks for drill-down
   const modeloAtualAnalytics = useModeloAtualAnalytics(startDate, endDate);
   const o2TaxAnalytics = useO2TaxAnalytics(startDate, endDate);
+  const franquiaAnalytics = useExpansaoAnalytics(startDate, endDate, 'Franquia');
+  const oxyHackerAnalytics = useExpansaoAnalytics(startDate, endDate, 'Oxy Hacker');
   
   // Check if we should use external database data
   const useExpansaoData = selectedBU === 'franquia';
@@ -172,6 +175,16 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
       return [];
     }
 
+    // For Franquia
+    if (useExpansaoData) {
+      return franquiaAnalytics.getDetailItemsForIndicator(indicator);
+    }
+
+    // For Oxy Hacker
+    if (useOxyHackerData) {
+      return oxyHackerAnalytics.getDetailItemsForIndicator(indicator);
+    }
+
     // For O2 TAX
     if (useO2TaxData) {
       // Map O2 TAX indicator names
@@ -188,7 +201,6 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
       
       // Filter cards by phase
       const wonCards = o2TaxAnalytics.getDealsWon;
-      const inProgressCards = o2TaxAnalytics.getDealsInProgress;
       
       if (indicator === 'venda') {
         return wonCards.cards.map(o2TaxAnalytics.toDetailItem);
@@ -207,7 +219,7 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
     if (selectedBU === 'modelo_atual' || useConsolidado) {
       const items = modeloAtualAnalytics.getDetailItemsForIndicator(indicator);
       
-      // For consolidado, also add O2 TAX items
+      // For consolidado, also add items from all BUs
       if (useConsolidado) {
         const o2TaxPhaseMap: Record<string, string> = {
           'mql': 'MQL',
@@ -217,20 +229,27 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
           'venda': 'Ganho',
         };
         
+        // O2 TAX items
+        let o2TaxItems: DetailItem[] = [];
         if (indicator === 'venda') {
-          const o2TaxItems = o2TaxAnalytics.getDealsWon.cards.map(o2TaxAnalytics.toDetailItem);
-          return [...items, ...o2TaxItems];
+          o2TaxItems = o2TaxAnalytics.getDealsWon.cards.map(o2TaxAnalytics.toDetailItem);
+        } else {
+          const phaseData = o2TaxAnalytics.getCardsByPhase.find(p => p.phase === o2TaxPhaseMap[indicator]);
+          o2TaxItems = phaseData?.cards.map(o2TaxAnalytics.toDetailItem) ?? [];
         }
         
-        const phaseData = o2TaxAnalytics.getCardsByPhase.find(p => p.phase === o2TaxPhaseMap[indicator]);
-        const o2TaxItems = phaseData?.cards.map(o2TaxAnalytics.toDetailItem) ?? [];
-        return [...items, ...o2TaxItems];
+        // Franquia items
+        const franquiaItems = franquiaAnalytics.getDetailItemsForIndicator(indicator);
+        
+        // Oxy Hacker items
+        const oxyHackerItems = oxyHackerAnalytics.getDetailItemsForIndicator(indicator);
+        
+        return [...items, ...o2TaxItems, ...franquiaItems, ...oxyHackerItems];
       }
       
       return items;
     }
 
-    // For other BUs (Oxy Hacker, Franquia) - currently no detailed data
     return [];
   };
 
