@@ -8,8 +8,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Line, ComposedChart, RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
 import { RefreshCw, Loader2, CalendarIcon, BarChart3, TrendingUp, ExternalLink } from "lucide-react";
 import { useFunnelRealized, IndicatorType, BUType } from "@/hooks/useFunnelRealized";
-import { useSheetMetas, ChartGrouping } from "@/hooks/useSheetMetas";
-import { useClosersMetas, CloserIndicator } from "@/hooks/useClosersMetas";
+import { useModeloAtualMetas, ChartGrouping, ModeloAtualIndicator } from "@/hooks/useModeloAtualMetas";
 import { useExpansaoMetas, ExpansaoIndicator } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas, O2TaxIndicator } from "@/hooks/useO2TaxMetas";
 import { useOxyHackerMetas, OxyHackerIndicator } from "@/hooks/useOxyHackerMetas";
@@ -170,8 +169,7 @@ export function IndicatorsTab() {
   };
 
   const { getTotal, syncWithPipefy, isSyncing, isLoading } = useFunnelRealized(startDate, endDate);
-  const { getMqlsMetaForPeriod, getMqlsQtyForPeriod, getMqlsGroupedData, isLoading: isLoadingMetas } = useSheetMetas(startDate, endDate);
-  const { getQtyForPeriod: getClosersQty, getMetaForPeriod: getClosersMeta, getGroupedData: getClosersGroupedData, isLoading: isLoadingClosers } = useClosersMetas(startDate, endDate);
+  const { getQtyForPeriod: getModeloAtualQty, getGroupedData: getModeloAtualGroupedData, isLoading: isLoadingModeloAtual } = useModeloAtualMetas(startDate, endDate);
   const { getQtyForPeriod: getExpansaoQty, getGroupedData: getExpansaoGroupedData, isLoading: isLoadingExpansao, refetch: refetchExpansao } = useExpansaoMetas(startDate, endDate);
   const { getQtyForPeriod: getO2TaxQty, getGroupedData: getO2TaxGroupedData, isLoading: isLoadingO2Tax } = useO2TaxMetas(startDate, endDate);
   const { getQtyForPeriod: getOxyHackerQty, getGroupedData: getOxyHackerGroupedData, isLoading: isLoadingOxyHacker } = useOxyHackerMetas(startDate, endDate);
@@ -323,28 +321,18 @@ export function IndicatorsTab() {
       return calcularMetaDoPeriodo(funnelData.oxyHacker, indicator.key, startDate, endDate);
     }
     
-    // Fallback to sheet metas (shouldn't be reached with current config)
-    if (indicator.useSheetMeta && indicator.key === 'mql') {
-      const sheetMeta = getMqlsMetaForPeriod(startDate, endDate);
-      if (sheetMeta > 0) return sheetMeta;
-    }
-    if (indicator.useClosersMeta && (indicator.key === 'rm' || indicator.key === 'rr' || indicator.key === 'proposta' || indicator.key === 'venda')) {
-      const closersMeta = getClosersMeta(indicator.key, startDate, endDate);
-      if (closersMeta > 0) return closersMeta;
-    }
+    // Fallback to prorated annual meta
     return Math.round(indicator.annualMeta * periodFraction);
   };
 
-  // Get realized value for indicator - uses external db data for Franquia/O2 TAX/Oxy Hacker, sheet qty for MQLs, closers qty for others
+  // Get realized value for indicator - uses external db data for all BUs
   const getRealizedForIndicator = (indicator: IndicatorConfig) => {
     // For Consolidado (all), sum realized from ALL BUs
     if (selectedBU === 'all') {
-      // Modelo Atual: MQLs from Sheet, others from Closers
-      const modeloAtualQty = indicator.key === 'mql'
-        ? getMqlsQtyForPeriod(startDate, endDate)
-        : getClosersQty(indicator.key as CloserIndicator, startDate, endDate);
+      // Modelo Atual from external database (pipefy_moviment_cfos)
+      const modeloAtualQty = getModeloAtualQty(indicator.key as ModeloAtualIndicator, startDate, endDate);
       
-      // External BUs from external database
+      // Other BUs from external database
       const o2TaxQty = getO2TaxQty(indicator.key as O2TaxIndicator, startDate, endDate);
       const oxyHackerQty = getOxyHackerQty(indicator.key as OxyHackerIndicator, startDate, endDate);
       const franquiaQty = getExpansaoQty(indicator.key as ExpansaoIndicator, startDate, endDate);
@@ -367,16 +355,8 @@ export function IndicatorsTab() {
       return getOxyHackerQty(indicator.key as OxyHackerIndicator, startDate, endDate);
     }
     
-    // For Modelo Atual, use sheet data
-    if (indicator.useSheetMeta && indicator.key === 'mql') {
-      const sheetQty = getMqlsQtyForPeriod(startDate, endDate);
-      if (sheetQty > 0) return sheetQty;
-    }
-    if (indicator.useClosersMeta && (indicator.key === 'rm' || indicator.key === 'rr' || indicator.key === 'proposta' || indicator.key === 'venda')) {
-      const closersQty = getClosersQty(indicator.key, startDate, endDate);
-      if (closersQty > 0) return closersQty;
-    }
-    return getTotal(indicator.key, selectedBU);
+    // For Modelo Atual, use external database (pipefy_moviment_cfos)
+    return getModeloAtualQty(indicator.key as ModeloAtualIndicator, startDate, endDate);
   };
 
   const buildChartData = (indicator: IndicatorConfig) => {
@@ -454,11 +434,9 @@ export function IndicatorsTab() {
       }));
     }
     
-    // For Modelo Atual BU, use funnelData metas from Plan Growth + realized from sheets
+    // For Modelo Atual BU, use funnelData metas from Plan Growth + realized from external db
     if (selectedBU === 'modelo_atual' && funnelData?.modeloAtual) {
-      const sheetRealizedData = indicator.key === 'mql'
-        ? getMqlsGroupedData(startDate, endDate, grouping)
-        : getClosersGroupedData(indicator.key as CloserIndicator, startDate, endDate, grouping);
+      const modeloAtualData = getModeloAtualGroupedData(indicator.key as ModeloAtualIndicator, startDate, endDate, grouping);
       
       const funnelMetasMensais = getMonthlyMetasFromFunnel(funnelData.modeloAtual, indicator.key, startDate, endDate);
       const metaPeriodo = calcularMetaDoPeriodo(funnelData.modeloAtual, indicator.key, startDate, endDate);
@@ -466,7 +444,7 @@ export function IndicatorsTab() {
 
       return chartLabels.map((label, index) => ({
         label,
-        realizado: sheetRealizedData.qty[index] || 0,
+        realizado: modeloAtualData.qty[index] || 0,
         meta: grouping === 'monthly'
           ? (funnelMetasMensais[index] ?? 0)
           : (metasProrateadas[index] ?? 0),
@@ -475,11 +453,7 @@ export function IndicatorsTab() {
 
     // For Consolidado (all), sum metas from all BUs + realized from respective sources
     if (selectedBU === 'all' && funnelData) {
-      const mqlSheetData = getMqlsGroupedData(startDate, endDate, grouping);
-      const closersSheetData = indicator.key !== 'mql' 
-        ? getClosersGroupedData(indicator.key as CloserIndicator, startDate, endDate, grouping)
-        : { qty: [], meta: [] };
-      
+      const modeloAtualData = getModeloAtualGroupedData(indicator.key as ModeloAtualIndicator, startDate, endDate, grouping);
       const o2taxData = getO2TaxGroupedData(indicator.key as O2TaxIndicator, startDate, endDate, grouping);
       const oxyHackerData = getOxyHackerGroupedData(indicator.key as OxyHackerIndicator, startDate, endDate, grouping);
       const expansaoData = getExpansaoGroupedData(indicator.key as ExpansaoIndicator, startDate, endDate, grouping);
@@ -500,10 +474,8 @@ export function IndicatorsTab() {
       const metasProrateadas = grouping !== 'monthly' ? getProratedMetaSeries(totalMetaPeriodo) : [];
 
       return chartLabels.map((label, index) => {
-        // Sum realized from all sources
-        const realizadoModeloAtual = indicator.key === 'mql' 
-          ? (mqlSheetData.qty[index] || 0)
-          : (closersSheetData.qty[index] || 0);
+        // Sum realized from all sources (now all from external db)
+        const realizadoModeloAtual = modeloAtualData.qty[index] || 0;
         const realizadoO2Tax = o2taxData.qty[index] || 0;
         const realizadoOxyHacker = oxyHackerData.qty[index] || 0;
         const realizadoFranquia = expansaoData.qty[index] || 0;
@@ -521,27 +493,8 @@ export function IndicatorsTab() {
       });
     }
     
-    // For MQLs (fallback), use sheet data
-    if (indicator.useSheetMeta && indicator.key === 'mql') {
-      const sheetData = getMqlsGroupedData(startDate, endDate, grouping);
-      return chartLabels.map((label, index) => ({ 
-        label, 
-        realizado: sheetData.qty[index] || 0, 
-        meta: sheetData.meta[index] || 0 
-      }));
-    }
-    
-    // For closers indicators (RM, RR, Proposta, Venda) fallback, use closers sheet data
-    if (indicator.useClosersMeta && (indicator.key === 'rm' || indicator.key === 'rr' || indicator.key === 'proposta' || indicator.key === 'venda')) {
-      const closersData = getClosersGroupedData(indicator.key as CloserIndicator, startDate, endDate, grouping);
-      return chartLabels.map((label, index) => ({ 
-        label, 
-        realizado: closersData.qty[index] || 0, 
-        meta: closersData.meta[index] || 0 
-      }));
-    }
-    
-    // Fallback for other indicators (shouldn't be reached with current config)
+    // Fallback: use external db data for Modelo Atual
+    const fallbackData = getModeloAtualGroupedData(indicator.key as ModeloAtualIndicator, startDate, endDate, grouping);
     const metaDiaria = indicator.annualMeta / 365;
     
     const getMetaPerPoint = (index: number): number => {
@@ -564,7 +517,7 @@ export function IndicatorsTab() {
     
     return chartLabels.map((label, index) => ({ 
       label, 
-      realizado: 0, 
+      realizado: fallbackData.qty[index] || 0, 
       meta: Math.round(getMetaPerPoint(index)) 
     }));
   };

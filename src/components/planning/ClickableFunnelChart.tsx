@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useSheetMetas } from "@/hooks/useSheetMetas";
-import { useClosersMetas } from "@/hooks/useClosersMetas";
+import { useModeloAtualMetas } from "@/hooks/useModeloAtualMetas";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
-import { useModeloAtualValues } from "@/hooks/useModeloAtualValues";
 import { useLeadsMetas } from "@/hooks/useLeadsMetas";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
@@ -39,12 +37,10 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
   const [sheetItems, setSheetItems] = useState<DetailItem[]>([]);
   const [sheetColumns, setSheetColumns] = useState<{ key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[]>([]);
 
-  const { getMqlsQtyForPeriod } = useSheetMetas(startDate, endDate);
-  const { getQtyForPeriod: getClosersQty } = useClosersMetas(startDate, endDate);
+  const { getQtyForPeriod: getModeloAtualQty, getValueForPeriod: getModeloAtualValue } = useModeloAtualMetas(startDate, endDate);
   const { getQtyForPeriod: getExpansaoQty, getValueForPeriod: getExpansaoValue } = useExpansaoMetas(startDate, endDate);
   const { getQtyForPeriod: getO2TaxQty, getValueForPeriod: getO2TaxValue } = useO2TaxMetas(startDate, endDate);
   const { getQtyForPeriod: getOxyHackerQty, getValueForPeriod: getOxyHackerValue } = useOxyHackerMetas(startDate, endDate);
-  const { getValueForPeriod: getModeloAtualValue } = useModeloAtualValues(startDate, endDate);
   const { getLeadsQtyForPeriod } = useLeadsMetas(startDate, endDate);
   
   // Analytics hooks for drill-down
@@ -62,14 +58,14 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
   // Get leads data (currently only available for Modelo Atual)
   const leadsQty = getLeadsQtyForPeriod(startDate, endDate);
   
-  // Get totals based on selected BU
+  // Get totals based on selected BU - all BUs now use external db
   const totals = useConsolidado ? {
     leads: leadsQty,
-    mql: getMqlsQtyForPeriod(startDate, endDate) + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate),
-    rm: getClosersQty('rm', startDate, endDate) + getO2TaxQty('rm', startDate, endDate) + getOxyHackerQty('rm', startDate, endDate) + getExpansaoQty('rm', startDate, endDate),
-    rr: getClosersQty('rr', startDate, endDate) + getO2TaxQty('rr', startDate, endDate) + getOxyHackerQty('rr', startDate, endDate) + getExpansaoQty('rr', startDate, endDate),
-    proposta: getClosersQty('proposta', startDate, endDate) + getO2TaxQty('proposta', startDate, endDate) + getOxyHackerQty('proposta', startDate, endDate) + getExpansaoQty('proposta', startDate, endDate),
-    venda: getClosersQty('venda', startDate, endDate) + getO2TaxQty('venda', startDate, endDate) + getOxyHackerQty('venda', startDate, endDate) + getExpansaoQty('venda', startDate, endDate),
+    mql: getModeloAtualQty('mql', startDate, endDate) + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate),
+    rm: getModeloAtualQty('rm', startDate, endDate) + getO2TaxQty('rm', startDate, endDate) + getOxyHackerQty('rm', startDate, endDate) + getExpansaoQty('rm', startDate, endDate),
+    rr: getModeloAtualQty('rr', startDate, endDate) + getO2TaxQty('rr', startDate, endDate) + getOxyHackerQty('rr', startDate, endDate) + getExpansaoQty('rr', startDate, endDate),
+    proposta: getModeloAtualQty('proposta', startDate, endDate) + getO2TaxQty('proposta', startDate, endDate) + getOxyHackerQty('proposta', startDate, endDate) + getExpansaoQty('proposta', startDate, endDate),
+    venda: getModeloAtualQty('venda', startDate, endDate) + getO2TaxQty('venda', startDate, endDate) + getOxyHackerQty('venda', startDate, endDate) + getExpansaoQty('venda', startDate, endDate),
   } : useExpansaoData ? {
     leads: 0,
     mql: getExpansaoQty('mql', startDate, endDate),
@@ -93,11 +89,11 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
     venda: getOxyHackerQty('venda', startDate, endDate),
   } : {
     leads: leadsQty,
-    mql: getMqlsQtyForPeriod(startDate, endDate),
-    rm: getClosersQty('rm', startDate, endDate),
-    rr: getClosersQty('rr', startDate, endDate),
-    proposta: getClosersQty('proposta', startDate, endDate),
-    venda: getClosersQty('venda', startDate, endDate),
+    mql: getModeloAtualQty('mql', startDate, endDate),
+    rm: getModeloAtualQty('rm', startDate, endDate),
+    rr: getModeloAtualQty('rr', startDate, endDate),
+    proposta: getModeloAtualQty('proposta', startDate, endDate),
+    venda: getModeloAtualQty('venda', startDate, endDate),
   };
 
   // Calculate conversions

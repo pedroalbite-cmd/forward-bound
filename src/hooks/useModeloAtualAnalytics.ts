@@ -25,6 +25,7 @@ export interface ModeloAtualCard {
 const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
   'MQL': 'mql',
   'Reunião agendada / Qualificado': 'rm',
+  'Remarcar Reunião': 'rm',
   'Reunião Realizada': 'rr',
   '1° Reunião Realizada - Apresentação': 'rr',
   'Enviar proposta': 'proposta',
@@ -33,21 +34,12 @@ const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
   'Contrato assinado': 'venda',
 };
 
-// Parse Google Sheets date format "Date(year,month,day)" to JS Date
-function parseGoogleDate(dateValue: any): Date | null {
+// Parse date from PostgreSQL format
+function parseDate(dateValue: string | null): Date | null {
   if (!dateValue) return null;
-  
-  if (typeof dateValue === 'string') {
-    const match = dateValue.match(/Date\((\d+),(\d+),(\d+)\)/);
-    if (match) {
-      return new Date(parseInt(match[1]), parseInt(match[2]), parseInt(match[3]));
-    }
-    // Try ISO format
-    const date = new Date(dateValue);
-    if (!isNaN(date.getTime())) return date;
-  }
-  
-  return null;
+  const date = new Date(dateValue);
+  if (isNaN(date.getTime())) return null;
+  return date;
 }
 
 // Parse numeric value, handling various formats
@@ -68,63 +60,60 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['modelo-atual-analytics', startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
-      const startDateStr = startDate.toISOString().split('T')[0];
-      const endDateStr = endDate.toISOString().split('T')[0];
+      console.log(`[useModeloAtualAnalytics] Fetching data from pipefy_moviment_cfos`);
       
-      console.log(`[useModeloAtualAnalytics] Fetching HISTÓRICO DE FASES for period: ${startDateStr} to ${endDateStr}`);
-      
-      const { data: responseData, error: fetchError } = await supabase.functions.invoke('read-sheet-tab', {
-        body: { 
-          sheetName: 'HISTÓRICO DE FASES', 
-          maxRows: 50000,
-          startDate: startDateStr,
-          endDate: endDateStr,
-          dateColumn: 'D', // Column D = "Entrada"
-        }
+      const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
+        body: { table: 'pipefy_moviment_cfos', action: 'preview', limit: 50000 }
       });
 
       if (fetchError) {
-        console.error('Error fetching histórico de fases:', fetchError);
+        console.error('[useModeloAtualAnalytics] Error fetching data:', fetchError);
         throw fetchError;
       }
 
-      if (!responseData?.success || !responseData?.data) {
-        console.warn('No data returned from HISTÓRICO DE FASES sheet');
+      if (!responseData?.data) {
+        console.warn('[useModeloAtualAnalytics] No data returned');
         return { cards: [] };
       }
 
+      console.log(`[useModeloAtualAnalytics] Raw data rows: ${responseData.data.length}`);
+
       const cards: ModeloAtualCard[] = [];
       for (const row of responseData.data) {
-        const cardId = row['ID do Card'] || row['ID Card'] || row['Card ID'] || row['id_card'] || '';
-        const entrada = parseGoogleDate(row['Entrada'] || row['Data Entrada'] || row['Data']);
-        const destino = row['Destino'] || row['Fase Destino'] || row['Para'] || '';
+        const id = String(row['ID'] || row['id'] || '');
+        const fase = row['Fase'] || row['fase'] || '';
+        const dataEntrada = parseDate(row['Entrada'] || row['entrada']) || new Date();
         
-        if (!cardId || !entrada || !destino) continue;
+        // Skip if no id or phase
+        if (!id || !fase) continue;
+
+        const valorMRR = parseNumericValue(row['Valor MRR'] || row['valor_mrr'] || 0);
+        const valorPontual = parseNumericValue(row['Valor Pontual'] || row['valor_pontual'] || 0);
+        const valorEducacao = parseNumericValue(row['Valor Educação'] || row['Valor Educacao'] || row['valor_educacao'] || 0);
+        const valorSetup = parseNumericValue(row['Valor Setup'] || row['valor_setup'] || 0);
+        const valor = valorMRR + valorPontual + valorEducacao + valorSetup;
         
         cards.push({
-          id: String(cardId),
-          titulo: row['Título'] || row['Titulo'] || row['Nome'] || '',
-          empresa: row['Empresa'] || row['Organização'] || '',
-          contato: row['Contato'] || row['Nome - Interlocução O2'] || '',
-          fase: row['Fase'] || row['Origem'] || '',
-          faseDestino: destino,
-          dataEntrada: entrada,
-          valorMRR: parseNumericValue(row['Valor MRR']),
-          valorPontual: parseNumericValue(row['Valor Pontual']),
-          valorEducacao: parseNumericValue(row['Valor Educação'] || row['Valor Educacao']),
-          valorSetup: parseNumericValue(row['Valor Setup']),
-          valor: 0,
-          responsavel: row['Closer responsável'] || row['SDR responsável'] || row['Responsável'] || '',
-          faixa: row['Faixa de faturamento mensal'] || row['Faixa'] || '',
+          id,
+          titulo: row['Título'] || row['titulo'] || row['Nome'] || '',
+          empresa: row['Empresa'] || row['empresa'] || row['Organização'] || '',
+          contato: row['Contato'] || row['contato'] || row['Nome - Interlocução O2'] || '',
+          fase,
+          faseDestino: fase, // Same as fase for pipefy_moviment_cfos
+          dataEntrada,
+          valorMRR,
+          valorPontual,
+          valorEducacao,
+          valorSetup,
+          valor,
+          responsavel: row['Closer responsável'] || row['SDR responsável'] || row['Responsável'] || row['responsavel'] || '',
+          faixa: row['Faixa de faturamento mensal'] || row['Faixa'] || row['faixa'] || '',
         });
       }
 
-      // Calculate total value for each card
-      for (const card of cards) {
-        card.valor = card.valorMRR + card.valorPontual + card.valorEducacao + card.valorSetup;
-      }
-
-      console.log(`[useModeloAtualAnalytics] Parsed ${cards.length} card movements from HISTÓRICO DE FASES`);
+      console.log(`[useModeloAtualAnalytics] Parsed ${cards.length} card movements`);
+      const uniquePhases = [...new Set(cards.map(c => c.fase))];
+      console.log(`[useModeloAtualAnalytics] Unique phases:`, uniquePhases);
       
       return { cards };
     },
@@ -159,14 +148,14 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         }
       }
       
+      console.log(`[useModeloAtualAnalytics] getCardsForIndicator ${indicator}: ${uniqueCards.size} cards`);
       return Array.from(uniqueCards.values());
     };
   }, [cardsInPeriod]);
 
-  // Get cards for leads (special handling - uses different sheet)
+  // Get cards for leads (special handling)
   const getLeadsCards = useMemo(() => {
-    // For leads, we don't have individual card data from "Leads Meta" sheet
-    // Return empty array - leads drill-down needs different implementation
+    // Leads don't have individual card data from this table
     return [];
   }, []);
 
