@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, LabelList } from "recharts";
 import { BUType } from "@/hooks/useFunnelRealized";
-import { useLeadsMetas, LeadsChartGrouping } from "@/hooks/useLeadsMetas";
+import { useModeloAtualMetas, ChartGrouping } from "@/hooks/useModeloAtualMetas";
 import { useMediaMetas, FunnelDataItem } from "@/contexts/MediaMetasContext";
 import { format, eachDayOfInterval, differenceInDays, addDays, eachMonthOfInterval, getMonth, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -18,7 +18,8 @@ const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Ma
 const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStackedChartProps) {
-  const { getLeadsGroupedData, getLeadsQtyForPeriod } = useLeadsMetas(startDate, endDate);
+  // Use database data for Modelo Atual leads
+  const { getGroupedData: getModeloAtualGroupedData, getQtyForPeriod: getModeloAtualQty } = useModeloAtualMetas(startDate, endDate);
   
   // Get funnelData from MediaMetasContext for dynamic metas
   const { funnelData } = useMediaMetas();
@@ -61,18 +62,17 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
   
   // Determine grouping based on period length
   const daysInPeriod = differenceInDays(endDate, startDate) + 1;
-  const grouping: LeadsChartGrouping = daysInPeriod <= 31 ? 'daily' : daysInPeriod <= 90 ? 'weekly' : 'monthly';
+  const grouping: ChartGrouping = daysInPeriod <= 31 ? 'daily' : daysInPeriod <= 90 ? 'weekly' : 'monthly';
 
-  // Get grouped data - external BUs don't have leads data from movements table
-  // For now, leads are only tracked for Modelo Atual (from Leads Meta sheet)
-  const getSheetData = () => {
-    if (useConsolidado || useModeloAtual) {
-      // Use Leads sheet data for Modelo Atual and Consolidado
-      return getLeadsGroupedData(startDate, endDate, grouping);
+  // Get grouped data from database for Modelo Atual
+  // External BUs (O2 TAX, Oxy Hacker, Franquia) don't have leads tracking yet
+  const getChartData = () => {
+    if (useModeloAtual || useConsolidado) {
+      // Use database data for Modelo Atual (and Consolidado uses Modelo Atual for now)
+      return getModeloAtualGroupedData('leads', startDate, endDate, grouping);
     }
     
-    // External BUs (O2 TAX, Oxy Hacker, Franquia) don't have leads tracking yet
-    // Return empty arrays
+    // External BUs don't have leads tracking yet - return empty arrays
     const numPeriods = grouping === 'daily' 
       ? daysInPeriod 
       : grouping === 'weekly' 
@@ -85,7 +85,7 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
     };
   };
   
-  const sheetData = getSheetData();
+  const leadsData = getChartData();
   
   // Get total meta from funnelData (Plan Growth)
   // External BUs don't have separate leads metas, so we only use Modelo Atual for consolidado
@@ -95,9 +95,9 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
     ? calcularMetaLeads(funnelData?.modeloAtual)
     : 0; // External BUs don't have leads meta yet
     
-  // Get total realized - only Modelo Atual has leads data from sheet
-  const totalRealized = (useConsolidado || useModeloAtual)
-    ? getLeadsQtyForPeriod(startDate, endDate)
+  // Get total realized from database
+  const totalRealized = (useModeloAtual || useConsolidado)
+    ? getModeloAtualQty('leads', startDate, endDate)
     : 0;
 
   // Build chart data with proper date labels
@@ -105,8 +105,8 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
     if (grouping === 'daily') {
       return eachDayOfInterval({ start: startDate, end: endDate }).map((day, index) => ({
         label: format(day, "d 'de' MMM", { locale: ptBR }),
-        leads: sheetData.qty[index] || 0,
-        meta: sheetData.meta[index] || 0,
+        leads: leadsData.qty[index] || 0,
+        meta: leadsData.meta[index] || 0,
       }));
     } else if (grouping === 'weekly') {
       const totalDays = differenceInDays(endDate, startDate) + 1;
@@ -115,8 +115,8 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
         const weekStart = addDays(startDate, i * 7);
         return {
           label: format(weekStart, "d 'de' MMM", { locale: ptBR }),
-          leads: sheetData.qty[i] || 0,
-          meta: sheetData.meta[i] || 0,
+          leads: leadsData.qty[i] || 0,
+          meta: leadsData.meta[i] || 0,
         };
       });
     } else {
@@ -124,8 +124,8 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
       const months = eachMonthOfInterval({ start: startDate, end: endDate });
       return months.map((monthDate, index) => ({
         label: format(monthDate, "MMM", { locale: ptBR }),
-        leads: sheetData.qty[index] || 0,
-        meta: sheetData.meta[index] || 0,
+        leads: leadsData.qty[index] || 0,
+        meta: leadsData.meta[index] || 0,
       }));
     }
   };
