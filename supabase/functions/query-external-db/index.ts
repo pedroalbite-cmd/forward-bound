@@ -141,10 +141,80 @@ Deno.serve(async (req) => {
         totalRows: countResult.rows[0]?.total,
       };
       console.log(`Count for ${table}: ${result.totalRows}`);
+    } else if (action === 'query_period') {
+      // Query with date filtering for Modelo Atual
+      const { startDate, endDate } = body;
+      
+      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
+      if (!validTables.includes(table)) {
+        await client.end();
+        return new Response(
+          JSON.stringify({ error: 'Invalid table name' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`Querying ${table} for period: ${startDate} to ${endDate}`);
+
+      // Query with date filter and ordering by most recent first
+      const dataQuery = `
+        SELECT * FROM ${table} 
+        WHERE "Entrada" >= $1::timestamp 
+        AND "Entrada" <= $2::timestamp 
+        ORDER BY "Entrada" DESC 
+        LIMIT $3
+      `;
+      const dataResult = await client.queryObject(dataQuery, [startDate, endDate, limit]);
+      
+      // Count in period
+      const countQuery = `
+        SELECT COUNT(*) as total FROM ${table} 
+        WHERE "Entrada" >= $1::timestamp 
+        AND "Entrada" <= $2::timestamp
+      `;
+      const countResult = await client.queryObject<CountRow>(countQuery, [startDate, endDate]);
+      
+      result = {
+        action: 'query_period',
+        table,
+        startDate,
+        endDate,
+        totalRows: countResult.rows[0]?.total,
+        previewRows: dataResult.rows.length,
+        data: dataResult.rows,
+      };
+      console.log(`Period query for ${table}: ${result.previewRows} rows of ${result.totalRows} total in period`);
+    } else if (action === 'stats') {
+      // Get table statistics for diagnostics
+      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
+      if (!validTables.includes(table)) {
+        await client.end();
+        return new Response(
+          JSON.stringify({ error: 'Invalid table name' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const statsQuery = `
+        SELECT 
+          COUNT(*) as total_rows,
+          MIN("Entrada") as min_entrada,
+          MAX("Entrada") as max_entrada,
+          COUNT(CASE WHEN "Entrada" >= '2026-01-01' THEN 1 END) as count_2026
+        FROM ${table}
+      `;
+      const statsResult = await client.queryObject(statsQuery);
+      
+      result = {
+        action: 'stats',
+        table,
+        stats: statsResult.rows[0],
+      };
+      console.log(`Stats for ${table}:`, result.stats);
     } else {
       await client.end();
       return new Response(
-        JSON.stringify({ error: 'Invalid action. Use: schema, preview, or count' }),
+        JSON.stringify({ error: 'Invalid action. Use: schema, preview, count, query_period, or stats' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
