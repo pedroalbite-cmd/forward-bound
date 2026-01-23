@@ -168,27 +168,41 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
     const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
 
     // Sum values for unique cards in the indicator phase within the period
-    const cardValues = new Map<string, number>();
+    const cardValues = new Map<string, { valor: number; titulo: string; mrr: number; pontual: number; educacao: number; setup: number }>();
     for (const movement of movements) {
       const moveTime = movement.dataEntrada.getTime();
       if (moveTime >= startTime && moveTime <= endTime) {
         const moveIndicator = PHASE_TO_INDICATOR[movement.fase];
         if (moveIndicator === indicator) {
           // Keep the latest value for each card
-          const existing = cardValues.get(movement.id) || 0;
-          if (movement.valor > existing) {
-            cardValues.set(movement.id, movement.valor);
+          const existing = cardValues.get(movement.id);
+          if (!existing || movement.valor > existing.valor) {
+            cardValues.set(movement.id, {
+              valor: movement.valor,
+              titulo: movement.titulo,
+              mrr: movement.valorMRR,
+              pontual: movement.valorPontual,
+              educacao: movement.valorEducacao,
+              setup: movement.valorSetup,
+            });
           }
         }
       }
     }
 
     let total = 0;
-    cardValues.forEach(value => {
-      total += value > 0 ? value : 17000; // Default ticket if no value
+    const details: string[] = [];
+    cardValues.forEach((data, cardId) => {
+      const valorFinal = data.valor > 0 ? data.valor : 17000;
+      total += valorFinal;
+      details.push(`  - Card ${cardId} (${data.titulo}): MRR=${data.mrr}, Pontual=${data.pontual}, Educação=${data.educacao}, Setup=${data.setup} → Total: R$ ${valorFinal.toLocaleString('pt-BR')}`);
     });
 
-    console.log(`[useModeloAtualMetas] getValueForPeriod ${indicator}: ${total}`);
+    console.log(`[useModeloAtualMetas] getValueForPeriod ${indicator}:`);
+    console.log(`  Cards encontrados: ${cardValues.size}`);
+    details.forEach(d => console.log(d));
+    console.log(`  TOTAL: R$ ${total.toLocaleString('pt-BR')}`);
+    
     return total;
   };
 
