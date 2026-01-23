@@ -188,7 +188,13 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       for (const card of cardsInPeriod) {
         const cardIndicator = PHASE_TO_INDICATOR[card.faseDestino];
         
-        if (cardIndicator === indicator) {
+        // LEADS = Union of 'Novos Leads' (leads) + 'MQLs' (mql)
+        // This ensures every card entering the funnel is counted as a Lead
+        const matchesIndicator = indicator === 'leads'
+          ? (cardIndicator === 'leads' || cardIndicator === 'mql')
+          : cardIndicator === indicator;
+        
+        if (matchesIndicator) {
           // Keep EARLIEST entry per card (first time entering the phase)
           // This ensures a sale is counted in the month it was FIRST signed, not re-moved
           const existing = uniqueCards.get(card.id);

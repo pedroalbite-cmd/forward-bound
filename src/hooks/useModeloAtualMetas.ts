@@ -188,7 +188,14 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
       const moveTime = movement.dataEntrada.getTime();
       if (moveTime >= startTime && moveTime <= endTime) {
         const moveIndicator = PHASE_TO_INDICATOR[movement.fase];
-        if (moveIndicator === indicator && !seenIds.has(movement.id)) {
+        
+        // LEADS = Union of 'Novos Leads' (leads) + 'MQLs' (mql)
+        // This ensures every card entering the funnel is counted as a Lead
+        if (indicator === 'leads') {
+          if ((moveIndicator === 'leads' || moveIndicator === 'mql') && !seenIds.has(movement.id)) {
+            seenIds.add(movement.id);
+          }
+        } else if (moveIndicator === indicator && !seenIds.has(movement.id)) {
           seenIds.add(movement.id);
         }
       }
@@ -263,7 +270,12 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
           const moveTime = movement.dataEntrada.getTime();
           if (moveTime >= dayStart && moveTime <= dayEnd) {
             const moveIndicator = PHASE_TO_INDICATOR[movement.fase];
-            if (moveIndicator === indicator && !seenIds.has(movement.id)) {
+            // LEADS = Union of 'Novos Leads' + 'MQLs'
+            if (indicator === 'leads') {
+              if ((moveIndicator === 'leads' || moveIndicator === 'mql') && !seenIds.has(movement.id)) {
+                seenIds.add(movement.id);
+              }
+            } else if (moveIndicator === indicator && !seenIds.has(movement.id)) {
               seenIds.add(movement.id);
             }
           }
@@ -287,7 +299,12 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
           const moveTime = movement.dataEntrada.getTime();
           if (moveTime >= weekStartTime && moveTime <= weekEndTime) {
             const moveIndicator = PHASE_TO_INDICATOR[movement.fase];
-            if (moveIndicator === indicator && !seenIds.has(movement.id)) {
+            // LEADS = Union of 'Novos Leads' + 'MQLs'
+            if (indicator === 'leads') {
+              if ((moveIndicator === 'leads' || moveIndicator === 'mql') && !seenIds.has(movement.id)) {
+                seenIds.add(movement.id);
+              }
+            } else if (moveIndicator === indicator && !seenIds.has(movement.id)) {
               seenIds.add(movement.id);
             }
           }
@@ -308,7 +325,12 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
           const moveTime = movement.dataEntrada.getTime();
           if (moveTime >= monthStart && moveTime <= monthEnd) {
             const moveIndicator = PHASE_TO_INDICATOR[movement.fase];
-            if (moveIndicator === indicator && !seenIds.has(movement.id)) {
+            // LEADS = Union of 'Novos Leads' + 'MQLs'
+            if (indicator === 'leads') {
+              if ((moveIndicator === 'leads' || moveIndicator === 'mql') && !seenIds.has(movement.id)) {
+                seenIds.add(movement.id);
+              }
+            } else if (moveIndicator === indicator && !seenIds.has(movement.id)) {
               seenIds.add(movement.id);
             }
           }
