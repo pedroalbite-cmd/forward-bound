@@ -52,11 +52,32 @@ function parseDate(dateValue: string | null): Date | null {
   return date;
 }
 
-// Parse numeric value, handling various formats
+// Parse numeric value - handles both BR (8.570,65) and US/DB (8570.65) formats
 function parseNumericValue(value: any): number {
   if (typeof value === 'number') return value;
+  if (value === null || value === undefined) return 0;
+  
   if (typeof value === 'string') {
-    const cleaned = value.replace(/[R$\s.]/g, '').replace(',', '.');
+    // Remove R$ e espaços
+    let cleaned = value.replace(/[R$\s]/g, '').trim();
+    
+    if (cleaned === '') return 0;
+    
+    // Detectar formato baseado na presença de vírgula e ponto:
+    // - Formato BR: "8.570,65" (ponto = milhar, vírgula = decimal)
+    // - Formato US/DB: "8570.65" (ponto = decimal)
+    const hasComma = cleaned.includes(',');
+    const hasDot = cleaned.includes('.');
+    
+    if (hasComma && hasDot) {
+      // Formato brasileiro completo: "8.570,65"
+      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+    } else if (hasComma && !hasDot) {
+      // Só vírgula: "8570,65" → trocar por ponto
+      cleaned = cleaned.replace(',', '.');
+    }
+    // Se só tem ponto ou nenhum: já está em formato americano (banco)
+    
     const parsed = parseFloat(cleaned);
     return isNaN(parsed) ? 0 : parsed;
   }
