@@ -5,7 +5,9 @@ import { BUType } from "@/hooks/useFunnelRealized";
 import { useModeloAtualMetas, ChartGrouping } from "@/hooks/useModeloAtualMetas";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
+import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
+import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas, FunnelDataItem } from "@/contexts/MediaMetasContext";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
@@ -35,8 +37,11 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsM
   const { getGroupedData: getO2TaxGroupedData, getQtyForPeriod: getO2TaxQty } = useO2TaxMetas(startDate, endDate);
   const { getGroupedData: getOxyHackerGroupedData, getQtyForPeriod: getOxyHackerQty } = useOxyHackerMetas(startDate, endDate);
   
-  // Analytics for drill-down
+  // Analytics hooks for drill-down (all BUs)
   const modeloAtualAnalytics = useModeloAtualAnalytics(startDate, endDate);
+  const o2TaxAnalytics = useO2TaxAnalytics(startDate, endDate);
+  const franquiaAnalytics = useExpansaoAnalytics(startDate, endDate, 'Franquia');
+  const oxyHackerAnalytics = useExpansaoAnalytics(startDate, endDate, 'Oxy Hacker');
   
   // Get funnelData from MediaMetasContext for dynamic metas
   const { funnelData } = useMediaMetas();
@@ -78,8 +83,8 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsM
   const useO2TaxData = selectedBU === 'o2_tax';
   const useOxyHackerData = selectedBU === 'oxy_hacker';
   
-  // Drill-down is available for Modelo Atual and Consolidado
-  const isClickable = useModeloAtual || useConsolidado;
+  // Drill-down is available for all BUs
+  const isClickable = true;
   
   // Determine grouping based on period length
   const daysInPeriod = differenceInDays(endDate, startDate) + 1;
@@ -145,8 +150,6 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsM
 
   // Handle click on specific bar - filter by day/week/month
   const handleBarClick = (data: any, index: number) => {
-    if (!isClickable) return;
-    
     // Calculate the exact date/period based on grouping and index
     let clickedDate: Date;
     let periodLabel: string;
@@ -169,8 +172,32 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsM
       periodLabel = format(clickedDate, "MMMM", { locale: ptBR });
     }
     
-    // Get all items and filter by the clicked period
-    const allItems = modeloAtualAnalytics.getDetailItemsForIndicator('mql');
+    // Get items based on selected BU
+    let allItems: DetailItem[] = [];
+    
+    if (useO2TaxData) {
+      // O2 TAX: get MQL cards from analytics
+      const mqlCards = o2TaxAnalytics.getMqlsByRevenue;
+      allItems = mqlCards.flatMap(r => r.cards).map(o2TaxAnalytics.toDetailItem);
+    } else if (useExpansaoData) {
+      // Franquia
+      allItems = franquiaAnalytics.getDetailItemsForIndicator('mql');
+    } else if (useOxyHackerData) {
+      // Oxy Hacker
+      allItems = oxyHackerAnalytics.getDetailItemsForIndicator('mql');
+    } else if (useConsolidado) {
+      // Consolidado: aggregate all BUs
+      const modeloAtualItems = modeloAtualAnalytics.getDetailItemsForIndicator('mql');
+      const o2Items = o2TaxAnalytics.getMqlsByRevenue.flatMap(r => r.cards).map(o2TaxAnalytics.toDetailItem);
+      const franquiaItems = franquiaAnalytics.getDetailItemsForIndicator('mql');
+      const oxyHackerItems = oxyHackerAnalytics.getDetailItemsForIndicator('mql');
+      allItems = [...modeloAtualItems, ...o2Items, ...franquiaItems, ...oxyHackerItems];
+    } else {
+      // Modelo Atual
+      allItems = modeloAtualAnalytics.getDetailItemsForIndicator('mql');
+    }
+    
+    // Filter by clicked period
     const filteredItems = allItems.filter(item => {
       if (!item.date) return false;
       const itemDate = new Date(item.date);
