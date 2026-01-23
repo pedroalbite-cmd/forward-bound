@@ -40,9 +40,8 @@ const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
   // Proposta (somente esta fase conta)
   'Proposta enviada / Follow Up': 'proposta',
   
-  // Venda (ambas as fases contam)
+  // Venda (somente esta fase conta)
   'Contrato assinado': 'venda',
-  'Ganho': 'venda',
 };
 
 // Parse date from PostgreSQL format
