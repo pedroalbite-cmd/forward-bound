@@ -1,4 +1,4 @@
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -33,21 +33,21 @@ const formatCurrency = (value: number) =>
 
 export function DetailSheet({ open, onOpenChange, title, description, items, columns }: DetailSheetProps) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-full sm:max-w-2xl">
-        <SheetHeader>
-          <SheetTitle className="text-xl">{title}</SheetTitle>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[90vw] w-[90vw] max-h-[90vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="text-xl">{title}</DialogTitle>
           {description && (
-            <SheetDescription>{description}</SheetDescription>
+            <DialogDescription>{description}</DialogDescription>
           )}
-        </SheetHeader>
-        <div className="mt-6">
+        </DialogHeader>
+        <div className="flex-1 overflow-hidden flex flex-col mt-4">
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm text-muted-foreground">
               {items.length} {items.length === 1 ? 'registro' : 'registros'}
             </span>
           </div>
-          <ScrollArea className="h-[calc(100vh-200px)]">
+          <ScrollArea className="h-[calc(90vh-180px)]">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -81,8 +81,8 @@ export function DetailSheet({ open, onOpenChange, title, description, items, col
             </Table>
           </ScrollArea>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 
