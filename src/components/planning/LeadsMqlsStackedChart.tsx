@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, LabelList } from "recharts";
 import { BUType } from "@/hooks/useFunnelRealized";
 import { useModeloAtualMetas, ChartGrouping } from "@/hooks/useModeloAtualMetas";
+import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas, FunnelDataItem } from "@/contexts/MediaMetasContext";
-import { format, eachDayOfInterval, differenceInDays, addDays, eachMonthOfInterval, getMonth, startOfMonth, endOfMonth } from "date-fns";
+import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
+import { ExternalLink } from "lucide-react";
+import { format, eachDayOfInterval, differenceInDays, addDays, eachMonthOfInterval, getMonth, startOfMonth, endOfMonth, isSameDay, isSameMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface LeadsMqlsStackedChartProps {
@@ -22,10 +26,17 @@ const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Ma
 const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsMqlsStackedChartProps) {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetItems, setSheetItems] = useState<DetailItem[]>([]);
+  const [sheetDescription, setSheetDescription] = useState("");
+  
   const { getGroupedData: getModeloAtualGroupedData, getQtyForPeriod: getModeloAtualQty } = useModeloAtualMetas(startDate, endDate);
   const { getGroupedData: getExpansaoGroupedData, getQtyForPeriod: getExpansaoQty } = useExpansaoMetas(startDate, endDate);
   const { getGroupedData: getO2TaxGroupedData, getQtyForPeriod: getO2TaxQty } = useO2TaxMetas(startDate, endDate);
   const { getGroupedData: getOxyHackerGroupedData, getQtyForPeriod: getOxyHackerQty } = useOxyHackerMetas(startDate, endDate);
+  
+  // Analytics for drill-down
+  const modeloAtualAnalytics = useModeloAtualAnalytics(startDate, endDate);
   
   // Get funnelData from MediaMetasContext for dynamic metas
   const { funnelData } = useMediaMetas();
@@ -61,9 +72,14 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsM
   };
   
   // Check if we should use external database data
+  const useModeloAtual = selectedBU === 'modelo_atual';
+  const useConsolidado = selectedBU === 'all';
   const useExpansaoData = selectedBU === 'franquia';
   const useO2TaxData = selectedBU === 'o2_tax';
   const useOxyHackerData = selectedBU === 'oxy_hacker';
+  
+  // Drill-down is available for Modelo Atual and Consolidado
+  const isClickable = useModeloAtual || useConsolidado;
   
   // Determine grouping based on period length
   const daysInPeriod = differenceInDays(endDate, startDate) + 1;
@@ -127,6 +143,52 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsM
 
   const chartData = buildChartData();
 
+  // Handle click on specific bar - filter by day/week/month
+  const handleBarClick = (data: any, index: number) => {
+    if (!isClickable) return;
+    
+    // Calculate the exact date/period based on grouping and index
+    let clickedDate: Date;
+    let periodLabel: string;
+    let periodEnd: Date;
+    
+    if (grouping === 'daily') {
+      const days = eachDayOfInterval({ start: startDate, end: endDate });
+      clickedDate = days[index];
+      periodEnd = clickedDate;
+      periodLabel = format(clickedDate, "d 'de' MMMM", { locale: ptBR });
+    } else if (grouping === 'weekly') {
+      clickedDate = addDays(startDate, index * 7);
+      periodEnd = addDays(clickedDate, 6);
+      if (periodEnd > endDate) periodEnd = endDate;
+      periodLabel = `Semana de ${format(clickedDate, "d 'de' MMM", { locale: ptBR })}`;
+    } else {
+      const months = eachMonthOfInterval({ start: startDate, end: endDate });
+      clickedDate = months[index];
+      periodEnd = endOfMonth(clickedDate);
+      periodLabel = format(clickedDate, "MMMM", { locale: ptBR });
+    }
+    
+    // Get all items and filter by the clicked period
+    const allItems = modeloAtualAnalytics.getDetailItemsForIndicator('mql');
+    const filteredItems = allItems.filter(item => {
+      if (!item.date) return false;
+      const itemDate = new Date(item.date);
+      
+      if (grouping === 'daily') {
+        return isSameDay(itemDate, clickedDate);
+      } else if (grouping === 'weekly') {
+        return itemDate >= clickedDate && itemDate <= periodEnd;
+      } else {
+        return isSameMonth(itemDate, clickedDate);
+      }
+    });
+    
+    setSheetItems(filteredItems);
+    setSheetDescription(`${filteredItems.length} MQLs em ${periodLabel}`);
+    setSheetOpen(true);
+  };
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -144,51 +206,80 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsM
   };
 
   return (
-    <Card className="bg-card border-2 border-chart-2">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-semibold text-foreground">Qtd MQLs</CardTitle>
-          <div className="flex items-center gap-4 text-sm">
-            <span className="text-muted-foreground">
-              Realizado: <span className="font-medium text-foreground">{formatNumber(totalRealized)}</span>
-            </span>
-            <span className="text-muted-foreground">
-              Meta: <span className="font-medium text-foreground">{formatNumber(periodMeta)}</span>
-            </span>
+    <>
+      <Card className="bg-card border-2 border-chart-2 relative group">
+        {isClickable && (
+          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+            <ExternalLink className="h-4 w-4 text-muted-foreground" />
           </div>
-        </div>
-        <div className="flex items-center gap-6 mt-2">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-sm bg-chart-2" />
-            <span className="text-xs text-muted-foreground">MQLs Realizados</span>
+        )}
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold text-foreground">Qtd MQLs</CardTitle>
+            <div className="flex items-center gap-4 text-sm">
+              <span className="text-muted-foreground">
+                Realizado: <span className="font-medium text-foreground">{formatNumber(totalRealized)}</span>
+              </span>
+              <span className="text-muted-foreground">
+                Meta: <span className="font-medium text-foreground">{formatNumber(periodMeta)}</span>
+              </span>
+            </div>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-              <XAxis 
-                dataKey="label" 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
-                interval={grouping === 'daily' && chartData.length > 10 ? Math.floor(chartData.length / 7) : 0}
-              />
-              <YAxis 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} 
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="mqls" fill="hsl(var(--chart-2))" name="MQLs" radius={[4, 4, 0, 0]}>
-                <LabelList dataKey="mqls" position="top" fill="hsl(var(--muted-foreground))" fontSize={10} formatter={(v: number) => v > 0 ? v : ''} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
+          <div className="flex items-center gap-6 mt-2">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-sm bg-chart-2" />
+              <span className="text-xs text-muted-foreground">MQLs Realizados</span>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis 
+                  dataKey="label" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                  interval={grouping === 'daily' && chartData.length > 10 ? Math.floor(chartData.length / 7) : 0}
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} 
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar 
+                  dataKey="mqls" 
+                  fill="hsl(var(--chart-2))" 
+                  name="MQLs" 
+                  radius={[4, 4, 0, 0]}
+                  onClick={handleBarClick}
+                  cursor={isClickable ? "pointer" : "default"}
+                >
+                  <LabelList dataKey="mqls" position="top" fill="hsl(var(--muted-foreground))" fontSize={10} formatter={(v: number) => v > 0 ? v : ''} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+      
+      <DetailSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        title="MQLs"
+        description={sheetDescription || `${formatNumber(totalRealized)} MQLs no período selecionado`}
+        items={sheetItems}
+        columns={[
+          { key: 'name', label: 'Título' },
+          { key: 'company', label: 'Empresa' },
+          { key: 'phase', label: 'Fase', format: columnFormatters.phase },
+          { key: 'date', label: 'Data', format: columnFormatters.date },
+          { key: 'revenueRange', label: 'Faixa Faturamento' },
+        ]}
+      />
+    </>
   );
 }
