@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, LabelList } from "recharts";
 import { BUType } from "@/hooks/useFunnelRealized";
-import { useSheetMetas, ChartGrouping } from "@/hooks/useSheetMetas";
+import { useModeloAtualMetas, ChartGrouping } from "@/hooks/useModeloAtualMetas";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
@@ -22,7 +22,7 @@ const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Ma
 const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsMqlsStackedChartProps) {
-  const { getMqlsGroupedData, getMqlsMetaForPeriod, getMqlsQtyForPeriod } = useSheetMetas(startDate, endDate);
+  const { getGroupedData: getModeloAtualGroupedData, getQtyForPeriod: getModeloAtualQty } = useModeloAtualMetas(startDate, endDate);
   const { getGroupedData: getExpansaoGroupedData, getQtyForPeriod: getExpansaoQty } = useExpansaoMetas(startDate, endDate);
   const { getGroupedData: getO2TaxGroupedData, getQtyForPeriod: getO2TaxQty } = useO2TaxMetas(startDate, endDate);
   const { getGroupedData: getOxyHackerGroupedData, getQtyForPeriod: getOxyHackerQty } = useOxyHackerMetas(startDate, endDate);
@@ -76,16 +76,16 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsM
     ? getO2TaxGroupedData('mql', startDate, endDate, grouping)
     : useOxyHackerData
     ? getOxyHackerGroupedData('mql', startDate, endDate, grouping)
-    : getMqlsGroupedData(startDate, endDate, grouping);
+    : getModeloAtualGroupedData('mql', startDate, endDate, grouping);
   
-  // Get total meta from funnelData (Plan Growth) for external BUs, otherwise from sheets
+  // Get total meta from funnelData (Plan Growth) for all BUs
   const periodMeta = useExpansaoData 
     ? calcularMetaDoPeriodo(funnelData?.franquia)
     : useO2TaxData
     ? calcularMetaDoPeriodo(funnelData?.o2Tax)
     : useOxyHackerData
     ? calcularMetaDoPeriodo(funnelData?.oxyHacker)
-    : getMqlsMetaForPeriod(startDate, endDate);
+    : calcularMetaDoPeriodo(funnelData?.modeloAtual);
     
   const totalRealized = useExpansaoData 
     ? getExpansaoQty('mql', startDate, endDate)
@@ -93,7 +93,7 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsM
     ? getO2TaxQty('mql', startDate, endDate)
     : useOxyHackerData
     ? getOxyHackerQty('mql', startDate, endDate)
-    : getMqlsQtyForPeriod(startDate, endDate);
+    : getModeloAtualQty('mql', startDate, endDate);
 
   // Build chart data with proper date labels
   const buildChartData = () => {
