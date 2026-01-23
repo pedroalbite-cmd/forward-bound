@@ -23,8 +23,11 @@ export interface ModeloAtualCard {
 
 // Map destination phases to indicators (based on pipefy_moviment_cfos table)
 const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
+  // Leads - Total de leads (primeira etapa)
+  'Novos Leads': 'leads',
+  
   // MQL - Leads qualificados
-  'Novos Leads': 'mql',
+  'MQLs': 'mql',
   
   // RM - Reunião Marcada
   'Reunião agendada / Qualificado': 'rm',
@@ -34,12 +37,10 @@ const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
   'Reunião Realizada': 'rr',
   '1° Reunião Realizada - Apresentação': 'rr',
   
-  // Proposta
-  'Enviar proposta': 'proposta',
+  // Proposta (somente esta fase conta)
   'Proposta enviada / Follow Up': 'proposta',
   
-  // Venda
-  'Ganho': 'venda',
+  // Venda (somente esta fase conta)
   'Contrato assinado': 'venda',
 };
 
