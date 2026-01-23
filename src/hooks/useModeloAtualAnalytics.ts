@@ -119,12 +119,23 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       for (const row of responseData.data) {
         const id = String(row['ID'] || row['id'] || '');
         const fase = row['Fase'] || row['fase'] || '';
-        const dataEntrada = parseDate(row['Entrada'] || row['entrada']) || new Date();
+        let dataEntrada = parseDate(row['Entrada'] || row['entrada']) || new Date();
+        const titulo = row['Título'] || row['titulo'] || row['Nome'] || '';
         
         // Skip if no id, no phase, or phase not in mapping
         if (!id || !fase) continue;
         if (!PHASE_TO_INDICATOR[fase]) continue;
 
+        // For "Contrato assinado", use "Data de assinatura do contrato" if available
+        // This ensures sales are counted in the month the contract was actually signed,
+        // not when the card was moved to this phase (which may be delayed)
+        if (fase === 'Contrato assinado') {
+          const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
+          if (dataAssinatura) {
+            console.log(`[useModeloAtualAnalytics] Card ${id} "${titulo}": Using "Data de assinatura do contrato" (${dataAssinatura.toISOString()}) instead of "Entrada" (${dataEntrada.toISOString()})`);
+            dataEntrada = dataAssinatura;
+          }
+        }
         const valorMRR = parseNumericValue(row['Valor MRR'] || row['valor_mrr'] || 0);
         const valorPontual = parseNumericValue(row['Valor Pontual'] || row['valor_pontual'] || 0);
         const valorEducacao = parseNumericValue(row['Valor Educação'] || row['Valor Educacao'] || row['valor_educacao'] || 0);
@@ -178,9 +189,10 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         const cardIndicator = PHASE_TO_INDICATOR[card.faseDestino];
         
         if (cardIndicator === indicator) {
-          // Keep most recent entry per card
+          // Keep EARLIEST entry per card (first time entering the phase)
+          // This ensures a sale is counted in the month it was FIRST signed, not re-moved
           const existing = uniqueCards.get(card.id);
-          if (!existing || card.dataEntrada > existing.dataEntrada) {
+          if (!existing || card.dataEntrada < existing.dataEntrada) {
             uniqueCards.set(card.id, card);
           }
         }
