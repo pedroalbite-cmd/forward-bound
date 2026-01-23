@@ -121,8 +121,9 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         const fase = row['Fase'] || row['fase'] || '';
         const dataEntrada = parseDate(row['Entrada'] || row['entrada']) || new Date();
         
-        // Skip if no id or phase
+        // Skip if no id, no phase, or phase not in mapping
         if (!id || !fase) continue;
+        if (!PHASE_TO_INDICATOR[fase]) continue;
 
         const valorMRR = parseNumericValue(row['Valor MRR'] || row['valor_mrr'] || 0);
         const valorPontual = parseNumericValue(row['Valor Pontual'] || row['valor_pontual'] || 0);
