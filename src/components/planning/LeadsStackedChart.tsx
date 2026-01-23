@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, LabelList } from "recharts";
 import { BUType } from "@/hooks/useFunnelRealized";
 import { useModeloAtualMetas, ChartGrouping } from "@/hooks/useModeloAtualMetas";
+import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useMediaMetas, FunnelDataItem } from "@/contexts/MediaMetasContext";
+import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
+import { ExternalLink } from "lucide-react";
 import { format, eachDayOfInterval, differenceInDays, addDays, eachMonthOfInterval, getMonth, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -18,8 +22,14 @@ const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Ma
 const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStackedChartProps) {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetItems, setSheetItems] = useState<DetailItem[]>([]);
+  
   // Use database data for Modelo Atual leads
   const { getGroupedData: getModeloAtualGroupedData, getQtyForPeriod: getModeloAtualQty } = useModeloAtualMetas(startDate, endDate);
+  
+  // Analytics hook for drill-down details
+  const modeloAtualAnalytics = useModeloAtualAnalytics(startDate, endDate);
   
   // Get funnelData from MediaMetasContext for dynamic metas
   const { funnelData } = useMediaMetas();
@@ -132,6 +142,14 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
 
   const chartData = buildChartData();
 
+  const handleChartClick = () => {
+    if (useModeloAtual || useConsolidado) {
+      const items = modeloAtualAnalytics.getDetailItemsForIndicator('leads');
+      setSheetItems(items);
+      setSheetOpen(true);
+    }
+  };
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -148,11 +166,22 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
     return null;
   };
 
+  const isClickable = useModeloAtual || useConsolidado;
+
   return (
-    <Card className="bg-card border-2 border-orange-500">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-semibold text-foreground">Qtd Leads</CardTitle>
+    <>
+      <Card 
+        className={`bg-card border-2 border-orange-500 relative group ${isClickable ? 'cursor-pointer hover:border-orange-400 transition-colors' : ''}`}
+        onClick={isClickable ? handleChartClick : undefined}
+      >
+        {isClickable && (
+          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+            <ExternalLink className="h-4 w-4 text-muted-foreground" />
+          </div>
+        )}
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold text-foreground">Qtd Leads</CardTitle>
           <div className="flex items-center gap-4 text-sm">
             <span className="text-muted-foreground">
               Realizado: <span className="font-medium text-foreground">{formatNumber(totalRealized)}</span>
@@ -195,5 +224,21 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
         </div>
       </CardContent>
     </Card>
+    
+    <DetailSheet
+      open={sheetOpen}
+      onOpenChange={setSheetOpen}
+      title="Leads"
+      description={`${formatNumber(totalRealized)} leads no período selecionado`}
+      items={sheetItems}
+      columns={[
+        { key: 'name', label: 'Título' },
+        { key: 'company', label: 'Empresa/Contato' },
+        { key: 'phase', label: 'Fase', format: columnFormatters.phase },
+        { key: 'date', label: 'Data', format: columnFormatters.date },
+        { key: 'revenueRange', label: 'Faixa Faturamento' },
+      ]}
+    />
+    </>
   );
 }
