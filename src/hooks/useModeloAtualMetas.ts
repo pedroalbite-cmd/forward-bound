@@ -67,10 +67,20 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['modelo-atual-metas', startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async (): Promise<ModeloAtualMetasResult> => {
-      console.log('[useModeloAtualMetas] Fetching data from pipefy_moviment_cfos');
+      // Use server-side filtering when dates are provided
+      const hasDateFilter = startDate && endDate;
+      const action = hasDateFilter ? 'query_period' : 'preview';
+      
+      console.log(`[useModeloAtualMetas] Fetching data from pipefy_moviment_cfos (action: ${action})`);
       
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
-        body: { table: 'pipefy_moviment_cfos', action: 'preview', limit: 10000 }
+        body: { 
+          table: 'pipefy_moviment_cfos', 
+          action,
+          startDate: startDate?.toISOString(),
+          endDate: endDate?.toISOString(),
+          limit: 10000 
+        }
       });
 
       if (fetchError) {

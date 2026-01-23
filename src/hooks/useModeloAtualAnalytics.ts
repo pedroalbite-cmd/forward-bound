@@ -69,10 +69,16 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['modelo-atual-analytics', startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
-      console.log(`[useModeloAtualAnalytics] Fetching data from pipefy_moviment_cfos`);
+      console.log(`[useModeloAtualAnalytics] Fetching data from pipefy_moviment_cfos with server-side date filter`);
       
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
-        body: { table: 'pipefy_moviment_cfos', action: 'preview', limit: 10000 }
+        body: { 
+          table: 'pipefy_moviment_cfos', 
+          action: 'query_period',
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          limit: 10000 
+        }
       });
 
       if (fetchError) {
