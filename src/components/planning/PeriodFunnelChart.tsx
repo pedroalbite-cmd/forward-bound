@@ -5,7 +5,7 @@ import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
 import { useModeloAtualValues } from "@/hooks/useModeloAtualValues";
-import { useLeadsMetas } from "@/hooks/useLeadsMetas";
+import { useModeloAtualMetas } from "@/hooks/useModeloAtualMetas";
 import { BUType, IndicatorType } from "@/hooks/useFunnelRealized";
 
 interface PeriodFunnelChartProps {
@@ -32,7 +32,7 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
   const { getQtyForPeriod: getO2TaxQty, getValueForPeriod: getO2TaxValue } = useO2TaxMetas(startDate, endDate);
   const { getQtyForPeriod: getOxyHackerQty, getValueForPeriod: getOxyHackerValue } = useOxyHackerMetas(startDate, endDate);
   const { getValueForPeriod: getModeloAtualValue } = useModeloAtualValues(startDate, endDate);
-  const { getLeadsQtyForPeriod } = useLeadsMetas(startDate, endDate);
+  const { getQtyForPeriod: getModeloAtualQty } = useModeloAtualMetas(startDate, endDate);
   
   // Check if we should use external database data
   const useExpansaoData = selectedBU === 'franquia';
@@ -40,8 +40,8 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
   const useOxyHackerData = selectedBU === 'oxy_hacker';
   const useConsolidado = selectedBU === 'all';
   
-  // Get leads data (currently only available for Modelo Atual)
-  const leadsQty = getLeadsQtyForPeriod(startDate, endDate);
+  // Get leads data using the same logic as LeadsStackedChart (Leads = Novos Leads + MQLs)
+  const leadsQty = getModeloAtualQty('leads', startDate, endDate);
   
   // Get totals based on selected BU
   const totals = useConsolidado ? {
