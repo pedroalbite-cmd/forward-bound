@@ -105,14 +105,30 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
         // Skip if no valid phase mapping
         if (!fase || !PHASE_TO_INDICATOR[fase]) continue;
 
-        const valorMRR = parseNumericValue(row['Valor MRR'] || row['valor_mrr'] || 0);
-        const valorPontual = parseNumericValue(row['Valor Pontual'] || row['valor_pontual'] || 0);
-        const valorEducacao = parseNumericValue(row['Valor Educação'] || row['Valor Educacao'] || row['valor_educacao'] || 0);
-        const valorSetup = parseNumericValue(row['Valor Setup'] || row['valor_setup'] || 0);
+        // Log raw values for debugging
+        const rawMRR = row['Valor MRR'] || row['valor_mrr'] || 0;
+        const rawPontual = row['Valor Pontual'] || row['valor_pontual'] || 0;
+        const rawEducacao = row['Valor Educação'] || row['Valor Educacao'] || row['valor_educacao'] || 0;
+        const rawSetup = row['Valor Setup'] || row['valor_setup'] || 0;
+
+        const valorMRR = parseNumericValue(rawMRR);
+        const valorPontual = parseNumericValue(rawPontual);
+        const valorEducacao = parseNumericValue(rawEducacao);
+        const valorSetup = parseNumericValue(rawSetup);
+
+        const titulo = row['Título'] || row['titulo'] || row['Nome'] || '';
+        
+        // Log values for venda phase to debug
+        if (fase === 'Contrato assinado') {
+          console.log(`[DEBUG VENDA] Card ${id} - ${titulo}:`);
+          console.log(`  RAW: MRR="${rawMRR}", Pontual="${rawPontual}", Educação="${rawEducacao}", Setup="${rawSetup}"`);
+          console.log(`  PARSED: MRR=${valorMRR}, Pontual=${valorPontual}, Educação=${valorEducacao}, Setup=${valorSetup}`);
+          console.log(`  SOMA: ${valorMRR + valorPontual + valorEducacao + valorSetup}`);
+        }
 
         movements.push({
           id,
-          titulo: row['Título'] || row['titulo'] || row['Nome'] || '',
+          titulo,
           fase,
           faseAtual: row['Fase Atual'] || row['fase_atual'] || fase,
           dataEntrada,
