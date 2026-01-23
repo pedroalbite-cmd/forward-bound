@@ -72,7 +72,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       console.log(`[useModeloAtualAnalytics] Fetching data from pipefy_moviment_cfos`);
       
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
-        body: { table: 'pipefy_moviment_cfos', action: 'preview', limit: 50000 }
+        body: { table: 'pipefy_moviment_cfos', action: 'preview', limit: 10000 }
       });
 
       if (fetchError) {
