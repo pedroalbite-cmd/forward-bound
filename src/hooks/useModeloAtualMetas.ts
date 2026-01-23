@@ -22,15 +22,24 @@ interface ModeloAtualMetasResult {
   movements: ModeloAtualMovement[];
 }
 
-// Map phase names to indicator keys
+// Map phase names to indicator keys (based on pipefy_moviment_cfos table)
 const PHASE_TO_INDICATOR: Record<string, ModeloAtualIndicator> = {
-  'MQL': 'mql',
+  // MQL - Leads qualificados
+  'Novos Leads': 'mql',
+  
+  // RM - Reunião Marcada
   'Reunião agendada / Qualificado': 'rm',
   'Remarcar Reunião': 'rm',
+  
+  // RR - Reunião Realizada
   'Reunião Realizada': 'rr',
   '1° Reunião Realizada - Apresentação': 'rr',
-  'Proposta enviada / Follow Up': 'proposta',
+  
+  // Proposta
   'Enviar proposta': 'proposta',
+  'Proposta enviada / Follow Up': 'proposta',
+  
+  // Venda
   'Ganho': 'venda',
   'Contrato assinado': 'venda',
 };
