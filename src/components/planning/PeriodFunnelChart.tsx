@@ -74,13 +74,13 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
     proposta: getOxyHackerQty('proposta', startDate, endDate),
     venda: getOxyHackerQty('venda', startDate, endDate),
   } : {
-    // Modelo Atual only
+    // Modelo Atual only - use useModeloAtualMetas for all indicators (same data source as charts)
     leads: leadsQty,
-    mql: getMqlsQtyForPeriod(startDate, endDate),
-    rm: getClosersQty('rm', startDate, endDate),
-    rr: getClosersQty('rr', startDate, endDate),
-    proposta: getClosersQty('proposta', startDate, endDate),
-    venda: getClosersQty('venda', startDate, endDate),
+    mql: getModeloAtualQty('mql', startDate, endDate),
+    rm: getModeloAtualQty('rm', startDate, endDate),
+    rr: getModeloAtualQty('rr', startDate, endDate),
+    proposta: getModeloAtualQty('proposta', startDate, endDate),
+    venda: getModeloAtualQty('venda', startDate, endDate),
   };
 
   // Calculate conversions
