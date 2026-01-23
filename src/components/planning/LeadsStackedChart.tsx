@@ -7,7 +7,7 @@ import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useMediaMetas, FunnelDataItem } from "@/contexts/MediaMetasContext";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
 import { ExternalLink } from "lucide-react";
-import { format, eachDayOfInterval, differenceInDays, addDays, eachMonthOfInterval, getMonth, startOfMonth, endOfMonth } from "date-fns";
+import { format, eachDayOfInterval, differenceInDays, addDays, eachMonthOfInterval, getMonth, startOfMonth, endOfMonth, isSameDay, isSameMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface LeadsStackedChartProps {
@@ -24,6 +24,7 @@ const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set
 export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStackedChartProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetItems, setSheetItems] = useState<DetailItem[]>([]);
+  const [sheetDescription, setSheetDescription] = useState("");
   
   // Use database data for Modelo Atual leads
   const { getGroupedData: getModeloAtualGroupedData, getQtyForPeriod: getModeloAtualQty } = useModeloAtualMetas(startDate, endDate);
@@ -142,12 +143,50 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
 
   const chartData = buildChartData();
 
-  const handleChartClick = () => {
-    if (useModeloAtual || useConsolidado) {
-      const items = modeloAtualAnalytics.getDetailItemsForIndicator('leads');
-      setSheetItems(items);
-      setSheetOpen(true);
+  // Handle click on specific bar - filter by day/week/month
+  const handleBarClick = (data: any, index: number) => {
+    if (!isClickable) return;
+    
+    // Calculate the exact date/period based on grouping and index
+    let clickedDate: Date;
+    let periodLabel: string;
+    let periodEnd: Date;
+    
+    if (grouping === 'daily') {
+      const days = eachDayOfInterval({ start: startDate, end: endDate });
+      clickedDate = days[index];
+      periodEnd = clickedDate;
+      periodLabel = format(clickedDate, "d 'de' MMMM", { locale: ptBR });
+    } else if (grouping === 'weekly') {
+      clickedDate = addDays(startDate, index * 7);
+      periodEnd = addDays(clickedDate, 6);
+      if (periodEnd > endDate) periodEnd = endDate;
+      periodLabel = `Semana de ${format(clickedDate, "d 'de' MMM", { locale: ptBR })}`;
+    } else {
+      const months = eachMonthOfInterval({ start: startDate, end: endDate });
+      clickedDate = months[index];
+      periodEnd = endOfMonth(clickedDate);
+      periodLabel = format(clickedDate, "MMMM", { locale: ptBR });
     }
+    
+    // Get all items and filter by the clicked period
+    const allItems = modeloAtualAnalytics.getDetailItemsForIndicator('leads');
+    const filteredItems = allItems.filter(item => {
+      if (!item.date) return false;
+      const itemDate = new Date(item.date);
+      
+      if (grouping === 'daily') {
+        return isSameDay(itemDate, clickedDate);
+      } else if (grouping === 'weekly') {
+        return itemDate >= clickedDate && itemDate <= periodEnd;
+      } else {
+        return isSameMonth(itemDate, clickedDate);
+      }
+    });
+    
+    setSheetItems(filteredItems);
+    setSheetDescription(`${filteredItems.length} leads em ${periodLabel}`);
+    setSheetOpen(true);
   };
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -171,8 +210,7 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
   return (
     <>
       <Card 
-        className={`bg-card border-2 border-orange-500 relative group ${isClickable ? 'cursor-pointer hover:border-orange-400 transition-colors' : ''}`}
-        onClick={isClickable ? handleChartClick : undefined}
+        className="bg-card border-2 border-orange-500 relative group"
       >
         {isClickable && (
           <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
@@ -216,7 +254,14 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
                 tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} 
               />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="leads" fill="#f97316" name="Leads" radius={[4, 4, 0, 0]}>
+              <Bar 
+                dataKey="leads" 
+                fill="#f97316" 
+                name="Leads" 
+                radius={[4, 4, 0, 0]}
+                onClick={handleBarClick}
+                cursor={isClickable ? "pointer" : "default"}
+              >
                 <LabelList dataKey="leads" position="top" fill="hsl(var(--muted-foreground))" fontSize={10} formatter={(v: number) => v > 0 ? v : ''} />
               </Bar>
             </BarChart>
@@ -229,7 +274,7 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
       open={sheetOpen}
       onOpenChange={setSheetOpen}
       title="Leads"
-      description={`${formatNumber(totalRealized)} leads no período selecionado`}
+      description={sheetDescription || `${formatNumber(totalRealized)} leads no período selecionado`}
       items={sheetItems}
       columns={[
         { key: 'name', label: 'Título' },
