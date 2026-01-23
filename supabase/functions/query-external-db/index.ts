@@ -184,6 +184,39 @@ Deno.serve(async (req) => {
         data: dataResult.rows,
       };
       console.log(`Period query for ${table}: ${result.previewRows} rows of ${result.totalRows} total in period`);
+    } else if (action === 'search') {
+      // Search by title/name (case insensitive)
+      const { searchTerm } = body;
+      
+      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
+      if (!validTables.includes(table)) {
+        await client.end();
+        return new Response(
+          JSON.stringify({ error: 'Invalid table name' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`Searching ${table} for term: ${searchTerm}`);
+
+      // Search in Título column
+      const searchQuery = `
+        SELECT * FROM ${table} 
+        WHERE "Título" ILIKE $1
+        ORDER BY "Entrada" DESC 
+        LIMIT $2
+      `;
+      const searchPattern = `%${searchTerm}%`;
+      const dataResult = await client.queryObject(searchQuery, [searchPattern, limit]);
+      
+      result = {
+        action: 'search',
+        table,
+        searchTerm,
+        totalRows: dataResult.rows.length,
+        data: dataResult.rows,
+      };
+      console.log(`Search for "${searchTerm}" in ${table}: ${result.totalRows} rows found`);
     } else if (action === 'stats') {
       // Get table statistics for diagnostics
       const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];

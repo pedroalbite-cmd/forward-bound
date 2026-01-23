@@ -121,10 +121,20 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
       for (const row of responseData.data) {
         const id = String(row['ID'] || row['id'] || '');
         const fase = row['Fase'] || row['fase'] || '';
-        const dataEntrada = parseDate(row['Entrada'] || row['entrada']) || new Date();
+        let dataEntrada = parseDate(row['Entrada'] || row['entrada']) || new Date();
         
         // Skip if no valid phase mapping
         if (!fase || !PHASE_TO_INDICATOR[fase]) continue;
+
+        // For "Contrato assinado", use "Data de assinatura do contrato" if available
+        // This ensures sales are counted in the month the contract was actually signed,
+        // not when the card was moved to this phase (which may be delayed)
+        if (fase === 'Contrato assinado') {
+          const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
+          if (dataAssinatura) {
+            dataEntrada = dataAssinatura;
+          }
+        }
 
         // Log raw values for debugging
         const rawMRR = row['Valor MRR'] || row['valor_mrr'] || 0;
@@ -138,14 +148,6 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
         const valorSetup = parseNumericValue(rawSetup);
 
         const titulo = row['Título'] || row['titulo'] || row['Nome'] || '';
-        
-        // Log values for venda phase to debug
-        if (fase === 'Contrato assinado') {
-          console.log(`[DEBUG VENDA] Card ${id} - ${titulo}:`);
-          console.log(`  RAW: MRR="${rawMRR}", Pontual="${rawPontual}", Educação="${rawEducacao}", Setup="${rawSetup}"`);
-          console.log(`  PARSED: MRR=${valorMRR}, Pontual=${valorPontual}, Educação=${valorEducacao}, Setup=${valorSetup}`);
-          console.log(`  SOMA: ${valorMRR + valorPontual + valorEducacao + valorSetup}`);
-        }
 
         movements.push({
           id,
