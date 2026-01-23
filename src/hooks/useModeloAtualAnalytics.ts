@@ -203,11 +203,10 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     };
   }, [cardsInPeriod]);
 
-  // Get cards for leads (special handling)
+  // Get cards for leads - now uses actual data from database
   const getLeadsCards = useMemo(() => {
-    // Leads don't have individual card data from this table
-    return [];
-  }, []);
+    return getCardsForIndicator('leads');
+  }, [getCardsForIndicator]);
 
   // Helper function to convert ModeloAtualCard to DetailItem
   const toDetailItem = (card: ModeloAtualCard): DetailItem => ({
@@ -223,10 +222,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
 
   // Get detail items for a specific indicator
   const getDetailItemsForIndicator = (indicator: IndicatorType): DetailItem[] => {
-    if (indicator === 'leads') {
-      // Leads don't have individual card data
-      return [];
-    }
+    // All indicators including leads now have card data from database
     
     const indicatorCards = getCardsForIndicator(indicator);
     return indicatorCards.map(toDetailItem);
