@@ -4,7 +4,7 @@ import { useModeloAtualMetas } from "@/hooks/useModeloAtualMetas";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
-import { useLeadsMetas } from "@/hooks/useLeadsMetas";
+// useLeadsMetas removed - now using useModeloAtualMetas for leads
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
@@ -41,7 +41,7 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
   const { getQtyForPeriod: getExpansaoQty, getValueForPeriod: getExpansaoValue } = useExpansaoMetas(startDate, endDate);
   const { getQtyForPeriod: getO2TaxQty, getValueForPeriod: getO2TaxValue } = useO2TaxMetas(startDate, endDate);
   const { getQtyForPeriod: getOxyHackerQty, getValueForPeriod: getOxyHackerValue } = useOxyHackerMetas(startDate, endDate);
-  const { getLeadsQtyForPeriod } = useLeadsMetas(startDate, endDate);
+  
   
   // Analytics hooks for drill-down
   const modeloAtualAnalytics = useModeloAtualAnalytics(startDate, endDate);
@@ -55,8 +55,8 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
   const useOxyHackerData = selectedBU === 'oxy_hacker';
   const useConsolidado = selectedBU === 'all';
   
-  // Get leads data (currently only available for Modelo Atual)
-  const leadsQty = getLeadsQtyForPeriod(startDate, endDate);
+  // Get leads data from the same database source as charts (Modelo Atual)
+  const leadsQty = getModeloAtualQty('leads', startDate, endDate);
   
   // Get totals based on selected BU - all BUs now use external db
   const totals = useConsolidado ? {
