@@ -185,8 +185,8 @@ Deno.serve(async (req) => {
       };
       console.log(`Period query for ${table}: ${result.previewRows} rows of ${result.totalRows} total in period`);
     } else if (action === 'search') {
-      // Search by title/name (case insensitive)
-      const { searchTerm } = body;
+      // Search by column (case insensitive for text, exact for ID)
+      const { searchTerm, searchColumn = 'Título' } = body;
       
       const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
       if (!validTables.includes(table)) {
@@ -197,26 +197,51 @@ Deno.serve(async (req) => {
         );
       }
 
-      console.log(`Searching ${table} for term: ${searchTerm}`);
+      // Validate searchColumn to prevent SQL injection
+      const allowedColumns = ['Título', 'ID', 'Empresa', 'Nome', 'Fase', 'Fase Atual'];
+      if (!allowedColumns.includes(searchColumn)) {
+        await client.end();
+        return new Response(
+          JSON.stringify({ error: `Invalid search column. Allowed: ${allowedColumns.join(', ')}` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
-      // Search in Título column
-      const searchQuery = `
-        SELECT * FROM ${table} 
-        WHERE "Título" ILIKE $1
-        ORDER BY "Entrada" DESC 
-        LIMIT $2
-      `;
-      const searchPattern = `%${searchTerm}%`;
+      console.log(`Searching ${table} for term: ${searchTerm} in column: ${searchColumn}`);
+
+      // For ID column, use exact match; for others, use ILIKE
+      let searchQuery: string;
+      let searchPattern: string;
+      
+      if (searchColumn === 'ID') {
+        searchQuery = `
+          SELECT * FROM ${table} 
+          WHERE "ID" = $1
+          ORDER BY "Entrada" DESC 
+          LIMIT $2
+        `;
+        searchPattern = searchTerm;
+      } else {
+        searchQuery = `
+          SELECT * FROM ${table} 
+          WHERE "${searchColumn}" ILIKE $1
+          ORDER BY "Entrada" DESC 
+          LIMIT $2
+        `;
+        searchPattern = `%${searchTerm}%`;
+      }
+      
       const dataResult = await client.queryObject(searchQuery, [searchPattern, limit]);
       
       result = {
         action: 'search',
         table,
         searchTerm,
+        searchColumn,
         totalRows: dataResult.rows.length,
         data: dataResult.rows,
       };
-      console.log(`Search for "${searchTerm}" in ${table}: ${result.totalRows} rows found`);
+      console.log(`Search for "${searchTerm}" in column "${searchColumn}" of ${table}: ${result.totalRows} rows found`);
     } else if (action === 'stats') {
       // Get table statistics for diagnostics
       const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
