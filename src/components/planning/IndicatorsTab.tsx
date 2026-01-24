@@ -16,7 +16,7 @@ import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
-import { format, startOfYear, endOfYear, differenceInDays, eachMonthOfInterval, addDays, eachDayOfInterval, getMonth, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfYear, endOfYear, endOfDay, differenceInDays, eachMonthOfInterval, addDays, eachDayOfInterval, getMonth, startOfMonth, endOfMonth } from "date-fns";
 import { FunnelDataItem } from "@/contexts/MediaMetasContext";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -689,7 +689,7 @@ export function IndicatorsTab() {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={endDate} onSelect={(d) => d && setEndDate(d)} locale={ptBR} className="pointer-events-auto" />
+                  <Calendar mode="single" selected={endDate} onSelect={(d) => d && setEndDate(endOfDay(d))} locale={ptBR} className="pointer-events-auto" />
                 </PopoverContent>
               </Popover>
             </div>
