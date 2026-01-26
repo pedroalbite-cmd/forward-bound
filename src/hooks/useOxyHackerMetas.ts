@@ -45,9 +45,15 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['oxy-hacker-metas-movements', startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async (): Promise<OxyHackerMetasResult> => {
-      // Use movements table for accurate phase tracking
+      // Use movements table for accurate phase tracking with server-side date filter
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
-        body: { table: 'pipefy_cards_movements_expansao', action: 'preview', limit: 5000 }
+        body: { 
+          table: 'pipefy_cards_movements_expansao', 
+          action: 'query_period',
+          startDate: startDate?.toISOString().split('T')[0] + 'T00:00:00',
+          endDate: endDate?.toISOString().split('T')[0] + 'T23:59:59',
+          limit: 10000 
+        }
       });
 
       if (fetchError) {
