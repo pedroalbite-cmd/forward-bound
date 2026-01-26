@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -25,10 +24,9 @@ import { LeadsStackedChart } from "./LeadsStackedChart";
 import { ClickableFunnelChart } from "./ClickableFunnelChart";
 import { AnalyticsSection } from "./indicators/AnalyticsSection";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
+import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select";
 
 type ViewMode = 'daily' | 'accumulated';
-
-type FilterBU = BUType | 'all';
 
 interface IndicatorConfig {
   key: IndicatorType;
@@ -47,8 +45,7 @@ const indicatorConfigs: IndicatorConfig[] = [
   { key: 'venda', label: 'Vendas', shortLabel: 'Vendas', annualMeta: 240, useClosersMeta: true },
 ];
 
-const buOptions: { value: FilterBU; label: string }[] = [
-  { value: 'all', label: 'Consolidado' },
+const buOptions: MultiSelectOption[] = [
   { value: 'modelo_atual', label: 'Modelo Atual' },
   { value: 'o2_tax', label: 'O2 TAX' },
   { value: 'oxy_hacker', label: 'Oxy Hacker' },
@@ -151,7 +148,10 @@ const IndicatorChartSection = ({ title, realizedLabel, realizedTotal, metaTotal,
 
 export function IndicatorsTab() {
   const currentYear = new Date().getFullYear();
-  const [selectedBU, setSelectedBU] = useState<FilterBU>('all');
+  // Multi-selection state for BUs (all selected by default = "Consolidado")
+  const [selectedBUs, setSelectedBUs] = useState<BUType[]>(['modelo_atual', 'o2_tax', 'oxy_hacker', 'franquia']);
+  // Multi-selection state for Closers (empty = all closers)
+  const [selectedClosers, setSelectedClosers] = useState<string[]>([]);
   const [startDate, setStartDate] = useState<Date>(startOfYear(new Date(currentYear, 0, 1)));
   const [endDate, setEndDate] = useState<Date>(endOfYear(new Date(currentYear, 0, 1)));
   const [viewMode, setViewMode] = useState<ViewMode>('daily');
@@ -182,6 +182,58 @@ export function IndicatorsTab() {
   
   // Get funnelData from MediaMetasContext for dynamic metas
   const { funnelData } = useMediaMetas();
+
+  // Derive helper flags from multi-selection
+  const isConsolidado = selectedBUs.length === 4;
+  const hasSingleBU = selectedBUs.length === 1;
+  const selectedBU: BUType | 'all' = hasSingleBU ? selectedBUs[0] : 'all';
+
+  // Extract unique closers from all analytics data for the closer filter dropdown
+  const availableClosers = useMemo((): MultiSelectOption[] => {
+    const closersSet = new Set<string>();
+    
+    // Modelo Atual
+    if (selectedBUs.includes('modelo_atual')) {
+      modeloAtualAnalytics.cards?.forEach(c => {
+        if (c.responsavel) closersSet.add(c.responsavel);
+      });
+    }
+    
+    // O2 TAX
+    if (selectedBUs.includes('o2_tax')) {
+      o2TaxAnalytics.getCardsByPhase?.forEach(p => {
+        p.cards?.forEach(c => {
+          if (c.responsavel) closersSet.add(c.responsavel);
+        });
+      });
+    }
+    
+    // Franquia
+    if (selectedBUs.includes('franquia')) {
+      franquiaAnalytics.movements?.forEach(m => {
+        if (m.responsavel) closersSet.add(m.responsavel);
+      });
+    }
+    
+    // Oxy Hacker
+    if (selectedBUs.includes('oxy_hacker')) {
+      oxyHackerAnalytics.movements?.forEach(m => {
+        if (m.responsavel) closersSet.add(m.responsavel);
+      });
+    }
+    
+    return Array.from(closersSet)
+      .filter(Boolean)
+      .sort()
+      .map(c => ({ value: c, label: c }));
+  }, [modeloAtualAnalytics.cards, o2TaxAnalytics.getCardsByPhase, franquiaAnalytics.movements, oxyHackerAnalytics.movements, selectedBUs]);
+
+  // Filter function - checks if a responsavel matches selected closers
+  const matchesCloserFilter = (responsavel?: string | null): boolean => {
+    if (selectedClosers.length === 0) return true; // No filter = show all
+    if (!responsavel) return false;
+    return selectedClosers.includes(responsavel);
+  };
   
   // Month name mapping for funnelData lookup
   const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -258,10 +310,11 @@ export function IndicatorsTab() {
     });
   };
 
-  // Check if we should use external database data
-  const useExpansaoData = selectedBU === 'franquia';
-  const useO2TaxData = selectedBU === 'o2_tax';
-  const useOxyHackerData = selectedBU === 'oxy_hacker';
+  // Check which BUs are selected (for multi-selection logic)
+  const includesModeloAtual = selectedBUs.includes('modelo_atual');
+  const includesO2Tax = selectedBUs.includes('o2_tax');
+  const includesOxyHacker = selectedBUs.includes('oxy_hacker');
+  const includesFranquia = selectedBUs.includes('franquia');
 
   const daysInPeriod = differenceInDays(endDate, startDate) + 1;
   const periodFraction = daysInPeriod / 365;
@@ -290,73 +343,47 @@ export function IndicatorsTab() {
 
   const chartLabels = getChartLabels();
 
-  // Get meta for indicator - uses funnelData from Plan Growth for all BUs
+  // Get meta for indicator - sums metas from selected BUs using funnelData
   const getMetaForIndicator = (indicator: IndicatorConfig) => {
-    // For Consolidado (all), sum metas from all BUs in funnelData
-    if (selectedBU === 'all' && funnelData) {
-      const metaModeloAtual = funnelData.modeloAtual ? calcularMetaDoPeriodo(funnelData.modeloAtual, indicator.key, startDate, endDate) : 0;
-      const metaO2Tax = funnelData.o2Tax ? calcularMetaDoPeriodo(funnelData.o2Tax, indicator.key, startDate, endDate) : 0;
-      const metaOxyHacker = funnelData.oxyHacker ? calcularMetaDoPeriodo(funnelData.oxyHacker, indicator.key, startDate, endDate) : 0;
-      const metaFranquia = funnelData.franquia ? calcularMetaDoPeriodo(funnelData.franquia, indicator.key, startDate, endDate) : 0;
-      return metaModeloAtual + metaO2Tax + metaOxyHacker + metaFranquia;
+    if (!funnelData) return Math.round(indicator.annualMeta * periodFraction);
+    
+    let total = 0;
+    
+    if (includesModeloAtual && funnelData.modeloAtual) {
+      total += calcularMetaDoPeriodo(funnelData.modeloAtual, indicator.key, startDate, endDate);
+    }
+    if (includesO2Tax && funnelData.o2Tax) {
+      total += calcularMetaDoPeriodo(funnelData.o2Tax, indicator.key, startDate, endDate);
+    }
+    if (includesOxyHacker && funnelData.oxyHacker) {
+      total += calcularMetaDoPeriodo(funnelData.oxyHacker, indicator.key, startDate, endDate);
+    }
+    if (includesFranquia && funnelData.franquia) {
+      total += calcularMetaDoPeriodo(funnelData.franquia, indicator.key, startDate, endDate);
     }
     
-    // For Modelo Atual BU, use funnelData from Plan Growth
-    if (selectedBU === 'modelo_atual' && funnelData?.modeloAtual) {
-      return calcularMetaDoPeriodo(funnelData.modeloAtual, indicator.key, startDate, endDate);
-    }
-    
-    // For Franquia BU, use funnelData from Plan Growth
-    if (useExpansaoData && funnelData?.franquia) {
-      return calcularMetaDoPeriodo(funnelData.franquia, indicator.key, startDate, endDate);
-    }
-    
-    // For O2 TAX BU, use funnelData from Plan Growth
-    if (useO2TaxData && funnelData?.o2Tax) {
-      return calcularMetaDoPeriodo(funnelData.o2Tax, indicator.key, startDate, endDate);
-    }
-    
-    // For Oxy Hacker BU, use funnelData from Plan Growth
-    if (useOxyHackerData && funnelData?.oxyHacker) {
-      return calcularMetaDoPeriodo(funnelData.oxyHacker, indicator.key, startDate, endDate);
-    }
-    
-    // Fallback to prorated annual meta
-    return Math.round(indicator.annualMeta * periodFraction);
+    return total > 0 ? total : Math.round(indicator.annualMeta * periodFraction);
   };
 
-  // Get realized value for indicator - uses external db data for all BUs
+  // Get realized value for indicator - sums realized from selected BUs
+  // Note: Closer filter is applied at the drill-down level, not here (raw counts)
   const getRealizedForIndicator = (indicator: IndicatorConfig) => {
-    // For Consolidado (all), sum realized from ALL BUs
-    if (selectedBU === 'all') {
-      // Modelo Atual from external database (pipefy_moviment_cfos)
-      const modeloAtualQty = getModeloAtualQty(indicator.key as ModeloAtualIndicator, startDate, endDate);
-      
-      // Other BUs from external database
-      const o2TaxQty = getO2TaxQty(indicator.key as O2TaxIndicator, startDate, endDate);
-      const oxyHackerQty = getOxyHackerQty(indicator.key as OxyHackerIndicator, startDate, endDate);
-      const franquiaQty = getExpansaoQty(indicator.key as ExpansaoIndicator, startDate, endDate);
-      
-      return modeloAtualQty + o2TaxQty + oxyHackerQty + franquiaQty;
+    let total = 0;
+    
+    if (includesModeloAtual) {
+      total += getModeloAtualQty(indicator.key as ModeloAtualIndicator, startDate, endDate);
+    }
+    if (includesO2Tax) {
+      total += getO2TaxQty(indicator.key as O2TaxIndicator, startDate, endDate);
+    }
+    if (includesOxyHacker) {
+      total += getOxyHackerQty(indicator.key as OxyHackerIndicator, startDate, endDate);
+    }
+    if (includesFranquia) {
+      total += getExpansaoQty(indicator.key as ExpansaoIndicator, startDate, endDate);
     }
     
-    // For Franquia BU, use expansão data from external database
-    if (useExpansaoData) {
-      return getExpansaoQty(indicator.key as ExpansaoIndicator, startDate, endDate);
-    }
-    
-    // For O2 TAX BU, use O2 TAX data from external database
-    if (useO2TaxData) {
-      return getO2TaxQty(indicator.key as O2TaxIndicator, startDate, endDate);
-    }
-    
-    // For Oxy Hacker BU, use Oxy Hacker data from external database
-    if (useOxyHackerData) {
-      return getOxyHackerQty(indicator.key as OxyHackerIndicator, startDate, endDate);
-    }
-    
-    // For Modelo Atual, use external database (pipefy_moviment_cfos)
-    return getModeloAtualQty(indicator.key as ModeloAtualIndicator, startDate, endDate);
+    return total;
   };
 
   const buildChartData = (indicator: IndicatorConfig) => {
@@ -383,8 +410,8 @@ export function IndicatorsTab() {
       return [];
     };
 
-    // For Franquia BU, use funnelData metas from Plan Growth + realized from external db
-    if (useExpansaoData) {
+    // For single BU selection - Franquia
+    if (hasSingleBU && includesFranquia) {
       const expansaoData = getExpansaoGroupedData(indicator.key as ExpansaoIndicator, startDate, endDate, grouping);
       const funnelMetasMensais = funnelData?.franquia ? getMonthlyMetasFromFunnel(funnelData.franquia, indicator.key, startDate, endDate) : [];
       const metaPeriodo = funnelData?.franquia ? calcularMetaDoPeriodo(funnelData.franquia, indicator.key, startDate, endDate) : 0;
@@ -400,8 +427,8 @@ export function IndicatorsTab() {
       }));
     }
 
-    // For O2 TAX BU, use funnelData metas from Plan Growth + realized from external db
-    if (useO2TaxData) {
+    // For single BU selection - O2 TAX
+    if (hasSingleBU && includesO2Tax) {
       const o2taxData = getO2TaxGroupedData(indicator.key as O2TaxIndicator, startDate, endDate, grouping);
       const funnelMetasMensais = funnelData?.o2Tax ? getMonthlyMetasFromFunnel(funnelData.o2Tax, indicator.key, startDate, endDate) : [];
       const metaPeriodo = funnelData?.o2Tax ? calcularMetaDoPeriodo(funnelData.o2Tax, indicator.key, startDate, endDate) : 0;
@@ -417,8 +444,8 @@ export function IndicatorsTab() {
       }));
     }
 
-    // For Oxy Hacker BU, use funnelData metas from Plan Growth + realized from external db
-    if (useOxyHackerData) {
+    // For single BU selection - Oxy Hacker
+    if (hasSingleBU && includesOxyHacker) {
       const oxyHackerData = getOxyHackerGroupedData(indicator.key as OxyHackerIndicator, startDate, endDate, grouping);
       const funnelMetasMensais = funnelData?.oxyHacker ? getMonthlyMetasFromFunnel(funnelData.oxyHacker, indicator.key, startDate, endDate) : [];
       const metaPeriodo = funnelData?.oxyHacker ? calcularMetaDoPeriodo(funnelData.oxyHacker, indicator.key, startDate, endDate) : 0;
@@ -434,8 +461,8 @@ export function IndicatorsTab() {
       }));
     }
     
-    // For Modelo Atual BU, use funnelData metas from Plan Growth + realized from external db
-    if (selectedBU === 'modelo_atual' && funnelData?.modeloAtual) {
+    // For single BU selection - Modelo Atual
+    if (hasSingleBU && includesModeloAtual && funnelData?.modeloAtual) {
       const modeloAtualData = getModeloAtualGroupedData(indicator.key as ModeloAtualIndicator, startDate, endDate, grouping);
       
       const funnelMetasMensais = getMonthlyMetasFromFunnel(funnelData.modeloAtual, indicator.key, startDate, endDate);
@@ -451,36 +478,37 @@ export function IndicatorsTab() {
       }));
     }
 
-    // For Consolidado (all), sum metas from all BUs + realized from respective sources
-    if (selectedBU === 'all' && funnelData) {
-      const modeloAtualData = getModeloAtualGroupedData(indicator.key as ModeloAtualIndicator, startDate, endDate, grouping);
-      const o2taxData = getO2TaxGroupedData(indicator.key as O2TaxIndicator, startDate, endDate, grouping);
-      const oxyHackerData = getOxyHackerGroupedData(indicator.key as OxyHackerIndicator, startDate, endDate, grouping);
-      const expansaoData = getExpansaoGroupedData(indicator.key as ExpansaoIndicator, startDate, endDate, grouping);
+    // For multi-BU selection (or Consolidado), sum metas from selected BUs
+    if (selectedBUs.length > 1 || !hasSingleBU) {
+      // Get data for each selected BU
+      const modeloAtualData = includesModeloAtual ? getModeloAtualGroupedData(indicator.key as ModeloAtualIndicator, startDate, endDate, grouping) : { qty: [], meta: [] };
+      const o2taxData = includesO2Tax ? getO2TaxGroupedData(indicator.key as O2TaxIndicator, startDate, endDate, grouping) : { qty: [], meta: [] };
+      const oxyHackerData = includesOxyHacker ? getOxyHackerGroupedData(indicator.key as OxyHackerIndicator, startDate, endDate, grouping) : { qty: [], meta: [] };
+      const expansaoData = includesFranquia ? getExpansaoGroupedData(indicator.key as ExpansaoIndicator, startDate, endDate, grouping) : { qty: [], meta: [] };
       
-      // Get monthly metas for each BU
-      const metasModeloAtual = funnelData.modeloAtual ? getMonthlyMetasFromFunnel(funnelData.modeloAtual, indicator.key, startDate, endDate) : [];
-      const metasO2Tax = funnelData.o2Tax ? getMonthlyMetasFromFunnel(funnelData.o2Tax, indicator.key, startDate, endDate) : [];
-      const metasOxyHacker = funnelData.oxyHacker ? getMonthlyMetasFromFunnel(funnelData.oxyHacker, indicator.key, startDate, endDate) : [];
-      const metasFranquia = funnelData.franquia ? getMonthlyMetasFromFunnel(funnelData.franquia, indicator.key, startDate, endDate) : [];
+      // Get monthly metas for each selected BU
+      const metasModeloAtual = (includesModeloAtual && funnelData?.modeloAtual) ? getMonthlyMetasFromFunnel(funnelData.modeloAtual, indicator.key, startDate, endDate) : [];
+      const metasO2Tax = (includesO2Tax && funnelData?.o2Tax) ? getMonthlyMetasFromFunnel(funnelData.o2Tax, indicator.key, startDate, endDate) : [];
+      const metasOxyHacker = (includesOxyHacker && funnelData?.oxyHacker) ? getMonthlyMetasFromFunnel(funnelData.oxyHacker, indicator.key, startDate, endDate) : [];
+      const metasFranquia = (includesFranquia && funnelData?.franquia) ? getMonthlyMetasFromFunnel(funnelData.franquia, indicator.key, startDate, endDate) : [];
       
       // Get period metas for prorating
-      const metaPeriodoModeloAtual = funnelData.modeloAtual ? calcularMetaDoPeriodo(funnelData.modeloAtual, indicator.key, startDate, endDate) : 0;
-      const metaPeriodoO2Tax = funnelData.o2Tax ? calcularMetaDoPeriodo(funnelData.o2Tax, indicator.key, startDate, endDate) : 0;
-      const metaPeriodoOxyHacker = funnelData.oxyHacker ? calcularMetaDoPeriodo(funnelData.oxyHacker, indicator.key, startDate, endDate) : 0;
-      const metaPeriodoFranquia = funnelData.franquia ? calcularMetaDoPeriodo(funnelData.franquia, indicator.key, startDate, endDate) : 0;
+      const metaPeriodoModeloAtual = (includesModeloAtual && funnelData?.modeloAtual) ? calcularMetaDoPeriodo(funnelData.modeloAtual, indicator.key, startDate, endDate) : 0;
+      const metaPeriodoO2Tax = (includesO2Tax && funnelData?.o2Tax) ? calcularMetaDoPeriodo(funnelData.o2Tax, indicator.key, startDate, endDate) : 0;
+      const metaPeriodoOxyHacker = (includesOxyHacker && funnelData?.oxyHacker) ? calcularMetaDoPeriodo(funnelData.oxyHacker, indicator.key, startDate, endDate) : 0;
+      const metaPeriodoFranquia = (includesFranquia && funnelData?.franquia) ? calcularMetaDoPeriodo(funnelData.franquia, indicator.key, startDate, endDate) : 0;
       const totalMetaPeriodo = metaPeriodoModeloAtual + metaPeriodoO2Tax + metaPeriodoOxyHacker + metaPeriodoFranquia;
       
       const metasProrateadas = grouping !== 'monthly' ? getProratedMetaSeries(totalMetaPeriodo) : [];
 
       return chartLabels.map((label, index) => {
-        // Sum realized from all sources (now all from external db)
-        const realizadoModeloAtual = modeloAtualData.qty[index] || 0;
-        const realizadoO2Tax = o2taxData.qty[index] || 0;
-        const realizadoOxyHacker = oxyHackerData.qty[index] || 0;
-        const realizadoFranquia = expansaoData.qty[index] || 0;
+        // Sum realized from selected BUs
+        const realizadoModeloAtual = includesModeloAtual ? (modeloAtualData.qty[index] || 0) : 0;
+        const realizadoO2Tax = includesO2Tax ? (o2taxData.qty[index] || 0) : 0;
+        const realizadoOxyHacker = includesOxyHacker ? (oxyHackerData.qty[index] || 0) : 0;
+        const realizadoFranquia = includesFranquia ? (expansaoData.qty[index] || 0) : 0;
         
-        // Sum metas from all BUs
+        // Sum metas from selected BUs
         const metaTotal = grouping === 'monthly'
           ? (metasModeloAtual[index] ?? 0) + (metasO2Tax[index] ?? 0) + (metasOxyHacker[index] ?? 0) + (metasFranquia[index] ?? 0)
           : (metasProrateadas[index] ?? 0);
@@ -567,49 +595,33 @@ export function IndicatorsTab() {
     ];
   };
 
-  // Get detail items for an indicator based on selected BU
+  // Get detail items for an indicator based on selected BUs and closer filter
   const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
-    const useExpansaoData = selectedBU === 'franquia';
-    const useO2TaxData = selectedBU === 'o2_tax';
-    const useOxyHackerData = selectedBU === 'oxy_hacker';
-    const useConsolidado = selectedBU === 'all';
-
-    // For Franquia
-    if (useExpansaoData) {
-      return franquiaAnalytics.getDetailItemsForIndicator(indicatorKey);
+    let items: DetailItem[] = [];
+    
+    // Aggregate items from selected BUs
+    if (includesModeloAtual) {
+      items = [...items, ...modeloAtualAnalytics.getDetailItemsForIndicator(indicatorKey)];
     }
-
-    // For Oxy Hacker
-    if (useOxyHackerData) {
-      return oxyHackerAnalytics.getDetailItemsForIndicator(indicatorKey);
+    
+    if (includesO2Tax) {
+      items = [...items, ...o2TaxAnalytics.getDetailItemsForIndicator(indicatorKey)];
     }
-
-    // For O2 TAX - use analytics hook directly (now supports all indicators with date filtering)
-    if (useO2TaxData) {
-      return o2TaxAnalytics.getDetailItemsForIndicator(indicatorKey);
+    
+    if (includesFranquia) {
+      items = [...items, ...franquiaAnalytics.getDetailItemsForIndicator(indicatorKey)];
     }
-
-    // For Modelo Atual or Consolidado
-    if (selectedBU === 'modelo_atual' || useConsolidado) {
-      const items = modeloAtualAnalytics.getDetailItemsForIndicator(indicatorKey);
-      
-      if (useConsolidado) {
-        // Add O2 TAX items - use hook with date filtering
-        const o2TaxItems = o2TaxAnalytics.getDetailItemsForIndicator(indicatorKey);
-        
-        // Add Franquia items
-        const franquiaItems = franquiaAnalytics.getDetailItemsForIndicator(indicatorKey);
-        
-        // Add Oxy Hacker items
-        const oxyHackerItems = oxyHackerAnalytics.getDetailItemsForIndicator(indicatorKey);
-        
-        return [...items, ...o2TaxItems, ...franquiaItems, ...oxyHackerItems];
-      }
-      
-      return items;
+    
+    if (includesOxyHacker) {
+      items = [...items, ...oxyHackerAnalytics.getDetailItemsForIndicator(indicatorKey)];
     }
-
-    return [];
+    
+    // Apply closer filter if any closers are selected
+    if (selectedClosers.length > 0) {
+      items = items.filter(item => matchesCloserFilter(item.responsible));
+    }
+    
+    return items;
   };
 
   // Handle radial card click
@@ -632,10 +644,25 @@ export function IndicatorsTab() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <h2 className="text-xl font-semibold text-foreground">Visão Meta Pace</h2>
           <div className="flex flex-wrap items-center gap-3">
-            <Select value={selectedBU} onValueChange={(v) => setSelectedBU(v as FilterBU)}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>{buOptions.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}</SelectContent>
-            </Select>
+            <MultiSelect
+              options={buOptions}
+              selected={selectedBUs}
+              onSelectionChange={(v) => setSelectedBUs(v as BUType[])}
+              placeholder="Selecionar BUs"
+              allLabel="Consolidado"
+              className="w-44"
+            />
+
+            {availableClosers.length > 0 && (
+              <MultiSelect
+                options={availableClosers}
+                selected={selectedClosers}
+                onSelectionChange={setSelectedClosers}
+                placeholder="Todos Closers"
+                allLabel="Todos Closers"
+                className="w-44"
+              />
+            )}
 
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">De:</span>
