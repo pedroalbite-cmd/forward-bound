@@ -1,284 +1,212 @@
 
 
-## Plano: Integrar Porcentagens de Closer nas Metas da Aba Indicadores
+## Plano: Ajustar Colunas dos Clicáveis e Adicionar Duração na Fase
 
 ### Objetivo
 
-Quando um closer específico (Pedro ou Daniel) for selecionado no filtro da aba Indicadores, as metas (não apenas o realizado) também devem ser filtradas proporcionalmente com base nas porcentagens configuradas no Admin.
+Modificar o modal de detalhes (DetailSheet) para:
+1. **Remover** a coluna "Título" (name)
+2. **Remover** a coluna "Fase" (phase)
+3. **Adicionar** coluna "Tempo na Fase" mostrando quanto tempo o registro ficou naquela fase
 
 ---
 
-### Como Funciona Atualmente
+### Análise da Fonte de Dados
 
-1. **Realizado:** Já está filtrado por closer - quando seleciona Pedro, só mostra cards onde `Closer responsável = 'Pedro Albite'`
-2. **Meta:** NÃO está filtrada - mostra a meta total independente do closer selecionado
+O banco externo `pipefy_moviment_cfos` já possui a coluna **"Duração (s)"** que contém o tempo em segundos que cada card permaneceu na fase. Isso elimina a necessidade de calcular a diferença entre "Entrada" e "Saída".
 
-### Como Deve Funcionar Após Implementação
-
-| Cenário | Meta Exibida |
-|---------|--------------|
-| Nenhum closer selecionado | Meta total (100%) |
-| Pedro Albite selecionado | Meta × (% do Pedro naquele mês/BU) |
-| Daniel Trindade selecionado | Meta × (% do Daniel naquele mês/BU) |
-| Ambos selecionados | Meta total (soma das %) |
-
-**Exemplo:**
-- Meta de Janeiro para Modelo Atual = 100 MQLs
-- Pedro tem 60% configurado para Janeiro
-- Usuário filtra por Pedro → Meta exibida = 60 MQLs
+| Coluna no Banco | Tipo | Descrição |
+|-----------------|------|-----------|
+| Entrada | timestamp | Data de entrada na fase |
+| Saída | timestamp | Data de saída da fase (pode ser null) |
+| Duração (s) | bigint | Tempo na fase em segundos |
 
 ---
 
-### Arquitetura da Solução
-
-```text
-┌────────────────────────────────────────────────────────────────────┐
-│                    Fluxo de Cálculo de Meta                        │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│   1. Buscar meta base do funnelData (Plan Growth)                  │
-│      └─► calcularMetaDoPeriodo(funnelData.modeloAtual, 'mql', ...)│
-│          Resultado: 100 MQLs                                       │
-│                                                                    │
-│   2. Aplicar filtro de closer (se ativo)                           │
-│      └─► getFilteredMeta(100, 'modelo_atual', 'Jan', ['Pedro'])   │
-│          ├── Busca % do Pedro para modelo_atual/Jan: 60%          │
-│          └── Resultado: 100 × 0.60 = 60 MQLs                      │
-│                                                                    │
-│   3. Exibir no RadialProgressCard                                  │
-│      └─► Meta: 60 (não mais 100)                                  │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### Mudanças por Arquivo
-
-#### 1. `src/components/planning/IndicatorsTab.tsx`
-
-**Modificações:**
-
-| Seção | Mudança |
-|-------|---------|
-| Imports | Adicionar import do `useCloserMetas` |
-| Hooks | Chamar `useCloserMetas()` para ter acesso às porcentagens |
-| `getMetaForIndicator()` | Aplicar `getFilteredMeta()` após calcular a meta base |
-| `buildChartData()` | Aplicar filtro de closer nas metas mensais dos gráficos |
-| `calcularMetaDoPeriodo()` | Modificar para aplicar porcentagem por mês antes de somar |
-
-**Código - Import e Hook:**
-```typescript
-import { useCloserMetas } from "@/hooks/useCloserMetas";
-
-// Inside IndicatorsTab component:
-const { getFilteredMeta, getPercentage, metas: closerMetas } = useCloserMetas(currentYear);
-```
-
-**Código - getMetaForIndicator (linhas 313-332):**
-```typescript
-const getMetaForIndicator = (indicator: IndicatorConfig) => {
-  if (!funnelData) return Math.round(indicator.annualMeta * periodFraction);
-  
-  let total = 0;
-  
-  // For each BU, calculate meta and apply closer filter if active
-  if (includesModeloAtual && funnelData.modeloAtual) {
-    const buMeta = calcularMetaDoPeriodoComCloser(
-      funnelData.modeloAtual, 
-      indicator.key, 
-      startDate, 
-      endDate,
-      'modelo_atual',
-      selectedClosers
-    );
-    total += buMeta;
-  }
-  // ... similar for o2_tax, oxy_hacker, franquia
-  
-  return total > 0 ? total : Math.round(indicator.annualMeta * periodFraction);
-};
-```
-
-**Código - Nova função calcularMetaDoPeriodoComCloser:**
-```typescript
-const calcularMetaDoPeriodoComCloser = (
-  funnelItems: FunnelDataItem[] | undefined,
-  indicatorKey: IndicatorType,
-  start: Date,
-  end: Date,
-  bu: string,
-  selectedClosers: string[]
-): number => {
-  if (!funnelItems || funnelItems.length === 0) return 0;
-  
-  // Se não há filtro de closer, usa cálculo normal
-  if (selectedClosers.length === 0) {
-    return calcularMetaDoPeriodo(funnelItems, indicatorKey, start, end);
-  }
-  
-  const getItemValue = (item: FunnelDataItem): number => {
-    switch (indicatorKey) {
-      case 'mql': return item.mqls;
-      case 'rm': return item.rms;
-      case 'rr': return item.rrs;
-      case 'proposta': return item.propostas;
-      case 'venda': return item.vendas;
-      default: return 0;
-    }
-  };
-
-  const monthsInPeriod = eachMonthOfInterval({ start, end });
-  let total = 0;
-
-  for (const monthDate of monthsInPeriod) {
-    const monthName = monthNames[getMonth(monthDate)];
-    const item = funnelItems.find(f => f.month === monthName);
-    if (!item) continue;
-
-    const monthStart = startOfMonth(monthDate);
-    const monthEnd = endOfMonth(monthDate);
-
-    const overlapStart = start > monthStart ? start : monthStart;
-    const overlapEnd = end < monthEnd ? end : monthEnd;
-
-    if (overlapStart > overlapEnd) continue;
-
-    const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
-    const daysInMonth = differenceInDays(monthEnd, monthStart) + 1;
-    const fraction = daysInMonth > 0 ? overlapDays / daysInMonth : 0;
-
-    // Get base meta for this month
-    const baseMeta = getItemValue(item) * fraction;
-    
-    // Apply closer filter percentage for this specific month
-    const filteredMeta = getFilteredMeta(baseMeta, bu, monthName, selectedClosers);
-    
-    total += filteredMeta;
-  }
-
-  return Math.round(total);
-};
-```
-
----
-
-#### 2. Atualizar buildChartData para aplicar filtro nas metas do gráfico
-
-**Modificar getMonthlyMetasFromFunnel para retornar metas filtradas por closer:**
-
-```typescript
-const getMonthlyMetasFromFunnelFiltered = (
-  funnelItems: FunnelDataItem[] | undefined,
-  indicatorKey: IndicatorType,
-  start: Date,
-  end: Date,
-  bu: string,
-  selectedClosers: string[]
-): number[] => {
-  if (!funnelItems || funnelItems.length === 0) return [];
-  
-  const monthsInPeriod = eachMonthOfInterval({ start, end });
-  
-  return monthsInPeriod.map(monthDate => {
-    const monthName = monthNames[getMonth(monthDate)];
-    const item = funnelItems.find(f => f.month === monthName);
-    if (!item) return 0;
-    
-    let value = 0;
-    switch (indicatorKey) {
-      case 'mql': value = item.mqls; break;
-      case 'rm': value = item.rms; break;
-      case 'rr': value = item.rrs; break;
-      case 'proposta': value = item.propostas; break;
-      case 'venda': value = item.vendas; break;
-    }
-    
-    // Apply closer filter if active
-    if (selectedClosers.length > 0) {
-      return Math.round(getFilteredMeta(value, bu, monthName, selectedClosers));
-    }
-    
-    return Math.round(value);
-  });
-};
-```
-
----
-
-### Componentes Afetados
-
-| Componente | Tipo de Mudança | Detalhes |
-|------------|-----------------|----------|
-| `IndicatorsTab.tsx` | Principal | Integrar hook useCloserMetas e aplicar filtro nas metas |
-| `RadialProgressCard` | Nenhuma | Já recebe meta como prop, não precisa mudar |
-| `ClickableFunnelChart` | Possível futura | Atualmente não mostra metas, só valores realizados |
-| `IndicatorChartSection` | Nenhuma | Já recebe meta como prop, não precisa mudar |
-
----
-
-### Fluxo de Dados Atualizado
+### Arquitetura da Mudança
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         IndicatorsTab                               │
+│                    Fluxo de Dados Atualizado                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  ┌─────────────┐    ┌──────────────────┐    ┌───────────────────┐  │
-│  │ funnelData  │───►│ calcularMeta     │───►│ getFilteredMeta   │  │
-│  │ (Plan Growth)│   │ DoPeriodoComCloser│   │ (useCloserMetas)  │  │
-│  └─────────────┘    └──────────────────┘    └─────────┬─────────┘  │
-│                                                       │            │
-│                                                       ▼            │
-│  ┌────────────────────────────────────────────────────────────┐   │
-│  │                    Meta Final Ajustada                      │   │
-│  │                                                             │   │
-│  │  Sem filtro: Meta = 100 (100%)                             │   │
-│  │  Pedro (60%): Meta = 60                                    │   │
-│  │  Daniel (40%): Meta = 40                                   │   │
-│  │  Ambos (100%): Meta = 100                                  │   │
-│  └────────────────────────────────────────────────────────────┘   │
-│                              │                                     │
-│              ┌───────────────┼───────────────┐                     │
-│              ▼               ▼               ▼                     │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐          │
-│  │ RadialCards   │  │ ChartSection  │  │ Funnel (opt.) │          │
-│  │ Meta: 60      │  │ Linha Meta    │  │               │          │
-│  └───────────────┘  └───────────────┘  └───────────────┘          │
+│   1. Edge Function (query-external-db)                              │
+│      └─► Já retorna "Duração (s)" - sem mudança necessária         │
+│                                                                     │
+│   2. useModeloAtualAnalytics                                        │
+│      └─► Adicionar campo "duracao" ao ModeloAtualCard              │
+│      └─► Mapear para DetailItem.duration                           │
+│                                                                     │
+│   3. DetailSheet Interface                                          │
+│      └─► Adicionar "duration?: number" ao DetailItem               │
+│                                                                     │
+│   4. IndicatorsTab                                                  │
+│      └─► Remover 'name' e 'phase' do baseColumns                   │
+│      └─► Adicionar 'duration' com formatador customizado           │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Resumo de Arquivos a Modificar
+### Mudanças por Arquivo
+
+#### 1. `src/components/planning/indicators/DetailSheet.tsx`
+
+**Adicionar campo `duration` à interface:**
+
+```typescript
+export interface DetailItem {
+  id: string;
+  name: string;           // Mantém no tipo, mas não exibe na tabela
+  company?: string;
+  phase?: string;         // Mantém no tipo, mas não exibe na tabela
+  date?: string;
+  value?: number;
+  reason?: string;
+  revenueRange?: string;
+  responsible?: string;
+  duration?: number;      // NOVO: duração em segundos
+}
+```
+
+**Adicionar formatador de duração:**
+
+```typescript
+export const columnFormatters = {
+  // ... existentes ...
+  duration: (seconds: number) => {
+    if (!seconds || seconds <= 0) return '-';
+    
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    
+    if (days > 0) {
+      return `${days}d ${hours}h`;
+    }
+    return `${hours}h`;
+  },
+};
+```
+
+---
+
+#### 2. `src/hooks/useModeloAtualAnalytics.ts`
+
+**Adicionar campo ao ModeloAtualCard:**
+
+```typescript
+export interface ModeloAtualCard {
+  // ... existentes ...
+  duracao: number;  // NOVO: "Duração (s)" do banco
+}
+```
+
+**Extrair duração ao parsear os dados:**
+
+```typescript
+cards.push({
+  // ... existentes ...
+  duracao: parseNumericValue(row['Duração (s)'] || 0),
+});
+```
+
+**Incluir na conversão para DetailItem:**
+
+```typescript
+const toDetailItem = (card: ModeloAtualCard): DetailItem => ({
+  // ... existentes ...
+  duration: card.duracao,
+});
+```
+
+---
+
+#### 3. `src/components/planning/IndicatorsTab.tsx`
+
+**Modificar `getColumnsForIndicator`:**
+
+Antes:
+```typescript
+const baseColumns = [
+  { key: 'name', label: 'Título' },
+  { key: 'company', label: 'Empresa/Contato' },
+  { key: 'phase', label: 'Fase', format: columnFormatters.phase },
+  { key: 'date', label: 'Data', format: columnFormatters.date },
+];
+```
+
+Depois:
+```typescript
+const baseColumns = [
+  { key: 'company', label: 'Empresa/Contato' },
+  { key: 'date', label: 'Data', format: columnFormatters.date },
+  { key: 'duration', label: 'Tempo na Fase', format: columnFormatters.duration },
+];
+```
+
+---
+
+### Visualização da Tabela
+
+**Antes:**
+
+| Título | Empresa/Contato | Fase | Data | Faixa Faturamento | Responsável | Pipefy |
+|--------|-----------------|------|------|-------------------|-------------|--------|
+| Lead ABC | Empresa X | MQL | 26/01/2026 | R$ 50k-200k | Pedro | 🔗 |
+
+**Depois:**
+
+| Empresa/Contato | Data | Tempo na Fase | Faixa Faturamento | Responsável | Pipefy |
+|-----------------|------|---------------|-------------------|-------------|--------|
+| Empresa X | 26/01/2026 | 3d 5h | R$ 50k-200k | Pedro | 🔗 |
+
+---
+
+### Formatação do Tempo
+
+| Duração | Exibição |
+|---------|----------|
+| 0 ou null | "-" |
+| 3600s (1h) | "1h" |
+| 7200s (2h) | "2h" |
+| 86400s (1 dia) | "1d 0h" |
+| 259200s (3 dias) | "3d 0h" |
+| 352800s (3d 18h) | "3d 18h" |
+
+---
+
+### Resumo de Arquivos
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `src/components/planning/IndicatorsTab.tsx` | Modificar | Importar hook, criar função de cálculo com closer, atualizar getMetaForIndicator e buildChartData |
+| `DetailSheet.tsx` | Modificar | Adicionar `duration` ao tipo e formatador |
+| `useModeloAtualAnalytics.ts` | Modificar | Extrair e mapear `Duração (s)` do banco |
+| `useO2TaxAnalytics.ts` | Modificar | Mesmo tratamento para O2 TAX |
+| `useExpansaoAnalytics.ts` | Modificar | Mesmo tratamento para Oxy Hacker/Franquia |
+| `IndicatorsTab.tsx` | Modificar | Remover colunas e adicionar Tempo na Fase |
 
 ---
 
-### Comportamento Esperado
+### Hooks de Analytics Afetados
 
-| Cenário | Resultado |
-|---------|-----------|
-| Usuário abre aba Indicadores | Metas mostram valores totais (sem filtro) |
-| Usuário seleciona "Pedro" no filtro | Metas ajustam para % do Pedro em cada mês/BU |
-| Usuário seleciona "Daniel" | Metas ajustam para % do Daniel em cada mês/BU |
-| Usuário seleciona ambos | Metas voltam para 100% |
-| Admin altera % no painel Admin | Próxima vez que abrir Indicadores, metas refletem mudança |
+Cada hook de analytics precisa:
+1. Adicionar `duracao` ao seu tipo de Card
+2. Extrair `row['Duração (s)']` dos dados do banco
+3. Incluir no `toDetailItem()` como `duration`
+
+Hooks:
+- `useModeloAtualAnalytics.ts` - Modelo Atual
+- `useO2TaxAnalytics.ts` - O2 TAX
+- `useExpansaoAnalytics.ts` - Oxy Hacker e Franquia
 
 ---
 
-### Consideração sobre BUs
+### Considerações
 
-O filtro de closer se aplica **apenas ao Modelo Atual** atualmente, pois:
-- O2 TAX, Oxy Hacker e Franquia não têm campo de closer nos dados
-- As porcentagens no Admin são configuradas por BU, então tecnicamente já estão preparadas
+1. **Fallback para duração:** Se a coluna "Duração (s)" estiver vazia ou for 0, exibir "-"
 
-**Para esta implementação inicial:**
-- Aplicar o filtro de closer nas metas do **Modelo Atual** apenas
-- As outras BUs usarão a meta total (não afetadas pelo filtro de closer)
-- Futuramente, se outras BUs tiverem closers, a estrutura já suporta
+2. **Cards ainda em andamento:** Se o card ainda está na fase (Saída = null), a duração pode ser 0 ou calculada desde a Entrada até agora. Por ora, usaremos o valor do banco como está.
+
+3. **Granularidade:** O formato "Xd Yh" é mais legível que segundos ou minutos exatos
 
