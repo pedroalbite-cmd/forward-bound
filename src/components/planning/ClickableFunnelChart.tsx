@@ -167,23 +167,24 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
 
   // Get detail items for an indicator based on selected BU
   const getItemsForIndicator = (indicator: IndicatorType): DetailItem[] => {
-    if (indicator === 'leads') {
-      // Leads don't have individual card data
-      return [];
-    }
-
-    // For Franquia
+    // For Franquia - no leads data available
     if (useExpansaoData) {
+      if (indicator === 'leads') return [];
       return franquiaAnalytics.getDetailItemsForIndicator(indicator);
     }
 
-    // For Oxy Hacker
+    // For Oxy Hacker - no leads data available
     if (useOxyHackerData) {
+      if (indicator === 'leads') return [];
       return oxyHackerAnalytics.getDetailItemsForIndicator(indicator);
     }
 
-    // For O2 TAX
+    // For O2 TAX - now supports leads
     if (useO2TaxData) {
+      if (indicator === 'leads') {
+        return o2TaxAnalytics.getDetailItemsForIndicator('leads');
+      }
+
       // Map O2 TAX indicator names
       const o2TaxIndicatorMap: Record<string, string> = {
         'mql': 'MQL',
@@ -218,6 +219,11 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
       
       // For consolidado, also add items from all BUs
       if (useConsolidado) {
+        // For leads, only Modelo Atual and O2 TAX have data
+        if (indicator === 'leads') {
+          const o2TaxLeadsItems = o2TaxAnalytics.getDetailItemsForIndicator('leads');
+          return [...items, ...o2TaxLeadsItems];
+        }
         const o2TaxPhaseMap: Record<string, string> = {
           'mql': 'MQL',
           'rm': 'RM',
@@ -252,8 +258,8 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
 
   // Handle stage click
   const handleStageClick = (stage: FunnelStage) => {
-    if (stage.indicator === 'leads' && stage.value === 0) {
-      // No drill-down for leads without data
+    if (stage.value === 0) {
+      // No drill-down for any indicator without data
       return;
     }
     
