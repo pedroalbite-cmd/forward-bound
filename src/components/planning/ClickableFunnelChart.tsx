@@ -66,7 +66,11 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedC
   const getFilteredModeloAtualQty = (indicator: IndicatorType): number => {
     if (selectedClosers?.length && selectedClosers.length > 0) {
       const cards = modeloAtualAnalytics.getCardsForIndicator(indicator);
-      return cards.filter(c => selectedClosers.includes(c.closer || '')).length;
+      const filteredCards = cards.filter(c => {
+        const closerValue = (c.closer || '').trim();
+        return closerValue && selectedClosers.includes(closerValue);
+      });
+      return filteredCards.length;
     }
     if (indicator === 'leads') return leadsQty;
     return getModeloAtualQty(indicator, startDate, endDate);
@@ -76,7 +80,10 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedC
   const getFilteredModeloAtualValue = (indicator: 'proposta' | 'venda'): number => {
     if (selectedClosers?.length && selectedClosers.length > 0) {
       const cards = modeloAtualAnalytics.getCardsForIndicator(indicator);
-      const filteredCards = cards.filter(c => selectedClosers.includes(c.closer || ''));
+      const filteredCards = cards.filter(c => {
+        const closerValue = (c.closer || '').trim();
+        return closerValue && selectedClosers.includes(closerValue);
+      });
       return filteredCards.reduce((sum, card) => sum + card.valor, 0);
     }
     return getModeloAtualValue(indicator, startDate, endDate);
@@ -211,7 +218,10 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedC
       let items: DetailItem[];
       if (selectedClosers?.length && selectedClosers.length > 0) {
         const cards = modeloAtualAnalytics.getCardsForIndicator(indicator);
-        const filteredCards = cards.filter(c => selectedClosers.includes(c.closer || ''));
+        const filteredCards = cards.filter(c => {
+          const closerValue = (c.closer || '').trim();
+          return closerValue && selectedClosers.includes(closerValue);
+        });
         items = filteredCards.map(modeloAtualAnalytics.toDetailItem);
       } else {
         items = modeloAtualAnalytics.getDetailItemsForIndicator(indicator);
