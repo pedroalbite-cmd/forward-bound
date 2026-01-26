@@ -152,8 +152,8 @@ export function IndicatorsTab() {
   const [selectedBUs, setSelectedBUs] = useState<BUType[]>(['modelo_atual', 'o2_tax', 'oxy_hacker', 'franquia']);
   // Multi-selection state for Closers (empty = all closers)
   const [selectedClosers, setSelectedClosers] = useState<string[]>([]);
-  const [startDate, setStartDate] = useState<Date>(startOfYear(new Date(currentYear, 0, 1)));
-  const [endDate, setEndDate] = useState<Date>(endOfYear(new Date(currentYear, 0, 1)));
+  const [startDate, setStartDate] = useState<Date>(startOfMonth(new Date()));
+  const [endDate, setEndDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('daily');
   
   // Detail sheet state for radial cards drill-down
