@@ -14,6 +14,7 @@ export interface DetailItem {
   reason?: string;
   revenueRange?: string;
   responsible?: string;
+  duration?: number; // Duration in seconds (from "Duração (s)" column)
 }
 
 interface DetailSheetProps {
@@ -109,4 +110,13 @@ export const columnFormatters = {
   reason: (value: string) => value ? (
     <Badge variant="secondary" className="font-normal">{value}</Badge>
   ) : '-',
+  duration: (seconds: number) => {
+    if (!seconds || seconds <= 0) return '-';
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    if (days > 0) {
+      return `${days}d ${hours}h`;
+    }
+    return `${hours}h`;
+  },
 };

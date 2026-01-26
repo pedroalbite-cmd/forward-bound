@@ -18,6 +18,7 @@ export interface ExpansaoCard {
   produto: string;
   responsavel: string | null;
   motivoPerda: string | null;
+  duracao: number; // Duration in seconds from "Duração (s)" column
 }
 
 // Map Pipefy phase names to indicator keys
@@ -128,6 +129,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
           produto: rowProduto,
           responsavel: row['Closer responsável'] || row['SDR responsável'] || null,
           motivoPerda: row['Motivo da perda'] || null,
+          duracao: row['Duração (s)'] ? parseFloat(row['Duração (s)']) : 0,
         };
         
         allMovements.push(movement);
@@ -192,6 +194,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
     value: card.valor,
     reason: card.motivoPerda || undefined,
     responsible: card.responsavel || undefined,
+    duration: card.duracao,
   });
 
   // Get detail items for an indicator
