@@ -57,10 +57,11 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
   
   // Get leads data from the same database source as charts (Modelo Atual)
   const leadsQty = getModeloAtualQty('leads', startDate, endDate);
+  const o2TaxLeadsQty = getO2TaxQty('leads', startDate, endDate);
   
   // Get totals based on selected BU - all BUs now use external db
   const totals = useConsolidado ? {
-    leads: leadsQty,
+    leads: leadsQty + o2TaxLeadsQty,
     mql: getModeloAtualQty('mql', startDate, endDate) + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate),
     rm: getModeloAtualQty('rm', startDate, endDate) + getO2TaxQty('rm', startDate, endDate) + getOxyHackerQty('rm', startDate, endDate) + getExpansaoQty('rm', startDate, endDate),
     rr: getModeloAtualQty('rr', startDate, endDate) + getO2TaxQty('rr', startDate, endDate) + getOxyHackerQty('rr', startDate, endDate) + getExpansaoQty('rr', startDate, endDate),
@@ -74,7 +75,7 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
     proposta: getExpansaoQty('proposta', startDate, endDate),
     venda: getExpansaoQty('venda', startDate, endDate),
   } : useO2TaxData ? {
-    leads: 0,
+    leads: o2TaxLeadsQty,
     mql: getO2TaxQty('mql', startDate, endDate),
     rm: getO2TaxQty('rm', startDate, endDate),
     rr: getO2TaxQty('rr', startDate, endDate),
