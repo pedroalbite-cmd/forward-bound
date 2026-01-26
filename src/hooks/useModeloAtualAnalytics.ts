@@ -12,6 +12,7 @@ export interface ModeloAtualCard {
   fase: string;
   faseDestino: string;
   dataEntrada: Date;
+  dataSaida: Date | null; // "Saída" from database
   valor: number;
   valorMRR: number;
   valorPontual: number;
@@ -20,7 +21,7 @@ export interface ModeloAtualCard {
   responsavel?: string;
   closer?: string; // Specifically the "Closer responsável" field for filtering
   faixa?: string;
-  duracao: number; // Duration in seconds from "Duração (s)" column
+  duracao: number; // Duration calculated dynamically from Entrada/Saída
 }
 
 // Map destination phases to indicators (based on pipefy_moviment_cfos table)
@@ -144,6 +145,17 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         const valorSetup = parseNumericValue(row['Valor Setup'] || row['valor_setup'] || 0);
         const valor = valorMRR + valorPontual + valorEducacao + valorSetup;
         
+        // Parse exit date and calculate duration dynamically
+        const dataSaida = parseDate(row['Saída']);
+        let duracao = 0;
+        if (dataSaida) {
+          // Card already left the phase: difference between Exit and Entry
+          duracao = Math.floor((dataSaida.getTime() - dataEntrada.getTime()) / 1000);
+        } else {
+          // Card still in phase: time since entry until now
+          duracao = Math.floor((Date.now() - dataEntrada.getTime()) / 1000);
+        }
+        
         cards.push({
           id,
           titulo: row['Título'] || row['titulo'] || row['Nome'] || '',
@@ -152,6 +164,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
           fase,
           faseDestino: fase, // Same as fase for pipefy_moviment_cfos
           dataEntrada,
+          dataSaida,
           valorMRR,
           valorPontual,
           valorEducacao,
@@ -160,7 +173,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
           closer: String(row['Closer responsável'] ?? '').trim(), // Closer specific field for filtering - normalized
           responsavel: String(row['SDR responsável'] || row['Responsável'] || row['responsavel'] || '').trim(),
           faixa: row['Faixa de faturamento mensal'] || row['Faixa'] || row['faixa'] || '',
-          duracao: parseNumericValue(row['Duração (s)'] || 0),
+          duracao,
         });
       }
 
