@@ -84,14 +84,14 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['o2tax-analytics', startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
-      // Use server-side filtering to ensure we get all records in the period
+      // Use server-side filtering with proper timestamps to include full days
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
         body: { 
           table: 'pipefy_cards_movements', 
           action: 'query_period',
-          startDate: startDate.toISOString().split('T')[0],
-          endDate: endDate.toISOString().split('T')[0],
-          limit: 10000 
+          startDate: startDate.toISOString().split('T')[0] + 'T00:00:00',
+          endDate: endDate.toISOString().split('T')[0] + 'T23:59:59',
+          limit: 15000 
         }
       });
 
@@ -104,14 +104,17 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
         return { cards: [] };
       }
 
-      // Group movements by card ID and get latest entry for each card
-      const cardMap = new Map<string, O2TaxCard>();
+      console.log(`[O2 TAX] Loaded ${responseData.data.length} movements for period`);
+
+      // Store ALL movements for drill-down (not just latest per card)
+      // This is critical because a card can have MQL movement early and RR movement later
+      const allMovements: O2TaxCard[] = [];
       
       for (const row of responseData.data) {
         const id = String(row.ID);
         const dataEntrada = parseDate(row['Entrada']);
         
-        // Only include cards with activity in the period
+        // Only include cards with valid entry date
         if (!dataEntrada) continue;
         
         const card: O2TaxCard = {
@@ -132,14 +135,11 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
         };
         card.valor = card.valorPontual + card.valorSetup + card.valorMRR;
         
-        // Keep the most recent entry for each card
-        const existing = cardMap.get(id);
-        if (!existing || card.dataEntrada > existing.dataEntrada) {
-          cardMap.set(id, card);
-        }
+        allMovements.push(card);
       }
 
-      return { cards: Array.from(cardMap.values()) };
+      console.log(`[O2 TAX] Processed ${allMovements.length} total movements`);
+      return { cards: allMovements };
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
