@@ -332,12 +332,19 @@ export function IndicatorsTab() {
   };
 
   // Get realized value for indicator - sums realized from selected BUs
-  // Note: Closer filter is applied at the drill-down level, not here (raw counts)
+  // Applies closer filter for Modelo Atual when closers are selected
   const getRealizedForIndicator = (indicator: IndicatorConfig) => {
     let total = 0;
     
     if (includesModeloAtual) {
-      total += getModeloAtualQty(indicator.key as ModeloAtualIndicator, startDate, endDate);
+      // When closer filter is active, use analytics hook to filter cards by responsavel
+      if (selectedClosers.length > 0) {
+        const cards = modeloAtualAnalytics.getCardsForIndicator(indicator.key);
+        const filteredCards = cards.filter(card => matchesCloserFilter(card.responsavel));
+        total += filteredCards.length;
+      } else {
+        total += getModeloAtualQty(indicator.key as ModeloAtualIndicator, startDate, endDate);
+      }
     }
     if (includesO2Tax) {
       total += getO2TaxQty(indicator.key as O2TaxIndicator, startDate, endDate);
