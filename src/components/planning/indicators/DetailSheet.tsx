@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ExternalLink } from "lucide-react";
 
 export interface DetailItem {
   id: string;
@@ -54,12 +55,13 @@ export function DetailSheet({ open, onOpenChange, title, description, items, col
                   {columns.map((col) => (
                     <TableHead key={col.key}>{col.label}</TableHead>
                   ))}
+                  <TableHead className="w-[60px] text-center">Pipefy</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={columns.length} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={columns.length + 1} className="text-center text-muted-foreground py-8">
                       Nenhum registro encontrado
                     </TableCell>
                   </TableRow>
@@ -74,6 +76,17 @@ export function DetailSheet({ open, onOpenChange, title, description, items, col
                           }
                         </TableCell>
                       ))}
+                      <TableCell className="text-center">
+                        <a
+                          href={`https://app.pipefy.com/open-cards/${item.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center p-2 rounded-md hover:bg-muted transition-colors"
+                          title="Abrir no Pipefy"
+                        >
+                          <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                        </a>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
