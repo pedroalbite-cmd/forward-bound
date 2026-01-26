@@ -584,22 +584,9 @@ export function IndicatorsTab() {
       return oxyHackerAnalytics.getDetailItemsForIndicator(indicatorKey);
     }
 
-    // For O2 TAX
+    // For O2 TAX - use analytics hook directly (now supports all indicators with date filtering)
     if (useO2TaxData) {
-      const o2TaxPhaseMap: Record<string, string> = {
-        'mql': 'MQL',
-        'rm': 'RM',
-        'rr': 'RR',
-        'proposta': 'Proposta',
-        'venda': 'Ganho',
-      };
-      
-      if (indicatorKey === 'venda') {
-        return o2TaxAnalytics.getDealsWon.cards.map(o2TaxAnalytics.toDetailItem);
-      }
-      
-      const phaseData = o2TaxAnalytics.getCardsByPhase.find(p => p.phase === o2TaxPhaseMap[indicatorKey]);
-      return phaseData?.cards.map(o2TaxAnalytics.toDetailItem) ?? [];
+      return o2TaxAnalytics.getDetailItemsForIndicator(indicatorKey);
     }
 
     // For Modelo Atual or Consolidado
@@ -607,22 +594,8 @@ export function IndicatorsTab() {
       const items = modeloAtualAnalytics.getDetailItemsForIndicator(indicatorKey);
       
       if (useConsolidado) {
-        const o2TaxPhaseMap: Record<string, string> = {
-          'mql': 'MQL',
-          'rm': 'RM',
-          'rr': 'RR',
-          'proposta': 'Proposta',
-          'venda': 'Ganho',
-        };
-        
-        // Add O2 TAX items
-        let o2TaxItems: DetailItem[] = [];
-        if (indicatorKey === 'venda') {
-          o2TaxItems = o2TaxAnalytics.getDealsWon.cards.map(o2TaxAnalytics.toDetailItem);
-        } else {
-          const phaseData = o2TaxAnalytics.getCardsByPhase.find(p => p.phase === o2TaxPhaseMap[indicatorKey]);
-          o2TaxItems = phaseData?.cards.map(o2TaxAnalytics.toDetailItem) ?? [];
-        }
+        // Add O2 TAX items - use hook with date filtering
+        const o2TaxItems = o2TaxAnalytics.getDetailItemsForIndicator(indicatorKey);
         
         // Add Franquia items
         const franquiaItems = franquiaAnalytics.getDetailItemsForIndicator(indicatorKey);
