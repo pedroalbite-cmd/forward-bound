@@ -84,8 +84,15 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['o2tax-analytics', startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
+      // Use server-side filtering to ensure we get all records in the period
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
-        body: { table: 'pipefy_cards_movements', action: 'preview', limit: 5000 }
+        body: { 
+          table: 'pipefy_cards_movements', 
+          action: 'query_period',
+          startDate: startDate.toISOString().split('T')[0],
+          endDate: endDate.toISOString().split('T')[0],
+          limit: 10000 
+        }
       });
 
       if (fetchError) {
