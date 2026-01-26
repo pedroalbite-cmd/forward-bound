@@ -10,6 +10,7 @@ export interface ExpansaoCard {
   fase: string;
   faseAtual: string;
   dataEntrada: Date;
+  dataSaida: Date | null; // "Saída" from database
   valor: number;
   taxaFranquia: number;
   valorMRR: number;
@@ -18,7 +19,7 @@ export interface ExpansaoCard {
   produto: string;
   responsavel: string | null;
   motivoPerda: string | null;
-  duracao: number; // Duration in seconds from "Duração (s)" column
+  duracao: number; // Duration calculated dynamically from Entrada/Saída
 }
 
 // Map Pipefy phase names to indicator keys
@@ -103,6 +104,17 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
         // Use fallback date like useExpansaoMetas to avoid skipping records
         const dataEntrada = parseDate(row['Entrada']) || new Date();
         
+        // Parse exit date and calculate duration dynamically
+        const dataSaida = parseDate(row['Saída']);
+        let duracao = 0;
+        if (dataSaida) {
+          // Card already left the phase: difference between Exit and Entry
+          duracao = Math.floor((dataSaida.getTime() - dataEntrada.getTime()) / 1000);
+        } else {
+          // Card still in phase: time since entry until now
+          duracao = Math.floor((Date.now() - dataEntrada.getTime()) / 1000);
+        }
+        
         const taxaFranquia = row['Taxa de franquia'] ? parseFloat(row['Taxa de franquia']) : 0;
         const valorMRR = row['Valor MRR'] ? parseFloat(row['Valor MRR']) : 0;
         const valorPontual = row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : 0;
@@ -121,6 +133,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
           fase: row['Fase'] || '',
           faseAtual: row['Fase Atual'] || '',
           dataEntrada,
+          dataSaida,
           valor,
           taxaFranquia,
           valorMRR,
@@ -129,7 +142,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
           produto: rowProduto,
           responsavel: row['Closer responsável'] || row['SDR responsável'] || null,
           motivoPerda: row['Motivo da perda'] || null,
-          duracao: row['Duração (s)'] ? parseFloat(row['Duração (s)']) : 0,
+          duracao,
         };
         
         allMovements.push(movement);

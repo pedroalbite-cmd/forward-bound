@@ -16,9 +16,10 @@ export interface O2TaxCard {
   responsavel: string | null;
   motivoPerda: string | null;
   dataEntrada: Date;
+  dataSaida: Date | null; // "Saída" from database
   contato: string | null;
   setor: string | null;
-  duracao: number; // Duration in seconds from "Duração (s)" column
+  duracao: number; // Duration calculated dynamically from Entrada/Saída
 }
 
 interface PhaseData {
@@ -118,6 +119,17 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
         // Only include cards with valid entry date
         if (!dataEntrada) continue;
         
+        // Parse exit date and calculate duration dynamically
+        const dataSaida = parseDate(row['Saída']);
+        let duracao = 0;
+        if (dataSaida) {
+          // Card already left the phase: difference between Exit and Entry
+          duracao = Math.floor((dataSaida.getTime() - dataEntrada.getTime()) / 1000);
+        } else {
+          // Card still in phase: time since entry until now
+          duracao = Math.floor((Date.now() - dataEntrada.getTime()) / 1000);
+        }
+        
         const card: O2TaxCard = {
           id,
           titulo: row['Título'] || '',
@@ -131,9 +143,10 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
           responsavel: row['Closer responsável'] || row['SDR responsável'] || null,
           motivoPerda: row['Motivo da perda'] || null,
           dataEntrada,
+          dataSaida,
           contato: row['Nome - Interlocução O2'] || row['Nome'] || null,
           setor: row['Setor'] || null,
-          duracao: row['Duração (s)'] ? parseFloat(row['Duração (s)']) : 0,
+          duracao,
         };
         card.valor = card.valorPontual + card.valorSetup + card.valorMRR;
         
