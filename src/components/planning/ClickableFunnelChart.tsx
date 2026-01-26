@@ -72,6 +72,16 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedC
     return getModeloAtualQty(indicator, startDate, endDate);
   };
 
+  // Helper to get filtered value for Modelo Atual when closers filter is active
+  const getFilteredModeloAtualValue = (indicator: 'proposta' | 'venda'): number => {
+    if (selectedClosers?.length && selectedClosers.length > 0) {
+      const cards = modeloAtualAnalytics.getCardsForIndicator(indicator);
+      const filteredCards = cards.filter(c => selectedClosers.includes(c.responsavel || ''));
+      return filteredCards.reduce((sum, card) => sum + card.valor, 0);
+    }
+    return getModeloAtualValue(indicator, startDate, endDate);
+  };
+
   // Get totals based on selected BU - all BUs now use external db
   const totals = useConsolidado ? {
     leads: getFilteredModeloAtualQty('leads') + o2TaxLeadsQty + oxyHackerLeadsQty + franquiaLeadsQty,
@@ -120,26 +130,26 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedC
     { number: 6, name: 'Contrato Assinado', indicator: 'venda', value: totals.venda, conversionPercent: totals.proposta > 0 ? (totals.venda / totals.proposta) * 100 : 0 },
   ];
 
-  // Calculate monetary values
+  // Calculate monetary values (filtered by closers when applicable)
   const propostaValue = useConsolidado
-    ? getModeloAtualValue('proposta', startDate, endDate) + getO2TaxValue('proposta', startDate, endDate) + getOxyHackerValue('proposta', startDate, endDate) + getExpansaoValue('proposta', startDate, endDate)
+    ? getFilteredModeloAtualValue('proposta') + getO2TaxValue('proposta', startDate, endDate) + getOxyHackerValue('proposta', startDate, endDate) + getExpansaoValue('proposta', startDate, endDate)
     : useExpansaoData 
       ? getExpansaoValue('proposta', startDate, endDate)
       : useO2TaxData 
         ? getO2TaxValue('proposta', startDate, endDate)
         : useOxyHackerData 
           ? getOxyHackerValue('proposta', startDate, endDate)
-          : getModeloAtualValue('proposta', startDate, endDate);
+          : getFilteredModeloAtualValue('proposta');
 
   const vendaValue = useConsolidado
-    ? getModeloAtualValue('venda', startDate, endDate) + getO2TaxValue('venda', startDate, endDate) + getOxyHackerValue('venda', startDate, endDate) + getExpansaoValue('venda', startDate, endDate)
+    ? getFilteredModeloAtualValue('venda') + getO2TaxValue('venda', startDate, endDate) + getOxyHackerValue('venda', startDate, endDate) + getExpansaoValue('venda', startDate, endDate)
     : useExpansaoData 
       ? getExpansaoValue('venda', startDate, endDate)
       : useO2TaxData 
         ? getO2TaxValue('venda', startDate, endDate)
         : useOxyHackerData 
           ? getOxyHackerValue('venda', startDate, endDate)
-          : getModeloAtualValue('venda', startDate, endDate);
+          : getFilteredModeloAtualValue('venda');
 
   // Width percentages for funnel visualization (6 stages now)
   const widthPercentages = [100, 85, 70, 55, 45, 35];
