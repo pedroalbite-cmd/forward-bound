@@ -168,10 +168,12 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
   // Get columns for indicator type
   const getColumnsForIndicator = (indicator: IndicatorType) => {
     const baseColumns: { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] = [
+      { key: 'product', label: 'Produto', format: columnFormatters.product },
       { key: 'name', label: 'Título' },
       { key: 'company', label: 'Empresa/Contato' },
       { key: 'phase', label: 'Fase', format: columnFormatters.phase },
       { key: 'date', label: 'Data', format: columnFormatters.date },
+      { key: 'duration', label: 'Tempo na Fase', format: columnFormatters.duration },
     ];
 
     if (indicator === 'proposta' || indicator === 'venda') {

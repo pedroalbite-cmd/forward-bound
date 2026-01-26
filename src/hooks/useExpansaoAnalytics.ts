@@ -208,6 +208,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
     reason: card.motivoPerda || undefined,
     responsible: card.responsavel || undefined,
     duration: card.duracao,
+    product: card.produto, // Franquia or Oxy Hacker
   });
 
   // Get detail items for an indicator
