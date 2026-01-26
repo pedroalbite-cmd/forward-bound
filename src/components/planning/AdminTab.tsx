@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Pencil, Save, Shield, Trash2, User } from 'lucide-react';
+import { Loader2, Pencil, Save, Shield, Trash2, User, Target } from 'lucide-react';
 import { CreateUserForm } from './CreateUserForm';
 import { EditUserDialog } from './EditUserDialog';
 import { DeleteUserDialog } from './DeleteUserDialog';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
-
+import { CloserMetasTab } from './CloserMetasTab';
 
 const TAB_OPTIONS: { key: TabKey; label: string }[] = [
   { key: 'context', label: 'Macro 2025' },
@@ -126,26 +127,38 @@ export function AdminTab() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-2xl font-display font-bold text-gradient mb-2">
-            Gerenciar Usuários
-          </h2>
-          <p className="text-muted-foreground">
-            Controle quais abas cada usuário pode acessar
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <ChangePasswordDialog />
-          <CreateUserForm 
-            onCreateUser={handleCreateUser}
-            isLoading={createUser.isPending}
-          />
-        </div>
-      </div>
+    <Tabs defaultValue="users" className="space-y-6">
+      <TabsList>
+        <TabsTrigger value="users" className="gap-2">
+          <User className="h-4 w-4" />
+          Usuários
+        </TabsTrigger>
+        <TabsTrigger value="closer-metas" className="gap-2">
+          <Target className="h-4 w-4" />
+          Metas por Closer
+        </TabsTrigger>
+      </TabsList>
 
-      <div className="grid gap-4">
+      <TabsContent value="users" className="space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h2 className="text-2xl font-display font-bold text-gradient mb-2">
+              Gerenciar Usuários
+            </h2>
+            <p className="text-muted-foreground">
+              Controle quais abas cada usuário pode acessar
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <ChangePasswordDialog />
+            <CreateUserForm 
+              onCreateUser={handleCreateUser}
+              isLoading={createUser.isPending}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4">
         {users.map(user => {
           const isEditing = editingUser === user.id;
           const isAdmin = user.role === 'admin';
@@ -291,6 +304,11 @@ export function AdminTab() {
         user={selectedUser}
         onDelete={handleDeleteUser}
       />
-    </div>
+      </TabsContent>
+
+      <TabsContent value="closer-metas">
+        <CloserMetasTab />
+      </TabsContent>
+    </Tabs>
   );
 }

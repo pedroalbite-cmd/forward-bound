@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      closer_metas: {
+        Row: {
+          bu: string
+          closer: string
+          created_at: string
+          id: string
+          month: string
+          percentage: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          bu: string
+          closer: string
+          created_at?: string
+          id?: string
+          month: string
+          percentage?: number
+          updated_at?: string
+          year?: number
+        }
+        Update: {
+          bu?: string
+          closer?: string
+          created_at?: string
+          id?: string
+          month?: string
+          percentage?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
       funnel_realized: {
         Row: {
           bu: string
