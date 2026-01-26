@@ -1,50 +1,48 @@
 
+## Plano: Ajustar Filtro de CFOs para Modelo Atual
 
-## Plano: Filtro de Closer com Apenas Pedro e Daniel
+### Problema Identificado
 
-### Objetivo
+O filtro de closers não está funcionando corretamente porque os valores configurados ("Pedro" e "Daniel") não correspondem aos dados do banco de dados externo `pipefy_moviment_cfos`:
 
-Substituir a extração dinâmica de closers por uma lista fixa contendo apenas:
-- **Pedro**
-- **Daniel**
+| Valor no Filtro | Valor no Banco |
+|-----------------|----------------|
+| `Pedro` | `Pedro Albite` |
+| `Daniel` | `Daniel Trindade` |
+
+A função `matchesCloserFilter` faz comparação exata (`includes`), então "Pedro" ≠ "Pedro Albite".
+
+---
+
+### Solução
+
+Atualizar os valores do filtro para usar os nomes completos exatamente como aparecem na coluna `"Closer responsável"` do banco de dados.
 
 ---
 
 ### Arquivo a Modificar
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/planning/IndicatorsTab.tsx` | Substituir `availableClosers` dinâmico por lista fixa |
+| Arquivo | Linha(s) | Mudança |
+|---------|----------|---------|
+| `src/components/planning/IndicatorsTab.tsx` | 191-195 | Substituir valores do filtro |
 
 ---
 
 ### Mudança Técnica
 
-**Linhas 191-229** - Substituir o `useMemo` por constante fixa:
-
+**Antes (linha 191-195):**
 ```typescript
-// ANTES (extração dinâmica)
-const availableClosers = useMemo((): MultiSelectOption[] => {
-  const closersSet = new Set<string>();
-  
-  // Modelo Atual
-  if (selectedBUs.includes('modelo_atual')) {
-    modeloAtualAnalytics.cards?.forEach(c => {
-      if (c.responsavel) closersSet.add(c.responsavel);
-    });
-  }
-  // ... lógica complexa de extração
-  
-  return Array.from(closersSet)
-    .filter(Boolean)
-    .sort()
-    .map(c => ({ value: c, label: c }));
-}, [modeloAtualAnalytics.cards, ...]);
-
-// DEPOIS (lista fixa)
 const availableClosers: MultiSelectOption[] = [
   { value: 'Pedro', label: 'Pedro' },
   { value: 'Daniel', label: 'Daniel' },
+];
+```
+
+**Depois:**
+```typescript
+const availableClosers: MultiSelectOption[] = [
+  { value: 'Pedro Albite', label: 'Pedro' },
+  { value: 'Daniel Trindade', label: 'Daniel' },
 ];
 ```
 
@@ -52,16 +50,13 @@ const availableClosers: MultiSelectOption[] = [
 
 ### Resultado
 
-O dropdown de Closers mostrará apenas:
-- [ ] Todos
-- [ ] Pedro
-- [ ] Daniel
-
-E filtrará os dados com base nesses nomes exatos.
+- O dropdown continua exibindo apenas "Pedro" e "Daniel" (labels amigáveis)
+- O filtro agora usa os valores corretos que correspondem exatamente aos dados do banco
+- Cards com `"Closer responsável": "Pedro Albite"` serão filtrados corretamente ao selecionar "Pedro"
+- Cards com `"Closer responsável": "Daniel Trindade"` serão filtrados corretamente ao selecionar "Daniel"
 
 ---
 
-### Observação
+### Observação sobre Escopo
 
-Se os nomes nos dados do Pipefy forem diferentes (ex: "Pedro Albite" ou "Daniel Trindade"), precisarei ajustar os valores para corresponder exatamente. Me avise se precisar verificar os nomes exatos nos dados.
-
+O filtro está configurado para funcionar apenas com dados do **Modelo Atual**, que usa a tabela `pipefy_moviment_cfos`. As outras BUs (O2 TAX, Franquia, Oxy Hacker) podem ter estruturas de responsáveis diferentes, mas como o pedido é focar nos CFOs, essa configuração atende ao requisito.
