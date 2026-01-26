@@ -6,6 +6,9 @@ import { useModeloAtualMetas, ChartGrouping } from "@/hooks/useModeloAtualMetas"
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
+import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
+import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
+import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { useMediaMetas, FunnelDataItem } from "@/contexts/MediaMetasContext";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
 import { ExternalLink } from "lucide-react";
@@ -34,9 +37,17 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
   // O2 TAX leads data
   const { getGroupedData: getO2TaxGroupedData, getQtyForPeriod: getO2TaxQty } = useO2TaxMetas(startDate, endDate);
   
+  // Oxy Hacker leads data
+  const { getGroupedData: getOxyHackerGroupedData, getQtyForPeriod: getOxyHackerQty } = useOxyHackerMetas(startDate, endDate);
+  
+  // Franquia leads data
+  const { getGroupedData: getFranquiaGroupedData, getQtyForPeriod: getFranquiaQty } = useExpansaoMetas(startDate, endDate);
+  
   // Analytics hooks for drill-down details
   const modeloAtualAnalytics = useModeloAtualAnalytics(startDate, endDate);
   const o2TaxAnalytics = useO2TaxAnalytics(startDate, endDate);
+  const oxyHackerAnalytics = useExpansaoAnalytics(startDate, endDate, 'Oxy Hacker');
+  const franquiaAnalytics = useExpansaoAnalytics(startDate, endDate, 'Franquia');
   
   // Get funnelData from MediaMetasContext for dynamic metas
   const { funnelData } = useMediaMetas();
@@ -77,6 +88,8 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
   const useConsolidado = selectedBU === 'all';
   const useModeloAtual = selectedBU === 'modelo_atual';
   const useO2Tax = selectedBU === 'o2_tax';
+  const useOxyHacker = selectedBU === 'oxy_hacker';
+  const useFranquia = selectedBU === 'franquia';
   
   // Determine grouping based on period length
   const daysInPeriod = differenceInDays(endDate, startDate) + 1;
@@ -92,17 +105,27 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
       return getO2TaxGroupedData('leads', startDate, endDate, grouping);
     }
     
+    if (useOxyHacker) {
+      return getOxyHackerGroupedData('leads', startDate, endDate, grouping);
+    }
+    
+    if (useFranquia) {
+      return getFranquiaGroupedData('leads', startDate, endDate, grouping);
+    }
+    
     if (useConsolidado) {
-      // Sum Modelo Atual + O2 TAX
+      // Sum all BUs: Modelo Atual + O2 TAX + Oxy Hacker + Franquia
       const modeloAtual = getModeloAtualGroupedData('leads', startDate, endDate, grouping);
       const o2Tax = getO2TaxGroupedData('leads', startDate, endDate, grouping);
+      const oxyHacker = getOxyHackerGroupedData('leads', startDate, endDate, grouping);
+      const franquia = getFranquiaGroupedData('leads', startDate, endDate, grouping);
       return {
-        qty: modeloAtual.qty.map((v, i) => v + (o2Tax.qty[i] || 0)),
-        meta: modeloAtual.meta.map((v, i) => v + (o2Tax.meta[i] || 0)),
+        qty: modeloAtual.qty.map((v, i) => v + (o2Tax.qty[i] || 0) + (oxyHacker.qty[i] || 0) + (franquia.qty[i] || 0)),
+        meta: modeloAtual.meta.map((v, i) => v + (o2Tax.meta[i] || 0) + (oxyHacker.meta[i] || 0) + (franquia.meta[i] || 0)),
       };
     }
     
-    // External BUs (Franquia, Oxy Hacker) don't have leads tracking yet - return empty arrays
+    // Fallback - return empty arrays
     const numPeriods = grouping === 'daily' 
       ? daysInPeriod 
       : grouping === 'weekly' 
@@ -118,22 +141,30 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
   const leadsData = getChartData();
   
   // Get total meta from funnelData (Plan Growth)
-  // For O2 TAX, we use estimated 50 leads/month = 600/year
+  // Annual metas: O2 TAX 600, Oxy Hacker 360, Franquia 432
   const periodMeta = useConsolidado 
-    ? calcularMetaLeads(funnelData?.modeloAtual) + Math.round((600 / 365) * daysInPeriod)
+    ? calcularMetaLeads(funnelData?.modeloAtual) + Math.round((600 / 365) * daysInPeriod) + Math.round((360 / 365) * daysInPeriod) + Math.round((432 / 365) * daysInPeriod)
     : useModeloAtual
     ? calcularMetaLeads(funnelData?.modeloAtual)
     : useO2Tax
     ? Math.round((600 / 365) * daysInPeriod) // O2 TAX: 600 leads/year
-    : 0; // Other external BUs don't have leads meta yet
+    : useOxyHacker
+    ? Math.round((360 / 365) * daysInPeriod) // Oxy Hacker: 360 leads/year
+    : useFranquia
+    ? Math.round((432 / 365) * daysInPeriod) // Franquia: 432 leads/year
+    : 0;
     
   // Get total realized from database
   const totalRealized = useConsolidado
-    ? getModeloAtualQty('leads', startDate, endDate) + getO2TaxQty('leads', startDate, endDate)
+    ? getModeloAtualQty('leads', startDate, endDate) + getO2TaxQty('leads', startDate, endDate) + getOxyHackerQty('leads', startDate, endDate) + getFranquiaQty('leads', startDate, endDate)
     : useModeloAtual
     ? getModeloAtualQty('leads', startDate, endDate)
     : useO2Tax
     ? getO2TaxQty('leads', startDate, endDate)
+    : useOxyHacker
+    ? getOxyHackerQty('leads', startDate, endDate)
+    : useFranquia
+    ? getFranquiaQty('leads', startDate, endDate)
     : 0;
 
   // Build chart data with proper date labels
@@ -201,11 +232,17 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
       allItems = modeloAtualAnalytics.getDetailItemsForIndicator('leads');
     } else if (useO2Tax) {
       allItems = o2TaxAnalytics.getDetailItemsForIndicator('leads');
+    } else if (useOxyHacker) {
+      allItems = oxyHackerAnalytics.getDetailItemsForIndicator('leads');
+    } else if (useFranquia) {
+      allItems = franquiaAnalytics.getDetailItemsForIndicator('leads');
     } else if (useConsolidado) {
       // Aggregate from all sources
       allItems = [
         ...modeloAtualAnalytics.getDetailItemsForIndicator('leads'),
         ...o2TaxAnalytics.getDetailItemsForIndicator('leads'),
+        ...oxyHackerAnalytics.getDetailItemsForIndicator('leads'),
+        ...franquiaAnalytics.getDetailItemsForIndicator('leads'),
       ];
     }
     
@@ -244,7 +281,7 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
     return null;
   };
 
-  const isClickable = useModeloAtual || useO2Tax || useConsolidado;
+  const isClickable = useModeloAtual || useO2Tax || useOxyHacker || useFranquia || useConsolidado;
 
   return (
     <>
