@@ -58,17 +58,19 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
   // Get leads data from the same database source as charts (Modelo Atual)
   const leadsQty = getModeloAtualQty('leads', startDate, endDate);
   const o2TaxLeadsQty = getO2TaxQty('leads', startDate, endDate);
+  const oxyHackerLeadsQty = getOxyHackerQty('leads', startDate, endDate);
+  const franquiaLeadsQty = getExpansaoQty('leads', startDate, endDate);
   
   // Get totals based on selected BU - all BUs now use external db
   const totals = useConsolidado ? {
-    leads: leadsQty + o2TaxLeadsQty,
+    leads: leadsQty + o2TaxLeadsQty + oxyHackerLeadsQty + franquiaLeadsQty,
     mql: getModeloAtualQty('mql', startDate, endDate) + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate),
     rm: getModeloAtualQty('rm', startDate, endDate) + getO2TaxQty('rm', startDate, endDate) + getOxyHackerQty('rm', startDate, endDate) + getExpansaoQty('rm', startDate, endDate),
     rr: getModeloAtualQty('rr', startDate, endDate) + getO2TaxQty('rr', startDate, endDate) + getOxyHackerQty('rr', startDate, endDate) + getExpansaoQty('rr', startDate, endDate),
     proposta: getModeloAtualQty('proposta', startDate, endDate) + getO2TaxQty('proposta', startDate, endDate) + getOxyHackerQty('proposta', startDate, endDate) + getExpansaoQty('proposta', startDate, endDate),
     venda: getModeloAtualQty('venda', startDate, endDate) + getO2TaxQty('venda', startDate, endDate) + getOxyHackerQty('venda', startDate, endDate) + getExpansaoQty('venda', startDate, endDate),
   } : useExpansaoData ? {
-    leads: 0,
+    leads: franquiaLeadsQty,
     mql: getExpansaoQty('mql', startDate, endDate),
     rm: getExpansaoQty('rm', startDate, endDate),
     rr: getExpansaoQty('rr', startDate, endDate),
@@ -82,7 +84,7 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
     proposta: getO2TaxQty('proposta', startDate, endDate),
     venda: getO2TaxQty('venda', startDate, endDate),
   } : useOxyHackerData ? {
-    leads: 0,
+    leads: oxyHackerLeadsQty,
     mql: getOxyHackerQty('mql', startDate, endDate),
     rm: getOxyHackerQty('rm', startDate, endDate),
     rr: getOxyHackerQty('rr', startDate, endDate),
@@ -167,15 +169,13 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
 
   // Get detail items for an indicator based on selected BU
   const getItemsForIndicator = (indicator: IndicatorType): DetailItem[] => {
-    // For Franquia - no leads data available
+    // For Franquia
     if (useExpansaoData) {
-      if (indicator === 'leads') return [];
       return franquiaAnalytics.getDetailItemsForIndicator(indicator);
     }
 
-    // For Oxy Hacker - no leads data available
+    // For Oxy Hacker
     if (useOxyHackerData) {
-      if (indicator === 'leads') return [];
       return oxyHackerAnalytics.getDetailItemsForIndicator(indicator);
     }
 

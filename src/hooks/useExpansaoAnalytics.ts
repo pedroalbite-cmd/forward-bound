@@ -69,8 +69,15 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
   const { data, isLoading, error } = useQuery({
     queryKey: ['expansao-analytics', produto, startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
+      // Use server-side date filtering for accurate period data
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
-        body: { table: 'pipefy_cards_movements_expansao', action: 'preview', limit: 5000 }
+        body: { 
+          table: 'pipefy_cards_movements_expansao', 
+          action: 'query_period',
+          startDate: startDate.toISOString().split('T')[0] + 'T00:00:00',
+          endDate: endDate.toISOString().split('T')[0] + 'T23:59:59',
+          limit: 10000 
+        }
       });
 
       if (fetchError) {
