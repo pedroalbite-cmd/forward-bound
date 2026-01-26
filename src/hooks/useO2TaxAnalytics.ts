@@ -18,6 +18,7 @@ export interface O2TaxCard {
   dataEntrada: Date;
   contato: string | null;
   setor: string | null;
+  duracao: number; // Duration in seconds from "Duração (s)" column
 }
 
 interface PhaseData {
@@ -132,6 +133,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
           dataEntrada,
           contato: row['Nome - Interlocução O2'] || row['Nome'] || null,
           setor: row['Setor'] || null,
+          duracao: row['Duração (s)'] ? parseFloat(row['Duração (s)']) : 0,
         };
         card.valor = card.valorPontual + card.valorSetup + card.valorMRR;
         
@@ -487,6 +489,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     reason: card.motivoPerda || undefined,
     revenueRange: card.faixa || undefined,
     responsible: card.responsavel || undefined,
+    duration: card.duracao,
   });
 
   return {

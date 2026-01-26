@@ -20,6 +20,7 @@ export interface ModeloAtualCard {
   responsavel?: string;
   closer?: string; // Specifically the "Closer responsável" field for filtering
   faixa?: string;
+  duracao: number; // Duration in seconds from "Duração (s)" column
 }
 
 // Map destination phases to indicators (based on pipefy_moviment_cfos table)
@@ -159,6 +160,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
           closer: String(row['Closer responsável'] ?? '').trim(), // Closer specific field for filtering - normalized
           responsavel: String(row['SDR responsável'] || row['Responsável'] || row['responsavel'] || '').trim(),
           faixa: row['Faixa de faturamento mensal'] || row['Faixa'] || row['faixa'] || '',
+          duracao: parseNumericValue(row['Duração (s)'] || 0),
         });
       }
 
@@ -226,6 +228,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     value: card.valor,
     revenueRange: card.faixa || undefined,
     responsible: card.closer || card.responsavel || undefined, // Prioritize closer for display
+    duration: card.duracao,
   });
 
   // Get detail items for a specific indicator
