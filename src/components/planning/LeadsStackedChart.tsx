@@ -19,6 +19,7 @@ interface LeadsStackedChartProps {
   startDate: Date;
   endDate: Date;
   selectedBU: BUType | 'all';
+  selectedBUs?: BUType[];
   selectedClosers?: string[];
 }
 
@@ -27,7 +28,7 @@ const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Ma
 // Month name mapping for funnelData lookup
 const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedClosers }: LeadsStackedChartProps) {
+export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs, selectedClosers }: LeadsStackedChartProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetItems, setSheetItems] = useState<DetailItem[]>([]);
   const [sheetDescription, setSheetDescription] = useState("");
@@ -85,104 +86,104 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedClos
     return Math.round(total);
   };
   
-  // Check which BU we're showing
-  const useConsolidado = selectedBU === 'all';
-  const useModeloAtual = selectedBU === 'modelo_atual';
-  const useO2Tax = selectedBU === 'o2_tax';
-  const useOxyHacker = selectedBU === 'oxy_hacker';
-  const useFranquia = selectedBU === 'franquia';
+  // Derive which BUs are included from selectedBUs array (or fallback to selectedBU)
+  const selectedBUsArray = selectedBUs || (selectedBU === 'all' 
+    ? ['modelo_atual', 'o2_tax', 'oxy_hacker', 'franquia'] as BUType[]
+    : [selectedBU]);
+  
+  const includesModeloAtual = selectedBUsArray.includes('modelo_atual');
+  const includesO2Tax = selectedBUsArray.includes('o2_tax');
+  const includesOxyHacker = selectedBUsArray.includes('oxy_hacker');
+  const includesFranquia = selectedBUsArray.includes('franquia');
+  
+  // Check if single BU selected
+  const hasSingleBU = selectedBUsArray.length === 1;
+  const useModeloAtual = hasSingleBU && selectedBUsArray[0] === 'modelo_atual';
+  const useConsolidado = selectedBUsArray.length > 1;
+  const useO2Tax = hasSingleBU && selectedBUsArray[0] === 'o2_tax';
+  const useOxyHacker = hasSingleBU && selectedBUsArray[0] === 'oxy_hacker';
+  const useFranquia = hasSingleBU && selectedBUsArray[0] === 'franquia';
   
   // Determine grouping based on period length
   const daysInPeriod = differenceInDays(endDate, startDate) + 1;
   const grouping: ChartGrouping = daysInPeriod <= 31 ? 'daily' : daysInPeriod <= 90 ? 'weekly' : 'monthly';
 
-  // Get grouped data from database for each BU
+  // Get grouped data based on selected BUs - for chart bars, use primary BU or aggregate
   const getChartData = () => {
-    if (useModeloAtual) {
-      return getModeloAtualGroupedData('leads', startDate, endDate, grouping);
+    if (hasSingleBU) {
+      if (useModeloAtual) return getModeloAtualGroupedData('leads', startDate, endDate, grouping);
+      if (useO2Tax) return getO2TaxGroupedData('leads', startDate, endDate, grouping);
+      if (useOxyHacker) return getOxyHackerGroupedData('leads', startDate, endDate, grouping);
+      if (useFranquia) return getFranquiaGroupedData('leads', startDate, endDate, grouping);
     }
     
-    if (useO2Tax) {
-      return getO2TaxGroupedData('leads', startDate, endDate, grouping);
-    }
-    
-    if (useOxyHacker) {
-      return getOxyHackerGroupedData('leads', startDate, endDate, grouping);
-    }
-    
-    if (useFranquia) {
-      return getFranquiaGroupedData('leads', startDate, endDate, grouping);
-    }
-    
-    if (useConsolidado) {
-      // Sum all BUs: Modelo Atual + O2 TAX + Oxy Hacker + Franquia
-      const modeloAtual = getModeloAtualGroupedData('leads', startDate, endDate, grouping);
-      const o2Tax = getO2TaxGroupedData('leads', startDate, endDate, grouping);
-      const oxyHacker = getOxyHackerGroupedData('leads', startDate, endDate, grouping);
-      const franquia = getFranquiaGroupedData('leads', startDate, endDate, grouping);
-      return {
-        qty: modeloAtual.qty.map((v, i) => v + (o2Tax.qty[i] || 0) + (oxyHacker.qty[i] || 0) + (franquia.qty[i] || 0)),
-        meta: modeloAtual.meta.map((v, i) => v + (o2Tax.meta[i] || 0) + (oxyHacker.meta[i] || 0) + (franquia.meta[i] || 0)),
-      };
-    }
-    
-    // Fallback - return empty arrays
+    // Multi-BU: sum grouped data from selected BUs
     const numPeriods = grouping === 'daily' 
       ? daysInPeriod 
       : grouping === 'weekly' 
       ? Math.ceil(daysInPeriod / 7) 
       : eachMonthOfInterval({ start: startDate, end: endDate }).length;
     
-    return {
-      qty: Array(numPeriods).fill(0),
-      meta: Array(numPeriods).fill(0),
-    };
+    const qty = Array(numPeriods).fill(0);
+    const meta = Array(numPeriods).fill(0);
+    
+    if (includesModeloAtual) {
+      const data = getModeloAtualGroupedData('leads', startDate, endDate, grouping);
+      data.qty.forEach((v, i) => { qty[i] += v; });
+      data.meta.forEach((v, i) => { meta[i] += v; });
+    }
+    if (includesO2Tax) {
+      const data = getO2TaxGroupedData('leads', startDate, endDate, grouping);
+      data.qty.forEach((v, i) => { qty[i] += v; });
+      data.meta.forEach((v, i) => { meta[i] += v; });
+    }
+    if (includesOxyHacker) {
+      const data = getOxyHackerGroupedData('leads', startDate, endDate, grouping);
+      data.qty.forEach((v, i) => { qty[i] += v; });
+      data.meta.forEach((v, i) => { meta[i] += v; });
+    }
+    if (includesFranquia) {
+      const data = getFranquiaGroupedData('leads', startDate, endDate, grouping);
+      data.qty.forEach((v, i) => { qty[i] += v; });
+      data.meta.forEach((v, i) => { meta[i] += v; });
+    }
+    
+    return { qty, meta };
   };
   
   const leadsData = getChartData();
   
-  // Get total meta from funnelData (Plan Growth)
+  // Get total meta from funnelData based on selected BUs
   // Annual metas: O2 TAX 600, Oxy Hacker 360, Franquia 432
-  const periodMeta = useConsolidado 
-    ? calcularMetaLeads(funnelData?.modeloAtual) + Math.round((600 / 365) * daysInPeriod) + Math.round((360 / 365) * daysInPeriod) + Math.round((432 / 365) * daysInPeriod)
-    : useModeloAtual
-    ? calcularMetaLeads(funnelData?.modeloAtual)
-    : useO2Tax
-    ? Math.round((600 / 365) * daysInPeriod) // O2 TAX: 600 leads/year
-    : useOxyHacker
-    ? Math.round((360 / 365) * daysInPeriod) // Oxy Hacker: 360 leads/year
-    : useFranquia
-    ? Math.round((432 / 365) * daysInPeriod) // Franquia: 432 leads/year
-    : 0;
+  const periodMeta = 
+    (includesModeloAtual ? calcularMetaLeads(funnelData?.modeloAtual) : 0) +
+    (includesO2Tax ? Math.round((600 / 365) * daysInPeriod) : 0) +
+    (includesOxyHacker ? Math.round((360 / 365) * daysInPeriod) : 0) +
+    (includesFranquia ? Math.round((432 / 365) * daysInPeriod) : 0);
     
-  // Get total realized from database - apply closer filter for Modelo Atual if active
+  // Get total realized based on selected BUs
   const getTotalRealized = (): number => {
-    if (useO2Tax) return getO2TaxQty('leads', startDate, endDate);
-    if (useOxyHacker) return getOxyHackerQty('leads', startDate, endDate);
-    if (useFranquia) return getFranquiaQty('leads', startDate, endDate);
+    let total = 0;
     
-    // For Modelo Atual or Consolidado, apply closer filter if active
-    if (selectedClosers?.length && selectedClosers.length > 0) {
-      const cards = modeloAtualAnalytics.getCardsForIndicator('leads');
-      const filteredCards = cards.filter(c => {
-        const closerValue = (c.closer || '').trim();
-        return closerValue && selectedClosers.includes(closerValue);
-      });
-      const modeloAtualFiltered = filteredCards.length;
-      
-      if (useConsolidado) {
-        // Add other BUs (not filtered by closers)
-        return modeloAtualFiltered + getO2TaxQty('leads', startDate, endDate) + getOxyHackerQty('leads', startDate, endDate) + getFranquiaQty('leads', startDate, endDate);
+    // For Modelo Atual, apply closer filter if active
+    if (includesModeloAtual) {
+      if (selectedClosers?.length && selectedClosers.length > 0) {
+        const cards = modeloAtualAnalytics.getCardsForIndicator('leads');
+        const filteredCards = cards.filter(c => {
+          const closerValue = (c.closer || '').trim();
+          return closerValue && selectedClosers.includes(closerValue);
+        });
+        total += filteredCards.length;
+      } else {
+        total += getModeloAtualQty('leads', startDate, endDate);
       }
-      return modeloAtualFiltered;
     }
     
-    // No filter - use regular totals
-    if (useConsolidado) {
-      return getModeloAtualQty('leads', startDate, endDate) + getO2TaxQty('leads', startDate, endDate) + getOxyHackerQty('leads', startDate, endDate) + getFranquiaQty('leads', startDate, endDate);
-    }
-    if (useModeloAtual) return getModeloAtualQty('leads', startDate, endDate);
-    return 0;
+    if (includesO2Tax) total += getO2TaxQty('leads', startDate, endDate);
+    if (includesOxyHacker) total += getOxyHackerQty('leads', startDate, endDate);
+    if (includesFranquia) total += getFranquiaQty('leads', startDate, endDate);
+    
+    return total;
   };
   
   const totalRealized = getTotalRealized();
@@ -245,25 +246,33 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedClos
       periodLabel = format(clickedDate, "MMMM", { locale: ptBR });
     }
     
-    // Get all items based on selected BU
+    // Get items based on selected BUs
     let allItems: DetailItem[] = [];
     
-    if (useModeloAtual) {
-      allItems = modeloAtualAnalytics.getDetailItemsForIndicator('leads');
-    } else if (useO2Tax) {
-      allItems = o2TaxAnalytics.getDetailItemsForIndicator('leads');
-    } else if (useOxyHacker) {
-      allItems = oxyHackerAnalytics.getDetailItemsForIndicator('leads');
-    } else if (useFranquia) {
-      allItems = franquiaAnalytics.getDetailItemsForIndicator('leads');
-    } else if (useConsolidado) {
-      // Aggregate from all sources
-      allItems = [
-        ...modeloAtualAnalytics.getDetailItemsForIndicator('leads'),
-        ...o2TaxAnalytics.getDetailItemsForIndicator('leads'),
-        ...oxyHackerAnalytics.getDetailItemsForIndicator('leads'),
-        ...franquiaAnalytics.getDetailItemsForIndicator('leads'),
-      ];
+    if (hasSingleBU) {
+      if (useModeloAtual) {
+        allItems = modeloAtualAnalytics.getDetailItemsForIndicator('leads');
+      } else if (useO2Tax) {
+        allItems = o2TaxAnalytics.getDetailItemsForIndicator('leads');
+      } else if (useOxyHacker) {
+        allItems = oxyHackerAnalytics.getDetailItemsForIndicator('leads');
+      } else if (useFranquia) {
+        allItems = franquiaAnalytics.getDetailItemsForIndicator('leads');
+      }
+    } else {
+      // Multi-BU: aggregate only selected BUs
+      if (includesModeloAtual) {
+        allItems = [...allItems, ...modeloAtualAnalytics.getDetailItemsForIndicator('leads')];
+      }
+      if (includesO2Tax) {
+        allItems = [...allItems, ...o2TaxAnalytics.getDetailItemsForIndicator('leads')];
+      }
+      if (includesOxyHacker) {
+        allItems = [...allItems, ...oxyHackerAnalytics.getDetailItemsForIndicator('leads')];
+      }
+      if (includesFranquia) {
+        allItems = [...allItems, ...franquiaAnalytics.getDetailItemsForIndicator('leads')];
+      }
     }
     
     // Filter by the clicked period
@@ -301,7 +310,7 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedClos
     return null;
   };
 
-  const isClickable = useModeloAtual || useO2Tax || useOxyHacker || useFranquia || useConsolidado;
+  const isClickable = selectedBUsArray.length > 0;
 
   return (
     <>

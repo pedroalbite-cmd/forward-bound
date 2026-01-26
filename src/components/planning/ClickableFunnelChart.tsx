@@ -17,6 +17,7 @@ interface ClickableFunnelChartProps {
   startDate: Date;
   endDate: Date;
   selectedBU: BUType | 'all';
+  selectedBUs?: BUType[];
   selectedClosers?: string[];
 }
 
@@ -31,7 +32,7 @@ interface FunnelStage {
   conversionPercent: number;
 }
 
-export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedClosers }: ClickableFunnelChartProps) {
+export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedBUs, selectedClosers }: ClickableFunnelChartProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetTitle, setSheetTitle] = useState('');
   const [sheetDescription, setSheetDescription] = useState('');
@@ -50,11 +51,22 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedC
   const franquiaAnalytics = useExpansaoAnalytics(startDate, endDate, 'Franquia');
   const oxyHackerAnalytics = useExpansaoAnalytics(startDate, endDate, 'Oxy Hacker');
   
-  // Check if we should use external database data
-  const useExpansaoData = selectedBU === 'franquia';
-  const useO2TaxData = selectedBU === 'o2_tax';
-  const useOxyHackerData = selectedBU === 'oxy_hacker';
-  const useConsolidado = selectedBU === 'all';
+  // Derive which BUs are included from selectedBUs array (or fallback to selectedBU)
+  const selectedBUsArray = selectedBUs || (selectedBU === 'all' 
+    ? ['modelo_atual', 'o2_tax', 'oxy_hacker', 'franquia'] as BUType[]
+    : [selectedBU]);
+  
+  const includesModeloAtual = selectedBUsArray.includes('modelo_atual');
+  const includesO2Tax = selectedBUsArray.includes('o2_tax');
+  const includesOxyHacker = selectedBUsArray.includes('oxy_hacker');
+  const includesFranquia = selectedBUsArray.includes('franquia');
+  
+  // Check if single BU selected for drill-down routing
+  const hasSingleBU = selectedBUsArray.length === 1;
+  const useExpansaoData = hasSingleBU && selectedBUsArray[0] === 'franquia';
+  const useO2TaxData = hasSingleBU && selectedBUsArray[0] === 'o2_tax';
+  const useOxyHackerData = hasSingleBU && selectedBUsArray[0] === 'oxy_hacker';
+  const useConsolidado = selectedBUsArray.length > 1;
   
   // Get leads data from the same database source as charts (Modelo Atual)
   const leadsQty = getModeloAtualQty('leads', startDate, endDate);
@@ -89,42 +101,32 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedC
     return getModeloAtualValue(indicator, startDate, endDate);
   };
 
-  // Get totals based on selected BU - all BUs now use external db
-  const totals = useConsolidado ? {
-    leads: getFilteredModeloAtualQty('leads') + o2TaxLeadsQty + oxyHackerLeadsQty + franquiaLeadsQty,
-    mql: getFilteredModeloAtualQty('mql') + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate),
-    rm: getFilteredModeloAtualQty('rm') + getO2TaxQty('rm', startDate, endDate) + getOxyHackerQty('rm', startDate, endDate) + getExpansaoQty('rm', startDate, endDate),
-    rr: getFilteredModeloAtualQty('rr') + getO2TaxQty('rr', startDate, endDate) + getOxyHackerQty('rr', startDate, endDate) + getExpansaoQty('rr', startDate, endDate),
-    proposta: getFilteredModeloAtualQty('proposta') + getO2TaxQty('proposta', startDate, endDate) + getOxyHackerQty('proposta', startDate, endDate) + getExpansaoQty('proposta', startDate, endDate),
-    venda: getFilteredModeloAtualQty('venda') + getO2TaxQty('venda', startDate, endDate) + getOxyHackerQty('venda', startDate, endDate) + getExpansaoQty('venda', startDate, endDate),
-  } : useExpansaoData ? {
-    leads: franquiaLeadsQty,
-    mql: getExpansaoQty('mql', startDate, endDate),
-    rm: getExpansaoQty('rm', startDate, endDate),
-    rr: getExpansaoQty('rr', startDate, endDate),
-    proposta: getExpansaoQty('proposta', startDate, endDate),
-    venda: getExpansaoQty('venda', startDate, endDate),
-  } : useO2TaxData ? {
-    leads: o2TaxLeadsQty,
-    mql: getO2TaxQty('mql', startDate, endDate),
-    rm: getO2TaxQty('rm', startDate, endDate),
-    rr: getO2TaxQty('rr', startDate, endDate),
-    proposta: getO2TaxQty('proposta', startDate, endDate),
-    venda: getO2TaxQty('venda', startDate, endDate),
-  } : useOxyHackerData ? {
-    leads: oxyHackerLeadsQty,
-    mql: getOxyHackerQty('mql', startDate, endDate),
-    rm: getOxyHackerQty('rm', startDate, endDate),
-    rr: getOxyHackerQty('rr', startDate, endDate),
-    proposta: getOxyHackerQty('proposta', startDate, endDate),
-    venda: getOxyHackerQty('venda', startDate, endDate),
-  } : {
-    leads: getFilteredModeloAtualQty('leads'),
-    mql: getFilteredModeloAtualQty('mql'),
-    rm: getFilteredModeloAtualQty('rm'),
-    rr: getFilteredModeloAtualQty('rr'),
-    proposta: getFilteredModeloAtualQty('proposta'),
-    venda: getFilteredModeloAtualQty('venda'),
+  // Get totals based on selected BUs array - sum only included BUs
+  const totals = {
+    leads: (includesModeloAtual ? getFilteredModeloAtualQty('leads') : 0) + 
+           (includesO2Tax ? o2TaxLeadsQty : 0) + 
+           (includesOxyHacker ? oxyHackerLeadsQty : 0) + 
+           (includesFranquia ? franquiaLeadsQty : 0),
+    mql: (includesModeloAtual ? getFilteredModeloAtualQty('mql') : 0) + 
+         (includesO2Tax ? getO2TaxQty('mql', startDate, endDate) : 0) + 
+         (includesOxyHacker ? getOxyHackerQty('mql', startDate, endDate) : 0) + 
+         (includesFranquia ? getExpansaoQty('mql', startDate, endDate) : 0),
+    rm: (includesModeloAtual ? getFilteredModeloAtualQty('rm') : 0) + 
+        (includesO2Tax ? getO2TaxQty('rm', startDate, endDate) : 0) + 
+        (includesOxyHacker ? getOxyHackerQty('rm', startDate, endDate) : 0) + 
+        (includesFranquia ? getExpansaoQty('rm', startDate, endDate) : 0),
+    rr: (includesModeloAtual ? getFilteredModeloAtualQty('rr') : 0) + 
+        (includesO2Tax ? getO2TaxQty('rr', startDate, endDate) : 0) + 
+        (includesOxyHacker ? getOxyHackerQty('rr', startDate, endDate) : 0) + 
+        (includesFranquia ? getExpansaoQty('rr', startDate, endDate) : 0),
+    proposta: (includesModeloAtual ? getFilteredModeloAtualQty('proposta') : 0) + 
+              (includesO2Tax ? getO2TaxQty('proposta', startDate, endDate) : 0) + 
+              (includesOxyHacker ? getOxyHackerQty('proposta', startDate, endDate) : 0) + 
+              (includesFranquia ? getExpansaoQty('proposta', startDate, endDate) : 0),
+    venda: (includesModeloAtual ? getFilteredModeloAtualQty('venda') : 0) + 
+           (includesO2Tax ? getO2TaxQty('venda', startDate, endDate) : 0) + 
+           (includesOxyHacker ? getOxyHackerQty('venda', startDate, endDate) : 0) + 
+           (includesFranquia ? getExpansaoQty('venda', startDate, endDate) : 0),
   };
 
   // Calculate conversions
@@ -137,26 +139,18 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedC
     { number: 6, name: 'Contrato Assinado', indicator: 'venda', value: totals.venda, conversionPercent: totals.proposta > 0 ? (totals.venda / totals.proposta) * 100 : 0 },
   ];
 
-  // Calculate monetary values (filtered by closers when applicable)
-  const propostaValue = useConsolidado
-    ? getFilteredModeloAtualValue('proposta') + getO2TaxValue('proposta', startDate, endDate) + getOxyHackerValue('proposta', startDate, endDate) + getExpansaoValue('proposta', startDate, endDate)
-    : useExpansaoData 
-      ? getExpansaoValue('proposta', startDate, endDate)
-      : useO2TaxData 
-        ? getO2TaxValue('proposta', startDate, endDate)
-        : useOxyHackerData 
-          ? getOxyHackerValue('proposta', startDate, endDate)
-          : getFilteredModeloAtualValue('proposta');
+  // Calculate monetary values based on selected BUs array
+  const propostaValue = 
+    (includesModeloAtual ? getFilteredModeloAtualValue('proposta') : 0) +
+    (includesO2Tax ? getO2TaxValue('proposta', startDate, endDate) : 0) +
+    (includesOxyHacker ? getOxyHackerValue('proposta', startDate, endDate) : 0) +
+    (includesFranquia ? getExpansaoValue('proposta', startDate, endDate) : 0);
 
-  const vendaValue = useConsolidado
-    ? getFilteredModeloAtualValue('venda') + getO2TaxValue('venda', startDate, endDate) + getOxyHackerValue('venda', startDate, endDate) + getExpansaoValue('venda', startDate, endDate)
-    : useExpansaoData 
-      ? getExpansaoValue('venda', startDate, endDate)
-      : useO2TaxData 
-        ? getO2TaxValue('venda', startDate, endDate)
-        : useOxyHackerData 
-          ? getOxyHackerValue('venda', startDate, endDate)
-          : getFilteredModeloAtualValue('venda');
+  const vendaValue = 
+    (includesModeloAtual ? getFilteredModeloAtualValue('venda') : 0) +
+    (includesO2Tax ? getO2TaxValue('venda', startDate, endDate) : 0) +
+    (includesOxyHacker ? getOxyHackerValue('venda', startDate, endDate) : 0) +
+    (includesFranquia ? getExpansaoValue('venda', startDate, endDate) : 0);
 
   // Width percentages for funnel visualization (6 stages now)
   const widthPercentages = [100, 85, 70, 55, 45, 35];

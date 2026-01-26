@@ -19,6 +19,7 @@ interface LeadsMqlsStackedChartProps {
   startDate: Date;
   endDate: Date;
   selectedBU: BUType | 'all';
+  selectedBUs?: BUType[];
   selectedClosers?: string[];
   metaMqls?: number;
 }
@@ -28,7 +29,7 @@ const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Ma
 // Month name mapping for funnelData lookup
 const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU, selectedClosers }: LeadsMqlsStackedChartProps) {
+export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU, selectedBUs, selectedClosers }: LeadsMqlsStackedChartProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetItems, setSheetItems] = useState<DetailItem[]>([]);
   const [sheetDescription, setSheetDescription] = useState("");
@@ -77,12 +78,23 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU, selected
     return Math.round(total);
   };
   
-  // Check if we should use external database data
-  const useModeloAtual = selectedBU === 'modelo_atual';
-  const useConsolidado = selectedBU === 'all';
-  const useExpansaoData = selectedBU === 'franquia';
-  const useO2TaxData = selectedBU === 'o2_tax';
-  const useOxyHackerData = selectedBU === 'oxy_hacker';
+  // Derive which BUs are included from selectedBUs array (or fallback to selectedBU)
+  const selectedBUsArray = selectedBUs || (selectedBU === 'all' 
+    ? ['modelo_atual', 'o2_tax', 'oxy_hacker', 'franquia'] as BUType[]
+    : [selectedBU]);
+  
+  const includesModeloAtual = selectedBUsArray.includes('modelo_atual');
+  const includesO2Tax = selectedBUsArray.includes('o2_tax');
+  const includesOxyHacker = selectedBUsArray.includes('oxy_hacker');
+  const includesFranquia = selectedBUsArray.includes('franquia');
+  
+  // Check if single BU selected
+  const hasSingleBU = selectedBUsArray.length === 1;
+  const useModeloAtual = hasSingleBU && selectedBUsArray[0] === 'modelo_atual';
+  const useConsolidado = selectedBUsArray.length > 1;
+  const useExpansaoData = hasSingleBU && selectedBUsArray[0] === 'franquia';
+  const useO2TaxData = hasSingleBU && selectedBUsArray[0] === 'o2_tax';
+  const useOxyHackerData = hasSingleBU && selectedBUsArray[0] === 'oxy_hacker';
   
   // Drill-down is available for all BUs
   const isClickable = true;
@@ -100,42 +112,36 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU, selected
     ? getOxyHackerGroupedData('mql', startDate, endDate, grouping)
     : getModeloAtualGroupedData('mql', startDate, endDate, grouping);
   
-  // Get total meta from funnelData (Plan Growth) for all BUs
-  const periodMeta = useExpansaoData 
-    ? calcularMetaDoPeriodo(funnelData?.franquia)
-    : useO2TaxData
-    ? calcularMetaDoPeriodo(funnelData?.o2Tax)
-    : useOxyHackerData
-    ? calcularMetaDoPeriodo(funnelData?.oxyHacker)
-    : calcularMetaDoPeriodo(funnelData?.modeloAtual);
+  // Get total meta from funnelData (Plan Growth) based on selected BUs
+  const periodMeta = 
+    (includesModeloAtual ? calcularMetaDoPeriodo(funnelData?.modeloAtual) : 0) +
+    (includesO2Tax ? calcularMetaDoPeriodo(funnelData?.o2Tax) : 0) +
+    (includesOxyHacker ? calcularMetaDoPeriodo(funnelData?.oxyHacker) : 0) +
+    (includesFranquia ? calcularMetaDoPeriodo(funnelData?.franquia) : 0);
     
-  // Calculate total realized - apply closer filter for Modelo Atual if active
+  // Calculate total realized based on selected BUs
   const getTotalRealized = (): number => {
-    if (useExpansaoData) return getExpansaoQty('mql', startDate, endDate);
-    if (useO2TaxData) return getO2TaxQty('mql', startDate, endDate);
-    if (useOxyHackerData) return getOxyHackerQty('mql', startDate, endDate);
+    let total = 0;
     
-    // For Modelo Atual or Consolidado, apply closer filter if active
-    if (selectedClosers?.length && selectedClosers.length > 0) {
-      const cards = modeloAtualAnalytics.getCardsForIndicator('mql');
-      const filteredCards = cards.filter(c => {
-        const closerValue = (c.closer || '').trim();
-        return closerValue && selectedClosers.includes(closerValue);
-      });
-      const modeloAtualFiltered = filteredCards.length;
-      
-      if (useConsolidado) {
-        // Add other BUs (not filtered by closers)
-        return modeloAtualFiltered + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate);
+    // For Modelo Atual, apply closer filter if active
+    if (includesModeloAtual) {
+      if (selectedClosers?.length && selectedClosers.length > 0) {
+        const cards = modeloAtualAnalytics.getCardsForIndicator('mql');
+        const filteredCards = cards.filter(c => {
+          const closerValue = (c.closer || '').trim();
+          return closerValue && selectedClosers.includes(closerValue);
+        });
+        total += filteredCards.length;
+      } else {
+        total += getModeloAtualQty('mql', startDate, endDate);
       }
-      return modeloAtualFiltered;
     }
     
-    // No filter - use regular totals
-    if (useConsolidado) {
-      return getModeloAtualQty('mql', startDate, endDate) + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate);
-    }
-    return getModeloAtualQty('mql', startDate, endDate);
+    if (includesO2Tax) total += getO2TaxQty('mql', startDate, endDate);
+    if (includesOxyHacker) total += getOxyHackerQty('mql', startDate, endDate);
+    if (includesFranquia) total += getExpansaoQty('mql', startDate, endDate);
+    
+    return total;
   };
   
   const totalRealized = getTotalRealized();
@@ -196,29 +202,35 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU, selected
       periodLabel = format(clickedDate, "MMMM", { locale: ptBR });
     }
     
-    // Get items based on selected BU
+    // Get items based on selected BUs
     let allItems: DetailItem[] = [];
     
-    if (useO2TaxData) {
-      // O2 TAX: get MQL cards from analytics
-      const mqlCards = o2TaxAnalytics.getMqlsByRevenue;
-      allItems = mqlCards.flatMap(r => r.cards).map(o2TaxAnalytics.toDetailItem);
-    } else if (useExpansaoData) {
-      // Franquia
-      allItems = franquiaAnalytics.getDetailItemsForIndicator('mql');
-    } else if (useOxyHackerData) {
-      // Oxy Hacker
-      allItems = oxyHackerAnalytics.getDetailItemsForIndicator('mql');
-    } else if (useConsolidado) {
-      // Consolidado: aggregate all BUs
-      const modeloAtualItems = modeloAtualAnalytics.getDetailItemsForIndicator('mql');
-      const o2Items = o2TaxAnalytics.getMqlsByRevenue.flatMap(r => r.cards).map(o2TaxAnalytics.toDetailItem);
-      const franquiaItems = franquiaAnalytics.getDetailItemsForIndicator('mql');
-      const oxyHackerItems = oxyHackerAnalytics.getDetailItemsForIndicator('mql');
-      allItems = [...modeloAtualItems, ...o2Items, ...franquiaItems, ...oxyHackerItems];
+    if (hasSingleBU) {
+      if (useO2TaxData) {
+        const mqlCards = o2TaxAnalytics.getMqlsByRevenue;
+        allItems = mqlCards.flatMap(r => r.cards).map(o2TaxAnalytics.toDetailItem);
+      } else if (useExpansaoData) {
+        allItems = franquiaAnalytics.getDetailItemsForIndicator('mql');
+      } else if (useOxyHackerData) {
+        allItems = oxyHackerAnalytics.getDetailItemsForIndicator('mql');
+      } else {
+        allItems = modeloAtualAnalytics.getDetailItemsForIndicator('mql');
+      }
     } else {
-      // Modelo Atual
-      allItems = modeloAtualAnalytics.getDetailItemsForIndicator('mql');
+      // Multi-BU: aggregate only selected BUs
+      if (includesModeloAtual) {
+        allItems = [...allItems, ...modeloAtualAnalytics.getDetailItemsForIndicator('mql')];
+      }
+      if (includesO2Tax) {
+        const o2Items = o2TaxAnalytics.getMqlsByRevenue.flatMap(r => r.cards).map(o2TaxAnalytics.toDetailItem);
+        allItems = [...allItems, ...o2Items];
+      }
+      if (includesFranquia) {
+        allItems = [...allItems, ...franquiaAnalytics.getDetailItemsForIndicator('mql')];
+      }
+      if (includesOxyHacker) {
+        allItems = [...allItems, ...oxyHackerAnalytics.getDetailItemsForIndicator('mql')];
+      }
     }
     
     // Filter by clicked period
