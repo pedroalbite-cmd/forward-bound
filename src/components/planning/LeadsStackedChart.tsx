@@ -19,6 +19,7 @@ interface LeadsStackedChartProps {
   startDate: Date;
   endDate: Date;
   selectedBU: BUType | 'all';
+  selectedClosers?: string[];
 }
 
 const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Math.round(value));
@@ -26,7 +27,7 @@ const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Ma
 // Month name mapping for funnelData lookup
 const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStackedChartProps) {
+export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedClosers }: LeadsStackedChartProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetItems, setSheetItems] = useState<DetailItem[]>([]);
   const [sheetDescription, setSheetDescription] = useState("");
@@ -154,18 +155,34 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU }: LeadsStack
     ? Math.round((432 / 365) * daysInPeriod) // Franquia: 432 leads/year
     : 0;
     
-  // Get total realized from database
-  const totalRealized = useConsolidado
-    ? getModeloAtualQty('leads', startDate, endDate) + getO2TaxQty('leads', startDate, endDate) + getOxyHackerQty('leads', startDate, endDate) + getFranquiaQty('leads', startDate, endDate)
-    : useModeloAtual
-    ? getModeloAtualQty('leads', startDate, endDate)
-    : useO2Tax
-    ? getO2TaxQty('leads', startDate, endDate)
-    : useOxyHacker
-    ? getOxyHackerQty('leads', startDate, endDate)
-    : useFranquia
-    ? getFranquiaQty('leads', startDate, endDate)
-    : 0;
+  // Get total realized from database - apply closer filter for Modelo Atual if active
+  const getTotalRealized = (): number => {
+    if (useO2Tax) return getO2TaxQty('leads', startDate, endDate);
+    if (useOxyHacker) return getOxyHackerQty('leads', startDate, endDate);
+    if (useFranquia) return getFranquiaQty('leads', startDate, endDate);
+    
+    // For Modelo Atual or Consolidado, apply closer filter if active
+    if (selectedClosers?.length && selectedClosers.length > 0) {
+      const cards = modeloAtualAnalytics.getCardsForIndicator('leads');
+      const filteredCards = cards.filter(c => selectedClosers.includes(c.responsavel || ''));
+      const modeloAtualFiltered = filteredCards.length;
+      
+      if (useConsolidado) {
+        // Add other BUs (not filtered by closers)
+        return modeloAtualFiltered + getO2TaxQty('leads', startDate, endDate) + getOxyHackerQty('leads', startDate, endDate) + getFranquiaQty('leads', startDate, endDate);
+      }
+      return modeloAtualFiltered;
+    }
+    
+    // No filter - use regular totals
+    if (useConsolidado) {
+      return getModeloAtualQty('leads', startDate, endDate) + getO2TaxQty('leads', startDate, endDate) + getOxyHackerQty('leads', startDate, endDate) + getFranquiaQty('leads', startDate, endDate);
+    }
+    if (useModeloAtual) return getModeloAtualQty('leads', startDate, endDate);
+    return 0;
+  };
+  
+  const totalRealized = getTotalRealized();
 
   // Build chart data with proper date labels
   const buildChartData = () => {

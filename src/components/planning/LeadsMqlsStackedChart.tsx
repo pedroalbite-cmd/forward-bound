@@ -19,6 +19,7 @@ interface LeadsMqlsStackedChartProps {
   startDate: Date;
   endDate: Date;
   selectedBU: BUType | 'all';
+  selectedClosers?: string[];
   metaMqls?: number;
 }
 
@@ -27,7 +28,7 @@ const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Ma
 // Month name mapping for funnelData lookup
 const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsMqlsStackedChartProps) {
+export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU, selectedClosers }: LeadsMqlsStackedChartProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetItems, setSheetItems] = useState<DetailItem[]>([]);
   const [sheetDescription, setSheetDescription] = useState("");
@@ -108,13 +109,33 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU }: LeadsM
     ? calcularMetaDoPeriodo(funnelData?.oxyHacker)
     : calcularMetaDoPeriodo(funnelData?.modeloAtual);
     
-  const totalRealized = useExpansaoData 
-    ? getExpansaoQty('mql', startDate, endDate)
-    : useO2TaxData
-    ? getO2TaxQty('mql', startDate, endDate)
-    : useOxyHackerData
-    ? getOxyHackerQty('mql', startDate, endDate)
-    : getModeloAtualQty('mql', startDate, endDate);
+  // Calculate total realized - apply closer filter for Modelo Atual if active
+  const getTotalRealized = (): number => {
+    if (useExpansaoData) return getExpansaoQty('mql', startDate, endDate);
+    if (useO2TaxData) return getO2TaxQty('mql', startDate, endDate);
+    if (useOxyHackerData) return getOxyHackerQty('mql', startDate, endDate);
+    
+    // For Modelo Atual or Consolidado, apply closer filter if active
+    if (selectedClosers?.length && selectedClosers.length > 0) {
+      const cards = modeloAtualAnalytics.getCardsForIndicator('mql');
+      const filteredCards = cards.filter(c => selectedClosers.includes(c.responsavel || ''));
+      const modeloAtualFiltered = filteredCards.length;
+      
+      if (useConsolidado) {
+        // Add other BUs (not filtered by closers)
+        return modeloAtualFiltered + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate);
+      }
+      return modeloAtualFiltered;
+    }
+    
+    // No filter - use regular totals
+    if (useConsolidado) {
+      return getModeloAtualQty('mql', startDate, endDate) + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate);
+    }
+    return getModeloAtualQty('mql', startDate, endDate);
+  };
+  
+  const totalRealized = getTotalRealized();
 
   // Build chart data with proper date labels
   const buildChartData = () => {
