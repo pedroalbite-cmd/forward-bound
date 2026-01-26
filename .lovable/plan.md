@@ -1,100 +1,150 @@
 
-
-## Plano: Corrigir Filtro de Closers que Está Zerando Vendas
+## Plano: Corrigir Seleção de BUs nos Gráficos do Funil
 
 ### Problema Identificado
 
-Após a mudança para separar o campo `closer` do campo `responsavel`, os totais de vendas estão zerados ou incorretos, mesmo quando o filtro de closers é removido. O problema parece estar na lógica de filtro que não consegue encontrar correspondência entre os valores do filtro e os valores do campo `closer` nos cards.
+Quando você seleciona/desseleciona BUs no filtro, os valores de **Proposta Enviada** e **Contratos Assinados** nem sempre atualizam corretamente. O problema ocorre especificamente quando:
 
-### Análise Técnica
+- Você seleciona 2 ou 3 BUs (não 1 e não 4)
+- O sistema trata isso como "Consolidado" (`selectedBU = 'all'`)
+- Os gráficos somam TODAS as 4 BUs, mesmo que apenas 2 ou 3 estejam selecionadas
 
-1. **Dados no banco confirmados**: Vendas de janeiro 2026 têm `"Closer responsável": "Pedro Albite"` corretamente preenchido
+**Exemplo:**
+- Você seleciona apenas "Modelo Atual" + "O2 TAX" 
+- O sistema passa `selectedBU = 'all'` para o funil
+- O funil soma valores de Modelo Atual + O2 TAX + **Oxy Hacker** + **Franquia** (incorreto!)
 
-2. **Fluxo atual do código**:
-   - `getFilteredModeloAtualQty` verifica se `selectedClosers.length > 0`
-   - Se sim, filtra cards por `c.closer`
-   - Se não, usa `getModeloAtualQty` de `useModeloAtualMetas`
+---
 
-3. **Problema potencial**: O campo `closer` pode estar vindo como `undefined` ou `null` ao invés de string vazia quando o valor não existe, causando falha na comparação
+### Causa Raiz
 
-### Solução Proposta
+**Arquivo:** `src/components/planning/IndicatorsTab.tsx` (linha 189)
 
-Modificar o código para ser mais robusto na comparação de closers, verificando explicitamente por valores válidos:
+```typescript
+const selectedBU: BUType | 'all' = hasSingleBU ? selectedBUs[0] : 'all';
+```
 
-#### 1. Atualizar `useModeloAtualAnalytics.ts` - Garantir campo closer sempre definido
+Quando mais de 1 BU está selecionada, o sistema converte o array `selectedBUs` para a string `'all'`, perdendo a informação de **quais** BUs específicas estão selecionadas.
 
-| Linha | Mudança |
-|-------|---------|
-| 159 | Usar nullish coalescing mais robusto |
+---
+
+### Solução
+
+Passar o array `selectedBUs` diretamente para os componentes filhos (`ClickableFunnelChart`, `LeadsStackedChart`, `LeadsMqlsStackedChart`), permitindo que eles saibam exatamente quais BUs devem ser consideradas nos cálculos.
+
+---
+
+### Mudanças por Arquivo
+
+#### 1. `src/components/planning/ClickableFunnelChart.tsx`
+
+| Mudança | Descrição |
+|---------|-----------|
+| Props | Adicionar `selectedBUs?: BUType[]` à interface |
+| Flags | Derivar `includesModeloAtual`, `includesO2Tax`, etc. do array `selectedBUs` |
+| Totais | Somar valores apenas das BUs incluídas no array |
+| Valores monetários | Calcular `propostaValue` e `vendaValue` apenas para BUs selecionadas |
 
 **Antes:**
 ```typescript
-closer: row['Closer responsável'] || '',
+const useConsolidado = selectedBU === 'all';
+// Soma TODAS as BUs quando useConsolidado = true
 ```
 
 **Depois:**
 ```typescript
-closer: String(row['Closer responsável'] ?? '').trim(),
+const selectedBUsArray = selectedBUs || (selectedBU === 'all' 
+  ? ['modelo_atual', 'o2_tax', 'oxy_hacker', 'franquia'] 
+  : [selectedBU]);
+
+const includesModeloAtual = selectedBUsArray.includes('modelo_atual');
+const includesO2Tax = selectedBUsArray.includes('o2_tax');
+const includesOxyHacker = selectedBUsArray.includes('oxy_hacker');
+const includesFranquia = selectedBUsArray.includes('franquia');
+
+// Soma apenas as BUs selecionadas
+const propostaValue = 
+  (includesModeloAtual ? getFilteredModeloAtualValue('proposta') : 0) +
+  (includesO2Tax ? getO2TaxValue('proposta', startDate, endDate) : 0) +
+  (includesOxyHacker ? getOxyHackerValue('proposta', startDate, endDate) : 0) +
+  (includesFranquia ? getExpansaoValue('proposta', startDate, endDate) : 0);
 ```
 
-Isso garante que:
-- Valores `null` ou `undefined` virem `''`
-- Espaços em branco extras sejam removidos
-- O valor sempre seja uma string
+#### 2. `src/components/planning/LeadsStackedChart.tsx`
 
-#### 2. Atualizar `ClickableFunnelChart.tsx` - Melhorar robustez do filtro
+| Mudança | Descrição |
+|---------|-----------|
+| Props | Adicionar `selectedBUs?: BUType[]` à interface |
+| Lógica | Usar flags derivadas do array para calcular totais |
 
-| Função | Mudança |
-|--------|---------|
-| `getFilteredModeloAtualQty` | Adicionar logging e trim nos valores |
-| `getFilteredModeloAtualValue` | Mesma correção |
+#### 3. `src/components/planning/LeadsMqlsStackedChart.tsx`
 
-**Antes:**
+| Mudança | Descrição |
+|---------|-----------|
+| Props | Adicionar `selectedBUs?: BUType[]` à interface |
+| Lógica | Usar flags derivadas do array para calcular totais |
+
+#### 4. `src/components/planning/IndicatorsTab.tsx`
+
+| Mudança | Descrição |
+|---------|-----------|
+| Props passadas | Adicionar `selectedBUs={selectedBUs}` aos componentes filhos |
+
+**Exemplo:**
 ```typescript
-return cards.filter(c => selectedClosers.includes(c.closer || '')).length;
+<ClickableFunnelChart 
+  startDate={startDate} 
+  endDate={endDate} 
+  selectedBU={selectedBU}      // Mantido para compatibilidade
+  selectedBUs={selectedBUs}    // Novo: array com BUs selecionadas
+  selectedClosers={selectedClosers} 
+/>
 ```
 
-**Depois:**
-```typescript
-const filteredCards = cards.filter(c => {
-  const closerValue = (c.closer || '').trim();
-  return closerValue && selectedClosers.includes(closerValue);
-});
-console.log(`[ClickableFunnelChart] Filter ${indicator}: ${cards.length} total, ${filteredCards.length} matched closers ${selectedClosers.join(',')}`);
-return filteredCards.length;
-```
-
-#### 3. Adicionar logs de diagnóstico temporários
-
-Para identificar o valor exato de `closer` nos cards, adicionar logs:
-
-```typescript
-// Em getCardsForIndicator ou no mapping
-console.log(`[ModeloAtualAnalytics] Card ${card.id} closer: "${card.closer}" (typeof: ${typeof card.closer})`);
-```
-
-### Arquivos a Modificar
-
-| Arquivo | Tipo de Mudança |
-|---------|-----------------|
-| `src/hooks/useModeloAtualAnalytics.ts` | Usar `String().trim()` para normalizar campo closer |
-| `src/components/planning/ClickableFunnelChart.tsx` | Adicionar trim e validação no filtro |
-| `src/components/planning/LeadsStackedChart.tsx` | Mesma correção no filtro de closers |
-| `src/components/planning/LeadsMqlsStackedChart.tsx` | Mesma correção no filtro de closers |
-| `src/components/planning/IndicatorsTab.tsx` | Mesma correção no filtro de closers |
+---
 
 ### Comportamento Esperado Após Correção
 
 | Cenário | Resultado |
 |---------|-----------|
-| Sem filtro de closers | Mostra todas as vendas (6 cards conforme logs) |
-| Filtro Pedro ativo | Mostra apenas vendas de Pedro (3+ vendas confirmadas no banco) |
-| Filtro Daniel ativo | Mostra apenas vendas de Daniel |
-| Ambos selecionados | Mostra vendas de Pedro + Daniel |
+| 1 BU selecionada | Mostra valores apenas dessa BU |
+| 2 BUs selecionadas | Soma valores apenas das 2 BUs selecionadas |
+| 3 BUs selecionadas | Soma valores apenas das 3 BUs selecionadas |
+| 4 BUs selecionadas (Consolidado) | Soma valores de todas as 4 BUs |
+| Selecionar/Desselecionar BUs | Valores atualizam imediatamente |
 
-### Validação
+---
 
-Após a correção, verificar nos logs do console:
-1. `[ClickableFunnelChart] Filter venda: X total, Y matched closers Pedro Albite` → Y deve ser > 0
-2. Os valores de venda no funil devem corresponder aos cards filtrados
+### Resumo de Arquivos
 
+| Arquivo | Tipo de Mudança |
+|---------|-----------------|
+| `src/components/planning/ClickableFunnelChart.tsx` | Adicionar prop `selectedBUs` e usar para calcular totais e valores monetários |
+| `src/components/planning/LeadsStackedChart.tsx` | Adicionar prop `selectedBUs` e usar para calcular totais |
+| `src/components/planning/LeadsMqlsStackedChart.tsx` | Adicionar prop `selectedBUs` e usar para calcular totais |
+| `src/components/planning/IndicatorsTab.tsx` | Passar `selectedBUs` para os 3 componentes acima |
+
+---
+
+### Diagrama de Fluxo
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ IndicatorsTab                                               │
+│                                                             │
+│   selectedBUs = ['modelo_atual', 'o2_tax']                  │
+│                       │                                     │
+│                       ▼                                     │
+│   ┌───────────────────────────────────────────────┐         │
+│   │ ClickableFunnelChart                          │         │
+│   │   selectedBUs = ['modelo_atual', 'o2_tax']    │         │
+│   │   includesModeloAtual = true                  │         │
+│   │   includesO2Tax = true                        │         │
+│   │   includesOxyHacker = false                   │         │
+│   │   includesFranquia = false                    │         │
+│   │                                               │         │
+│   │   propostaValue = ModeloAtual + O2Tax         │         │
+│   │   vendaValue = ModeloAtual + O2Tax            │         │
+│   └───────────────────────────────────────────────┘         │
+└─────────────────────────────────────────────────────────────┘
+```
