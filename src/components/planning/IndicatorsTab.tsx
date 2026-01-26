@@ -188,45 +188,11 @@ export function IndicatorsTab() {
   const hasSingleBU = selectedBUs.length === 1;
   const selectedBU: BUType | 'all' = hasSingleBU ? selectedBUs[0] : 'all';
 
-  // Extract unique closers from all analytics data for the closer filter dropdown
-  const availableClosers = useMemo((): MultiSelectOption[] => {
-    const closersSet = new Set<string>();
-    
-    // Modelo Atual
-    if (selectedBUs.includes('modelo_atual')) {
-      modeloAtualAnalytics.cards?.forEach(c => {
-        if (c.responsavel) closersSet.add(c.responsavel);
-      });
-    }
-    
-    // O2 TAX
-    if (selectedBUs.includes('o2_tax')) {
-      o2TaxAnalytics.getCardsByPhase?.forEach(p => {
-        p.cards?.forEach(c => {
-          if (c.responsavel) closersSet.add(c.responsavel);
-        });
-      });
-    }
-    
-    // Franquia
-    if (selectedBUs.includes('franquia')) {
-      franquiaAnalytics.movements?.forEach(m => {
-        if (m.responsavel) closersSet.add(m.responsavel);
-      });
-    }
-    
-    // Oxy Hacker
-    if (selectedBUs.includes('oxy_hacker')) {
-      oxyHackerAnalytics.movements?.forEach(m => {
-        if (m.responsavel) closersSet.add(m.responsavel);
-      });
-    }
-    
-    return Array.from(closersSet)
-      .filter(Boolean)
-      .sort()
-      .map(c => ({ value: c, label: c }));
-  }, [modeloAtualAnalytics.cards, o2TaxAnalytics.getCardsByPhase, franquiaAnalytics.movements, oxyHackerAnalytics.movements, selectedBUs]);
+  // Fixed list of closers for the filter dropdown
+  const availableClosers: MultiSelectOption[] = [
+    { value: 'Pedro', label: 'Pedro' },
+    { value: 'Daniel', label: 'Daniel' },
+  ];
 
   // Filter function - checks if a responsavel matches selected closers
   const matchesCloserFilter = (responsavel?: string | null): boolean => {
