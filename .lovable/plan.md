@@ -1,62 +1,126 @@
 
-## Plano: Ajustar Filtro de CFOs para Modelo Atual
+## Plano: Aplicar Filtro de Closers nos Gráficos
 
-### Problema Identificado
+### Objetivo
 
-O filtro de closers não está funcionando corretamente porque os valores configurados ("Pedro" e "Daniel") não correspondem aos dados do banco de dados externo `pipefy_moviment_cfos`:
-
-| Valor no Filtro | Valor no Banco |
-|-----------------|----------------|
-| `Pedro` | `Pedro Albite` |
-| `Daniel` | `Daniel Trindade` |
-
-A função `matchesCloserFilter` faz comparação exata (`includes`), então "Pedro" ≠ "Pedro Albite".
+Fazer com que os gráficos de barras (Leads e MQLs) e o Funil do Período também respondam ao filtro de Closers, assim como os acelerômetros já fazem.
 
 ---
 
-### Solução
+### Componentes Afetados
 
-Atualizar os valores do filtro para usar os nomes completos exatamente como aparecem na coluna `"Closer responsável"` do banco de dados.
-
----
-
-### Arquivo a Modificar
-
-| Arquivo | Linha(s) | Mudança |
-|---------|----------|---------|
-| `src/components/planning/IndicatorsTab.tsx` | 191-195 | Substituir valores do filtro |
+| Componente | Arquivo | Função |
+|------------|---------|--------|
+| Qtd Leads | `src/components/planning/LeadsStackedChart.tsx` | Gráfico de barras laranja |
+| Qtd MQLs | `src/components/planning/LeadsMqlsStackedChart.tsx` | Gráfico de barras roxo |
+| Funil do Período | `src/components/planning/ClickableFunnelChart.tsx` | Funil visual com 6 etapas |
 
 ---
 
-### Mudança Técnica
+### Abordagem
 
-**Antes (linha 191-195):**
+Passar o filtro de closers como prop para os três componentes e, quando closers estiverem selecionados, filtrar os cards do Modelo Atual pelo campo `responsavel` antes de calcular totais e dados do gráfico.
+
+---
+
+### Mudanças Técnicas
+
+#### 1. IndicatorsTab.tsx (linha ~707-710)
+
+Passar `selectedClosers` como prop para os três componentes:
+
 ```typescript
-const availableClosers: MultiSelectOption[] = [
-  { value: 'Pedro', label: 'Pedro' },
-  { value: 'Daniel', label: 'Daniel' },
-];
+// Antes
+<LeadsMqlsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
+<LeadsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
+<ClickableFunnelChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
+
+// Depois
+<LeadsMqlsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} selectedClosers={selectedClosers} />
+<LeadsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} selectedClosers={selectedClosers} />
+<ClickableFunnelChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} selectedClosers={selectedClosers} />
 ```
 
-**Depois:**
+#### 2. LeadsStackedChart.tsx
+
+**Interface (linha ~18-22):**
 ```typescript
-const availableClosers: MultiSelectOption[] = [
-  { value: 'Pedro Albite', label: 'Pedro' },
-  { value: 'Daniel Trindade', label: 'Daniel' },
-];
+interface LeadsStackedChartProps {
+  startDate: Date;
+  endDate: Date;
+  selectedBU: BUType | 'all';
+  selectedClosers?: string[];  // Nova prop
+}
+```
+
+**Lógica de filtragem:**
+Quando `selectedClosers` tiver valores e a BU for Modelo Atual ou Consolidado, usar o hook `useModeloAtualAnalytics` para obter os cards filtrados por `responsavel`, ao invés de usar `getModeloAtualGroupedData` diretamente.
+
+**Cálculo do `totalRealized` (linha ~158-168):**
+```typescript
+// Quando filtro ativo para Modelo Atual
+if (selectedClosers?.length > 0 && (useModeloAtual || useConsolidado)) {
+  const cards = modeloAtualAnalytics.getCardsForIndicator('leads');
+  const filteredCards = cards.filter(c => selectedClosers.includes(c.responsavel || ''));
+  totalRealized = filteredCards.length + (useConsolidado ? outrosRealizados : 0);
+}
+```
+
+#### 3. LeadsMqlsStackedChart.tsx
+
+Mesma lógica do LeadsStackedChart:
+- Adicionar `selectedClosers?: string[]` na interface
+- Filtrar cards do Modelo Atual quando closers selecionados
+
+#### 4. ClickableFunnelChart.tsx
+
+**Interface (linha ~16-20):**
+```typescript
+interface ClickableFunnelChartProps {
+  startDate: Date;
+  endDate: Date;
+  selectedBU: BUType | 'all';
+  selectedClosers?: string[];  // Nova prop
+}
+```
+
+**Cálculo dos totais (linha ~65-100):**
+Quando closers estiverem selecionados, calcular cada etapa do funil filtrando cards por `responsavel`:
+
+```typescript
+const getFilteredQty = (indicator: IndicatorType): number => {
+  if (selectedClosers?.length && (selectedBU === 'modelo_atual' || selectedBU === 'all')) {
+    const cards = modeloAtualAnalytics.getCardsForIndicator(indicator);
+    const filtered = cards.filter(c => selectedClosers.includes(c.responsavel || ''));
+    // Para consolidado, somar outras BUs sem filtro
+    const outrosBUs = selectedBU === 'all' 
+      ? getO2TaxQty(indicator) + getOxyHackerQty(indicator) + getExpansaoQty(indicator) 
+      : 0;
+    return filtered.length + outrosBUs;
+  }
+  return getModeloAtualQty(indicator);
+};
 ```
 
 ---
 
-### Resultado
+### Comportamento Esperado
 
-- O dropdown continua exibindo apenas "Pedro" e "Daniel" (labels amigáveis)
-- O filtro agora usa os valores corretos que correspondem exatamente aos dados do banco
-- Cards com `"Closer responsável": "Pedro Albite"` serão filtrados corretamente ao selecionar "Pedro"
-- Cards com `"Closer responsável": "Daniel Trindade"` serão filtrados corretamente ao selecionar "Daniel"
+| Cenário | Resultado |
+|---------|-----------|
+| Sem filtro de closers | Mostra todos os dados (comportamento atual) |
+| Pedro selecionado | Gráficos mostram apenas cards onde `responsavel = "Pedro Albite"` |
+| Daniel selecionado | Gráficos mostram apenas cards onde `responsavel = "Daniel Trindade"` |
+| Ambos selecionados | Mostra a soma dos dois (equivalente a sem filtro para Modelo Atual) |
+| O2 TAX / Franquia / Oxy Hacker | Filtro não se aplica (não têm closers CFO) |
 
 ---
 
-### Observação sobre Escopo
+### Resumo de Arquivos
 
-O filtro está configurado para funcionar apenas com dados do **Modelo Atual**, que usa a tabela `pipefy_moviment_cfos`. As outras BUs (O2 TAX, Franquia, Oxy Hacker) podem ter estruturas de responsáveis diferentes, mas como o pedido é focar nos CFOs, essa configuração atende ao requisito.
+| Arquivo | Tipo de Mudança |
+|---------|-----------------|
+| `src/components/planning/IndicatorsTab.tsx` | Passar prop `selectedClosers` |
+| `src/components/planning/LeadsStackedChart.tsx` | Receber prop e aplicar filtro |
+| `src/components/planning/LeadsMqlsStackedChart.tsx` | Receber prop e aplicar filtro |
+| `src/components/planning/ClickableFunnelChart.tsx` | Receber prop e aplicar filtro |
