@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { eachDayOfInterval, eachMonthOfInterval, addDays, differenceInDays } from "date-fns";
 
-export type OxyHackerIndicator = 'mql' | 'rm' | 'rr' | 'proposta' | 'venda';
+export type OxyHackerIndicator = 'leads' | 'mql' | 'rm' | 'rr' | 'proposta' | 'venda';
 export type ChartGrouping = 'daily' | 'weekly' | 'monthly';
 
 interface OxyHackerMovement {
@@ -25,6 +25,7 @@ interface OxyHackerMetasResult {
 
 // Map Pipefy phase names to indicator keys
 const PHASE_TO_INDICATOR: Record<string, OxyHackerIndicator> = {
+  'Start form': 'leads',
   'MQL': 'mql',
   'Reunião agendada / Qualificado': 'rm',
   'Reunião Realizada': 'rr',
@@ -201,6 +202,7 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
     
     // Annual metas based on planning (updated to match real targets)
     const annualMetas: Record<OxyHackerIndicator, number> = {
+      leads: 360,     // 30/month
       mql: 300,       // 25/month
       rm: 120,        // 10/month
       rr: 60,         // 5/month
@@ -220,6 +222,7 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
     
     const daysInYear = 365;
     const annualMetas: Record<OxyHackerIndicator, number> = {
+      leads: 360,
       mql: 300,
       rm: 120,
       rr: 60,

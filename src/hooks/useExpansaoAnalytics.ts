@@ -22,6 +22,7 @@ export interface ExpansaoCard {
 
 // Map Pipefy phase names to indicator keys
 const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
+  'Start form': 'leads',
   'MQL': 'mql',
   'Reunião agendada / Qualificado': 'rm',
   'Reunião Realizada': 'rr',
@@ -42,6 +43,7 @@ const INDICATOR_TO_DISPLAY: Record<IndicatorType, string> = {
 
 // Map phase to display name
 const PHASE_DISPLAY_MAP: Record<string, string> = {
+  'Start form': 'Lead',
   'MQL': 'MQL',
   'Reunião agendada / Qualificado': 'RM',
   'Reunião Realizada': 'RR',
@@ -138,8 +140,6 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
   // Get unique cards that entered a specific indicator phase during the period
   const getCardsForIndicator = useMemo(() => {
     return (indicator: IndicatorType): ExpansaoCard[] => {
-      if (indicator === 'leads') return [];
-      
       console.log(`[useExpansaoAnalytics] getCardsForIndicator(${indicator}): checking ${movements.length} movements, period ${new Date(startTime).toLocaleDateString()} - ${new Date(endTime).toLocaleDateString()}`);
       
       const seenIds = new Set<string>();
@@ -154,7 +154,9 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
         
         // Check if movement matches the indicator
         let matches = false;
-        if (indicator === 'venda' && movement.fase === 'Ganho') {
+        if (indicator === 'leads' && movement.fase === 'Start form') {
+          matches = true;
+        } else if (indicator === 'venda' && movement.fase === 'Ganho') {
           matches = true;
         } else if (indicator === 'proposta' && movementIndicator === 'proposta') {
           matches = true;
@@ -188,8 +190,6 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
   // Get detail items for an indicator
   const getDetailItemsForIndicator = useMemo(() => {
     return (indicator: IndicatorType): DetailItem[] => {
-      if (indicator === 'leads') return [];
-      
       const indicatorCards = getCardsForIndicator(indicator);
       return indicatorCards.map(toDetailItem);
     };

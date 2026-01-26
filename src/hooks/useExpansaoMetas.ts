@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { eachDayOfInterval, eachMonthOfInterval, addDays, differenceInDays } from "date-fns";
 
-export type ExpansaoIndicator = 'mql' | 'rm' | 'rr' | 'proposta' | 'venda';
+export type ExpansaoIndicator = 'leads' | 'mql' | 'rm' | 'rr' | 'proposta' | 'venda';
 export type ChartGrouping = 'daily' | 'weekly' | 'monthly';
 
 interface ExpansaoMovement {
@@ -25,6 +25,7 @@ interface ExpansaoMetasResult {
 
 // Map Pipefy phase names to indicator keys
 const PHASE_TO_INDICATOR: Record<string, ExpansaoIndicator> = {
+  'Start form': 'leads',
   'MQL': 'mql',
   'Reunião agendada / Qualificado': 'rm',
   'Reunião Realizada': 'rr',
@@ -201,6 +202,7 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
     
     // Annual metas based on planning (updated to match real targets)
     const annualMetas: Record<ExpansaoIndicator, number> = {
+      leads: 432,     // 36/month
       mql: 360,       // 30/month
       rm: 144,        // 12/month
       rr: 72,         // 6/month
@@ -220,6 +222,7 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
     
     const daysInYear = 365;
     const annualMetas: Record<ExpansaoIndicator, number> = {
+      leads: 432,
       mql: 360,
       rm: 144,
       rr: 72,
