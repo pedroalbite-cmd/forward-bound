@@ -156,8 +156,8 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
           valorEducacao,
           valorSetup,
           valor,
-          closer: row['Closer responsável'] || '', // Closer specific field for filtering
-          responsavel: row['SDR responsável'] || row['Responsável'] || row['responsavel'] || '',
+          closer: String(row['Closer responsável'] ?? '').trim(), // Closer specific field for filtering - normalized
+          responsavel: String(row['SDR responsável'] || row['Responsável'] || row['responsavel'] || '').trim(),
           faixa: row['Faixa de faturamento mensal'] || row['Faixa'] || row['faixa'] || '',
         });
       }

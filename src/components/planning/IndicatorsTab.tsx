@@ -340,7 +340,10 @@ export function IndicatorsTab() {
       // When closer filter is active, use analytics hook to filter cards by closer field
       if (selectedClosers.length > 0) {
         const cards = modeloAtualAnalytics.getCardsForIndicator(indicator.key);
-        const filteredCards = cards.filter(card => selectedClosers.includes(card.closer || ''));
+        const filteredCards = cards.filter(card => {
+          const closerValue = (card.closer || '').trim();
+          return closerValue && selectedClosers.includes(closerValue);
+        });
         total += filteredCards.length;
       } else {
         total += getModeloAtualQty(indicator.key as ModeloAtualIndicator, startDate, endDate);
