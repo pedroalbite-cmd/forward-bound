@@ -164,7 +164,7 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedClos
     // For Modelo Atual or Consolidado, apply closer filter if active
     if (selectedClosers?.length && selectedClosers.length > 0) {
       const cards = modeloAtualAnalytics.getCardsForIndicator('leads');
-      const filteredCards = cards.filter(c => selectedClosers.includes(c.responsavel || ''));
+      const filteredCards = cards.filter(c => selectedClosers.includes(c.closer || ''));
       const modeloAtualFiltered = filteredCards.length;
       
       if (useConsolidado) {

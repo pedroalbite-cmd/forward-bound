@@ -66,7 +66,7 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedC
   const getFilteredModeloAtualQty = (indicator: IndicatorType): number => {
     if (selectedClosers?.length && selectedClosers.length > 0) {
       const cards = modeloAtualAnalytics.getCardsForIndicator(indicator);
-      return cards.filter(c => selectedClosers.includes(c.responsavel || '')).length;
+      return cards.filter(c => selectedClosers.includes(c.closer || '')).length;
     }
     if (indicator === 'leads') return leadsQty;
     return getModeloAtualQty(indicator, startDate, endDate);
@@ -76,7 +76,7 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedC
   const getFilteredModeloAtualValue = (indicator: 'proposta' | 'venda'): number => {
     if (selectedClosers?.length && selectedClosers.length > 0) {
       const cards = modeloAtualAnalytics.getCardsForIndicator(indicator);
-      const filteredCards = cards.filter(c => selectedClosers.includes(c.responsavel || ''));
+      const filteredCards = cards.filter(c => selectedClosers.includes(c.closer || ''));
       return filteredCards.reduce((sum, card) => sum + card.valor, 0);
     }
     return getModeloAtualValue(indicator, startDate, endDate);
@@ -207,13 +207,14 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedC
 
     // For Modelo Atual or Consolidado (use Modelo Atual data)
     if (selectedBU === 'modelo_atual' || useConsolidado) {
-      let items = modeloAtualAnalytics.getDetailItemsForIndicator(indicator);
-      
-      // Apply closers filter to Modelo Atual items
+      // Get cards and filter by closer field specifically
+      let items: DetailItem[];
       if (selectedClosers?.length && selectedClosers.length > 0) {
-        items = items.filter(item => 
-          selectedClosers.includes(item.responsible || '')
-        );
+        const cards = modeloAtualAnalytics.getCardsForIndicator(indicator);
+        const filteredCards = cards.filter(c => selectedClosers.includes(c.closer || ''));
+        items = filteredCards.map(modeloAtualAnalytics.toDetailItem);
+      } else {
+        items = modeloAtualAnalytics.getDetailItemsForIndicator(indicator);
       }
       
       // For consolidado, also add items from all BUs
