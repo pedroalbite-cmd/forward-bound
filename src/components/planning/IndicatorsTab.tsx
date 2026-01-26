@@ -337,10 +337,10 @@ export function IndicatorsTab() {
     let total = 0;
     
     if (includesModeloAtual) {
-      // When closer filter is active, use analytics hook to filter cards by responsavel
+      // When closer filter is active, use analytics hook to filter cards by closer field
       if (selectedClosers.length > 0) {
         const cards = modeloAtualAnalytics.getCardsForIndicator(indicator.key);
-        const filteredCards = cards.filter(card => matchesCloserFilter(card.responsavel));
+        const filteredCards = cards.filter(card => selectedClosers.includes(card.closer || ''));
         total += filteredCards.length;
       } else {
         total += getModeloAtualQty(indicator.key as ModeloAtualIndicator, startDate, endDate);

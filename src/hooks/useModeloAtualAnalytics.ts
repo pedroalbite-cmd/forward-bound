@@ -18,6 +18,7 @@ export interface ModeloAtualCard {
   valorEducacao: number;
   valorSetup: number;
   responsavel?: string;
+  closer?: string; // Specifically the "Closer responsável" field for filtering
   faixa?: string;
 }
 
@@ -155,7 +156,8 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
           valorEducacao,
           valorSetup,
           valor,
-          responsavel: row['Closer responsável'] || row['SDR responsável'] || row['Responsável'] || row['responsavel'] || '',
+          closer: row['Closer responsável'] || '', // Closer specific field for filtering
+          responsavel: row['SDR responsável'] || row['Responsável'] || row['responsavel'] || '',
           faixa: row['Faixa de faturamento mensal'] || row['Faixa'] || row['faixa'] || '',
         });
       }
@@ -223,7 +225,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     date: card.dataEntrada.toISOString(),
     value: card.valor,
     revenueRange: card.faixa || undefined,
-    responsible: card.responsavel || undefined,
+    responsible: card.closer || card.responsavel || undefined, // Prioritize closer for display
   });
 
   // Get detail items for a specific indicator

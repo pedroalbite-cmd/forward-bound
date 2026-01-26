@@ -118,7 +118,7 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU, selected
     // For Modelo Atual or Consolidado, apply closer filter if active
     if (selectedClosers?.length && selectedClosers.length > 0) {
       const cards = modeloAtualAnalytics.getCardsForIndicator('mql');
-      const filteredCards = cards.filter(c => selectedClosers.includes(c.responsavel || ''));
+      const filteredCards = cards.filter(c => selectedClosers.includes(c.closer || ''));
       const modeloAtualFiltered = filteredCards.length;
       
       if (useConsolidado) {
