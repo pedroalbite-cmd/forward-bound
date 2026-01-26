@@ -242,6 +242,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     revenueRange: card.faixa || undefined,
     responsible: card.closer || card.responsavel || undefined, // Prioritize closer for display
     duration: card.duracao,
+    product: 'CaaS',
   });
 
   // Get detail items for a specific indicator

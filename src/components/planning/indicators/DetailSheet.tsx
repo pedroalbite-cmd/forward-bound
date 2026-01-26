@@ -15,6 +15,7 @@ export interface DetailItem {
   revenueRange?: string;
   responsible?: string;
   duration?: number; // Duration in seconds (from "Duração (s)" column)
+  product?: string; // CaaS, O2 TAX, Oxy Hacker, Franquia
 }
 
 interface DetailSheetProps {
@@ -118,5 +119,23 @@ export const columnFormatters = {
       return `${days}d ${hours}h`;
     }
     return `${hours}h`;
+  },
+  product: (value: string) => {
+    if (!value) return '-';
+    
+    const colorMap: Record<string, string> = {
+      'CaaS': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      'O2 TAX': 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+      'Oxy Hacker': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+      'Franquia': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    };
+    
+    const colorClass = colorMap[value] || 'bg-gray-100 text-gray-800';
+    
+    return (
+      <Badge className={`font-normal ${colorClass}`}>
+        {value}
+      </Badge>
+    );
   },
 };

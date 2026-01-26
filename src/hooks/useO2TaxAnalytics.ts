@@ -503,6 +503,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     revenueRange: card.faixa || undefined,
     responsible: card.responsavel || undefined,
     duration: card.duracao,
+    product: 'O2 TAX',
   });
 
   return {

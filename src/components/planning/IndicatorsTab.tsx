@@ -590,6 +590,7 @@ export function IndicatorsTab() {
   // Get columns for indicator type
   const getColumnsForIndicator = (indicatorKey: IndicatorType): { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] => {
     const baseColumns: { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] = [
+      { key: 'product', label: 'Produto', format: columnFormatters.product },
       { key: 'company', label: 'Empresa/Contato' },
       { key: 'date', label: 'Data', format: columnFormatters.date },
       { key: 'duration', label: 'Tempo na Fase', format: columnFormatters.duration },
