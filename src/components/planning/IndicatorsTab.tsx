@@ -188,10 +188,10 @@ export function IndicatorsTab() {
   const hasSingleBU = selectedBUs.length === 1;
   const selectedBU: BUType | 'all' = hasSingleBU ? selectedBUs[0] : 'all';
 
-  // Fixed list of closers for the filter dropdown
+  // Fixed list of closers for the filter dropdown (values match "Closer responsável" column in pipefy_moviment_cfos)
   const availableClosers: MultiSelectOption[] = [
-    { value: 'Pedro', label: 'Pedro' },
-    { value: 'Daniel', label: 'Daniel' },
+    { value: 'Pedro Albite', label: 'Pedro' },
+    { value: 'Daniel Trindade', label: 'Daniel' },
   ];
 
   // Filter function - checks if a responsavel matches selected closers
