@@ -71,14 +71,13 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
   const { data, isLoading, error } = useQuery({
     queryKey: ['expansao-analytics', produto, startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
-      // Use server-side date filtering for accurate period data
+      // Use 'preview' action (same as useExpansaoMetas/useOxyHackerMetas) for consistency
+      // This ensures the same data source and filtering logic between indicators and drill-down
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
         body: { 
           table: 'pipefy_cards_movements_expansao', 
-          action: 'query_period',
-          startDate: startDate.toISOString().split('T')[0] + 'T00:00:00',
-          endDate: endDate.toISOString().split('T')[0] + 'T23:59:59',
-          limit: 10000 
+          action: 'preview', 
+          limit: 5000 
         }
       });
 
@@ -160,6 +159,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
   const movements = data?.movements ?? [];
 
   // Get unique cards that entered a specific indicator phase during the period
+  // ALIGNED with useExpansaoMetas.getQtyForPeriod logic for consistency
   const getCardsForIndicator = useMemo(() => {
     return (indicator: IndicatorType): ExpansaoCard[] => {
       console.log(`[useExpansaoAnalytics] getCardsForIndicator(${indicator}): checking ${movements.length} movements, period ${new Date(startTime).toLocaleDateString()} - ${new Date(endTime).toLocaleDateString()}`);
@@ -174,16 +174,24 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
         
         const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
         
-        // Check if movement matches the indicator
+        // Check if movement matches the indicator (SAME logic as useExpansaoMetas)
         let matches = false;
-        if (indicator === 'leads' && movement.fase === 'Start form') {
-          matches = true;
-        } else if (indicator === 'venda' && movement.fase === 'Ganho') {
-          matches = true;
-        } else if (indicator === 'proposta' && movementIndicator === 'proposta') {
-          matches = true;
-        } else if (movementIndicator === indicator) {
-          matches = true;
+        
+        if (indicator === 'venda') {
+          // For "venda", count unique cards that ENTERED "Ganho" phase during the period
+          if (movement.fase === 'Ganho') {
+            matches = true;
+          }
+        } else if (indicator === 'proposta') {
+          // For "proposta", count ONLY cards that explicitly passed through proposta phases
+          if (movementIndicator === 'proposta') {
+            matches = true;
+          }
+        } else {
+          // For other indicators, count unique cards that passed through the phase
+          if (movementIndicator === indicator) {
+            matches = true;
+          }
         }
         
         if (matches) {
