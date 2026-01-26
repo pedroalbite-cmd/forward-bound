@@ -436,24 +436,33 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
 
   // Get detail items for a specific indicator (for drill-down)
   const getDetailItemsForIndicator = (indicator: string): DetailItem[] => {
-    let targetCards: O2TaxCard[] = [];
+    const targetCards: O2TaxCard[] = [];
+    const seenIds = new Set<string>();
     
-    if (indicator === 'leads') {
-      targetCards = getLeads;
-    } else if (indicator === 'mql') {
-      // Get all unique MQL cards
-      const seenIds = new Set<string>();
-      for (const card of cards) {
-        const entryTime = card.dataEntrada.getTime();
-        if (
-          card.fase === 'MQL' &&
-          entryTime >= startTime &&
-          entryTime <= endTime &&
-          !seenIds.has(card.id)
-        ) {
-          targetCards.push(card);
-          seenIds.add(card.id);
-        }
+    // Map indicator to Pipefy phases
+    const indicatorToPhases: Record<string, string[]> = {
+      'leads': ['Start form', 'MQL'],
+      'mql': ['MQL'],
+      'rm': ['Reunião agendada / Qualificado'],
+      'rr': ['1° Reunião Realizada - Apresentação'],
+      'proposta': ['Proposta enviada / Follow Up', 'Enviar para assinatura'],
+      'venda': ['Ganho'],
+    };
+    
+    const targetPhases = indicatorToPhases[indicator];
+    if (!targetPhases) return [];
+    
+    // Filter cards by phase AND period
+    for (const card of cards) {
+      const entryTime = card.dataEntrada.getTime();
+      if (
+        targetPhases.includes(card.fase) &&
+        entryTime >= startTime &&
+        entryTime <= endTime &&
+        !seenIds.has(card.id)
+      ) {
+        targetCards.push(card);
+        seenIds.add(card.id);
       }
     }
     
