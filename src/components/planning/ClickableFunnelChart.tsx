@@ -207,7 +207,14 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedC
 
     // For Modelo Atual or Consolidado (use Modelo Atual data)
     if (selectedBU === 'modelo_atual' || useConsolidado) {
-      const items = modeloAtualAnalytics.getDetailItemsForIndicator(indicator);
+      let items = modeloAtualAnalytics.getDetailItemsForIndicator(indicator);
+      
+      // Apply closers filter to Modelo Atual items
+      if (selectedClosers?.length && selectedClosers.length > 0) {
+        items = items.filter(item => 
+          selectedClosers.includes(item.responsible || '')
+        );
+      }
       
       // For consolidado, also add items from all BUs
       if (useConsolidado) {
