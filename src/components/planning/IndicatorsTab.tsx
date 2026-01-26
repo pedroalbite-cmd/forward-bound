@@ -704,10 +704,10 @@ export function IndicatorsTab() {
       {/* New Charts - MQLs, Leads and Funnel */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="space-y-4">
-          <LeadsMqlsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
-          <LeadsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
+          <LeadsMqlsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} selectedClosers={selectedClosers} />
+          <LeadsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} selectedClosers={selectedClosers} />
         </div>
-        <ClickableFunnelChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} />
+        <ClickableFunnelChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} selectedClosers={selectedClosers} />
       </div>
 
       {/* Charts Section with View Mode Toggle */}

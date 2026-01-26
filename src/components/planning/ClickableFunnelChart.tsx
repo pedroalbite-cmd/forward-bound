@@ -17,6 +17,7 @@ interface ClickableFunnelChartProps {
   startDate: Date;
   endDate: Date;
   selectedBU: BUType | 'all';
+  selectedClosers?: string[];
 }
 
 const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Math.round(value));
@@ -30,7 +31,7 @@ interface FunnelStage {
   conversionPercent: number;
 }
 
-export function ClickableFunnelChart({ startDate, endDate, selectedBU }: ClickableFunnelChartProps) {
+export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedClosers }: ClickableFunnelChartProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetTitle, setSheetTitle] = useState('');
   const [sheetDescription, setSheetDescription] = useState('');
@@ -61,14 +62,24 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
   const oxyHackerLeadsQty = getOxyHackerQty('leads', startDate, endDate);
   const franquiaLeadsQty = getExpansaoQty('leads', startDate, endDate);
   
+  // Helper to get filtered qty for Modelo Atual when closers filter is active
+  const getFilteredModeloAtualQty = (indicator: IndicatorType): number => {
+    if (selectedClosers?.length && selectedClosers.length > 0) {
+      const cards = modeloAtualAnalytics.getCardsForIndicator(indicator);
+      return cards.filter(c => selectedClosers.includes(c.responsavel || '')).length;
+    }
+    if (indicator === 'leads') return leadsQty;
+    return getModeloAtualQty(indicator, startDate, endDate);
+  };
+
   // Get totals based on selected BU - all BUs now use external db
   const totals = useConsolidado ? {
-    leads: leadsQty + o2TaxLeadsQty + oxyHackerLeadsQty + franquiaLeadsQty,
-    mql: getModeloAtualQty('mql', startDate, endDate) + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate),
-    rm: getModeloAtualQty('rm', startDate, endDate) + getO2TaxQty('rm', startDate, endDate) + getOxyHackerQty('rm', startDate, endDate) + getExpansaoQty('rm', startDate, endDate),
-    rr: getModeloAtualQty('rr', startDate, endDate) + getO2TaxQty('rr', startDate, endDate) + getOxyHackerQty('rr', startDate, endDate) + getExpansaoQty('rr', startDate, endDate),
-    proposta: getModeloAtualQty('proposta', startDate, endDate) + getO2TaxQty('proposta', startDate, endDate) + getOxyHackerQty('proposta', startDate, endDate) + getExpansaoQty('proposta', startDate, endDate),
-    venda: getModeloAtualQty('venda', startDate, endDate) + getO2TaxQty('venda', startDate, endDate) + getOxyHackerQty('venda', startDate, endDate) + getExpansaoQty('venda', startDate, endDate),
+    leads: getFilteredModeloAtualQty('leads') + o2TaxLeadsQty + oxyHackerLeadsQty + franquiaLeadsQty,
+    mql: getFilteredModeloAtualQty('mql') + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate),
+    rm: getFilteredModeloAtualQty('rm') + getO2TaxQty('rm', startDate, endDate) + getOxyHackerQty('rm', startDate, endDate) + getExpansaoQty('rm', startDate, endDate),
+    rr: getFilteredModeloAtualQty('rr') + getO2TaxQty('rr', startDate, endDate) + getOxyHackerQty('rr', startDate, endDate) + getExpansaoQty('rr', startDate, endDate),
+    proposta: getFilteredModeloAtualQty('proposta') + getO2TaxQty('proposta', startDate, endDate) + getOxyHackerQty('proposta', startDate, endDate) + getExpansaoQty('proposta', startDate, endDate),
+    venda: getFilteredModeloAtualQty('venda') + getO2TaxQty('venda', startDate, endDate) + getOxyHackerQty('venda', startDate, endDate) + getExpansaoQty('venda', startDate, endDate),
   } : useExpansaoData ? {
     leads: franquiaLeadsQty,
     mql: getExpansaoQty('mql', startDate, endDate),
@@ -91,12 +102,12 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
     proposta: getOxyHackerQty('proposta', startDate, endDate),
     venda: getOxyHackerQty('venda', startDate, endDate),
   } : {
-    leads: leadsQty,
-    mql: getModeloAtualQty('mql', startDate, endDate),
-    rm: getModeloAtualQty('rm', startDate, endDate),
-    rr: getModeloAtualQty('rr', startDate, endDate),
-    proposta: getModeloAtualQty('proposta', startDate, endDate),
-    venda: getModeloAtualQty('venda', startDate, endDate),
+    leads: getFilteredModeloAtualQty('leads'),
+    mql: getFilteredModeloAtualQty('mql'),
+    rm: getFilteredModeloAtualQty('rm'),
+    rr: getFilteredModeloAtualQty('rr'),
+    proposta: getFilteredModeloAtualQty('proposta'),
+    venda: getFilteredModeloAtualQty('venda'),
   };
 
   // Calculate conversions
