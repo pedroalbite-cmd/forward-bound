@@ -83,17 +83,17 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
   const startTime = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
   const endTime = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).getTime();
 
+  // Use the SAME data source and filtering as useO2TaxMetas for consistency
   const { data, isLoading, error } = useQuery({
     queryKey: ['o2tax-analytics', startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
-      // Use server-side filtering with proper timestamps to include full days
+      // Use 'preview' action (same as useO2TaxMetas) to get ALL data and filter locally
+      // This ensures consistency between indicator numbers and drill-down lists
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
         body: { 
           table: 'pipefy_cards_movements', 
-          action: 'query_period',
-          startDate: startDate.toISOString().split('T')[0] + 'T00:00:00',
-          endDate: endDate.toISOString().split('T')[0] + 'T23:59:59',
-          limit: 15000 
+          action: 'preview', 
+          limit: 5000 
         }
       });
 
@@ -106,27 +106,23 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
         return { cards: [] };
       }
 
-      console.log(`[O2 TAX] Loaded ${responseData.data.length} movements for period`);
+      console.log(`[O2 TAX Analytics] Loaded ${responseData.data.length} total movements (using preview like Metas)`);
 
       // Store ALL movements for drill-down (not just latest per card)
-      // This is critical because a card can have MQL movement early and RR movement later
+      // CRITICAL: Use the SAME fallback logic as useO2TaxMetas (parseDate || new Date())
       const allMovements: O2TaxCard[] = [];
       
       for (const row of responseData.data) {
         const id = String(row.ID);
-        const dataEntrada = parseDate(row['Entrada']);
-        
-        // Only include cards with valid entry date
-        if (!dataEntrada) continue;
+        // Use fallback date like useO2TaxMetas to avoid discrepancy
+        const dataEntrada = parseDate(row['Entrada']) || new Date();
         
         // Parse exit date and calculate duration dynamically
         const dataSaida = parseDate(row['Saída']);
         let duracao = 0;
         if (dataSaida) {
-          // Card already left the phase: difference between Exit and Entry
           duracao = Math.floor((dataSaida.getTime() - dataEntrada.getTime()) / 1000);
         } else {
-          // Card still in phase: time since entry until now
           duracao = Math.floor((Date.now() - dataEntrada.getTime()) / 1000);
         }
         
@@ -153,7 +149,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
         allMovements.push(card);
       }
 
-      console.log(`[O2 TAX] Processed ${allMovements.length} total movements`);
+      console.log(`[O2 TAX Analytics] Processed ${allMovements.length} total movements`);
       return { cards: allMovements };
     },
     staleTime: 5 * 60 * 1000,
@@ -457,37 +453,60 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
   }, [cards, startTime, endTime]);
 
   // Get detail items for a specific indicator (for drill-down)
+  // ALIGNED with useO2TaxMetas logic for consistency
   const getDetailItemsForIndicator = (indicator: string): DetailItem[] => {
     const targetCards: O2TaxCard[] = [];
     const seenIds = new Set<string>();
     
-    // Map indicator to Pipefy phases
-    const indicatorToPhases: Record<string, string[]> = {
-      'leads': ['Start form', 'MQL'],
-      'mql': ['MQL'],
-      'rm': ['Reunião agendada / Qualificado'],
-      'rr': ['1° Reunião Realizada - Apresentação'],
-      'proposta': ['Proposta enviada / Follow Up', 'Enviar para assinatura'],
-      'venda': ['Ganho'],
+    // Map indicator to Pipefy phases (same as PHASE_TO_INDICATOR in useO2TaxMetas)
+    const PHASE_TO_INDICATOR_MAP: Record<string, string> = {
+      'Start form': 'leads',
+      'MQL': 'mql',
+      'Reunião agendada / Qualificado': 'rm',
+      '1° Reunião Realizada - Apresentação': 'rr',
+      'Proposta enviada / Follow Up': 'proposta',
+      'Enviar para assinatura': 'proposta',
+      'Ganho': 'venda',
     };
     
-    const targetPhases = indicatorToPhases[indicator];
-    if (!targetPhases) return [];
-    
-    // Filter cards by phase AND period
+    // Filter cards using the SAME logic as useO2TaxMetas.getQtyForPeriod
     for (const card of cards) {
       const entryTime = card.dataEntrada.getTime();
-      if (
-        targetPhases.includes(card.fase) &&
-        entryTime >= startTime &&
-        entryTime <= endTime &&
-        !seenIds.has(card.id)
-      ) {
-        targetCards.push(card);
+      if (entryTime < startTime || entryTime > endTime) continue;
+      if (seenIds.has(card.id)) continue;
+      
+      const movementIndicator = PHASE_TO_INDICATOR_MAP[card.fase];
+      let matches = false;
+      
+      if (indicator === 'leads') {
+        // For "leads", count unique cards that entered via "Start form" OR "MQL"
+        if (card.fase === 'Start form' || card.fase === 'MQL') {
+          matches = true;
+        }
+      } else if (indicator === 'venda') {
+        // For "venda", count unique cards that ENTERED "Ganho" phase
+        if (card.fase === 'Ganho') {
+          matches = true;
+        }
+      } else if (indicator === 'proposta') {
+        // For "proposta", count ONLY cards that explicitly passed through proposta phases
+        if (movementIndicator === 'proposta') {
+          matches = true;
+        }
+      } else {
+        // For other indicators, count unique cards that passed through the phase
+        if (movementIndicator === indicator) {
+          matches = true;
+        }
+      }
+      
+      if (matches) {
         seenIds.add(card.id);
+        targetCards.push(card);
       }
     }
     
+    console.log(`[O2 TAX Analytics] getDetailItemsForIndicator(${indicator}): ${targetCards.length} unique cards in period`);
     return targetCards.map(toDetailItem);
   };
 
