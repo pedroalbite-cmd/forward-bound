@@ -1,131 +1,100 @@
 
 
-## Plano: Corrigir Filtro de Closers para Usar Campo Específico
+## Plano: Corrigir Filtro de Closers que Está Zerando Vendas
 
 ### Problema Identificado
 
-O filtro de Closers está comparando contra o campo `responsavel`, que é preenchido com fallback:
-```
-Closer responsável || SDR responsável || Responsável
-```
+Após a mudança para separar o campo `closer` do campo `responsavel`, os totais de vendas estão zerados ou incorretos, mesmo quando o filtro de closers é removido. O problema parece estar na lógica de filtro que não consegue encontrar correspondência entre os valores do filtro e os valores do campo `closer` nos cards.
 
-Isso causa o seguinte cenário problemático:
-- Card com `Closer responsável = "Pedro Albite"` e `SDR responsável = "Jessica Simon Nunes"`
-- O campo `responsavel` = "Pedro Albite" (prioridade para Closer) ✓ Correto
-- **MAS** um card com `Closer responsável = ""` e `SDR responsável = "Jessica Simon Nunes"`:
-- O campo `responsavel` = "Jessica Simon Nunes"
-- Este card NÃO deveria aparecer no filtro de Pedro ✓ Correto
+### Análise Técnica
 
-O problema real pode ser que a coluna **exibida** no DetailSheet mostra o SDR, mesmo quando o Closer é Pedro. Ou seja, o filtro está correto, mas a **exibição** mostra o campo errado.
+1. **Dados no banco confirmados**: Vendas de janeiro 2026 têm `"Closer responsável": "Pedro Albite"` corretamente preenchido
 
----
+2. **Fluxo atual do código**:
+   - `getFilteredModeloAtualQty` verifica se `selectedClosers.length > 0`
+   - Se sim, filtra cards por `c.closer`
+   - Se não, usa `getModeloAtualQty` de `useModeloAtualMetas`
 
-### Análise do Banco de Dados
-
-No banco `pipefy_moviment_cfos`:
-- `Closer responsável`: Campo específico do Closer (Pedro Albite, Daniel Trindade)
-- `SDR responsável`: Campo do SDR (Jessica Simon Nunes, etc.)
-
-O código atual mapeia para `responsavel`:
-```typescript
-responsavel: row['Closer responsável'] || row['SDR responsável'] || row['Responsável'] || ...
-```
-
----
+3. **Problema potencial**: O campo `closer` pode estar vindo como `undefined` ou `null` ao invés de string vazia quando o valor não existe, causando falha na comparação
 
 ### Solução Proposta
 
-**Opção 1: Separar campos Closer e SDR (Recomendada)**
+Modificar o código para ser mais robusto na comparação de closers, verificando explicitamente por valores válidos:
 
-Adicionar um campo `closer` separado no `ModeloAtualCard` para armazenar especificamente o "Closer responsável", e usar esse campo para o filtro. O campo `responsavel` mostraria o SDR para exibição na coluna "Responsável".
+#### 1. Atualizar `useModeloAtualAnalytics.ts` - Garantir campo closer sempre definido
 
-#### 1. Modificar `src/hooks/useModeloAtualAnalytics.ts`
+| Linha | Mudança |
+|-------|---------|
+| 159 | Usar nullish coalescing mais robusto |
 
-Adicionar campo `closer` na interface `ModeloAtualCard`:
+**Antes:**
 ```typescript
-export interface ModeloAtualCard {
-  // ... campos existentes ...
-  responsavel?: string;  // Para exibição (SDR ou outro)
-  closer?: string;       // Novo campo: especificamente o Closer
-}
+closer: row['Closer responsável'] || '',
 ```
 
-Atualizar mapeamento no parsing:
+**Depois:**
 ```typescript
-cards.push({
-  // ... outros campos ...
-  responsavel: row['SDR responsável'] || row['Responsável'] || '',  // SDR para exibição
-  closer: row['Closer responsável'] || '',  // Closer separado para filtro
+closer: String(row['Closer responsável'] ?? '').trim(),
+```
+
+Isso garante que:
+- Valores `null` ou `undefined` virem `''`
+- Espaços em branco extras sejam removidos
+- O valor sempre seja uma string
+
+#### 2. Atualizar `ClickableFunnelChart.tsx` - Melhorar robustez do filtro
+
+| Função | Mudança |
+|--------|---------|
+| `getFilteredModeloAtualQty` | Adicionar logging e trim nos valores |
+| `getFilteredModeloAtualValue` | Mesma correção |
+
+**Antes:**
+```typescript
+return cards.filter(c => selectedClosers.includes(c.closer || '')).length;
+```
+
+**Depois:**
+```typescript
+const filteredCards = cards.filter(c => {
+  const closerValue = (c.closer || '').trim();
+  return closerValue && selectedClosers.includes(closerValue);
 });
+console.log(`[ClickableFunnelChart] Filter ${indicator}: ${cards.length} total, ${filteredCards.length} matched closers ${selectedClosers.join(',')}`);
+return filteredCards.length;
 ```
 
-Atualizar `toDetailItem` para usar ambos os campos:
+#### 3. Adicionar logs de diagnóstico temporários
+
+Para identificar o valor exato de `closer` nos cards, adicionar logs:
+
 ```typescript
-const toDetailItem = (card: ModeloAtualCard): DetailItem => ({
-  // ... outros campos ...
-  responsible: card.closer || card.responsavel || undefined,  // Prioriza Closer na exibição
-});
+// Em getCardsForIndicator ou no mapping
+console.log(`[ModeloAtualAnalytics] Card ${card.id} closer: "${card.closer}" (typeof: ${typeof card.closer})`);
 ```
 
-#### 2. Modificar `src/components/planning/ClickableFunnelChart.tsx`
+### Arquivos a Modificar
 
-Atualizar helpers de filtro para usar `card.closer`:
-```typescript
-const getFilteredModeloAtualQty = (indicator: IndicatorType): number => {
-  if (selectedClosers?.length && selectedClosers.length > 0) {
-    const cards = modeloAtualAnalytics.getCardsForIndicator(indicator);
-    return cards.filter(c => selectedClosers.includes(c.closer || '')).length;
-  }
-  // ...
-};
-
-const getFilteredModeloAtualValue = (indicator: 'proposta' | 'venda'): number => {
-  if (selectedClosers?.length && selectedClosers.length > 0) {
-    const cards = modeloAtualAnalytics.getCardsForIndicator(indicator);
-    const filteredCards = cards.filter(c => selectedClosers.includes(c.closer || ''));
-    return filteredCards.reduce((sum, card) => sum + card.valor, 0);
-  }
-  // ...
-};
-```
-
-Atualizar `getItemsForIndicator` para filtrar por `closer`:
-```typescript
-if (selectedClosers?.length && selectedClosers.length > 0) {
-  const cards = modeloAtualAnalytics.getCardsForIndicator(indicator);
-  const filteredCards = cards.filter(c => selectedClosers.includes(c.closer || ''));
-  items = filteredCards.map(modeloAtualAnalytics.toDetailItem);
-}
-```
-
-#### 3. Modificar outros componentes que usam o filtro
-
-| Componente | Mudança |
-|------------|---------|
-| `LeadsStackedChart.tsx` | Filtrar por `c.closer` |
-| `LeadsMqlsStackedChart.tsx` | Filtrar por `c.closer` |
-| `IndicatorsTab.tsx` | Filtrar por `card.closer` |
-
----
+| Arquivo | Tipo de Mudança |
+|---------|-----------------|
+| `src/hooks/useModeloAtualAnalytics.ts` | Usar `String().trim()` para normalizar campo closer |
+| `src/components/planning/ClickableFunnelChart.tsx` | Adicionar trim e validação no filtro |
+| `src/components/planning/LeadsStackedChart.tsx` | Mesma correção no filtro de closers |
+| `src/components/planning/LeadsMqlsStackedChart.tsx` | Mesma correção no filtro de closers |
+| `src/components/planning/IndicatorsTab.tsx` | Mesma correção no filtro de closers |
 
 ### Comportamento Esperado Após Correção
 
 | Cenário | Resultado |
 |---------|-----------|
-| Card com Closer = "Pedro", SDR = "Jessica" | Filtro Pedro ✓ mostra card, coluna Responsável = "Pedro" |
-| Card com Closer = "", SDR = "Jessica" | Filtro Pedro ✗ NÃO mostra card |
-| Card com Closer = "Daniel", SDR = "Jessica" | Filtro Pedro ✗ NÃO mostra card |
-| Sem filtro de closers | Mostra todos os cards |
+| Sem filtro de closers | Mostra todas as vendas (6 cards conforme logs) |
+| Filtro Pedro ativo | Mostra apenas vendas de Pedro (3+ vendas confirmadas no banco) |
+| Filtro Daniel ativo | Mostra apenas vendas de Daniel |
+| Ambos selecionados | Mostra vendas de Pedro + Daniel |
 
----
+### Validação
 
-### Resumo de Arquivos a Modificar
-
-| Arquivo | Tipo de Mudança |
-|---------|-----------------|
-| `src/hooks/useModeloAtualAnalytics.ts` | Adicionar campo `closer` na interface e mapeamento |
-| `src/components/planning/ClickableFunnelChart.tsx` | Usar `card.closer` para filtros |
-| `src/components/planning/LeadsStackedChart.tsx` | Usar `card.closer` para filtros |
-| `src/components/planning/LeadsMqlsStackedChart.tsx` | Usar `card.closer` para filtros |
-| `src/components/planning/IndicatorsTab.tsx` | Usar `card.closer` para filtros nos radial cards |
+Após a correção, verificar nos logs do console:
+1. `[ClickableFunnelChart] Filter venda: X total, Y matched closers Pedro Albite` → Y deve ser > 0
+2. Os valores de venda no funil devem corresponder aos cards filtrados
 
