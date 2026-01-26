@@ -378,10 +378,15 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     const rangeMap = new Map<string, O2TaxCard[]>();
     const uniqueCards = new Map<string, O2TaxCard>();
     
-    // Get unique cards in period
+    // Get unique cards in period that entered via MQL phase
     for (const card of cards) {
       const entryTime = card.dataEntrada.getTime();
-      if (entryTime >= startTime && entryTime <= endTime && !uniqueCards.has(card.id)) {
+      if (
+        card.fase === 'MQL' &&
+        entryTime >= startTime && 
+        entryTime <= endTime && 
+        !uniqueCards.has(card.id)
+      ) {
         uniqueCards.set(card.id, card);
       }
     }
@@ -408,6 +413,53 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
       .sort((a, b) => b.count - a.count);
   }, [cards, startTime, endTime]);
 
+  // Get leads (cards that entered via "Start form" OR "MQL" in the period)
+  const getLeads = useMemo(() => {
+    const leadsCards: O2TaxCard[] = [];
+    const seenIds = new Set<string>();
+    
+    for (const card of cards) {
+      const entryTime = card.dataEntrada.getTime();
+      if (
+        (card.fase === 'Start form' || card.fase === 'MQL') &&
+        entryTime >= startTime &&
+        entryTime <= endTime &&
+        !seenIds.has(card.id)
+      ) {
+        leadsCards.push(card);
+        seenIds.add(card.id);
+      }
+    }
+    
+    return leadsCards;
+  }, [cards, startTime, endTime]);
+
+  // Get detail items for a specific indicator (for drill-down)
+  const getDetailItemsForIndicator = (indicator: string): DetailItem[] => {
+    let targetCards: O2TaxCard[] = [];
+    
+    if (indicator === 'leads') {
+      targetCards = getLeads;
+    } else if (indicator === 'mql') {
+      // Get all unique MQL cards
+      const seenIds = new Set<string>();
+      for (const card of cards) {
+        const entryTime = card.dataEntrada.getTime();
+        if (
+          card.fase === 'MQL' &&
+          entryTime >= startTime &&
+          entryTime <= endTime &&
+          !seenIds.has(card.id)
+        ) {
+          targetCards.push(card);
+          seenIds.add(card.id);
+        }
+      }
+    }
+    
+    return targetCards.map(toDetailItem);
+  };
+
   // Helper function to convert O2TaxCard to DetailItem
   const toDetailItem = (card: O2TaxCard): DetailItem => ({
     id: card.id,
@@ -432,6 +484,8 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     getLostDeals,
     getLossReasons,
     getMqlsByRevenue,
+    getLeads,
+    getDetailItemsForIndicator,
     toDetailItem,
   };
 }
