@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { eachDayOfInterval, eachMonthOfInterval, addDays, differenceInDays } from "date-fns";
 
-export type O2TaxIndicator = 'mql' | 'rm' | 'rr' | 'proposta' | 'venda';
+export type O2TaxIndicator = 'leads' | 'mql' | 'rm' | 'rr' | 'proposta' | 'venda';
 export type ChartGrouping = 'daily' | 'weekly' | 'monthly';
 
 interface O2TaxMovement {
@@ -23,7 +23,9 @@ interface O2TaxMetasResult {
 
 // Map Pipefy phase names to indicator keys
 // O2 TAX uses "1° Reunião Realizada - Apresentação" for RR
+// Leads = cards that entered via "Start form" or "MQL"
 const PHASE_TO_INDICATOR: Record<string, O2TaxIndicator> = {
+  'Start form': 'leads',
   'MQL': 'mql',
   'Reunião agendada / Qualificado': 'rm',
   '1° Reunião Realizada - Apresentação': 'rr',
@@ -105,7 +107,12 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
       if (entryTime >= startTime && entryTime <= endTime) {
         const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
         
-        if (indicator === 'venda') {
+        if (indicator === 'leads') {
+          // For "leads", count unique cards that entered via "Start form" OR "MQL"
+          if (movement.fase === 'Start form' || movement.fase === 'MQL') {
+            uniqueCards.add(movement.id);
+          }
+        } else if (indicator === 'venda') {
           // For "venda", count unique cards that ENTERED "Ganho" phase during the period
           if (movement.fase === 'Ganho') {
             uniqueCards.add(movement.id);
@@ -186,6 +193,7 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
     
     // Annual metas based on planning (updated to match real targets)
     const annualMetas: Record<O2TaxIndicator, number> = {
+      leads: 600,     // 50/month (estimated)
       mql: 504,       // 42/month
       rm: 180,        // 15/month
       rr: 96,         // 8/month
@@ -205,6 +213,7 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
     
     const daysInYear = 365;
     const annualMetas: Record<O2TaxIndicator, number> = {
+      leads: 600,
       mql: 504,
       rm: 180,
       rr: 96,
@@ -222,7 +231,11 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
         if (entryTime >= periodStart && entryTime <= periodEnd) {
           const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
           
-          if (indicator === 'venda') {
+          if (indicator === 'leads') {
+            if (movement.fase === 'Start form' || movement.fase === 'MQL') {
+              uniqueCards.add(movement.id);
+            }
+          } else if (indicator === 'venda') {
             if (movement.fase === 'Ganho') {
               uniqueCards.add(movement.id);
             }

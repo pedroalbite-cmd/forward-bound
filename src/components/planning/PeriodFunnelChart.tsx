@@ -42,11 +42,12 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
   
   // Get leads data using the same logic as LeadsStackedChart (Leads = Novos Leads + MQLs)
   const leadsQty = getModeloAtualQty('leads', startDate, endDate);
+  const o2TaxLeadsQty = getO2TaxQty('leads', startDate, endDate);
   
   // Get totals based on selected BU
   const totals = useConsolidado ? {
     // Consolidado: sum all BUs (Modelo Atual + O2 TAX + Oxy Hacker + Franquia)
-    leads: leadsQty, // Leads data only from Modelo Atual for now
+    leads: leadsQty + o2TaxLeadsQty, // Include O2 TAX leads
     mql: getMqlsQtyForPeriod(startDate, endDate) + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate),
     rm: getClosersQty('rm', startDate, endDate) + getO2TaxQty('rm', startDate, endDate) + getOxyHackerQty('rm', startDate, endDate) + getExpansaoQty('rm', startDate, endDate),
     rr: getClosersQty('rr', startDate, endDate) + getO2TaxQty('rr', startDate, endDate) + getOxyHackerQty('rr', startDate, endDate) + getExpansaoQty('rr', startDate, endDate),
@@ -60,7 +61,7 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
     proposta: getExpansaoQty('proposta', startDate, endDate),
     venda: getExpansaoQty('venda', startDate, endDate),
   } : useO2TaxData ? {
-    leads: 0, // No leads data for O2 TAX yet
+    leads: o2TaxLeadsQty, // Use O2 TAX leads data
     mql: getO2TaxQty('mql', startDate, endDate),
     rm: getO2TaxQty('rm', startDate, endDate),
     rr: getO2TaxQty('rr', startDate, endDate),
