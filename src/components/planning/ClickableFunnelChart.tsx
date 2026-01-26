@@ -179,38 +179,9 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU }: Clickab
       return oxyHackerAnalytics.getDetailItemsForIndicator(indicator);
     }
 
-    // For O2 TAX - now supports leads
+    // For O2 TAX - use analytics hook directly (now supports all indicators with date filtering)
     if (useO2TaxData) {
-      if (indicator === 'leads') {
-        return o2TaxAnalytics.getDetailItemsForIndicator('leads');
-      }
-
-      // Map O2 TAX indicator names
-      const o2TaxIndicatorMap: Record<string, string> = {
-        'mql': 'MQL',
-        'rm': 'Reunião agendada / Qualificado',
-        'rr': '1° Reunião Realizada - Apresentação',
-        'proposta': 'Proposta enviada / Follow Up',
-        'venda': 'Ganho',
-      };
-      
-      const phase = o2TaxIndicatorMap[indicator];
-      if (!phase) return [];
-      
-      // Filter cards by phase
-      const wonCards = o2TaxAnalytics.getDealsWon;
-      
-      if (indicator === 'venda') {
-        return wonCards.cards.map(o2TaxAnalytics.toDetailItem);
-      }
-      
-      // For other indicators, get from cardsByPhase
-      const phaseData = o2TaxAnalytics.getCardsByPhase.find(p => p.phase === phase || 
-        (indicator === 'rm' && p.phase === 'RM') ||
-        (indicator === 'rr' && p.phase === 'RR') ||
-        (indicator === 'proposta' && p.phase === 'Proposta')
-      );
-      return phaseData?.cards.map(o2TaxAnalytics.toDetailItem) ?? [];
+      return o2TaxAnalytics.getDetailItemsForIndicator(indicator);
     }
 
     // For Modelo Atual or Consolidado (use Modelo Atual data)
