@@ -1,190 +1,237 @@
 
 
-## Plano: Adicionar 5 Novos Acelerômetros na Aba Indicadores
+## Plano: Aplicar Filtros de BU e Closer aos Indicadores Monetários
 
-### Objetivo
+### Problema Atual
 
-Adicionar 5 novos acelerômetros (radial gauges) na aba "Indicadores" para monitorar métricas financeiras:
-1. **ROI** - Retorno sobre Investimento 
-2. **Faturamento** - Total de faturamento realizado
-3. **MRR** - Receita Recorrente Mensal
-4. **SETUP** - Valor de Setup (implantação)
-5. **PONTUAL** - Valor Pontual (receitas não recorrentes)
+Os 5 novos acelerômetros (ROI, Faturamento, MRR, SETUP, PONTUAL) não respeitam:
+1. **Filtro de BUs** - MRR/Setup/Pontual só buscam dados do Modelo Atual
+2. **Filtro de Closer** - Nenhum dos indicadores monetários filtra por Closer selecionado
 
 ---
 
-### Arquitetura dos Dados
+### Solução
 
-Os dados para estes novos indicadores virão de diferentes fontes:
+#### 1. Modificar `useModeloAtualMetas.ts`
 
-| Indicador | Fonte de Dados Realizado | Fonte de Meta |
-|-----------|-------------------------|---------------|
-| ROI | Calculado: Faturamento / Investimento | Fixa (ex: 10x) ou sem meta |
-| Faturamento | `useModeloAtualMetas.getValueForPeriod('venda')` + outras BUs | `funnelData.faturamentoMeta` do MediaMetasContext |
-| MRR | Cards na fase 'Ganho': soma de `valorMRR` | Meta baseada em % do faturamento |
-| SETUP | Cards na fase 'Ganho': soma de `valorSetup` | Meta baseada em % do faturamento |
-| PONTUAL | Cards na fase 'Ganho': soma de `valorPontual` | Meta baseada em % do faturamento |
-
----
-
-### Modificações no Hook `useModeloAtualMetas.ts`
-
-**1. Adicionar novas funções para extrair valores por tipo:**
+Adicionar suporte a filtro de Closer nas funções `getMrrForPeriod`, `getSetupForPeriod`, `getPontualForPeriod` e `getValueForPeriod`:
 
 ```typescript
-// Já existe a função getValueForPeriod que retorna o valor total (MRR + Pontual + Educação + Setup)
-// Adicionar funções específicas para cada tipo de valor
-
-const getMrrForPeriod = (start?: Date, end?: Date): number => {
-  // Filtrar cards na fase 'Ganho' e somar apenas valorMRR
-};
-
-const getSetupForPeriod = (start?: Date, end?: Date): number => {
-  // Filtrar cards na fase 'Ganho' e somar apenas valorSetup
-};
-
-const getPontualForPeriod = (start?: Date, end?: Date): number => {
-  // Filtrar cards na fase 'Ganho' e somar apenas valorPontual
+// Cada função receberá um parâmetro opcional closerFilter
+const getMrrForPeriod = (start?: Date, end?: Date, closerFilter?: string[]): number => {
+  // Filtrar cards por closer se closerFilter fornecido
+  // Similar à lógica de getRealizedForIndicator
 };
 ```
+
+#### 2. Modificar `IndicatorsTab.tsx` - `getRealizedMonetaryForIndicator`
+
+**ANTES:**
+```typescript
+case 'mrr':
+  return getMrrForPeriod(startDate, endDate);
+
+case 'faturamento':
+  if (includesModeloAtual) {
+    totalFaturamento += getModeloAtualValue('venda', startDate, endDate);
+  }
+  // Outras BUs...
+```
+
+**DEPOIS:**
+```typescript
+case 'mrr':
+  // Somar MRR de todas as BUs selecionadas
+  let totalMrr = 0;
+  if (includesModeloAtual) {
+    if (selectedClosers.length > 0) {
+      // Filtrar por closer usando analytics
+      const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
+      const filteredCards = salesCards.filter(card => matchesCloserFilter(card.closer?.trim()));
+      totalMrr += filteredCards.reduce((acc, card) => acc + (card.valorMRR || 0), 0);
+    } else {
+      totalMrr += getMrrForPeriod(startDate, endDate);
+    }
+  }
+  // Para outras BUs, usar dados específicos ou ticket estimado
+  return totalMrr;
+
+case 'faturamento':
+  // Aplicar filtro de closer para Modelo Atual
+  if (includesModeloAtual) {
+    if (selectedClosers.length > 0) {
+      const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
+      const filteredCards = salesCards.filter(card => matchesCloserFilter(card.closer?.trim()));
+      totalFaturamento += filteredCards.reduce((acc, card) => acc + (card.valor || 0), 0);
+    } else {
+      totalFaturamento += getModeloAtualValue('venda', startDate, endDate);
+    }
+  }
+  // Outras BUs mantêm lógica atual (closers só se aplicam a Modelo Atual)
+```
+
+#### 3. Mesma lógica para `setup` e `pontual`
+
+Aplicar a mesma abordagem: verificar se há filtro de closer ativo, e se sim, filtrar cards de venda e somar o campo específico (`valorSetup`, `valorPontual`).
 
 ---
 
-### Modificações no `IndicatorsTab.tsx`
+### Comportamento Esperado
 
-**1. Adicionar nova interface para indicadores monetários:**
+| Filtro | Indicador | Resultado |
+|--------|-----------|-----------|
+| Só Modelo Atual + Pedro | MRR | Soma de valorMRR dos cards de venda onde closer = "Pedro Albite" |
+| O2 TAX + Franquia | Faturamento | Soma de vendas O2 TAX × R$15k + vendas Franquia × R$140k |
+| Consolidado + Sem filtro | MRR | Total de MRR de todas as BUs |
+| Modelo Atual + Daniel | Setup | Soma de valorSetup dos cards de venda onde closer = "Daniel Trindade" |
 
-```typescript
-interface MonetaryIndicatorConfig {
-  key: 'roi' | 'faturamento' | 'mrr' | 'setup' | 'pontual';
-  label: string;
-  shortLabel: string;
-  format: 'currency' | 'multiplier'; // 'currency' para R$, 'multiplier' para ROI (ex: "10x")
-}
+---
 
-const monetaryIndicatorConfigs: MonetaryIndicatorConfig[] = [
-  { key: 'roi', label: 'ROI', shortLabel: 'ROI', format: 'multiplier' },
-  { key: 'faturamento', label: 'Faturamento', shortLabel: 'Fat.', format: 'currency' },
-  { key: 'mrr', label: 'MRR', shortLabel: 'MRR', format: 'currency' },
-  { key: 'setup', label: 'Setup', shortLabel: 'Setup', format: 'currency' },
-  { key: 'pontual', label: 'Pontual', shortLabel: 'Pont.', format: 'currency' },
-];
-```
+### Modificações Detalhadas
 
-**2. Criar novo componente `MonetaryRadialCard`:**
+#### Arquivo: `src/hooks/useModeloAtualMetas.ts`
 
-Similar ao `RadialProgressCard`, mas com formatação apropriada para valores monetários (R$ compacto) e ROI (ex: "4.2x").
+**Adicionar campos ao retorno do hook (já existem, revisar se `valorMRR`, `valorSetup`, `valorPontual` estão expostos nos movements):**
 
-**3. Adicionar segunda linha de acelerômetros na UI:**
+O hook já retorna `getMrrForPeriod`, `getSetupForPeriod`, `getPontualForPeriod`. Precisamos garantir que o hook `useModeloAtualAnalytics` também tenha acesso a esses valores para filtragem por closer.
 
-```tsx
-{/* Cards de Indicadores de Quantidade (existentes) */}
-<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-  {indicatorConfigs.map(...)}
-</div>
+#### Arquivo: `src/hooks/useModeloAtualAnalytics.ts`
 
-{/* NOVO: Cards de Indicadores Monetários */}
-<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-  {monetaryIndicatorConfigs.map((indicator) => (
-    <MonetaryRadialCard 
-      key={indicator.key}
-      title={indicator.label}
-      realized={getRealizedMonetaryForIndicator(indicator)}
-      meta={getMetaMonetaryForIndicator(indicator)}
-      format={indicator.format}
-      isClickable={indicator.key !== 'roi'} // ROI não tem drill-down
-      onClick={() => handleMonetaryCardClick(indicator)}
-    />
-  ))}
-</div>
-```
+Verificar se os cards retornados por `getCardsForIndicator` incluem os campos `valorMRR`, `valorSetup`, `valorPontual`, `closer`. Se não, adicionar.
 
-**4. Implementar funções de cálculo:**
+#### Arquivo: `src/components/planning/IndicatorsTab.tsx`
+
+Modificar a função `getRealizedMonetaryForIndicator` para:
+
+1. **Faturamento**: Filtrar por closer se aplicável
+2. **MRR**: Somar de todas as BUs selecionadas, com filtro de closer para Modelo Atual
+3. **Setup**: Idem
+4. **Pontual**: Idem
+5. **ROI**: Automático (usa faturamento que já estará filtrado)
+
+---
+
+### Código Refatorado para `getRealizedMonetaryForIndicator`
 
 ```typescript
 const getRealizedMonetaryForIndicator = (indicator: MonetaryIndicatorConfig): number => {
-  switch(indicator.key) {
-    case 'roi':
-      const faturamento = getRealizedMonetaryForIndicator({ key: 'faturamento', ... });
-      const investimento = getInvestimentoPeriodo(); // Do funnelData
-      return investimento > 0 ? faturamento / investimento : 0;
-    
-    case 'faturamento':
-      // Soma de todas as BUs selecionadas
+  switch (indicator.key) {
+    case 'faturamento': {
       let total = 0;
-      if (includesModeloAtual) total += getModeloAtualValueForPeriod('venda', startDate, endDate);
-      if (includesO2Tax) total += getO2TaxValueForPeriod('venda', startDate, endDate);
-      // ... outras BUs
+      
+      if (includesModeloAtual) {
+        if (selectedClosers.length > 0) {
+          // Com filtro de closer: usar analytics para filtrar
+          const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
+          const filteredCards = salesCards.filter(card => 
+            matchesCloserFilter((card.responsible || '').trim())
+          );
+          total += filteredCards.reduce((acc, card) => acc + (card.value || 0), 0);
+        } else {
+          total += getModeloAtualValue('venda', startDate, endDate);
+        }
+      }
+      
+      // Outras BUs não têm filtro de closer
+      if (includesO2Tax) {
+        total += getO2TaxQty('venda', startDate, endDate) * 15000;
+      }
+      if (includesOxyHacker) {
+        total += getOxyHackerQty('venda', startDate, endDate) * 54000;
+      }
+      if (includesFranquia) {
+        total += getExpansaoQty('venda', startDate, endDate) * 140000;
+      }
+      
       return total;
+    }
     
-    case 'mrr':
-      return getMrrForPeriod(startDate, endDate);
+    case 'roi': {
+      const faturamento = getRealizedMonetaryForIndicator({ ...indicator, key: 'faturamento' });
+      const investimento = getInvestimentoPeriodo();
+      return investimento > 0 ? faturamento / investimento : 0;
+    }
     
-    case 'setup':
-      return getSetupForPeriod(startDate, endDate);
+    case 'mrr': {
+      let total = 0;
+      
+      if (includesModeloAtual) {
+        if (selectedClosers.length > 0) {
+          const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
+          const filteredCards = salesCards.filter(card => 
+            matchesCloserFilter((card.responsible || '').trim())
+          );
+          // Acessar valorMRR dos items (precisa estar disponível no DetailItem)
+          total += filteredCards.reduce((acc, card) => acc + ((card as any).mrr || 0), 0);
+        } else {
+          total += getMrrForPeriod(startDate, endDate);
+        }
+      }
+      
+      // Para O2 TAX, Oxy Hacker, Franquia: estimar ou buscar de hooks específicos
+      // (atualmente não têm campo MRR separado, então usar 0 ou estimativa)
+      
+      return total;
+    }
     
-    case 'pontual':
-      return getPontualForPeriod(startDate, endDate);
-  }
-};
-
-const getMetaMonetaryForIndicator = (indicator: MonetaryIndicatorConfig): number => {
-  switch(indicator.key) {
-    case 'roi':
-      return 10; // Meta de 10x ROI (ou calcular dinamicamente)
+    case 'setup': {
+      let total = 0;
+      
+      if (includesModeloAtual) {
+        if (selectedClosers.length > 0) {
+          const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
+          const filteredCards = salesCards.filter(card => 
+            matchesCloserFilter((card.responsible || '').trim())
+          );
+          total += filteredCards.reduce((acc, card) => acc + ((card as any).setup || 0), 0);
+        } else {
+          total += getSetupForPeriod(startDate, endDate);
+        }
+      }
+      
+      return total;
+    }
     
-    case 'faturamento':
-      // Soma das metas de faturamento das BUs selecionadas
-      return calcularMetaFaturamento();
+    case 'pontual': {
+      let total = 0;
+      
+      if (includesModeloAtual) {
+        if (selectedClosers.length > 0) {
+          const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
+          const filteredCards = salesCards.filter(card => 
+            matchesCloserFilter((card.responsible || '').trim())
+          );
+          total += filteredCards.reduce((acc, card) => acc + ((card as any).pontual || 0), 0);
+        } else {
+          total += getPontualForPeriod(startDate, endDate);
+        }
+      }
+      
+      return total;
+    }
     
-    case 'mrr':
-    case 'setup':
-    case 'pontual':
-      // Distribuir proporcionalmente com base em histórico
-      // Ex: MRR = ~60% do faturamento, Setup = ~25%, Pontual = ~15%
-      return getMetaFaturamento() * getProporção(indicator.key);
+    default:
+      return 0;
   }
 };
 ```
 
 ---
 
-### Extensão dos Hooks de Metas
+### Extensão do `DetailItem` (se necessário)
 
-**Arquivo: `src/hooks/useModeloAtualMetas.ts`**
+Adicionar campos opcionais ao tipo `DetailItem` em `DetailSheet.tsx`:
 
-Adicionar funções para extrair valores individuais (MRR, Setup, Pontual) da mesma forma que `getValueForPeriod`, mas filtrando apenas o campo específico.
-
-**Arquivos similares:**
-- `src/hooks/useO2TaxMetas.ts`
-- `src/hooks/useExpansaoMetas.ts` 
-- `src/hooks/useOxyHackerMetas.ts`
-
-Cada um precisará de funções equivalentes se possuírem campos de valor separados.
-
----
-
-### Layout Visual Proposto
-
-```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│  Visão Meta Pace                    [BU ▼] [Closers ▼] [De:] [Até:] ⟳  │
-├─────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
-│  │  MQLs    │ │ Reuniões │ │ Reuniões │ │Propostas │ │  Vendas  │      │
-│  │   ⭕    │ │Agendadas │ │Realizadas│ │ Enviadas │ │   ⭕    │      │
-│  │   42    │ │   ⭕    │ │   ⭕    │ │   ⭕    │ │   12    │      │
-│  │ Meta:52 │ │  Meta:30 │ │  Meta:24 │ │  Meta:12 │ │ Meta:6  │      │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘      │
-│                                                                         │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
-│  │   ROI   │ │Faturamen.│ │   MRR   │ │  Setup  │ │ Pontual │      │
-│  │   ⭕    │ │   ⭕    │ │   ⭕    │ │   ⭕    │ │   ⭕    │      │
-│  │  4.2x   │ │ R$ 850k │ │ R$ 510k │ │ R$ 213k │ │ R$ 127k │      │
-│  │Meta:10x │ │Meta:1.2M │ │Meta:700k│ │Meta:300k│ │Meta:200k│      │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘      │
-└─────────────────────────────────────────────────────────────────────────┘
+```typescript
+export interface DetailItem {
+  // ... campos existentes ...
+  mrr?: number;
+  setup?: number;
+  pontual?: number;
+}
 ```
+
+E garantir que `useModeloAtualAnalytics.toDetailItem` popule esses campos.
 
 ---
 
@@ -192,32 +239,26 @@ Cada um precisará de funções equivalentes se possuírem campos de valor separ
 
 | Arquivo | Tipo | Descrição |
 |---------|------|-----------|
-| `src/hooks/useModeloAtualMetas.ts` | Modificar | Adicionar funções `getMrrForPeriod`, `getSetupForPeriod`, `getPontualForPeriod` |
-| `src/components/planning/IndicatorsTab.tsx` | Modificar | Adicionar `monetaryIndicatorConfigs`, componente `MonetaryRadialCard`, funções de cálculo e segunda linha de cards |
-| `src/contexts/MediaMetasContext.tsx` | Modificar (opcional) | Adicionar campos para investimento se necessário para ROI |
+| `src/components/planning/indicators/DetailSheet.tsx` | Modificar | Adicionar campos `mrr`, `setup`, `pontual` ao `DetailItem` |
+| `src/hooks/useModeloAtualAnalytics.ts` | Modificar | Incluir `mrr`, `setup`, `pontual`, `closer` no mapeamento de cards |
+| `src/components/planning/IndicatorsTab.tsx` | Modificar | Refatorar `getRealizedMonetaryForIndicator` para respeitar filtros de BU e Closer |
 
 ---
 
-### Detalhes Técnicos
+### Meta de Indicadores Monetários com Filtro de Closer
 
-#### Formatação de Valores
+A função `getMetaMonetaryForIndicator` também precisará ser ajustada para aplicar proporções de closer nas metas quando o filtro estiver ativo:
 
-- **ROI**: Exibir como "4.2x" (multiplicador)
-- **Faturamento**: Exibir como "R$ 1.2M" (formato compacto)
-- **MRR/Setup/Pontual**: Exibir como "R$ 510k" (formato compacto)
-
-A função `formatCompact` já existe em `salesData.ts` e pode ser reutilizada.
-
-#### Drill-down
-
-- **ROI**: Não terá drill-down (é um cálculo agregado)
-- **Faturamento**: Drill-down mostrará todos os cards de venda
-- **MRR/Setup/Pontual**: Drill-down mostrará os mesmos cards de venda, mas com colunas específicas para o tipo de valor
-
-#### Filtros
-
-Os novos acelerômetros respeitarão os mesmos filtros da aba:
-- Seleção de BUs
-- Seleção de Closers (para Modelo Atual)
-- Período de datas
+```typescript
+case 'faturamento':
+  let meta = getFaturamentoMetaPeriodo();
+  // Se apenas Modelo Atual está selecionado E há filtro de closer
+  if (hasSingleBU && includesModeloAtual && selectedClosers.length > 0) {
+    // Aplicar proporção do closer (usar getFilteredMeta)
+    const monthsInPeriod = eachMonthOfInterval({ start: startDate, end: endDate });
+    // Recalcular meta com filtro de closer por mês
+    // ...
+  }
+  return meta;
+```
 
