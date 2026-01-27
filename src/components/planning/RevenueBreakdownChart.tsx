@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Legend } from "recharts";
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { DollarSign, ExternalLink } from "lucide-react";
 import { useModeloAtualMetas, ChartGrouping } from "@/hooks/useModeloAtualMetas";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
-import { differenceInDays, eachDayOfInterval, eachMonthOfInterval, addDays, format, getMonth } from "date-fns";
+import { differenceInDays, eachDayOfInterval, eachMonthOfInterval, addDays, format, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { BUType } from "@/hooks/useFunnelRealized";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
+import { useMediaMetas } from "@/contexts/MediaMetasContext";
 
 interface RevenueBreakdownChartProps {
   startDate: Date;
@@ -23,6 +24,7 @@ interface ChartDataPoint {
   setup: number;
   pontual: number;
   total: number;
+  meta: number;
   startDate: Date;
   endDate: Date;
 }
@@ -52,6 +54,7 @@ export function RevenueBreakdownChart({
   // Hooks for data retrieval
   const { movements, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod } = useModeloAtualMetas(startDate, endDate);
   const modeloAtualAnalytics = useModeloAtualAnalytics(startDate, endDate);
+  const { metasPorBU } = useMediaMetas();
 
   // Check which BUs are selected
   const useModeloAtual = selectedBUs.includes('modelo_atual') || selectedBU === 'modelo_atual';
@@ -68,6 +71,33 @@ export function RevenueBreakdownChart({
   const filterByCloser = (cards: any[]) => {
     if (selectedClosers.length === 0) return cards;
     return cards.filter(card => selectedClosers.includes(card.closer?.trim() || ''));
+  };
+
+  // Calculate pro-rated meta for a period
+  const calcularMetaDoPeriodo = (start: Date, end: Date): number => {
+    if (!metasPorBU || !useModeloAtual) return 0;
+    
+    const metas = metasPorBU.modelo_atual;
+    if (!metas || Object.keys(metas).length === 0) return 0;
+    
+    const monthsInPeriod = eachMonthOfInterval({ start, end });
+    let total = 0;
+    
+    for (const monthDate of monthsInPeriod) {
+      const monthName = format(monthDate, 'MMM', { locale: ptBR });
+      const monthMeta = metas[monthName] || 0;
+      
+      const monthStartDate = startOfMonth(monthDate);
+      const monthEndDate = endOfMonth(monthDate);
+      const overlapStart = start > monthStartDate ? start : monthStartDate;
+      const overlapEnd = end < monthEndDate ? end : monthEndDate;
+      const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
+      const daysInMonth = differenceInDays(monthEndDate, monthStartDate) + 1;
+      
+      total += monthMeta * (overlapDays / daysInMonth);
+    }
+    
+    return total;
   };
 
   // Get grouped monetary data for Modelo Atual
@@ -112,6 +142,7 @@ export function RevenueBreakdownChart({
           setup,
           pontual,
           total: mrr + setup + pontual,
+          meta: calcularMetaDoPeriodo(day, day),
           startDate: day,
           endDate: day,
         });
@@ -146,6 +177,7 @@ export function RevenueBreakdownChart({
           setup,
           pontual,
           total: mrr + setup + pontual,
+          meta: calcularMetaDoPeriodo(weekStart, weekEnd),
           startDate: weekStart,
           endDate: weekEnd,
         });
@@ -179,6 +211,7 @@ export function RevenueBreakdownChart({
           setup,
           pontual,
           total: mrr + setup + pontual,
+          meta: calcularMetaDoPeriodo(monthStart, lastDay),
           startDate: monthStart,
           endDate: lastDay,
         });
@@ -196,6 +229,7 @@ export function RevenueBreakdownChart({
       setup: data.reduce((sum, d) => sum + d.setup, 0),
       pontual: data.reduce((sum, d) => sum + d.pontual, 0),
       total: data.reduce((sum, d) => sum + d.total, 0),
+      meta: data.reduce((sum, d) => sum + d.meta, 0),
     };
   }, [getGroupedMonetaryData]);
 
@@ -273,6 +307,11 @@ export function RevenueBreakdownChart({
               <span className="font-semibold text-green-500">{formatCompactCurrency(totals.total)}</span>
             </div>
             <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-sm border-2 border-green-500 border-dashed" />
+              <span className="text-muted-foreground">Meta:</span>
+              <span className="font-medium text-green-500">{formatCompactCurrency(totals.meta)}</span>
+            </div>
+            <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-sm bg-blue-500" />
               <span className="text-muted-foreground">MRR:</span>
               <span className="font-medium">{formatCompactCurrency(totals.mrr)}</span>
@@ -292,7 +331,7 @@ export function RevenueBreakdownChart({
         <CardContent>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart 
+              <ComposedChart 
                 data={getGroupedMonetaryData.data} 
                 margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
                 onClick={(e) => e?.activePayload?.[0]?.payload && handleBarClick(e.activePayload[0].payload)}
@@ -319,14 +358,14 @@ export function RevenueBreakdownChart({
                   }}
                   formatter={(value: number, name: string) => [
                     formatCompactCurrency(value),
-                    name === 'mrr' ? 'MRR' : name === 'setup' ? 'Setup' : 'Pontual'
+                    name === 'mrr' ? 'MRR' : name === 'setup' ? 'Setup' : name === 'pontual' ? 'Pontual' : 'Meta'
                   ]}
                   labelFormatter={(label) => `Período: ${label}`}
                 />
                 <Legend 
                   formatter={(value) => (
                     <span style={{ color: 'hsl(var(--foreground))' }}>
-                      {value === 'mrr' ? 'MRR' : value === 'setup' ? 'Setup' : 'Pontual'}
+                      {value === 'mrr' ? 'MRR' : value === 'setup' ? 'Setup' : value === 'pontual' ? 'Pontual' : 'Meta'}
                     </span>
                   )}
                 />
@@ -354,7 +393,16 @@ export function RevenueBreakdownChart({
                   radius={[4, 4, 0, 0]}
                   className="cursor-pointer"
                 />
-              </BarChart>
+                <Line 
+                  type="monotone" 
+                  dataKey="meta" 
+                  stroke="#22c55e" 
+                  strokeWidth={2} 
+                  strokeDasharray="5 5" 
+                  dot={false}
+                  name="meta"
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
