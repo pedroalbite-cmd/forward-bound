@@ -15,7 +15,7 @@ import { ExternalLink } from "lucide-react";
 import { format, eachDayOfInterval, differenceInDays, addDays, eachMonthOfInterval, getMonth, startOfMonth, endOfMonth, isSameDay, isSameMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-interface LeadsStackedChartProps {
+interface MeetingsScheduledChartProps {
   startDate: Date;
   endDate: Date;
   selectedBU: BUType | 'all';
@@ -28,21 +28,21 @@ const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Ma
 // Month name mapping for funnelData lookup
 const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs, selectedClosers }: LeadsStackedChartProps) {
+export function MeetingsScheduledChart({ startDate, endDate, selectedBU, selectedBUs, selectedClosers }: MeetingsScheduledChartProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetItems, setSheetItems] = useState<DetailItem[]>([]);
   const [sheetDescription, setSheetDescription] = useState("");
   
-  // Use database data for Modelo Atual leads
+  // Use database data for Modelo Atual meetings (rm = reunião marcada)
   const { getGroupedData: getModeloAtualGroupedData, getQtyForPeriod: getModeloAtualQty } = useModeloAtualMetas(startDate, endDate);
   
-  // O2 TAX leads data
+  // O2 TAX meetings data
   const { getGroupedData: getO2TaxGroupedData, getQtyForPeriod: getO2TaxQty } = useO2TaxMetas(startDate, endDate);
   
-  // Oxy Hacker leads data
+  // Oxy Hacker meetings data
   const { getGroupedData: getOxyHackerGroupedData, getQtyForPeriod: getOxyHackerQty } = useOxyHackerMetas(startDate, endDate);
   
-  // Franquia leads data
+  // Franquia meetings data
   const { getGroupedData: getFranquiaGroupedData, getQtyForPeriod: getFranquiaQty } = useExpansaoMetas(startDate, endDate);
   
   // Analytics hooks for drill-down details
@@ -55,8 +55,8 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
   const { funnelData } = useMediaMetas();
   
   // Helper function to calculate meta from funnelData for a given period (pro-rated for partial months)
-  // Uses 'leads' field from funnelData
-  const calcularMetaLeads = (funnelItems: FunnelDataItem[] | undefined): number => {
+  // Uses 'rms' field from funnelData (reuniões marcadas)
+  const calcularMetaRM = (funnelItems: FunnelDataItem[] | undefined): number => {
     if (!funnelItems || funnelItems.length === 0) return 0;
     
     const monthsInPeriod = eachMonthOfInterval({ start: startDate, end: endDate });
@@ -79,8 +79,8 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
       const daysInMonth = differenceInDays(monthEnd, monthStart) + 1;
       const fraction = daysInMonth > 0 ? overlapDays / daysInMonth : 0;
       
-      // Use leads field from funnelData
-      total += (item.leads || 0) * fraction;
+      // Use rms field from funnelData (reuniões marcadas)
+      total += (item.rms || 0) * fraction;
     }
     
     return Math.round(total);
@@ -108,13 +108,13 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
   const daysInPeriod = differenceInDays(endDate, startDate) + 1;
   const grouping: ChartGrouping = daysInPeriod <= 31 ? 'daily' : daysInPeriod <= 90 ? 'weekly' : 'monthly';
 
-  // Get grouped data based on selected BUs - for chart bars, use primary BU or aggregate
+  // Get grouped data based on selected BUs - for chart bars, use 'rm' indicator
   const getChartData = () => {
     if (hasSingleBU) {
-      if (useModeloAtual) return getModeloAtualGroupedData('leads', startDate, endDate, grouping);
-      if (useO2Tax) return getO2TaxGroupedData('leads', startDate, endDate, grouping);
-      if (useOxyHacker) return getOxyHackerGroupedData('leads', startDate, endDate, grouping);
-      if (useFranquia) return getFranquiaGroupedData('leads', startDate, endDate, grouping);
+      if (useModeloAtual) return getModeloAtualGroupedData('rm', startDate, endDate, grouping);
+      if (useO2Tax) return getO2TaxGroupedData('rm', startDate, endDate, grouping);
+      if (useOxyHacker) return getOxyHackerGroupedData('rm', startDate, endDate, grouping);
+      if (useFranquia) return getFranquiaGroupedData('rm', startDate, endDate, grouping);
     }
     
     // Multi-BU: sum grouped data from selected BUs
@@ -128,22 +128,22 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
     const meta = Array(numPeriods).fill(0);
     
     if (includesModeloAtual) {
-      const data = getModeloAtualGroupedData('leads', startDate, endDate, grouping);
+      const data = getModeloAtualGroupedData('rm', startDate, endDate, grouping);
       data.qty.forEach((v, i) => { qty[i] += v; });
       data.meta.forEach((v, i) => { meta[i] += v; });
     }
     if (includesO2Tax) {
-      const data = getO2TaxGroupedData('leads', startDate, endDate, grouping);
+      const data = getO2TaxGroupedData('rm', startDate, endDate, grouping);
       data.qty.forEach((v, i) => { qty[i] += v; });
       data.meta.forEach((v, i) => { meta[i] += v; });
     }
     if (includesOxyHacker) {
-      const data = getOxyHackerGroupedData('leads', startDate, endDate, grouping);
+      const data = getOxyHackerGroupedData('rm', startDate, endDate, grouping);
       data.qty.forEach((v, i) => { qty[i] += v; });
       data.meta.forEach((v, i) => { meta[i] += v; });
     }
     if (includesFranquia) {
-      const data = getFranquiaGroupedData('leads', startDate, endDate, grouping);
+      const data = getFranquiaGroupedData('rm', startDate, endDate, grouping);
       data.qty.forEach((v, i) => { qty[i] += v; });
       data.meta.forEach((v, i) => { meta[i] += v; });
     }
@@ -151,15 +151,15 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
     return { qty, meta };
   };
   
-  const leadsData = getChartData();
+  const meetingsData = getChartData();
   
   // Get total meta from funnelData based on selected BUs
-  // Annual metas: O2 TAX 600, Oxy Hacker 360, Franquia 432
+  // Annual metas for RM: O2 TAX 180, Oxy Hacker 120, Franquia 144
   const periodMeta = 
-    (includesModeloAtual ? calcularMetaLeads(funnelData?.modeloAtual) : 0) +
-    (includesO2Tax ? Math.round((600 / 365) * daysInPeriod) : 0) +
-    (includesOxyHacker ? Math.round((360 / 365) * daysInPeriod) : 0) +
-    (includesFranquia ? Math.round((432 / 365) * daysInPeriod) : 0);
+    (includesModeloAtual ? calcularMetaRM(funnelData?.modeloAtual) : 0) +
+    (includesO2Tax ? Math.round((180 / 365) * daysInPeriod) : 0) +
+    (includesOxyHacker ? Math.round((120 / 365) * daysInPeriod) : 0) +
+    (includesFranquia ? Math.round((144 / 365) * daysInPeriod) : 0);
     
   // Get total realized based on selected BUs
   const getTotalRealized = (): number => {
@@ -168,20 +168,20 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
     // For Modelo Atual, apply closer filter if active
     if (includesModeloAtual) {
       if (selectedClosers?.length && selectedClosers.length > 0) {
-        const cards = modeloAtualAnalytics.getCardsForIndicator('leads');
+        const cards = modeloAtualAnalytics.getCardsForIndicator('rm');
         const filteredCards = cards.filter(c => {
           const closerValue = (c.closer || '').trim();
           return closerValue && selectedClosers.includes(closerValue);
         });
         total += filteredCards.length;
       } else {
-        total += getModeloAtualQty('leads', startDate, endDate);
+        total += getModeloAtualQty('rm', startDate, endDate);
       }
     }
     
-    if (includesO2Tax) total += getO2TaxQty('leads', startDate, endDate);
-    if (includesOxyHacker) total += getOxyHackerQty('leads', startDate, endDate);
-    if (includesFranquia) total += getFranquiaQty('leads', startDate, endDate);
+    if (includesO2Tax) total += getO2TaxQty('rm', startDate, endDate);
+    if (includesOxyHacker) total += getOxyHackerQty('rm', startDate, endDate);
+    if (includesFranquia) total += getFranquiaQty('rm', startDate, endDate);
     
     return total;
   };
@@ -193,8 +193,8 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
     if (grouping === 'daily') {
       return eachDayOfInterval({ start: startDate, end: endDate }).map((day, index) => ({
         label: format(day, "d 'de' MMM", { locale: ptBR }),
-        leads: leadsData.qty[index] || 0,
-        meta: leadsData.meta[index] || 0,
+        meetings: meetingsData.qty[index] || 0,
+        meta: meetingsData.meta[index] || 0,
       }));
     } else if (grouping === 'weekly') {
       const totalDays = differenceInDays(endDate, startDate) + 1;
@@ -203,8 +203,8 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
         const weekStart = addDays(startDate, i * 7);
         return {
           label: format(weekStart, "d 'de' MMM", { locale: ptBR }),
-          leads: leadsData.qty[i] || 0,
-          meta: leadsData.meta[i] || 0,
+          meetings: meetingsData.qty[i] || 0,
+          meta: meetingsData.meta[i] || 0,
         };
       });
     } else {
@@ -212,8 +212,8 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
       const months = eachMonthOfInterval({ start: startDate, end: endDate });
       return months.map((monthDate, index) => ({
         label: format(monthDate, "MMM", { locale: ptBR }),
-        leads: leadsData.qty[index] || 0,
-        meta: leadsData.meta[index] || 0,
+        meetings: meetingsData.qty[index] || 0,
+        meta: meetingsData.meta[index] || 0,
       }));
     }
   };
@@ -251,27 +251,27 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
     
     if (hasSingleBU) {
       if (useModeloAtual) {
-        allItems = modeloAtualAnalytics.getDetailItemsForIndicator('leads');
+        allItems = modeloAtualAnalytics.getDetailItemsForIndicator('rm');
       } else if (useO2Tax) {
-        allItems = o2TaxAnalytics.getDetailItemsForIndicator('leads');
+        allItems = o2TaxAnalytics.getDetailItemsForIndicator('rm');
       } else if (useOxyHacker) {
-        allItems = oxyHackerAnalytics.getDetailItemsForIndicator('leads');
+        allItems = oxyHackerAnalytics.getDetailItemsForIndicator('rm');
       } else if (useFranquia) {
-        allItems = franquiaAnalytics.getDetailItemsForIndicator('leads');
+        allItems = franquiaAnalytics.getDetailItemsForIndicator('rm');
       }
     } else {
       // Multi-BU: aggregate only selected BUs
       if (includesModeloAtual) {
-        allItems = [...allItems, ...modeloAtualAnalytics.getDetailItemsForIndicator('leads')];
+        allItems = [...allItems, ...modeloAtualAnalytics.getDetailItemsForIndicator('rm')];
       }
       if (includesO2Tax) {
-        allItems = [...allItems, ...o2TaxAnalytics.getDetailItemsForIndicator('leads')];
+        allItems = [...allItems, ...o2TaxAnalytics.getDetailItemsForIndicator('rm')];
       }
       if (includesOxyHacker) {
-        allItems = [...allItems, ...oxyHackerAnalytics.getDetailItemsForIndicator('leads')];
+        allItems = [...allItems, ...oxyHackerAnalytics.getDetailItemsForIndicator('rm')];
       }
       if (includesFranquia) {
-        allItems = [...allItems, ...franquiaAnalytics.getDetailItemsForIndicator('leads')];
+        allItems = [...allItems, ...franquiaAnalytics.getDetailItemsForIndicator('rm')];
       }
     }
     
@@ -290,7 +290,7 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
     });
     
     setSheetItems(filteredItems);
-    setSheetDescription(`${filteredItems.length} leads em ${periodLabel}`);
+    setSheetDescription(`${filteredItems.length} reuniões em ${periodLabel}`);
     setSheetOpen(true);
   };
 
@@ -315,7 +315,7 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
   return (
     <>
       <Card 
-        className="bg-card border-2 border-orange-500 relative group"
+        className="bg-card border-2 border-blue-500 relative group"
       >
         {isClickable && (
           <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
@@ -324,7 +324,7 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
         )}
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold text-foreground">Qtd Leads</CardTitle>
+            <CardTitle className="text-base font-semibold text-foreground">Qtd Reuniões Marcadas</CardTitle>
           <div className="flex items-center gap-4 text-sm">
             <span className="text-muted-foreground">
               Realizado: <span className="font-medium text-foreground">{formatNumber(totalRealized)}</span>
@@ -336,8 +336,8 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
         </div>
         <div className="flex items-center gap-6 mt-2">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-sm bg-orange-500" />
-            <span className="text-xs text-muted-foreground">Leads Realizados</span>
+            <div className="w-3 h-3 rounded-sm bg-blue-500" />
+            <span className="text-xs text-muted-foreground">Reuniões Marcadas</span>
           </div>
         </div>
       </CardHeader>
@@ -360,14 +360,14 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
               />
               <Tooltip content={<CustomTooltip />} />
               <Bar 
-                dataKey="leads" 
-                fill="#f97316" 
-                name="Leads" 
+                dataKey="meetings" 
+                fill="#3b82f6" 
+                name="Reuniões" 
                 radius={[4, 4, 0, 0]}
                 onClick={handleBarClick}
                 cursor={isClickable ? "pointer" : "default"}
               >
-                <LabelList dataKey="leads" position="top" fill="hsl(var(--muted-foreground))" fontSize={10} formatter={(v: number) => v > 0 ? v : ''} />
+                <LabelList dataKey="meetings" position="top" fill="hsl(var(--muted-foreground))" fontSize={10} formatter={(v: number) => v > 0 ? v : ''} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -378,15 +378,16 @@ export function LeadsStackedChart({ startDate, endDate, selectedBU, selectedBUs,
     <DetailSheet
       open={sheetOpen}
       onOpenChange={setSheetOpen}
-      title="Leads"
-      description={sheetDescription || `${formatNumber(totalRealized)} leads no período selecionado`}
+      title="Reuniões Marcadas"
+      description={sheetDescription || `${formatNumber(totalRealized)} reuniões no período selecionado`}
       items={sheetItems}
       columns={[
-        { key: 'name', label: 'Título' },
+        { key: 'product', label: 'Produto', format: columnFormatters.product },
         { key: 'company', label: 'Empresa/Contato' },
-        { key: 'phase', label: 'Fase', format: columnFormatters.phase },
         { key: 'date', label: 'Data', format: columnFormatters.date },
+        { key: 'duration', label: 'Tempo na Fase', format: columnFormatters.duration },
         { key: 'revenueRange', label: 'Faixa Faturamento' },
+        { key: 'responsible', label: 'Responsável' },
       ]}
     />
     </>
