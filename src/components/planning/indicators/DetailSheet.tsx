@@ -16,6 +16,10 @@ export interface DetailItem {
   responsible?: string;
   duration?: number; // Duration in seconds (from "Duração (s)" column)
   product?: string; // CaaS, O2 TAX, Oxy Hacker, Franquia
+  mrr?: number; // Valor MRR for monetary indicators
+  setup?: number; // Valor Setup for monetary indicators
+  pontual?: number; // Valor Pontual for monetary indicators
+  closer?: string; // Closer responsável (for filtering)
 }
 
 interface DetailSheetProps {
