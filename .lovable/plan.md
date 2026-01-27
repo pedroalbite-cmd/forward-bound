@@ -1,123 +1,106 @@
 
 
-## Plano: Adicionar Collapsible para Gráficos de Indicadores
+## Plano: Tornar Cada Gráfico de Indicador Colapsável Individualmente
 
 ### Objetivo
 
-Permitir que o usuário minimize/expanda a seção "Gráficos de Indicadores" que contém os 5 gráficos de indicadores (MQLs, Reuniões Agendadas, Reuniões Realizadas, Propostas, Vendas).
+Permitir que o usuário minimize/expanda **cada gráfico individualmente** dentro da seção "Gráficos de Indicadores", em vez de colapsar toda a seção de uma vez.
 
 ---
 
-### Abordagem
+### O Que Será Revertido
 
-Utilizar o componente `Collapsible` do Radix UI (já disponível em `@/components/ui/collapsible`) para envolver a seção de gráficos, similar ao padrão já usado no `AnalyticsSection.tsx`.
+Remover a implementação anterior que envolvia toda a seção de gráficos em um único Collapsible:
+- Remover o estado `chartsOpen` (linha 167)
+- Remover o wrapper `Collapsible` da seção inteira (linhas 759-818)
+- Restaurar a estrutura original da seção com o título "Gráficos de Indicadores" e o ToggleGroup
 
 ---
 
-### Mudanças no Arquivo
+### Nova Implementação
 
-#### `src/components/planning/IndicatorsTab.tsx`
-
-**1. Adicionar imports necessários (linha 1-28):**
-
-```typescript
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp } from "lucide-react";
-```
-
-**2. Adicionar estado para controlar o collapsible (após linha 165):**
-
-```typescript
-const [chartsOpen, setChartsOpen] = useState(true); // Começa expandido
-```
-
-**3. Modificar a seção de gráficos (linhas 756-797):**
+Modificar o componente `IndicatorChartSection` (linhas 105-149) para ser colapsável individualmente:
 
 **ANTES:**
 ```tsx
-{/* Charts Section with View Mode Toggle */}
-<div className="space-y-4">
-  <div className="flex items-center justify-between">
-    <h3 className="text-lg font-semibold text-foreground">Gráficos de Indicadores</h3>
-    <ToggleGroup ...>
-      ...
-    </ToggleGroup>
-  </div>
-  
-  {indicatorConfigs.map((indicator) => (
-    <IndicatorChartSection ... />
-  ))}
-</div>
+const IndicatorChartSection = ({ title, ... }) => (
+  <Card className="bg-card border-border">
+    <CardHeader className="pb-2">
+      {/* Header com título e totais */}
+    </CardHeader>
+    <CardContent className="pt-0">
+      {/* Gráfico */}
+    </CardContent>
+  </Card>
+);
 ```
 
 **DEPOIS:**
 ```tsx
-{/* Charts Section with View Mode Toggle - Collapsible */}
-<Collapsible open={chartsOpen} onOpenChange={setChartsOpen} className="w-full">
-  <CollapsibleTrigger className="w-full">
-    <div className="flex items-center justify-between w-full p-4 bg-card border border-border rounded-lg hover:bg-muted/50 transition-colors">
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-primary/10 rounded-lg">
-          <BarChart3 className="h-5 w-5 text-primary" />
-        </div>
-        <div className="text-left">
-          <h3 className="text-lg font-semibold text-foreground">Gráficos de Indicadores</h3>
-          <p className="text-sm text-muted-foreground">Evolução diária/acumulada de MQLs, RM, RR, Propostas e Vendas</p>
-        </div>
-      </div>
-      <div className="flex items-center gap-4">
-        {/* Toggle permanece visível fora do collapsible para troca rápida */}
-        {chartsOpen ? (
-          <ChevronUp className="h-5 w-5 text-muted-foreground" />
-        ) : (
-          <ChevronDown className="h-5 w-5 text-muted-foreground" />
-        )}
-      </div>
-    </div>
-  </CollapsibleTrigger>
-  <CollapsibleContent className="mt-4 space-y-4">
-    {/* Toggle de visualização dentro do conteúdo */}
-    <div className="flex justify-end">
-      <ToggleGroup 
-        type="single" 
-        value={viewMode} 
-        onValueChange={(v) => v && setViewMode(v as ViewMode)}
-        className="bg-muted rounded-lg p-1"
-      >
-        <ToggleGroupItem value="daily" ...>
-          ...
-        </ToggleGroupItem>
-        <ToggleGroupItem value="accumulated" ...>
-          ...
-        </ToggleGroupItem>
-      </ToggleGroup>
-    </div>
-    
-    {indicatorConfigs.map((indicator) => (
-      <IndicatorChartSection ... />
-    ))}
-  </CollapsibleContent>
-</Collapsible>
+const IndicatorChartSection = ({ title, ... }) => {
+  const [isOpen, setIsOpen] = useState(true);
+  
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
+      <Card className="bg-card border-border">
+        <CollapsibleTrigger asChild>
+          <CardHeader className="pb-2 cursor-pointer hover:bg-muted/50 transition-colors">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-base font-semibold text-foreground">{title}</CardTitle>
+                {isAccumulated && (
+                  <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">Acumulado</span>
+                )}
+                {/* Chevron indicator */}
+                {isOpen ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex items-center gap-6 text-sm">
+                <span className="text-muted-foreground">{realizedLabel}: <span className="text-foreground font-medium">{formatNumber(realizedTotal)}</span></span>
+                <span className="text-muted-foreground">Meta: <span className="text-foreground font-medium">{formatNumber(metaTotal)}</span></span>
+              </div>
+            </div>
+            {/* Legenda fica visível sempre */}
+            <div className="flex items-center gap-4 mt-2">
+              <div className="flex items-center gap-2"><div className="w-3 h-0.5 bg-chart-1 rounded" /><span className="text-xs text-muted-foreground">{isAccumulated ? 'Meta Acumulada' : 'Meta'}</span></div>
+              <div className="flex items-center gap-2"><div className="w-3 h-0.5 bg-chart-2 rounded" /><span className="text-xs text-muted-foreground">{isAccumulated ? 'Realizado Acumulado' : 'Realizado'}</span></div>
+            </div>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="pt-0">
+            <div className="h-72">
+              {/* Gráfico ComposedChart */}
+            </div>
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
+};
 ```
 
 ---
 
-### Comportamento
+### Comportamento por Gráfico
 
 | Estado | Visualização |
 |--------|-------------|
-| Expandido (padrão) | Mostra header clicável + toggle de visualização + todos os 5 gráficos |
-| Minimizado | Mostra apenas header clicável com ícone e descrição |
+| Expandido (padrão) | Header clicável (título, valores, legenda) + gráfico completo |
+| Minimizado | Apenas header (título, valores realizados/meta, legenda) com chevron indicando que pode expandir |
 
 ---
 
-### Design Consistente
+### UX Melhorado
 
-O design será consistente com a seção "Análises Detalhadas" (`AnalyticsSection.tsx`) que já usa este padrão:
-- Card com ícone à esquerda
-- Título e descrição
-- Chevron à direita indicando estado
-- Hover effect para indicar interatividade
+- Cada card de gráfico tem um **chevron** no header indicando que é clicável
+- **Hover effect** no header para indicar interatividade
+- **Totais (Realizado/Meta) sempre visíveis** mesmo quando minimizado
+- **Legenda sempre visível** para contexto
+- Usuário pode minimizar gráficos específicos que não precisa ver no momento
 
 ---
 
@@ -125,5 +108,5 @@ O design será consistente com a seção "Análises Detalhadas" (`AnalyticsSecti
 
 | Arquivo | Tipo | Descrição |
 |---------|------|-----------|
-| `src/components/planning/IndicatorsTab.tsx` | Modificar | Adicionar imports, estado e envolver seção de gráficos com Collapsible |
+| `src/components/planning/IndicatorsTab.tsx` | Modificar | 1) Remover estado `chartsOpen` e Collapsible da seção inteira. 2) Refatorar `IndicatorChartSection` para ter seu próprio estado e Collapsible interno. 3) Restaurar estrutura original da seção "Gráficos de Indicadores" |
 
