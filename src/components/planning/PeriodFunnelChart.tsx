@@ -162,11 +162,6 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
                   </span>
                   <span className="hidden sm:inline truncate">{stage.name}</span>
                   <span className="font-bold flex-shrink-0">{formatNumber(stage.value)}</span>
-                  {index > 0 && (
-                    <span className="text-white/80 text-xs flex-shrink-0">
-                      ({stage.conversionPercent.toFixed(1)}%)
-                    </span>
-                  )}
                 </div>
               </div>
             </div>
