@@ -1,218 +1,66 @@
 
 
-## Plano: Criar Aba "Indicadores Marketing"
+## Plano: Adicionar Dados Fictícios e Renomear para "Mkt Indicadores"
 
 ### Objetivo
 
-Criar uma nova aba de Indicadores de Marketing com estrutura modular e preparada para receber dados futuros. A aba seguirá os mesmos padrões visuais e de filtros da aba "Indicadores" (vendas).
+1. Renomear a aba de "Mkt Indicators" para "Mkt Indicadores"
+2. Adicionar dados fictícios realistas para visualização do dashboard
 
 ---
 
-### Indicadores a Serem Exibidos
+### Modificações
 
-Com base nas suas definições:
+#### 1. Renomear a aba (Planning2026.tsx)
 
-| Categoria | Indicadores |
-|-----------|-------------|
-| **Aquisição** | Leads, MQLs, RM (Reuniões Marcadas), RR (Reuniões Realizadas) |
-| **Investimento por Canal** | Meta Ads, Google Ads, Eventos |
-| **Performance** | ROAS+LTV, ROI LTV, CAC, LTV |
-| **Eficiência** | MQL/Leads (taxa de conversão), Conversão Ads por Canal |
-| **Investimento** | Investimento Total, Investimento por Fonte |
-| **Detalhamento** | Tabela com info de Campanhas, Anúncios, etc. |
-
----
-
-### Estrutura de Arquivos
-
-```text
-src/
-├── components/
-│   └── planning/
-│       ├── MarketingIndicatorsTab.tsx  (NOVO - componente principal)
-│       └── marketing-indicators/       (NOVA pasta)
-│           ├── InvestmentByChannelChart.tsx
-│           ├── AcquisitionFunnelChart.tsx
-│           ├── PerformanceGauges.tsx
-│           ├── ConversionsByChannelChart.tsx
-│           ├── CampaignsTable.tsx
-│           └── types.ts
-├── hooks/
-│   └── useMarketingIndicators.ts  (NOVO - hook para dados futuros)
-├── pages/
-│   └── Planning2026.tsx  (MODIFICAR - adicionar nova aba)
-└── hooks/
-    └── useUserPermissions.ts  (MODIFICAR - adicionar 'marketing_indicators')
-```
-
----
-
-### Componente Principal: MarketingIndicatorsTab.tsx
-
-Layout seguindo o padrão da aba Indicadores de vendas:
-
-```text
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│  Indicadores Marketing                                         [BU ▼] [📅 Data] │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐│
-│  │    ROAS     │ │   ROI LTV   │ │     CAC     │ │     LTV     │ │ Investimento││
-│  │    2.5x     │ │    4.2x     │ │   R$ 9.5k   │ │   R$ 38k    │ │  R$ 150k    ││
-│  │  Meta: 3x   │ │  Meta: 5x   │ │ Meta: R$8k  │ │ Meta: R$40k │ │ Meta: R$180k││
-│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘│
-│                                                                                 │
-│  ┌───────────────────────────────────┐ ┌───────────────────────────────────────┐│
-│  │   Investimento por Canal          │ │   Funil de Aquisição                  ││
-│  │   ┌────┐ ┌────┐ ┌────┐            │ │   Leads → MQL → RM → RR               ││
-│  │   │Meta│ │Goog│ │Even│            │ │                                       ││
-│  │   │Ads │ │ Ads│ │tos │            │ │   ████████████████████████ 1200       ││
-│  │   │ 80k│ │ 50k│ │ 20k│            │ │   █████████████████ 840               ││
-│  │   └────┘ └────┘ └────┘            │ │   ███████████ 504                     ││
-│  └───────────────────────────────────┘ │   ██████ 302                          ││
-│                                        └───────────────────────────────────────┘│
-│                                                                                 │
-│  ┌─────────────────────────────────────────────────────────────────────────────┐│
-│  │   Conversão por Canal                                                        ││
-│  │                                                                              ││
-│  │   Canal        │ Leads │  MQLs │ Conversão │  CPL  │  CPMQL │    Gasto     ││
-│  │   ───────────────────────────────────────────────────────────────────────── ││
-│  │   Meta Ads     │  500  │  350  │   70%     │ R$ 80 │ R$ 114 │  R$ 40.000   ││
-│  │   Google Ads   │  400  │  280  │   70%     │ R$ 75 │ R$ 107 │  R$ 30.000   ││
-│  │   Eventos      │  100  │   85  │   85%     │ R$150 │ R$ 176 │  R$ 15.000   ││
-│  └─────────────────────────────────────────────────────────────────────────────┘│
-│                                                                                 │
-│  ┌─────────────────────────────────────────────────────────────────────────────┐│
-│  │   Campanhas e Anúncios                                      [Collapsible ▼]  ││
-│  │                                                                              ││
-│  │   Campanha              │ Canal    │ Leads │ MQLs │  Gasto  │  ROAS │ Status ││
-│  │   ────────────────────────────────────────────────────────────────────────── ││
-│  │   Black Friday 2026     │ Meta Ads │  120  │  84  │ R$ 8.5k │  2.8x │ Ativo  ││
-│  │   Webinar Janeiro       │ Google   │   80  │  60  │ R$ 5.2k │  3.1x │ Pausado││
-│  └─────────────────────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### Detalhes Técnicos
-
-#### 1. Tipos de Dados (marketing-indicators/types.ts)
-
+Alterar linha 28:
 ```typescript
-export interface MarketingChannel {
-  id: string;
-  name: string;
-  investment: number;
-  leads: number;
-  mqls: number;
-  cpl: number;    // Cost per Lead
-  cpmql: number;  // Cost per MQL
-}
+// De:
+{ key: 'marketing_indicators', label: 'Mkt Indicators', icon: TrendingUp },
 
-export interface CampaignData {
-  id: string;
-  name: string;
-  channel: string;
-  status: 'active' | 'paused' | 'ended';
-  investment: number;
-  leads: number;
-  mqls: number;
-  roas: number;
-  startDate: string;
-  endDate?: string;
-}
-
-export interface MarketingMetrics {
-  roas: number;
-  roasLtv: number;
-  roiLtv: number;
-  cac: number;
-  ltv: number;
-  totalInvestment: number;
-  channels: MarketingChannel[];
-  campaigns: CampaignData[];
-}
+// Para:
+{ key: 'marketing_indicators', label: 'Mkt Indicadores', icon: TrendingUp },
 ```
-
-#### 2. Hook de Dados (useMarketingIndicators.ts)
-
-```typescript
-// Hook preparado para receber dados futuros
-// Por agora retorna dados mockados/placeholder
-
-export function useMarketingIndicators(startDate: Date, endDate: Date, selectedBUs: string[]) {
-  // Placeholder - será integrado com fonte de dados real
-  const mockData: MarketingMetrics = {
-    roas: 0,
-    roasLtv: 0,
-    roiLtv: 0,
-    cac: 0,
-    ltv: 0,
-    totalInvestment: 0,
-    channels: [],
-    campaigns: [],
-  };
-
-  return {
-    data: mockData,
-    isLoading: false,
-    refetch: () => {},
-  };
-}
-```
-
-#### 3. Componentes Modulares
-
-| Componente | Descrição |
-|------------|-----------|
-| `PerformanceGauges.tsx` | 5 radial gauges: ROAS, ROI LTV, CAC, LTV, Investimento |
-| `InvestmentByChannelChart.tsx` | Gráfico de barras por canal (Meta Ads, Google Ads, Eventos) |
-| `AcquisitionFunnelChart.tsx` | Funil visual: Leads → MQL → RM → RR |
-| `ConversionsByChannelChart.tsx` | Tabela com métricas por canal de aquisição |
-| `CampaignsTable.tsx` | Tabela colapsável com detalhes de campanhas e anúncios |
-
-#### 4. Filtros (mesmo padrão da aba Indicadores)
-
-- **Período**: DatePicker com range de datas
-- **BUs**: MultiSelect (Modelo Atual, O2 TAX, Oxy Hacker, Franquia)
-- **Canal**: MultiSelect (Meta Ads, Google Ads, Eventos) - NOVO
 
 ---
 
-### Modificações em Arquivos Existentes
+#### 2. Dados Fictícios (useMarketingIndicators.ts)
 
-#### 1. useUserPermissions.ts
-```typescript
-// Adicionar 'marketing_indicators' ao TabKey
-export type TabKey = 'context' | 'goals' | 'monthly' | 'sales' | 'media' | 
-                     'marketing' | 'structure' | 'admin' | 'indicators' | 
-                     'marketing_indicators';  // NOVO
+Adicionar dados realistas para todos os indicadores:
 
-// Atualizar allowedTabs para admins
-const allowedTabs: TabKey[] = isAdmin 
-  ? ['context', 'goals', 'monthly', 'sales', 'media', 'marketing', 'structure', 
-     'admin', 'indicators', 'marketing_indicators']  // Incluir novo
-  : permissions || [];
-```
+**Canais de Marketing:**
 
-#### 2. Planning2026.tsx
-```typescript
-// Adicionar import
-import { MarketingIndicatorsTab } from "@/components/planning/MarketingIndicatorsTab";
-import { TrendingUp } from "lucide-react";
+| Canal | Investimento | Leads | MQLs | RM | RR | CPL | CPMQL | Conversão |
+|-------|-------------|-------|------|-----|-----|------|-------|-----------|
+| Meta Ads | R$ 85.000 | 520 | 364 | 218 | 175 | R$ 163 | R$ 233 | 70% |
+| Google Ads | R$ 62.000 | 380 | 266 | 160 | 128 | R$ 163 | R$ 233 | 70% |
+| Eventos | R$ 28.000 | 95 | 81 | 57 | 49 | R$ 295 | R$ 346 | 85% |
 
-// Adicionar à TAB_CONFIG
-const TAB_CONFIG = [
-  // ... tabs existentes ...
-  { key: 'marketing_indicators', label: 'Mkt Indicators', icon: TrendingUp },
-];
+**Métricas de Performance:**
 
-// Adicionar TabsContent
-<TabsContent value="marketing_indicators" className="mt-0">
-  <MarketingIndicatorsTab />
-</TabsContent>
-```
+| Métrica | Valor | Meta |
+|---------|-------|------|
+| ROAS | 2.8x | 3.5x |
+| ROI LTV | 4.5x | 5.0x |
+| CAC | R$ 9.200 | R$ 8.000 |
+| LTV | R$ 38.500 | R$ 40.000 |
+| Investimento | R$ 175.000 | R$ 200.000 |
+
+**Totais do Funil:**
+- Leads: 995
+- MQLs: 711
+- RM: 435
+- RR: 352
+
+**Campanhas Exemplo:**
+
+| Campanha | Canal | Status | Leads | MQLs | Gasto | ROAS |
+|----------|-------|--------|-------|------|-------|------|
+| Black Friday 2026 | Meta Ads | Ativo | 145 | 102 | R$ 18.500 | 3.2x |
+| Webinar Contábil | Google Ads | Ativo | 92 | 74 | R$ 12.800 | 2.9x |
+| Feira Empresarial SP | Eventos | Encerrado | 68 | 58 | R$ 15.000 | 4.1x |
+| Remarketing Leads | Meta Ads | Ativo | 210 | 147 | R$ 22.000 | 2.5x |
+| Brand Awareness | Google Ads | Pausado | 85 | 51 | R$ 8.500 | 1.8x |
 
 ---
 
@@ -220,23 +68,6 @@ const TAB_CONFIG = [
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `src/hooks/useUserPermissions.ts` | Modificar | Adicionar 'marketing_indicators' ao TabKey |
-| `src/pages/Planning2026.tsx` | Modificar | Adicionar nova aba e TabsContent |
-| `src/components/planning/MarketingIndicatorsTab.tsx` | Criar | Componente principal da aba |
-| `src/components/planning/marketing-indicators/types.ts` | Criar | Tipos TypeScript |
-| `src/components/planning/marketing-indicators/PerformanceGauges.tsx` | Criar | Radial gauges de performance |
-| `src/components/planning/marketing-indicators/InvestmentByChannelChart.tsx` | Criar | Gráfico de investimento por canal |
-| `src/components/planning/marketing-indicators/AcquisitionFunnelChart.tsx` | Criar | Funil de aquisição visual |
-| `src/components/planning/marketing-indicators/ConversionsByChannelChart.tsx` | Criar | Tabela de conversões por canal |
-| `src/components/planning/marketing-indicators/CampaignsTable.tsx` | Criar | Tabela de campanhas |
-| `src/hooks/useMarketingIndicators.ts` | Criar | Hook para dados (placeholder) |
-
----
-
-### Próximos Passos (Fora deste Plano)
-
-Após a estrutura criada, a integração de dados reais poderá ser feita:
-1. Conectar com APIs do Meta Ads / Google Ads
-2. Integrar com Google Sheets para dados manuais de campanhas
-3. Criar Edge Function para consolidar dados de múltiplas fontes
+| `src/pages/Planning2026.tsx` | Modificar | Renomear label para "Mkt Indicadores" |
+| `src/hooks/useMarketingIndicators.ts` | Modificar | Adicionar dados fictícios realistas para todos os indicadores, canais e campanhas |
 
