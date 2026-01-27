@@ -343,32 +343,12 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
                     </span>
                     <span className="hidden sm:inline truncate">{stage.name}</span>
                     <span className="font-bold flex-shrink-0">{formatNumber(stage.value)}</span>
-                    {index > 0 && (
-                      <span className="text-white/80 text-xs flex-shrink-0">
-                        ({stage.conversionPercent.toFixed(1)}%)
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Legend */}
-          <div className="mt-4 pt-4 border-t border-border">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-              {stages.slice(1).map((stage, index) => (
-                <div key={stage.indicator} className="flex items-center gap-2">
-                  <span className="text-muted-foreground">
-                    {stages[index].name} → {stage.name}:
-                  </span>
-                  <span className="font-medium text-foreground">
-                    {stage.conversionPercent.toFixed(1)}%
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
         </CardContent>
       </Card>
 
