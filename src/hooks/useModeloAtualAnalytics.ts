@@ -44,7 +44,7 @@ const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
   'Proposta enviada / Follow Up': 'proposta',
   
   // Venda (somente esta fase conta)
-  'Contrato assinado': 'venda',
+  'Ganho': 'venda',
 };
 
 // Parse date from PostgreSQL format
@@ -129,16 +129,8 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         if (!id || !fase) continue;
         if (!PHASE_TO_INDICATOR[fase]) continue;
 
-        // For "Contrato assinado", use "Data de assinatura do contrato" if available
-        // This ensures sales are counted in the month the contract was actually signed,
-        // not when the card was moved to this phase (which may be delayed)
-        if (fase === 'Contrato assinado') {
-          const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
-          if (dataAssinatura) {
-            console.log(`[useModeloAtualAnalytics] Card ${id} "${titulo}": Using "Data de assinatura do contrato" (${dataAssinatura.toISOString()}) instead of "Entrada" (${dataEntrada.toISOString()})`);
-            dataEntrada = dataAssinatura;
-          }
-        }
+        // Note: Logic for "Data de assinatura do contrato" removed since
+        // we now use "Ganho" phase for sales instead of "Contrato assinado"
         const valorMRR = parseNumericValue(row['Valor MRR'] || row['valor_mrr'] || 0);
         const valorPontual = parseNumericValue(row['Valor Pontual'] || row['valor_pontual'] || 0);
         const valorEducacao = parseNumericValue(row['Valor Educação'] || row['Valor Educacao'] || row['valor_educacao'] || 0);

@@ -79,21 +79,12 @@ const PHASE_TO_INDICATOR: Record<string, string> = {
   'proposta enviada / follow up': 'proposta',
   'enviar proposta': 'proposta',
   
-  // Fases de Venda
+  // Fases de Venda (apenas "Ganho" conta como venda)
   'venda': 'venda',
   'sale': 'venda',
   'ganho': 'venda',
   'won': 'venda',
-  'fechado': 'venda',
   'closed won': 'venda',
-  'assinatura': 'venda',
-  'contrato assinado': 'venda',
-  'cliente': 'venda',
-  'onboarding': 'venda',
-  'implantação': 'venda',
-  'sucesso': 'venda',
-  'concluído': 'venda',
-  'finalizado': 'venda',
 };
 
 // Mapeamento de BU (Business Unit) - expandido com nomes de pipes comuns
