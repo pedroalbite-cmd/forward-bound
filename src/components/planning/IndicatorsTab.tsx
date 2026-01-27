@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { LeadsMqlsStackedChart } from "./LeadsMqlsStackedChart";
 import { MeetingsScheduledChart } from "./MeetingsScheduledChart";
 import { ClickableFunnelChart } from "./ClickableFunnelChart";
-import { AnalyticsSection } from "./indicators/AnalyticsSection";
+import { RevenueBreakdownChart } from "./RevenueBreakdownChart";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
 import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select";
 
@@ -1175,8 +1175,14 @@ export function IndicatorsTab() {
         ))}
       </div>
 
-      {/* Analytics Section */}
-      <AnalyticsSection buKey={selectedBU} startDate={startDate} endDate={endDate} />
+      {/* Revenue Breakdown Chart */}
+      <RevenueBreakdownChart 
+        startDate={startDate} 
+        endDate={endDate} 
+        selectedBU={selectedBU} 
+        selectedBUs={selectedBUs}
+        selectedClosers={selectedClosers}
+      />
 
       {(isLoading || isLoadingExpansao || isLoadingO2Tax) && (
         <div className="fixed inset-0 bg-background/50 flex items-center justify-center z-50">
