@@ -69,7 +69,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
   const defaultTicket = produto === 'Franquia' ? 140000 : 54000;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['expansao-analytics', produto, startDate.toISOString(), endDate.toISOString()],
+    queryKey: ['expansao-movements-all', produto],
     queryFn: async () => {
       // Use 'preview' action (same as useExpansaoMetas/useOxyHackerMetas) for consistency
       // This ensures the same data source and filtering logic between indicators and drill-down
