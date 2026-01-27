@@ -25,7 +25,7 @@ const TAB_CONFIG: { key: TabKey; label: string; icon: React.ComponentType<{ clas
   { key: 'sales', label: 'Controle Metas', icon: Target },
   { key: 'media', label: 'Plan Growth', icon: Megaphone },
   { key: 'indicators', label: 'Indicadores', icon: Activity },
-  { key: 'marketing_indicators', label: 'Mkt Indicators', icon: TrendingUp },
+  { key: 'marketing_indicators', label: 'Mkt Indicadores', icon: TrendingUp },
   { key: 'marketing', label: 'Marketing', icon: Lightbulb },
   { key: 'structure', label: 'Estrutura', icon: Users },
   { key: 'admin', label: 'Admin', icon: Settings },
