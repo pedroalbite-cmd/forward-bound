@@ -22,7 +22,7 @@ import { FunnelDataItem } from "@/contexts/MediaMetasContext";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { LeadsMqlsStackedChart } from "./LeadsMqlsStackedChart";
-import { LeadsStackedChart } from "./LeadsStackedChart";
+import { MeetingsScheduledChart } from "./MeetingsScheduledChart";
 import { ClickableFunnelChart } from "./ClickableFunnelChart";
 import { AnalyticsSection } from "./indicators/AnalyticsSection";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
@@ -1127,7 +1127,7 @@ export function IndicatorsTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="space-y-4">
           <LeadsMqlsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} selectedBUs={selectedBUs} selectedClosers={selectedClosers} />
-          <LeadsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} selectedBUs={selectedBUs} selectedClosers={selectedClosers} />
+          <MeetingsScheduledChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} selectedBUs={selectedBUs} selectedClosers={selectedClosers} />
         </div>
         <ClickableFunnelChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} selectedBUs={selectedBUs} selectedClosers={selectedClosers} />
       </div>
