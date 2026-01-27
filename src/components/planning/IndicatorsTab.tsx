@@ -823,66 +823,171 @@ export function IndicatorsTab() {
     return total;
   };
 
-  // Get realized monetary value for monetary indicators
+  // Get realized monetary value for monetary indicators (respecting BU and Closer filters)
   const getRealizedMonetaryForIndicator = (indicator: MonetaryIndicatorConfig): number => {
     switch (indicator.key) {
-      case 'faturamento':
-        // Sum all sales value from selected BUs
-        let totalFaturamento = 0;
+      case 'faturamento': {
+        let total = 0;
+        
+        // For Modelo Atual: apply closer filter if active
         if (includesModeloAtual) {
-          totalFaturamento += getModeloAtualValue('venda', startDate, endDate);
+          if (selectedClosers.length > 0) {
+            // Filter by closer using analytics
+            const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
+            const filteredCards = salesCards.filter(card => 
+              matchesCloserFilter((card.closer || '').trim())
+            );
+            total += filteredCards.reduce((acc, card) => acc + (card.valor || 0), 0);
+          } else {
+            total += getModeloAtualValue('venda', startDate, endDate);
+          }
         }
-        // For other BUs, use qty * ticket (simplified)
+        
+        // Other BUs don't have closer filter
         if (includesO2Tax) {
-          totalFaturamento += getO2TaxQty('venda' as O2TaxIndicator, startDate, endDate) * 15000;
+          total += getO2TaxQty('venda' as O2TaxIndicator, startDate, endDate) * 15000;
         }
         if (includesOxyHacker) {
-          totalFaturamento += getOxyHackerQty('venda' as OxyHackerIndicator, startDate, endDate) * 54000;
+          total += getOxyHackerQty('venda' as OxyHackerIndicator, startDate, endDate) * 54000;
         }
         if (includesFranquia) {
-          totalFaturamento += getExpansaoQty('venda' as ExpansaoIndicator, startDate, endDate) * 140000;
+          total += getExpansaoQty('venda' as ExpansaoIndicator, startDate, endDate) * 140000;
         }
-        return totalFaturamento;
+        
+        return total;
+      }
       
-      case 'roi':
+      case 'roi': {
         const faturamento = getRealizedMonetaryForIndicator({ ...indicator, key: 'faturamento' });
         const investimento = getInvestimentoPeriodo();
         return investimento > 0 ? faturamento / investimento : 0;
+      }
       
-      case 'mrr':
-        return getMrrForPeriod(startDate, endDate);
+      case 'mrr': {
+        let total = 0;
+        
+        if (includesModeloAtual) {
+          if (selectedClosers.length > 0) {
+            // Filter by closer using analytics
+            const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
+            const filteredCards = salesCards.filter(card => 
+              matchesCloserFilter((card.closer || '').trim())
+            );
+            total += filteredCards.reduce((acc, card) => acc + (card.valorMRR || 0), 0);
+          } else {
+            total += getMrrForPeriod(startDate, endDate);
+          }
+        }
+        
+        // Other BUs don't have MRR breakdown - their "ticket" is all-inclusive
+        // No additional MRR for O2 TAX, Oxy Hacker, Franquia
+        
+        return total;
+      }
       
-      case 'setup':
-        return getSetupForPeriod(startDate, endDate);
+      case 'setup': {
+        let total = 0;
+        
+        if (includesModeloAtual) {
+          if (selectedClosers.length > 0) {
+            const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
+            const filteredCards = salesCards.filter(card => 
+              matchesCloserFilter((card.closer || '').trim())
+            );
+            total += filteredCards.reduce((acc, card) => acc + (card.valorSetup || 0), 0);
+          } else {
+            total += getSetupForPeriod(startDate, endDate);
+          }
+        }
+        
+        return total;
+      }
       
-      case 'pontual':
-        return getPontualForPeriod(startDate, endDate);
+      case 'pontual': {
+        let total = 0;
+        
+        if (includesModeloAtual) {
+          if (selectedClosers.length > 0) {
+            const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
+            const filteredCards = salesCards.filter(card => 
+              matchesCloserFilter((card.closer || '').trim())
+            );
+            total += filteredCards.reduce((acc, card) => acc + (card.valorPontual || 0), 0);
+          } else {
+            total += getPontualForPeriod(startDate, endDate);
+          }
+        }
+        
+        return total;
+      }
       
       default:
         return 0;
     }
   };
 
-  // Get meta for monetary indicators
+  // Get meta for monetary indicators (respecting closer filter for Modelo Atual)
   const getMetaMonetaryForIndicator = (indicator: MonetaryIndicatorConfig): number => {
+    // Helper to calculate faturamento meta with closer filter applied
+    const getFilteredFaturamentoMeta = (): number => {
+      if (!funnelData) return 0;
+      
+      let total = 0;
+      const monthsInPeriod = eachMonthOfInterval({ start: startDate, end: endDate });
+      const closerFilter = selectedClosers.length > 0 ? selectedClosers : undefined;
+      
+      for (const monthDate of monthsInPeriod) {
+        const monthName = monthNames[getMonth(monthDate)];
+        
+        if (includesModeloAtual && funnelData.modeloAtual) {
+          const item = funnelData.modeloAtual.find(f => f.month === monthName);
+          if (item) {
+            let vendas = item.vendas || 0;
+            // Apply closer percentage if filter is active
+            if (closerFilter && closerFilter.length > 0) {
+              const totalPercentage = closerFilter.reduce((sum, closer) => {
+                return sum + getFilteredMeta(vendas, 'modelo_atual', monthName, [closer]) / vendas * 100;
+              }, 0);
+              vendas = vendas * (totalPercentage / 100);
+            }
+            total += vendas * 17000;
+          }
+        }
+        if (includesO2Tax && funnelData.o2Tax) {
+          const item = funnelData.o2Tax.find(f => f.month === monthName);
+          if (item) total += (item.vendas || 0) * 15000;
+        }
+        if (includesOxyHacker && funnelData.oxyHacker) {
+          const item = funnelData.oxyHacker.find(f => f.month === monthName);
+          if (item) total += (item.vendas || 0) * 54000;
+        }
+        if (includesFranquia && funnelData.franquia) {
+          const item = funnelData.franquia.find(f => f.month === monthName);
+          if (item) total += (item.vendas || 0) * 140000;
+        }
+      }
+      
+      return total;
+    };
+    
     switch (indicator.key) {
       case 'roi':
         return 10; // Meta de 10x ROI
       
       case 'faturamento':
-        return getFaturamentoMetaPeriodo();
+        return getFilteredFaturamentoMeta();
       
       case 'mrr':
         // MRR = ~60% do faturamento
-        return getFaturamentoMetaPeriodo() * 0.6;
+        return getFilteredFaturamentoMeta() * 0.6;
       
       case 'setup':
         // Setup = ~25% do faturamento
-        return getFaturamentoMetaPeriodo() * 0.25;
+        return getFilteredFaturamentoMeta() * 0.25;
       
       case 'pontual':
         // Pontual = ~15% do faturamento
-        return getFaturamentoMetaPeriodo() * 0.15;
+        return getFilteredFaturamentoMeta() * 0.15;
       
       default:
         return 0;

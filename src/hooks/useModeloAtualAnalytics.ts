@@ -235,6 +235,10 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     responsible: card.closer || card.responsavel || undefined, // Prioritize closer for display
     duration: card.duracao,
     product: 'CaaS',
+    mrr: card.valorMRR,
+    setup: card.valorSetup,
+    pontual: card.valorPontual,
+    closer: card.closer,
   });
 
   // Get detail items for a specific indicator
