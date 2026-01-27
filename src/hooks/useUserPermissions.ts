@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-export type TabKey = 'context' | 'goals' | 'monthly' | 'sales' | 'media' | 'marketing' | 'structure' | 'admin' | 'indicators';
+export type TabKey = 'context' | 'goals' | 'monthly' | 'sales' | 'media' | 'marketing' | 'structure' | 'admin' | 'indicators' | 'marketing_indicators';
 
 export function useUserPermissions(userId: string | undefined) {
   const { data: permissions, isLoading: permissionsLoading } = useQuery({
@@ -40,7 +40,7 @@ export function useUserPermissions(userId: string | undefined) {
 
   // Admins have access to all tabs
   const allowedTabs: TabKey[] = isAdmin 
-    ? ['context', 'goals', 'monthly', 'sales', 'media', 'marketing', 'structure', 'admin', 'indicators']
+    ? ['context', 'goals', 'monthly', 'sales', 'media', 'marketing', 'structure', 'admin', 'indicators', 'marketing_indicators']
     : permissions || [];
 
   return {
