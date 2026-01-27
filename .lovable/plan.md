@@ -1,148 +1,119 @@
 
-## Plano: Corrigir Estrutura de Dados Compartilhada do O2 TAX
 
-### Problema Identificado
+## Plano: Unificar Definição de Venda para "Ganho" em Todas as BUs
 
-Após unificar a `queryKey` para `['o2tax-movements-all']`, os dois hooks continuam retornando estruturas de dados diferentes:
+### Contexto
 
-- **useO2TaxMetas**: retorna `{ movements: O2TaxMovement[] }`
-- **useO2TaxAnalytics**: retorna `{ cards: O2TaxCard[] }`
+Atualmente, a definição de venda (indicador 'venda') varia entre as BUs:
+- **O2 TAX, Franquia, Oxy Hacker**: já usam fase "Ganho" como venda
+- **Modelo Atual**: usa fase "Contrato assinado" como venda
 
-Quando `useO2TaxMetas` executa primeiro, o cache é preenchido com `{ movements: [...] }`, mas `useO2TaxAnalytics` tenta acessar `data?.cards`, que resulta em `undefined`, gerando um array vazio no drill-down.
-
----
-
-### Solução Proposta
-
-Modificar `useO2TaxAnalytics` para:
-1. **Remover sua própria queryFn** - não precisa buscar dados
-2. **Reutilizar o cache de `useO2TaxMetas`** - acessando `data?.movements`
-3. **Processar os movements localmente** para criar os O2TaxCards que o drill-down precisa
+A solicitação é padronizar para que **todas as BUs** contem venda apenas quando o card chega na fase **"Ganho"**.
 
 ---
 
-### Mudanças no Arquivo
+### Mapeamento Atual vs Desejado
 
-#### `src/hooks/useO2TaxAnalytics.ts`
-
-**1. Alterar a query para reutilizar o cache existente:**
-
-```typescript
-// ANTES (linhas 86-157):
-const { data, isLoading, error } = useQuery({
-  queryKey: ['o2tax-movements-all'],
-  queryFn: async () => {
-    // ... busca própria que retorna { cards: [] }
-  },
-  staleTime: 5 * 60 * 1000,
-  retry: 1,
-});
-
-const cards = data?.cards ?? [];
-
-// DEPOIS:
-const { data, isLoading, error } = useQuery({
-  queryKey: ['o2tax-movements-all'],
-  queryFn: async () => {
-    // Mesma busca que useO2TaxMetas faz, retornando mesma estrutura
-    const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
-      body: { table: 'pipefy_cards_movements', action: 'preview', limit: 5000 }
-    });
-
-    if (fetchError) {
-      console.error('Error fetching O2 TAX movements:', fetchError);
-      throw fetchError;
-    }
-
-    if (!responseData?.data) {
-      return { movements: [] };  // ← MESMA estrutura que useO2TaxMetas
-    }
-
-    const movements = responseData.data.map((row: any) => ({
-      id: String(row.ID),
-      titulo: row['Título'] || '',
-      fase: row['Fase'] || '',
-      faseAtual: row['Fase Atual'] || '',
-      dataEntrada: parseDate(row['Entrada']) || new Date(),
-      dataSaida: parseDate(row['Saída']),
-      valorMRR: row['Valor MRR'] ? parseFloat(row['Valor MRR']) : null,
-      valorPontual: row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : null,
-      valorSetup: row['Valor Setup'] ? parseFloat(row['Valor Setup']) : null,
-    }));
-
-    return { movements };
-  },
-  staleTime: 5 * 60 * 1000,
-  retry: 1,
-});
-
-// Processar movements para criar cards para drill-down
-const cards = useMemo(() => {
-  if (!data?.movements) return [];
-  
-  return data.movements.map((mov) => {
-    const dataEntrada = mov.dataEntrada;
-    const dataSaida = mov.dataSaida;
-    
-    // Calcular duração
-    let duracao = 0;
-    if (dataSaida) {
-      duracao = Math.floor((dataSaida.getTime() - dataEntrada.getTime()) / 1000);
-    } else {
-      duracao = Math.floor((Date.now() - dataEntrada.getTime()) / 1000);
-    }
-    
-    const valorPontual = mov.valorPontual || 0;
-    const valorSetup = mov.valorSetup || 0;
-    const valorMRR = mov.valorMRR || 0;
-    
-    return {
-      id: mov.id,
-      titulo: mov.titulo,
-      fase: mov.fase,
-      faseAtual: mov.faseAtual,
-      faixa: null, // Será populado se precisar
-      valorMRR,
-      valorPontual,
-      valorSetup,
-      valor: valorPontual + valorSetup + valorMRR,
-      responsavel: null,
-      motivoPerda: null,
-      dataEntrada,
-      dataSaida,
-      contato: null,
-      setor: null,
-      duracao,
-    } as O2TaxCard;
-  });
-}, [data?.movements]);
-```
-
-**2. Adicionar campos faltantes na estrutura de movements (opcional):**
-
-Alternativamente, podemos enriquecer a estrutura de `movements` em `useO2TaxMetas` para incluir todos os campos que `useO2TaxAnalytics` precisa, evitando processamento duplicado.
+| BU | Fase Atual para Venda | Fase Desejada para Venda |
+|----|----------------------|--------------------------|
+| O2 TAX | Ganho | Ganho (OK) |
+| Franquia | Ganho | Ganho (OK) |
+| Oxy Hacker | Ganho | Ganho (OK) |
+| **Modelo Atual** | **Contrato assinado** | **Ganho** |
+| Consolidado | Misto | Ganho |
 
 ---
 
 ### Arquivos a Modificar
 
-| Arquivo | Ação |
-|---------|------|
-| `src/hooks/useO2TaxAnalytics.ts` | Modificar queryFn para retornar `{ movements: [] }` e processar via useMemo |
+#### 1. `src/hooks/useModeloAtualMetas.ts`
+
+**Alterações:**
+
+1. Adicionar "Ganho" no mapeamento PHASE_TO_INDICATOR (linha 45):
+   - DE: `'Contrato assinado': 'venda'`
+   - PARA: `'Ganho': 'venda'` (substituir ou adicionar)
+
+2. Remover a lógica especial de "Data de assinatura do contrato" (linhas 129-137):
+   - Esta lógica era específica para "Contrato assinado"
+   - Não é mais necessária se usarmos "Ganho"
 
 ---
 
-### Benefícios
+#### 2. `src/hooks/useModeloAtualAnalytics.ts`
 
-1. **Cache consistente**: Ambos os hooks compartilham a mesma estrutura de dados
-2. **Sem race condition**: Qualquer hook que executar primeiro preenche o cache com a estrutura correta
-3. **Drill-down funcional**: `getDetailItemsForIndicator` terá dados disponíveis
+**Alterações:**
+
+1. Atualizar PHASE_TO_INDICATOR (linha 47):
+   - DE: `'Contrato assinado': 'venda'`
+   - PARA: `'Ganho': 'venda'`
+
+2. Remover a lógica especial de "Data de assinatura do contrato" (linhas 132-141):
+   - Esta lógica era específica para "Contrato assinado"
+   - Não é mais necessária
 
 ---
 
-### Observações Técnicas
+#### 3. `src/hooks/useClosersMetas.ts`
 
-O processamento de `movements` → `cards` é feito em `useMemo`, garantindo que:
-- Só é recalculado quando `data.movements` muda
-- Mantém boa performance mesmo com 5000+ registros
-- Aplica a mesma lógica de cálculo de duração que o código original
+**Alterações:**
+
+1. Atualizar PHASE_TO_INDICATOR (linha 24):
+   - DE: `'Contrato assinado': 'venda'`
+   - PARA: `'Ganho': 'venda'`
+
+---
+
+#### 4. `supabase/functions/sync-pipefy-funnel/index.ts`
+
+**Alterações:**
+
+1. Remover "Contrato Assinado" do mapeamento (linha 32):
+   - Manter apenas `'Ganho': 'venda'`
+   - Remover: `'Contrato Assinado': 'venda'`
+
+---
+
+#### 5. `supabase/functions/sync-from-sheets/index.ts`
+
+**Alterações:**
+
+1. Verificar se "ganho" está mapeado para venda (se não estiver, adicionar)
+2. Remover ou manter "contrato assinado" dependendo de como os dados chegam do Sheets
+   - Como esta é uma edge function de sincronização, pode ser necessário manter ambos os mapeamentos para compatibilidade com dados históricos do Sheets
+
+---
+
+### Observação Importante: UI (Nomes de Exibição)
+
+Os gráficos de funil mostram "Contrato Assinado" como nome de exibição (label). Isso NÃO precisa ser alterado pois:
+- O nome "Contrato Assinado" é apenas um label visual para o usuário
+- A lógica interna usa o indicador 'venda' que agora mapeará para fase "Ganho"
+
+Arquivos de UI que usam o label "Contrato Assinado" (não precisam ser alterados):
+- `src/components/planning/ClickableFunnelChart.tsx` (linha 139)
+- `src/components/planning/PeriodFunnelChart.tsx` (linha 94)
+
+Se desejar alterar o nome de exibição de "Contrato Assinado" para "Ganho", isso seria uma mudança separada nos componentes de UI.
+
+---
+
+### Resumo de Modificações
+
+| Arquivo | Tipo | Descrição |
+|---------|------|-----------|
+| `src/hooks/useModeloAtualMetas.ts` | Modificar | Mudar mapeamento de 'Contrato assinado' para 'Ganho'; remover lógica de data de assinatura |
+| `src/hooks/useModeloAtualAnalytics.ts` | Modificar | Mudar mapeamento de 'Contrato assinado' para 'Ganho'; remover lógica de data de assinatura |
+| `src/hooks/useClosersMetas.ts` | Modificar | Mudar mapeamento de 'Contrato assinado' para 'Ganho' |
+| `supabase/functions/sync-pipefy-funnel/index.ts` | Modificar | Remover 'Contrato Assinado' do mapeamento |
+| `supabase/functions/sync-from-sheets/index.ts` | Avaliar | Verificar se precisa adicionar 'ganho' e/ou manter compatibilidade |
+
+---
+
+### Impacto nos Dados
+
+Após a alteração:
+- Vendas serão contadas quando cards entrarem na fase **"Ganho"** no Pipefy
+- Cards que estão em "Contrato assinado" mas ainda não chegaram em "Ganho" não serão contados como vendas
+- Isso pode resultar em números diferentes se houver cards "travados" entre as fases
+
