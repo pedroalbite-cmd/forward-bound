@@ -85,7 +85,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
 
   // Use the SAME data source and filtering as useO2TaxMetas for consistency
   const { data, isLoading, error } = useQuery({
-    queryKey: ['o2tax-analytics', startDate.toISOString(), endDate.toISOString()],
+    queryKey: ['o2tax-movements-all'],
     queryFn: async () => {
       // Use 'preview' action (same as useO2TaxMetas) to get ALL data and filter locally
       // This ensures consistency between indicator numbers and drill-down lists
