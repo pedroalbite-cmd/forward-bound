@@ -1,170 +1,242 @@
 
 
-## Plano: Adicionar Meta de Faturamento ao Gráfico de Faturamento por Período
+## Plano: Criar Aba "Indicadores Marketing"
 
 ### Objetivo
 
-Exibir a meta de faturamento do Plan Growth como uma linha de referência no gráfico "Faturamento por Período", permitindo visualizar a performance realizada versus planejada.
+Criar uma nova aba de Indicadores de Marketing com estrutura modular e preparada para receber dados futuros. A aba seguirá os mesmos padrões visuais e de filtros da aba "Indicadores" (vendas).
 
 ---
 
-### Fonte de Dados
+### Indicadores a Serem Exibidos
 
-A meta de faturamento virá do **`MediaMetasContext.metasPorBU`**, que contém as metas mensais de receita para cada BU:
+Com base nas suas definições:
 
-```typescript
-metasPorBU = {
-  modelo_atual: { Jan: 1125000, Fev: 1237500, Mar: 1387500, ... },
-  o2_tax: { Jan: 132975, Fev: 135635, ... },
-  oxy_hacker: { Jan: 54000, Fev: 108000, ... },
-  franquia: { Jan: 0, Fev: 140000, ... }
-}
-```
+| Categoria | Indicadores |
+|-----------|-------------|
+| **Aquisição** | Leads, MQLs, RM (Reuniões Marcadas), RR (Reuniões Realizadas) |
+| **Investimento por Canal** | Meta Ads, Google Ads, Eventos |
+| **Performance** | ROAS+LTV, ROI LTV, CAC, LTV |
+| **Eficiência** | MQL/Leads (taxa de conversão), Conversão Ads por Canal |
+| **Investimento** | Investimento Total, Investimento por Fonte |
+| **Detalhamento** | Tabela com info de Campanhas, Anúncios, etc. |
 
 ---
 
-### Modificações no Componente `RevenueBreakdownChart.tsx`
+### Estrutura de Arquivos
 
-#### 1. Importar o contexto de metas
-
-```typescript
-import { useMediaMetas } from "@/contexts/MediaMetasContext";
-```
-
-#### 2. Acessar metasPorBU no componente
-
-```typescript
-const { metasPorBU } = useMediaMetas();
-```
-
-#### 3. Adicionar campo `meta` ao ChartDataPoint
-
-```typescript
-interface ChartDataPoint {
-  label: string;
-  mrr: number;
-  setup: number;
-  pontual: number;
-  total: number;
-  meta: number;  // NOVO
-  startDate: Date;
-  endDate: Date;
-}
-```
-
-#### 4. Calcular a meta por período
-
-Criar função `calcularMetaPorPeriodo` que pro-rateia as metas mensais para o agrupamento do gráfico (diário/semanal/mensal):
-
-```typescript
-const calcularMetaDoPeriodo = (start: Date, end: Date): number => {
-  if (!metasPorBU || !useModeloAtual) return 0;
-  
-  // Para Modelo Atual, pegar metas do contexto
-  const metas = metasPorBU.modelo_atual;
-  if (!metas || Object.keys(metas).length === 0) return 0;
-  
-  // Pro-ratear por dias do período
-  const monthsInPeriod = eachMonthOfInterval({ start, end });
-  let total = 0;
-  
-  for (const monthDate of monthsInPeriod) {
-    const monthName = format(monthDate, 'MMM', { locale: ptBR }); // Jan, Fev...
-    const monthMeta = metas[monthName] || 0;
-    
-    // Calcular fração do mês no período
-    const monthStart = startOfMonth(monthDate);
-    const monthEnd = endOfMonth(monthDate);
-    const overlapStart = start > monthStart ? start : monthStart;
-    const overlapEnd = end < monthEnd ? end : monthEnd;
-    const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
-    const daysInMonth = differenceInDays(monthEnd, monthStart) + 1;
-    
-    total += monthMeta * (overlapDays / daysInMonth);
-  }
-  
-  return total;
-};
-```
-
-#### 5. Incluir meta nos dados do gráfico
-
-Dentro de `getGroupedMonetaryData`, adicionar o cálculo de meta para cada ponto do gráfico.
-
-#### 6. Adicionar linha de meta no gráfico
-
-```tsx
-<Line 
-  type="monotone" 
-  dataKey="meta" 
-  stroke="#22c55e" 
-  strokeWidth={2} 
-  strokeDasharray="5 5" 
-  dot={false}
-  name="meta"
-/>
-```
-
-#### 7. Atualizar header com meta total
-
-```tsx
-<div className="flex items-center gap-2">
-  <span className="text-muted-foreground">Meta:</span>
-  <span className="font-medium text-green-500">{formatCompactCurrency(metaTotal)}</span>
-</div>
+```text
+src/
+├── components/
+│   └── planning/
+│       ├── MarketingIndicatorsTab.tsx  (NOVO - componente principal)
+│       └── marketing-indicators/       (NOVA pasta)
+│           ├── InvestmentByChannelChart.tsx
+│           ├── AcquisitionFunnelChart.tsx
+│           ├── PerformanceGauges.tsx
+│           ├── ConversionsByChannelChart.tsx
+│           ├── CampaignsTable.tsx
+│           └── types.ts
+├── hooks/
+│   └── useMarketingIndicators.ts  (NOVO - hook para dados futuros)
+├── pages/
+│   └── Planning2026.tsx  (MODIFICAR - adicionar nova aba)
+└── hooks/
+    └── useUserPermissions.ts  (MODIFICAR - adicionar 'marketing_indicators')
 ```
 
 ---
 
-### Design Visual do Gráfico Atualizado
+### Componente Principal: MarketingIndicatorsTab.tsx
+
+Layout seguindo o padrão da aba Indicadores de vendas:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│  Faturamento por Período                                                        │
+│  Indicadores Marketing                                         [BU ▼] [📅 Data] │
+├─────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                 │
-│  Total: R$ 850k    Meta: R$ 1.2M    MRR: R$ 510k    Setup: R$ 213k    Pont: R$ 127k │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐│
+│  │    ROAS     │ │   ROI LTV   │ │     CAC     │ │     LTV     │ │ Investimento││
+│  │    2.5x     │ │    4.2x     │ │   R$ 9.5k   │ │   R$ 38k    │ │  R$ 150k    ││
+│  │  Meta: 3x   │ │  Meta: 5x   │ │ Meta: R$8k  │ │ Meta: R$40k │ │ Meta: R$180k││
+│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘│
 │                                                                                 │
-│  ■ MRR   ■ Setup   ■ Pontual   ─ ─ Meta                                         │
+│  ┌───────────────────────────────────┐ ┌───────────────────────────────────────┐│
+│  │   Investimento por Canal          │ │   Funil de Aquisição                  ││
+│  │   ┌────┐ ┌────┐ ┌────┐            │ │   Leads → MQL → RM → RR               ││
+│  │   │Meta│ │Goog│ │Even│            │ │                                       ││
+│  │   │Ads │ │ Ads│ │tos │            │ │   ████████████████████████ 1200       ││
+│  │   │ 80k│ │ 50k│ │ 20k│            │ │   █████████████████ 840               ││
+│  │   └────┘ └────┘ └────┘            │ │   ███████████ 504                     ││
+│  └───────────────────────────────────┘ │   ██████ 302                          ││
+│                                        └───────────────────────────────────────┘│
 │                                                                                 │
-│        - - - - - - - - - - - - - - - - - - - - - - - - ← Linha de meta (verde)  │
-│     ┌───┐         ┌───┐         ┌───┐         ┌───┐                            │
-│  200k│███│      150k│███│      180k│███│      120k│███│  ← Barras empilhadas     │
-│     │███│         │███│         │███│         │███│                            │
-│     │░░░│         │░░░│         │░░░│         │░░░│                            │
-│     │░░░│         │░░░│         │░░░│         │░░░│                            │
-│     │▒▒▒│         │▒▒▒│         │▒▒▒│         │▒▒▒│                            │
-│     └───┘         └───┘         └───┘         └───┘                            │
-│      Jan           Fev           Mar           Abr                              │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐│
+│  │   Conversão por Canal                                                        ││
+│  │                                                                              ││
+│  │   Canal        │ Leads │  MQLs │ Conversão │  CPL  │  CPMQL │    Gasto     ││
+│  │   ───────────────────────────────────────────────────────────────────────── ││
+│  │   Meta Ads     │  500  │  350  │   70%     │ R$ 80 │ R$ 114 │  R$ 40.000   ││
+│  │   Google Ads   │  400  │  280  │   70%     │ R$ 75 │ R$ 107 │  R$ 30.000   ││
+│  │   Eventos      │  100  │   85  │   85%     │ R$150 │ R$ 176 │  R$ 15.000   ││
+│  └─────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐│
+│  │   Campanhas e Anúncios                                      [Collapsible ▼]  ││
+│  │                                                                              ││
+│  │   Campanha              │ Canal    │ Leads │ MQLs │  Gasto  │  ROAS │ Status ││
+│  │   ────────────────────────────────────────────────────────────────────────── ││
+│  │   Black Friday 2026     │ Meta Ads │  120  │  84  │ R$ 8.5k │  2.8x │ Ativo  ││
+│  │   Webinar Janeiro       │ Google   │   80  │  60  │ R$ 5.2k │  3.1x │ Pausado││
+│  └─────────────────────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Imports Adicionais Necessários
+### Detalhes Técnicos
+
+#### 1. Tipos de Dados (marketing-indicators/types.ts)
 
 ```typescript
-import { useMediaMetas } from "@/contexts/MediaMetasContext";
-import { startOfMonth, endOfMonth } from "date-fns";
-import { Line, ComposedChart } from "recharts";
+export interface MarketingChannel {
+  id: string;
+  name: string;
+  investment: number;
+  leads: number;
+  mqls: number;
+  cpl: number;    // Cost per Lead
+  cpmql: number;  // Cost per MQL
+}
+
+export interface CampaignData {
+  id: string;
+  name: string;
+  channel: string;
+  status: 'active' | 'paused' | 'ended';
+  investment: number;
+  leads: number;
+  mqls: number;
+  roas: number;
+  startDate: string;
+  endDate?: string;
+}
+
+export interface MarketingMetrics {
+  roas: number;
+  roasLtv: number;
+  roiLtv: number;
+  cac: number;
+  ltv: number;
+  totalInvestment: number;
+  channels: MarketingChannel[];
+  campaigns: CampaignData[];
+}
 ```
 
-Nota: Precisamos trocar `BarChart` por `ComposedChart` para combinar barras empilhadas com linha de meta.
+#### 2. Hook de Dados (useMarketingIndicators.ts)
+
+```typescript
+// Hook preparado para receber dados futuros
+// Por agora retorna dados mockados/placeholder
+
+export function useMarketingIndicators(startDate: Date, endDate: Date, selectedBUs: string[]) {
+  // Placeholder - será integrado com fonte de dados real
+  const mockData: MarketingMetrics = {
+    roas: 0,
+    roasLtv: 0,
+    roiLtv: 0,
+    cac: 0,
+    ltv: 0,
+    totalInvestment: 0,
+    channels: [],
+    campaigns: [],
+  };
+
+  return {
+    data: mockData,
+    isLoading: false,
+    refetch: () => {},
+  };
+}
+```
+
+#### 3. Componentes Modulares
+
+| Componente | Descrição |
+|------------|-----------|
+| `PerformanceGauges.tsx` | 5 radial gauges: ROAS, ROI LTV, CAC, LTV, Investimento |
+| `InvestmentByChannelChart.tsx` | Gráfico de barras por canal (Meta Ads, Google Ads, Eventos) |
+| `AcquisitionFunnelChart.tsx` | Funil visual: Leads → MQL → RM → RR |
+| `ConversionsByChannelChart.tsx` | Tabela com métricas por canal de aquisição |
+| `CampaignsTable.tsx` | Tabela colapsável com detalhes de campanhas e anúncios |
+
+#### 4. Filtros (mesmo padrão da aba Indicadores)
+
+- **Período**: DatePicker com range de datas
+- **BUs**: MultiSelect (Modelo Atual, O2 TAX, Oxy Hacker, Franquia)
+- **Canal**: MultiSelect (Meta Ads, Google Ads, Eventos) - NOVO
 
 ---
 
-### Resumo de Modificações
+### Modificações em Arquivos Existentes
+
+#### 1. useUserPermissions.ts
+```typescript
+// Adicionar 'marketing_indicators' ao TabKey
+export type TabKey = 'context' | 'goals' | 'monthly' | 'sales' | 'media' | 
+                     'marketing' | 'structure' | 'admin' | 'indicators' | 
+                     'marketing_indicators';  // NOVO
+
+// Atualizar allowedTabs para admins
+const allowedTabs: TabKey[] = isAdmin 
+  ? ['context', 'goals', 'monthly', 'sales', 'media', 'marketing', 'structure', 
+     'admin', 'indicators', 'marketing_indicators']  // Incluir novo
+  : permissions || [];
+```
+
+#### 2. Planning2026.tsx
+```typescript
+// Adicionar import
+import { MarketingIndicatorsTab } from "@/components/planning/MarketingIndicatorsTab";
+import { TrendingUp } from "lucide-react";
+
+// Adicionar à TAB_CONFIG
+const TAB_CONFIG = [
+  // ... tabs existentes ...
+  { key: 'marketing_indicators', label: 'Mkt Indicators', icon: TrendingUp },
+];
+
+// Adicionar TabsContent
+<TabsContent value="marketing_indicators" className="mt-0">
+  <MarketingIndicatorsTab />
+</TabsContent>
+```
+
+---
+
+### Resumo de Arquivos
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `src/components/planning/RevenueBreakdownChart.tsx` | Modificar | Importar useMediaMetas, calcular metas pro-rata, adicionar linha de meta ao gráfico, atualizar header |
+| `src/hooks/useUserPermissions.ts` | Modificar | Adicionar 'marketing_indicators' ao TabKey |
+| `src/pages/Planning2026.tsx` | Modificar | Adicionar nova aba e TabsContent |
+| `src/components/planning/MarketingIndicatorsTab.tsx` | Criar | Componente principal da aba |
+| `src/components/planning/marketing-indicators/types.ts` | Criar | Tipos TypeScript |
+| `src/components/planning/marketing-indicators/PerformanceGauges.tsx` | Criar | Radial gauges de performance |
+| `src/components/planning/marketing-indicators/InvestmentByChannelChart.tsx` | Criar | Gráfico de investimento por canal |
+| `src/components/planning/marketing-indicators/AcquisitionFunnelChart.tsx` | Criar | Funil de aquisição visual |
+| `src/components/planning/marketing-indicators/ConversionsByChannelChart.tsx` | Criar | Tabela de conversões por canal |
+| `src/components/planning/marketing-indicators/CampaignsTable.tsx` | Criar | Tabela de campanhas |
+| `src/hooks/useMarketingIndicators.ts` | Criar | Hook para dados (placeholder) |
 
 ---
 
-### Detalhes Tecnico
+### Próximos Passos (Fora deste Plano)
 
-1. **Pro-rateamento de metas**: As metas mensais serão divididas proporcionalmente para agrupamentos diários/semanais
-2. **Tipo de gráfico**: Trocar `BarChart` por `ComposedChart` para suportar barras + linha
-3. **Visual da meta**: Linha tracejada verde (#22c55e) que atravessa o gráfico
-4. **Tooltip atualizado**: Incluir valor da meta ao passar o mouse
-5. **Legenda atualizada**: Adicionar item "Meta" na legenda
+Após a estrutura criada, a integração de dados reais poderá ser feita:
+1. Conectar com APIs do Meta Ads / Google Ads
+2. Integrar com Google Sheets para dados manuais de campanhas
+3. Criar Edge Function para consolidar dados de múltiplas fontes
 
