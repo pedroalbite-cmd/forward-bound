@@ -83,12 +83,11 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
   const startTime = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
   const endTime = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).getTime();
 
-  // Use the SAME data source and filtering as useO2TaxMetas for consistency
+  // Use the SAME data source and cache as useO2TaxMetas for consistency
+  // Both hooks share queryKey ['o2tax-movements-all'] and return { movements: [] }
   const { data, isLoading, error } = useQuery({
     queryKey: ['o2tax-movements-all'],
     queryFn: async () => {
-      // Use 'preview' action (same as useO2TaxMetas) to get ALL data and filter locally
-      // This ensures consistency between indicator numbers and drill-down lists
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
         body: { 
           table: 'pipefy_cards_movements', 
@@ -98,65 +97,80 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
       });
 
       if (fetchError) {
-        console.error('Error fetching O2 TAX analytics:', fetchError);
+        console.error('Error fetching O2 TAX movements:', fetchError);
         throw fetchError;
       }
 
       if (!responseData?.data) {
-        return { cards: [] };
+        return { movements: [] };
       }
 
-      console.log(`[O2 TAX Analytics] Loaded ${responseData.data.length} total movements (using preview like Metas)`);
+      console.log(`[O2 TAX Analytics] Loaded ${responseData.data.length} movements`);
 
-      // Store ALL movements for drill-down (not just latest per card)
-      // CRITICAL: Use the SAME fallback logic as useO2TaxMetas (parseDate || new Date())
-      const allMovements: O2TaxCard[] = [];
-      
-      for (const row of responseData.data) {
-        const id = String(row.ID);
-        // Use fallback date like useO2TaxMetas to avoid discrepancy
-        const dataEntrada = parseDate(row['Entrada']) || new Date();
-        
-        // Parse exit date and calculate duration dynamically
-        const dataSaida = parseDate(row['Saída']);
-        let duracao = 0;
-        if (dataSaida) {
-          duracao = Math.floor((dataSaida.getTime() - dataEntrada.getTime()) / 1000);
-        } else {
-          duracao = Math.floor((Date.now() - dataEntrada.getTime()) / 1000);
-        }
-        
-        const card: O2TaxCard = {
-          id,
-          titulo: row['Título'] || '',
-          fase: row['Fase'] || '',
-          faseAtual: row['Fase Atual'] || '',
-          faixa: row['Faixa de faturamento mensal'] || null,
-          valorMRR: row['Valor MRR'] ? parseFloat(row['Valor MRR']) : 0,
-          valorPontual: row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : 0,
-          valorSetup: row['Valor Setup'] ? parseFloat(row['Valor Setup']) : 0,
-          valor: 0,
-          responsavel: row['Closer responsável'] || row['SDR responsável'] || null,
-          motivoPerda: row['Motivo da perda'] || null,
-          dataEntrada,
-          dataSaida,
-          contato: row['Nome - Interlocução O2'] || row['Nome'] || null,
-          setor: row['Setor'] || null,
-          duracao,
-        };
-        card.valor = card.valorPontual + card.valorSetup + card.valorMRR;
-        
-        allMovements.push(card);
-      }
+      // Return movements in the SAME structure as useO2TaxMetas
+      const movements = responseData.data.map((row: any) => ({
+        id: String(row.ID),
+        titulo: row['Título'] || '',
+        fase: row['Fase'] || '',
+        faseAtual: row['Fase Atual'] || '',
+        dataEntrada: parseDate(row['Entrada']) || new Date(),
+        dataSaida: parseDate(row['Saída']),
+        valorMRR: row['Valor MRR'] ? parseFloat(row['Valor MRR']) : null,
+        valorPontual: row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : null,
+        valorSetup: row['Valor Setup'] ? parseFloat(row['Valor Setup']) : null,
+        faixa: row['Faixa de faturamento mensal'] || null,
+        responsavel: row['Closer responsável'] || row['SDR responsável'] || null,
+        motivoPerda: row['Motivo da perda'] || null,
+        contato: row['Nome - Interlocução O2'] || row['Nome'] || null,
+        setor: row['Setor'] || null,
+      }));
 
-      console.log(`[O2 TAX Analytics] Processed ${allMovements.length} total movements`);
-      return { cards: allMovements };
+      return { movements };
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
 
-  const cards = data?.cards ?? [];
+  // Transform movements into O2TaxCards for drill-down (processed via useMemo)
+  const cards: O2TaxCard[] = useMemo(() => {
+    if (!data?.movements) return [];
+    
+    return data.movements.map((mov: any) => {
+      const dataEntrada = mov.dataEntrada instanceof Date ? mov.dataEntrada : new Date(mov.dataEntrada);
+      const dataSaida = mov.dataSaida ? (mov.dataSaida instanceof Date ? mov.dataSaida : new Date(mov.dataSaida)) : null;
+      
+      // Calculate duration dynamically
+      let duracao = 0;
+      if (dataSaida) {
+        duracao = Math.floor((dataSaida.getTime() - dataEntrada.getTime()) / 1000);
+      } else {
+        duracao = Math.floor((Date.now() - dataEntrada.getTime()) / 1000);
+      }
+      
+      const valorPontual = mov.valorPontual || 0;
+      const valorSetup = mov.valorSetup || 0;
+      const valorMRR = mov.valorMRR || 0;
+      
+      return {
+        id: mov.id,
+        titulo: mov.titulo,
+        fase: mov.fase,
+        faseAtual: mov.faseAtual,
+        faixa: mov.faixa || null,
+        valorMRR,
+        valorPontual,
+        valorSetup,
+        valor: valorPontual + valorSetup + valorMRR,
+        responsavel: mov.responsavel || null,
+        motivoPerda: mov.motivoPerda || null,
+        dataEntrada,
+        dataSaida,
+        contato: mov.contato || null,
+        setor: mov.setor || null,
+        duracao,
+      } as O2TaxCard;
+    });
+  }, [data?.movements]);
 
   // Filter cards by period
   const cardsInPeriod = useMemo(() => {
