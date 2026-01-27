@@ -1,20 +1,32 @@
 
 
-## Plano: Remover Dados de Andamento do Funil
+## Plano: Remover Dados de Conversão do ClickableFunnelChart
 
-### Objetivo
+### Problema Identificado
 
-Remover a seção de legenda/andamento que aparece abaixo do funil visual, que exibe as taxas de conversão entre cada etapa.
+O componente que está sendo renderizado na tela é o **`ClickableFunnelChart.tsx`**, não o `PeriodFunnelChart.tsx` que foi editado anteriormente. Por isso os percentuais de conversão continuam aparecendo.
 
 ---
 
-### Modificação
+### Modificações Necessárias
 
-**Arquivo:** `src/components/planning/PeriodFunnelChart.tsx`
+**Arquivo:** `src/components/planning/ClickableFunnelChart.tsx`
 
-**O que remover (linhas 176-190):**
+#### 1. Remover percentuais das barras (linhas 346-350)
 
 ```tsx
+// REMOVER:
+{index > 0 && (
+  <span className="text-white/80 text-xs flex-shrink-0">
+    ({stage.conversionPercent.toFixed(1)}%)
+  </span>
+)}
+```
+
+#### 2. Remover seção de legenda abaixo do funil (linhas 357-371)
+
+```tsx
+// REMOVER:
 {/* Legend */}
 <div className="mt-4 pt-4 border-t border-border">
   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
@@ -36,18 +48,18 @@ Remover a seção de legenda/andamento que aparece abaixo do funil visual, que e
 
 ### Resultado Esperado
 
-O componente `PeriodFunnelChart` exibirá apenas:
-1. O título "Funil do Período"
-2. Os cards de "Proposta Enviada" e "Contratos Assinados" com valores monetários
-3. O funil visual com as 6 etapas (Leads, MQL, RM, RR, Proposta, Venda)
+O funil exibirá apenas:
+- Título "Funil do Período"
+- Cards de "Proposta Enviada" e "Contratos Assinados" (valores monetários)
+- Barras do funil com: número, nome da etapa e quantidade absoluta
 
-A seção com as taxas de conversão entre etapas (ex: "Leads → MQL: 45.2%") será removida.
+**Sem** percentuais de conversão (nem dentro das barras, nem abaixo do funil).
 
 ---
 
-### Arquivo Modificado
+### Resumo
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `src/components/planning/PeriodFunnelChart.tsx` | Modificar | Remover seção de legenda (linhas 176-190) |
+| `src/components/planning/ClickableFunnelChart.tsx` | Modificar | Remover percentuais das barras (linhas 346-350) e seção de legenda (linhas 357-371) |
 
