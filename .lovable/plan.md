@@ -1,37 +1,32 @@
 
 
-## Plano: Substituir Gráfico de Leads por Reuniões Marcadas
+## Plano: Adicionar Gráfico de Faturamento e Remover Análises Detalhadas
 
 ### Objetivo
 
-Substituir o gráfico "Qtd Leads" (componente `LeadsStackedChart`) pelo gráfico "Qtd Reuniões Marcadas" (indicador 'rm'), mantendo a mesma estrutura de design e funcionalidades de drill-down.
+1. Criar um novo gráfico de barras empilhadas mostrando a evolução temporal de **Faturamento Total, MRR, Setup e Pontual**
+2. Posicionar este gráfico abaixo do gráfico de Vendas/Funil existente
+3. Remover a seção "Análises Detalhadas" (AnalyticsSection)
 
 ---
 
-### Mudanças Necessárias
+### Novo Componente: `RevenueBreakdownChart.tsx`
 
-#### 1. Renomear e Refatorar o Componente
+Criar um novo componente para exibir a evolução temporal de faturamento com suas componentes:
 
-**Arquivo a Modificar:** `src/components/planning/LeadsStackedChart.tsx`
+| Métrica | Descrição | Cor Proposta |
+|---------|-----------|--------------|
+| Faturamento Total | Soma de MRR + Setup + Pontual | Verde (#22c55e) |
+| MRR Incremento | Receita Recorrente Mensal | Azul (#3b82f6) |
+| Setup Incremento | Valor de Implantação | Laranja (#f97316) |
+| Pontual Incremento | Receitas não recorrentes | Roxo (#8b5cf6) |
 
-Renomear para `src/components/planning/MeetingsScheduledChart.tsx`
-
-**Alterações principais:**
-- Mudar o título do card de "Qtd Leads" para "Qtd Reuniões Marcadas"
-- Mudar o indicador de `'leads'` para `'rm'` em todas as chamadas de hook
-- Mudar a cor do gráfico de laranja (`#f97316`) para a cor do indicador RM (ex: `#3b82f6` - azul)
-- Atualizar a legenda de "Leads Realizados" para "Reuniões Realizadas"
-- Atualizar as colunas do DetailSheet para refletir dados de reunião
-- Ajustar as metas: O2 TAX (504/ano), Oxy Hacker (300/ano), Franquia (360/ano)
-
----
-
-### Estrutura do Novo Componente
+**Estrutura do componente:**
 
 ```typescript
-// src/components/planning/MeetingsScheduledChart.tsx
+// src/components/planning/RevenueBreakdownChart.tsx
 
-interface MeetingsScheduledChartProps {
+interface RevenueBreakdownChartProps {
   startDate: Date;
   endDate: Date;
   selectedBU: BUType | 'all';
@@ -39,38 +34,29 @@ interface MeetingsScheduledChartProps {
   selectedClosers?: string[];
 }
 
-export function MeetingsScheduledChart({ ... }: MeetingsScheduledChartProps) {
-  // Usar hooks existentes com indicador 'rm' em vez de 'leads'
-  const { getGroupedData: getModeloAtualGroupedData, getQtyForPeriod: getModeloAtualQty } = useModeloAtualMetas(startDate, endDate);
+export function RevenueBreakdownChart({ ... }: RevenueBreakdownChartProps) {
+  // Usar dados do hook useModeloAtualMetas:
+  // - getMrrForPeriod
+  // - getSetupForPeriod
+  // - getPontualForPeriod
   
-  // Mesma lógica do LeadsStackedChart, mas para 'rm'
-  const getChartData = () => {
-    if (hasSingleBU) {
-      if (useModeloAtual) return getModeloAtualGroupedData('rm', startDate, endDate, grouping);
-      // ...
-    }
-    // Multi-BU aggregation
-  };
+  // Construir dados do gráfico agrupados (diário/semanal/mensal)
+  // baseado no período selecionado
   
-  // Metas para RM:
-  // - Modelo Atual: via closersMetas ou funnelData
-  // - O2 TAX: 504/ano (42/mês)
-  // - Oxy Hacker: 300/ano (25/mês)
-  // - Franquia: 360/ano (30/mês)
+  // Layout: Card com 4 barras empilhadas por período
+  // Legenda: Faturamento, MRR, Setup, Pontual
   
   return (
-    <Card className="bg-card border-2 border-blue-500 relative group">
+    <Card className="bg-card border-2 border-green-500">
       <CardHeader>
-        <CardTitle>Qtd Reuniões Marcadas</CardTitle>
-        {/* ... */}
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-sm bg-blue-500" />
-          <span className="text-xs text-muted-foreground">Reuniões Realizadas</span>
-        </div>
+        <CardTitle>Faturamento por Período</CardTitle>
+        {/* Legenda com as 4 métricas */}
       </CardHeader>
       <CardContent>
         <BarChart data={chartData}>
-          <Bar dataKey="meetings" fill="#3b82f6" name="Reuniões" />
+          <Bar dataKey="mrr" stackId="revenue" fill="#3b82f6" name="MRR" />
+          <Bar dataKey="setup" stackId="revenue" fill="#f97316" name="Setup" />
+          <Bar dataKey="pontual" stackId="revenue" fill="#8b5cf6" name="Pontual" />
         </BarChart>
       </CardContent>
     </Card>
@@ -80,73 +66,127 @@ export function MeetingsScheduledChart({ ... }: MeetingsScheduledChartProps) {
 
 ---
 
-### Metas de Reuniões Marcadas por BU
+### Fonte de Dados
 
-| BU | Meta Anual | Meta Diária (÷365) |
-|----|------------|-------------------|
-| Modelo Atual | Via funnelData/closersMetas | Dinâmico |
-| O2 TAX | 504 | 1.38 |
-| Oxy Hacker | 300 | 0.82 |
-| Franquia | 360 | 0.99 |
+Os valores virão do hook `useModeloAtualMetas`:
 
----
-
-### Integração com o IndicatorsTab.tsx
-
-**Arquivo a Modificar:** `src/components/planning/IndicatorsTab.tsx`
-
-1. Atualizar o import:
 ```typescript
-// ANTES
-import { LeadsStackedChart } from "./LeadsStackedChart";
+// Valores já disponíveis:
+const { getMrrForPeriod, getSetupForPeriod, getPontualForPeriod } = useModeloAtualMetas(startDate, endDate);
 
-// DEPOIS  
-import { MeetingsScheduledChart } from "./MeetingsScheduledChart";
+// Para gráfico temporal, precisamos adicionar funções de agrupamento:
+// getGroupedMonetaryData(type, startDate, endDate, grouping)
 ```
 
-2. Atualizar o uso do componente (linha ~1130):
+**Extensão necessária no hook:**
+
+Adicionar função `getGroupedMonetaryData` que retorna arrays de MRR, Setup e Pontual agrupados por dia/semana/mês, similar ao `getGroupedData` existente para quantidades.
+
+---
+
+### Modificações no `IndicatorsTab.tsx`
+
+**1. Adicionar import do novo componente:**
+
+```typescript
+import { RevenueBreakdownChart } from "./RevenueBreakdownChart";
+```
+
+**2. Remover import do AnalyticsSection:**
+
+```typescript
+// REMOVER:
+import { AnalyticsSection } from "./indicators/AnalyticsSection";
+```
+
+**3. Adicionar o gráfico após a seção de charts existente (linha ~1133):**
+
 ```tsx
-// ANTES
-<LeadsStackedChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} selectedBUs={selectedBUs} selectedClosers={selectedClosers} />
+{/* Charts Section with View Mode Toggle */}
+<div className="space-y-4">
+  {/* ... gráficos existentes de indicadores ... */}
+</div>
 
-// DEPOIS
-<MeetingsScheduledChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} selectedBUs={selectedBUs} selectedClosers={selectedClosers} />
+{/* NOVO: Revenue Breakdown Chart */}
+<RevenueBreakdownChart 
+  startDate={startDate} 
+  endDate={endDate} 
+  selectedBU={selectedBU} 
+  selectedBUs={selectedBUs}
+  selectedClosers={selectedClosers}
+/>
+
+{/* REMOVER Analytics Section */}
+{/* <AnalyticsSection buKey={selectedBU} startDate={startDate} endDate={endDate} /> */}
 ```
 
 ---
 
-### Drill-down para Reuniões
+### Design Visual do Gráfico
 
-O DetailSheet mostrará informações relevantes para reuniões:
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Faturamento por Período                                                │
+│                                                                         │
+│  Total: R$ 850k    MRR: R$ 510k    Setup: R$ 213k    Pontual: R$ 127k  │
+│                                                                         │
+│  ■ MRR   ■ Setup   ■ Pontual                                           │
+│                                                                         │
+│     ┌───┐         ┌───┐         ┌───┐         ┌───┐                    │
+│  200k│███│      150k│███│      180k│███│      120k│███│                  │
+│     │███│         │███│         │███│         │███│                    │
+│     │░░░│         │░░░│         │░░░│         │░░░│                    │
+│     │░░░│         │░░░│         │░░░│         │░░░│                    │
+│     │▒▒▒│         │▒▒▒│         │▒▒▒│         │▒▒▒│                    │
+│     └───┘         └───┘         └───┘         └───┘                    │
+│      Jan           Fev           Mar           Abr                      │
+└─────────────────────────────────────────────────────────────────────────┘
 
-| Coluna | Descrição |
-|--------|-----------|
-| Título | Nome do card/oportunidade |
-| Empresa/Contato | Empresa ou nome do contato |
-| Fase | Status atual (Agendada, Remarcar, etc.) |
-| Data | Data da reunião marcada |
-| Responsável | Closer responsável |
+Legenda: ███ = MRR (azul)   ░░░ = Setup (laranja)   ▒▒▒ = Pontual (roxo)
+```
 
 ---
 
-### Resumo de Arquivos
+### Resumo de Modificações
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `src/components/planning/LeadsStackedChart.tsx` | Deletar/Renomear | Será substituído por MeetingsScheduledChart |
-| `src/components/planning/MeetingsScheduledChart.tsx` | Criar | Novo componente para Reuniões Marcadas |
-| `src/components/planning/IndicatorsTab.tsx` | Modificar | Atualizar import e uso do componente |
+| `src/components/planning/RevenueBreakdownChart.tsx` | Criar | Novo componente de gráfico de faturamento |
+| `src/hooks/useModeloAtualMetas.ts` | Modificar | Adicionar funções para agrupar dados monetários por período |
+| `src/components/planning/IndicatorsTab.tsx` | Modificar | Importar novo componente, remover AnalyticsSection |
 
 ---
 
-### Validação de Funcionamento
+### Funcionalidades do Gráfico
 
-Após a implementação, o gráfico deverá:
+1. **Agrupamento dinâmico**: Diário (≤31 dias), Semanal (32-90 dias), Mensal (>90 dias)
+2. **Filtros respeitados**: BUs selecionadas, Closers selecionados, período de datas
+3. **Valores empilhados**: MRR + Setup + Pontual formando o Faturamento Total visual
+4. **Header com totais**: Exibe os totais de cada componente no período
+5. **Drill-down (opcional)**: Clique na barra para ver os cards de venda correspondentes
 
-1. Exibir a quantidade de reuniões marcadas (fase 'rm') por período
-2. Respeitar os filtros de BUs selecionadas
-3. Respeitar o filtro de Closers (para Modelo Atual)
-4. Respeitar o filtro de datas
-5. Permitir drill-down ao clicar nas barras do gráfico
-6. Exibir a lista de reuniões no DetailSheet com informações relevantes
+---
+
+### Detalhes Técnicos
+
+#### Extensão do Hook `useModeloAtualMetas.ts`
+
+```typescript
+// Nova função para agrupar dados monetários
+const getGroupedMonetaryData = (
+  start: Date, 
+  end: Date, 
+  grouping: ChartGrouping
+): { mrr: number[]; setup: number[]; pontual: number[] } => {
+  // Similar a getGroupedData, mas retorna valores monetários
+  // agrupados por dia/semana/mês
+};
+```
+
+#### Integração com Filtro de Closer
+
+Quando há filtro de closer ativo, o gráfico deve:
+1. Filtrar cards de venda por closer
+2. Somar MRR/Setup/Pontual apenas dos cards filtrados
+3. Respeitar a mesma lógica já implementada nos acelerômetros monetários
 
