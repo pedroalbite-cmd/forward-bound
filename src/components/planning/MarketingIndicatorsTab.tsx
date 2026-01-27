@@ -13,6 +13,9 @@ import { InvestmentByChannelChart } from "./marketing-indicators/InvestmentByCha
 import { AcquisitionFunnelChart } from "./marketing-indicators/AcquisitionFunnelChart";
 import { ConversionsByChannelChart } from "./marketing-indicators/ConversionsByChannelChart";
 import { CampaignsTable } from "./marketing-indicators/CampaignsTable";
+import { ChannelMetricsCards } from "./marketing-indicators/ChannelMetricsCards";
+import { RevenueMetricsCards } from "./marketing-indicators/RevenueMetricsCards";
+import { CostPerStageChart } from "./marketing-indicators/CostPerStageChart";
 import { CHANNEL_LABELS, ChannelId } from "./marketing-indicators/types";
 
 const BU_OPTIONS = [
@@ -139,6 +142,23 @@ export function MarketingIndicatorsTab() {
           </Button>
         </div>
       </div>
+
+      {/* Channel Metrics Cards - NEW */}
+      <ChannelMetricsCards
+        channels={data.channels}
+        instagram={data.instagram}
+        totalInvestment={data.totalInvestment}
+        totalLeads={data.totalLeads}
+      />
+
+      {/* Revenue Metrics Cards - NEW */}
+      <RevenueMetricsCards
+        revenue={data.revenue}
+        goals={goals.revenue}
+      />
+
+      {/* Cost Per Stage Chart - NEW */}
+      <CostPerStageChart costPerStage={data.costPerStage} />
 
       {/* Performance Gauges */}
       <PerformanceGauges
