@@ -1,157 +1,148 @@
 
-
-## Plano: Corrigir Drill-Down dos Acelerômetros O2 TAX
+## Plano: Corrigir Estrutura de Dados Compartilhada do O2 TAX
 
 ### Problema Identificado
 
-Os acelerômetros (radial cards) mostram números corretos (ex: 25 MQLs), mas ao clicar, o modal de detalhes aparece **vazio** (0 registros).
+Após unificar a `queryKey` para `['o2tax-movements-all']`, os dois hooks continuam retornando estruturas de dados diferentes:
 
-### Causa Raiz
+- **useO2TaxMetas**: retorna `{ movements: O2TaxMovement[] }`
+- **useO2TaxAnalytics**: retorna `{ cards: O2TaxCard[] }`
 
-Existem **dois hooks separados** fazendo a mesma busca com **queryKeys diferentes**:
+Quando `useO2TaxMetas` executa primeiro, o cache é preenchido com `{ movements: [...] }`, mas `useO2TaxAnalytics` tenta acessar `data?.cards`, que resulta em `undefined`, gerando um array vazio no drill-down.
 
-| Hook | QueryKey | Propósito |
-|------|----------|-----------|
-| `useO2TaxMetas` | `o2tax-metas-movements` | Números dos acelerômetros |
-| `useO2TaxAnalytics` | `o2tax-analytics` | Lista para drill-down |
-
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Problema de Sincronização                        │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│   useO2TaxMetas ─────► Busca DB ─────► Acelerômetro: 25 MQLs ✓     │
-│                        (completa)                                   │
-│                                                                     │
-│   useO2TaxAnalytics ──► Busca DB ──────────────────────────────────│
-│                        (ainda carregando)     cards = [] vazio     │
-│                                                                     │
-│   Usuário clica ──────────► Drill-down mostra: 0 registros ✗       │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
+---
 
 ### Solução Proposta
 
-**Unificar os hooks** para compartilhar o mesmo cache de dados, garantindo que quando os números aparecem nos acelerômetros, os dados para drill-down também estejam disponíveis.
+Modificar `useO2TaxAnalytics` para:
+1. **Remover sua própria queryFn** - não precisa buscar dados
+2. **Reutilizar o cache de `useO2TaxMetas`** - acessando `data?.movements`
+3. **Processar os movements localmente** para criar os O2TaxCards que o drill-down precisa
 
 ---
 
-### Mudanças por Arquivo
+### Mudanças no Arquivo
 
-#### 1. `src/hooks/useO2TaxAnalytics.ts`
+#### `src/hooks/useO2TaxAnalytics.ts`
 
-**Alterar a queryKey para compartilhar cache com useO2TaxMetas:**
+**1. Alterar a query para reutilizar o cache existente:**
 
 ```typescript
-// ANTES (linha 88):
-queryKey: ['o2tax-analytics', startDate.toISOString(), endDate.toISOString()],
+// ANTES (linhas 86-157):
+const { data, isLoading, error } = useQuery({
+  queryKey: ['o2tax-movements-all'],
+  queryFn: async () => {
+    // ... busca própria que retorna { cards: [] }
+  },
+  staleTime: 5 * 60 * 1000,
+  retry: 1,
+});
+
+const cards = data?.cards ?? [];
 
 // DEPOIS:
-queryKey: ['o2tax-metas-movements', startDate?.toISOString(), endDate?.toISOString()],
-```
+const { data, isLoading, error } = useQuery({
+  queryKey: ['o2tax-movements-all'],
+  queryFn: async () => {
+    // Mesma busca que useO2TaxMetas faz, retornando mesma estrutura
+    const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
+      body: { table: 'pipefy_cards_movements', action: 'preview', limit: 5000 }
+    });
 
-**Problema**: A estrutura de dados retornada é diferente (movements vs cards).
+    if (fetchError) {
+      console.error('Error fetching O2 TAX movements:', fetchError);
+      throw fetchError;
+    }
 
-**Solução alternativa - Remover parâmetros de data da queryKey:**
+    if (!responseData?.data) {
+      return { movements: [] };  // ← MESMA estrutura que useO2TaxMetas
+    }
 
-Como ambos os hooks buscam TODOS os dados (limite 5000) e filtram localmente, a queryKey não deveria depender das datas:
+    const movements = responseData.data.map((row: any) => ({
+      id: String(row.ID),
+      titulo: row['Título'] || '',
+      fase: row['Fase'] || '',
+      faseAtual: row['Fase Atual'] || '',
+      dataEntrada: parseDate(row['Entrada']) || new Date(),
+      dataSaida: parseDate(row['Saída']),
+      valorMRR: row['Valor MRR'] ? parseFloat(row['Valor MRR']) : null,
+      valorPontual: row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : null,
+      valorSetup: row['Valor Setup'] ? parseFloat(row['Valor Setup']) : null,
+    }));
 
-```typescript
-// useO2TaxAnalytics - linha 88:
-queryKey: ['o2tax-movements-data'],
+    return { movements };
+  },
+  staleTime: 5 * 60 * 1000,
+  retry: 1,
+});
 
-// useO2TaxMetas - linha 46:
-queryKey: ['o2tax-movements-data'],
-```
-
-Isso garante que ambos compartilhem o mesmo cache.
-
----
-
-#### 2. Ajustar estrutura de dados para compatibilidade
-
-Como os dois hooks processam os dados de forma diferente, a melhor solução é:
-
-**Opção A: Criar hook base compartilhado**
-
-Criar um hook `useO2TaxRawData` que apenas busca os dados brutos e é usado por ambos:
-
-```typescript
-// src/hooks/useO2TaxRawData.ts (NOVO ARQUIVO)
-export function useO2TaxRawData() {
-  return useQuery({
-    queryKey: ['o2tax-raw-movements'],
-    queryFn: async () => {
-      const { data: responseData } = await supabase.functions.invoke('query-external-db', {
-        body: { table: 'pipefy_cards_movements', action: 'preview', limit: 5000 }
-      });
-      return responseData?.data ?? [];
-    },
-    staleTime: 5 * 60 * 1000,
+// Processar movements para criar cards para drill-down
+const cards = useMemo(() => {
+  if (!data?.movements) return [];
+  
+  return data.movements.map((mov) => {
+    const dataEntrada = mov.dataEntrada;
+    const dataSaida = mov.dataSaida;
+    
+    // Calcular duração
+    let duracao = 0;
+    if (dataSaida) {
+      duracao = Math.floor((dataSaida.getTime() - dataEntrada.getTime()) / 1000);
+    } else {
+      duracao = Math.floor((Date.now() - dataEntrada.getTime()) / 1000);
+    }
+    
+    const valorPontual = mov.valorPontual || 0;
+    const valorSetup = mov.valorSetup || 0;
+    const valorMRR = mov.valorMRR || 0;
+    
+    return {
+      id: mov.id,
+      titulo: mov.titulo,
+      fase: mov.fase,
+      faseAtual: mov.faseAtual,
+      faixa: null, // Será populado se precisar
+      valorMRR,
+      valorPontual,
+      valorSetup,
+      valor: valorPontual + valorSetup + valorMRR,
+      responsavel: null,
+      motivoPerda: null,
+      dataEntrada,
+      dataSaida,
+      contato: null,
+      setor: null,
+      duracao,
+    } as O2TaxCard;
   });
-}
-
-// Depois useO2TaxMetas e useO2TaxAnalytics usam este hook base
+}, [data?.movements]);
 ```
 
-**Opção B (mais simples): Usar mesma queryKey e processar dados localmente**
+**2. Adicionar campos faltantes na estrutura de movements (opcional):**
 
-Modificar `useO2TaxAnalytics` para usar a mesma queryKey que `useO2TaxMetas`, garantindo cache compartilhado.
-
----
-
-### Implementação Recomendada (Opção B)
-
-#### Arquivo: `src/hooks/useO2TaxAnalytics.ts`
-
-**Mudança 1 - Alterar queryKey (linha 88):**
-
-```typescript
-// DE:
-queryKey: ['o2tax-analytics', startDate.toISOString(), endDate.toISOString()],
-
-// PARA (remover dependência de datas já que filtragem é local):
-queryKey: ['o2tax-movements-all'],
-```
-
-#### Arquivo: `src/hooks/useO2TaxMetas.ts`
-
-**Mudança 2 - Usar mesma queryKey (linha 46):**
-
-```typescript
-// DE:
-queryKey: ['o2tax-metas-movements', startDate?.toISOString(), endDate?.toISOString()],
-
-// PARA:
-queryKey: ['o2tax-movements-all'],
-```
+Alternativamente, podemos enriquecer a estrutura de `movements` em `useO2TaxMetas` para incluir todos os campos que `useO2TaxAnalytics` precisa, evitando processamento duplicado.
 
 ---
 
-### Benefícios da Correção
+### Arquivos a Modificar
 
-1. **Cache unificado**: Uma única busca ao banco, compartilhada entre ambos os hooks
-2. **Consistência garantida**: Quando os acelerômetros mostram números, os dados de drill-down estarão disponíveis
-3. **Performance**: Reduz chamadas duplicadas ao banco externo
-4. **Sem condição de corrida**: Elimina o problema de timing
-
----
-
-### Resumo de Arquivos a Modificar
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/hooks/useO2TaxAnalytics.ts` | Modificar | Alterar queryKey para `['o2tax-movements-all']` |
-| `src/hooks/useO2TaxMetas.ts` | Modificar | Alterar queryKey para `['o2tax-movements-all']` (mesma chave) |
+| Arquivo | Ação |
+|---------|------|
+| `src/hooks/useO2TaxAnalytics.ts` | Modificar queryFn para retornar `{ movements: [] }` e processar via useMemo |
 
 ---
 
-### Consideração Técnica
+### Benefícios
 
-A razão pela qual a queryKey original incluía as datas era para invalidar o cache quando o período mudasse. Porém, como:
-1. A busca sempre retorna os mesmos dados (primeiros 5000 registros, sem filtro de data no servidor)
-2. A filtragem por data é feita localmente nos métodos `getQtyForPeriod` e `getDetailItemsForIndicator`
+1. **Cache consistente**: Ambos os hooks compartilham a mesma estrutura de dados
+2. **Sem race condition**: Qualquer hook que executar primeiro preenche o cache com a estrutura correta
+3. **Drill-down funcional**: `getDetailItemsForIndicator` terá dados disponíveis
 
-Não há necessidade de incluir datas na queryKey. O cache pode ser compartilhado globalmente, e os filtros de data são aplicados dinamicamente ao usar os dados.
+---
 
+### Observações Técnicas
+
+O processamento de `movements` → `cards` é feito em `useMemo`, garantindo que:
+- Só é recalculado quando `data.movements` muda
+- Mantém boa performance mesmo com 5000+ registros
+- Aplica a mesma lógica de cálculo de duração que o código original
