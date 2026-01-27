@@ -53,7 +53,6 @@ const PHASE_DISPLAY_MAP: Record<string, string> = {
   'Proposta enviada / Follow Up': 'Proposta',
   'Enviar para assinatura': 'Assinatura',
   'Ganho': 'Ganho',
-  'Contrato assinado': 'Ganho',
   'Perdido': 'Perdido',
   'Arquivado': 'Arquivado',
 };
@@ -256,7 +255,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     for (const card of cards) {
       const entryTime = card.dataEntrada.getTime();
       if (
-        (card.fase === 'Ganho' || card.fase === 'Contrato assinado') &&
+        card.fase === 'Ganho' &&
         entryTime >= startTime &&
         entryTime <= endTime &&
         !seenIds.has(card.id)
@@ -482,7 +481,6 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
       'Proposta enviada / Follow Up': 'proposta',
       'Enviar para assinatura': 'proposta',
       'Ganho': 'venda',
-      'Contrato assinado': 'venda',
     };
     
     // Filter cards using the SAME logic as useO2TaxMetas.getQtyForPeriod
@@ -500,8 +498,8 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
           matches = true;
         }
       } else if (indicator === 'venda') {
-        // For "venda", count unique cards that ENTERED "Ganho" or "Contrato assinado" phase
-        if (card.fase === 'Ganho' || card.fase === 'Contrato assinado') {
+        // For "venda", count unique cards that ENTERED "Ganho" phase
+        if (card.fase === 'Ganho') {
           matches = true;
         }
       } else if (indicator === 'proposta') {
