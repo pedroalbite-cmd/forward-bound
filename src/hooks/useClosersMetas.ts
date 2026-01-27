@@ -21,7 +21,7 @@ const PHASE_TO_INDICATOR: Record<string, CloserIndicator> = {
   'Reunião agendada / Qualificado': 'rm',
   'Reunião Realizada': 'rr',
   'Proposta enviada / Follow Up': 'proposta',
-  'Contrato assinado': 'venda',
+  'Ganho': 'venda',
 };
 
 // Parse Google Sheets date format "Date(year,month,day)" to JS Date

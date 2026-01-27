@@ -42,7 +42,7 @@ const PHASE_TO_INDICATOR: Record<string, ModeloAtualIndicator> = {
   'Proposta enviada / Follow Up': 'proposta',
   
   // Venda (somente esta fase conta)
-  'Contrato assinado': 'venda',
+  'Ganho': 'venda',
 };
 
 // Parse date from PostgreSQL format
@@ -126,15 +126,8 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
         // Skip if no valid phase mapping
         if (!fase || !PHASE_TO_INDICATOR[fase]) continue;
 
-        // For "Contrato assinado", use "Data de assinatura do contrato" if available
-        // This ensures sales are counted in the month the contract was actually signed,
-        // not when the card was moved to this phase (which may be delayed)
-        if (fase === 'Contrato assinado') {
-          const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
-          if (dataAssinatura) {
-            dataEntrada = dataAssinatura;
-          }
-        }
+        // Note: Logic for "Data de assinatura do contrato" removed since
+        // we now use "Ganho" phase for sales instead of "Contrato assinado"
 
         // Log raw values for debugging
         const rawMRR = row['Valor MRR'] || row['valor_mrr'] || 0;

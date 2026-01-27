@@ -27,9 +27,8 @@ const PHASE_TO_INDICATOR: Record<string, string> = {
   // Proposta phases
   'Proposta enviada': 'proposta',
   'Follow Up': 'proposta',
-  // Venda phases (requires additional validation)
+  // Venda phase (only "Ganho" counts as sale)
   'Ganho': 'venda',
-  'Contrato Assinado': 'venda',
 };
 
 // Field names in Pipefy
