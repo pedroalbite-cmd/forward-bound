@@ -1,192 +1,53 @@
 
 
-## Plano: Adicionar Gráfico de Faturamento e Remover Análises Detalhadas
+## Plano: Remover Dados de Andamento do Funil
 
 ### Objetivo
 
-1. Criar um novo gráfico de barras empilhadas mostrando a evolução temporal de **Faturamento Total, MRR, Setup e Pontual**
-2. Posicionar este gráfico abaixo do gráfico de Vendas/Funil existente
-3. Remover a seção "Análises Detalhadas" (AnalyticsSection)
+Remover a seção de legenda/andamento que aparece abaixo do funil visual, que exibe as taxas de conversão entre cada etapa.
 
 ---
 
-### Novo Componente: `RevenueBreakdownChart.tsx`
+### Modificação
 
-Criar um novo componente para exibir a evolução temporal de faturamento com suas componentes:
+**Arquivo:** `src/components/planning/PeriodFunnelChart.tsx`
 
-| Métrica | Descrição | Cor Proposta |
-|---------|-----------|--------------|
-| Faturamento Total | Soma de MRR + Setup + Pontual | Verde (#22c55e) |
-| MRR Incremento | Receita Recorrente Mensal | Azul (#3b82f6) |
-| Setup Incremento | Valor de Implantação | Laranja (#f97316) |
-| Pontual Incremento | Receitas não recorrentes | Roxo (#8b5cf6) |
-
-**Estrutura do componente:**
-
-```typescript
-// src/components/planning/RevenueBreakdownChart.tsx
-
-interface RevenueBreakdownChartProps {
-  startDate: Date;
-  endDate: Date;
-  selectedBU: BUType | 'all';
-  selectedBUs?: BUType[];
-  selectedClosers?: string[];
-}
-
-export function RevenueBreakdownChart({ ... }: RevenueBreakdownChartProps) {
-  // Usar dados do hook useModeloAtualMetas:
-  // - getMrrForPeriod
-  // - getSetupForPeriod
-  // - getPontualForPeriod
-  
-  // Construir dados do gráfico agrupados (diário/semanal/mensal)
-  // baseado no período selecionado
-  
-  // Layout: Card com 4 barras empilhadas por período
-  // Legenda: Faturamento, MRR, Setup, Pontual
-  
-  return (
-    <Card className="bg-card border-2 border-green-500">
-      <CardHeader>
-        <CardTitle>Faturamento por Período</CardTitle>
-        {/* Legenda com as 4 métricas */}
-      </CardHeader>
-      <CardContent>
-        <BarChart data={chartData}>
-          <Bar dataKey="mrr" stackId="revenue" fill="#3b82f6" name="MRR" />
-          <Bar dataKey="setup" stackId="revenue" fill="#f97316" name="Setup" />
-          <Bar dataKey="pontual" stackId="revenue" fill="#8b5cf6" name="Pontual" />
-        </BarChart>
-      </CardContent>
-    </Card>
-  );
-}
-```
-
----
-
-### Fonte de Dados
-
-Os valores virão do hook `useModeloAtualMetas`:
-
-```typescript
-// Valores já disponíveis:
-const { getMrrForPeriod, getSetupForPeriod, getPontualForPeriod } = useModeloAtualMetas(startDate, endDate);
-
-// Para gráfico temporal, precisamos adicionar funções de agrupamento:
-// getGroupedMonetaryData(type, startDate, endDate, grouping)
-```
-
-**Extensão necessária no hook:**
-
-Adicionar função `getGroupedMonetaryData` que retorna arrays de MRR, Setup e Pontual agrupados por dia/semana/mês, similar ao `getGroupedData` existente para quantidades.
-
----
-
-### Modificações no `IndicatorsTab.tsx`
-
-**1. Adicionar import do novo componente:**
-
-```typescript
-import { RevenueBreakdownChart } from "./RevenueBreakdownChart";
-```
-
-**2. Remover import do AnalyticsSection:**
-
-```typescript
-// REMOVER:
-import { AnalyticsSection } from "./indicators/AnalyticsSection";
-```
-
-**3. Adicionar o gráfico após a seção de charts existente (linha ~1133):**
+**O que remover (linhas 176-190):**
 
 ```tsx
-{/* Charts Section with View Mode Toggle */}
-<div className="space-y-4">
-  {/* ... gráficos existentes de indicadores ... */}
+{/* Legend */}
+<div className="mt-4 pt-4 border-t border-border">
+  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+    {stages.slice(1).map((stage, index) => (
+      <div key={stage.indicator} className="flex items-center gap-2">
+        <span className="text-muted-foreground">
+          {stages[index].name} → {stage.name}:
+        </span>
+        <span className="font-medium text-foreground">
+          {stage.conversionPercent.toFixed(1)}%
+        </span>
+      </div>
+    ))}
+  </div>
 </div>
-
-{/* NOVO: Revenue Breakdown Chart */}
-<RevenueBreakdownChart 
-  startDate={startDate} 
-  endDate={endDate} 
-  selectedBU={selectedBU} 
-  selectedBUs={selectedBUs}
-  selectedClosers={selectedClosers}
-/>
-
-{/* REMOVER Analytics Section */}
-{/* <AnalyticsSection buKey={selectedBU} startDate={startDate} endDate={endDate} /> */}
 ```
 
 ---
 
-### Design Visual do Gráfico
+### Resultado Esperado
 
-```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│  Faturamento por Período                                                │
-│                                                                         │
-│  Total: R$ 850k    MRR: R$ 510k    Setup: R$ 213k    Pontual: R$ 127k  │
-│                                                                         │
-│  ■ MRR   ■ Setup   ■ Pontual                                           │
-│                                                                         │
-│     ┌───┐         ┌───┐         ┌───┐         ┌───┐                    │
-│  200k│███│      150k│███│      180k│███│      120k│███│                  │
-│     │███│         │███│         │███│         │███│                    │
-│     │░░░│         │░░░│         │░░░│         │░░░│                    │
-│     │░░░│         │░░░│         │░░░│         │░░░│                    │
-│     │▒▒▒│         │▒▒▒│         │▒▒▒│         │▒▒▒│                    │
-│     └───┘         └───┘         └───┘         └───┘                    │
-│      Jan           Fev           Mar           Abr                      │
-└─────────────────────────────────────────────────────────────────────────┘
+O componente `PeriodFunnelChart` exibirá apenas:
+1. O título "Funil do Período"
+2. Os cards de "Proposta Enviada" e "Contratos Assinados" com valores monetários
+3. O funil visual com as 6 etapas (Leads, MQL, RM, RR, Proposta, Venda)
 
-Legenda: ███ = MRR (azul)   ░░░ = Setup (laranja)   ▒▒▒ = Pontual (roxo)
-```
+A seção com as taxas de conversão entre etapas (ex: "Leads → MQL: 45.2%") será removida.
 
 ---
 
-### Resumo de Modificações
+### Arquivo Modificado
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `src/components/planning/RevenueBreakdownChart.tsx` | Criar | Novo componente de gráfico de faturamento |
-| `src/hooks/useModeloAtualMetas.ts` | Modificar | Adicionar funções para agrupar dados monetários por período |
-| `src/components/planning/IndicatorsTab.tsx` | Modificar | Importar novo componente, remover AnalyticsSection |
-
----
-
-### Funcionalidades do Gráfico
-
-1. **Agrupamento dinâmico**: Diário (≤31 dias), Semanal (32-90 dias), Mensal (>90 dias)
-2. **Filtros respeitados**: BUs selecionadas, Closers selecionados, período de datas
-3. **Valores empilhados**: MRR + Setup + Pontual formando o Faturamento Total visual
-4. **Header com totais**: Exibe os totais de cada componente no período
-5. **Drill-down (opcional)**: Clique na barra para ver os cards de venda correspondentes
-
----
-
-### Detalhes Técnicos
-
-#### Extensão do Hook `useModeloAtualMetas.ts`
-
-```typescript
-// Nova função para agrupar dados monetários
-const getGroupedMonetaryData = (
-  start: Date, 
-  end: Date, 
-  grouping: ChartGrouping
-): { mrr: number[]; setup: number[]; pontual: number[] } => {
-  // Similar a getGroupedData, mas retorna valores monetários
-  // agrupados por dia/semana/mês
-};
-```
-
-#### Integração com Filtro de Closer
-
-Quando há filtro de closer ativo, o gráfico deve:
-1. Filtrar cards de venda por closer
-2. Somar MRR/Setup/Pontual apenas dos cards filtrados
-3. Respeitar a mesma lógica já implementada nos acelerômetros monetários
+| `src/components/planning/PeriodFunnelChart.tsx` | Modificar | Remover seção de legenda (linhas 176-190) |
 
