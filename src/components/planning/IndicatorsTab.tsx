@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Line, ComposedChart, RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
-import { RefreshCw, Loader2, CalendarIcon, BarChart3, TrendingUp, ExternalLink } from "lucide-react";
+import { RefreshCw, Loader2, CalendarIcon, BarChart3, TrendingUp, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import { useFunnelRealized, IndicatorType, BUType } from "@/hooks/useFunnelRealized";
 import { useModeloAtualMetas, ChartGrouping, ModeloAtualIndicator } from "@/hooks/useModeloAtualMetas";
 import { useExpansaoMetas, ExpansaoIndicator } from "@/hooks/useExpansaoMetas";
@@ -163,6 +164,7 @@ export function IndicatorsTab() {
   const [detailSheetDescription, setDetailSheetDescription] = useState('');
   const [detailSheetItems, setDetailSheetItems] = useState<DetailItem[]>([]);
   const [detailSheetColumns, setDetailSheetColumns] = useState<{ key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[]>([]);
+  const [chartsOpen, setChartsOpen] = useState(true);
 
   const handleSync = () => {
     // Use the year from the start date for sync
@@ -753,48 +755,67 @@ export function IndicatorsTab() {
         <ClickableFunnelChart startDate={startDate} endDate={endDate} selectedBU={selectedBU} selectedBUs={selectedBUs} selectedClosers={selectedClosers} />
       </div>
 
-      {/* Charts Section with View Mode Toggle */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-foreground">Gráficos de Indicadores</h3>
-          <ToggleGroup 
-            type="single" 
-            value={viewMode} 
-            onValueChange={(v) => v && setViewMode(v as ViewMode)}
-            className="bg-muted rounded-lg p-1"
-          >
-            <ToggleGroupItem 
-              value="daily" 
-              aria-label="Meta Diária"
-              className="data-[state=on]:bg-background data-[state=on]:shadow-sm gap-2 px-3"
+      {/* Charts Section with View Mode Toggle - Collapsible */}
+      <Collapsible open={chartsOpen} onOpenChange={setChartsOpen} className="w-full">
+        <CollapsibleTrigger className="w-full">
+          <div className="flex items-center justify-between w-full p-4 bg-card border border-border rounded-lg hover:bg-muted/50 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <BarChart3 className="h-5 w-5 text-primary" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-lg font-semibold text-foreground">Gráficos de Indicadores</h3>
+                <p className="text-sm text-muted-foreground">Evolução diária/acumulada de MQLs, RM, RR, Propostas e Vendas</p>
+              </div>
+            </div>
+            {chartsOpen ? (
+              <ChevronUp className="h-5 w-5 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-5 w-5 text-muted-foreground" />
+            )}
+          </div>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-4 space-y-4">
+          <div className="flex justify-end">
+            <ToggleGroup 
+              type="single" 
+              value={viewMode} 
+              onValueChange={(v) => v && setViewMode(v as ViewMode)}
+              className="bg-muted rounded-lg p-1"
             >
-              <BarChart3 className="h-4 w-4" />
-              <span className="hidden sm:inline">Meta Diária</span>
-            </ToggleGroupItem>
-            <ToggleGroupItem 
-              value="accumulated" 
-              aria-label="Meta Acumulada"
-              className="data-[state=on]:bg-background data-[state=on]:shadow-sm gap-2 px-3"
-            >
-              <TrendingUp className="h-4 w-4" />
-              <span className="hidden sm:inline">Meta Acumulada</span>
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-        
-        {indicatorConfigs.map((indicator) => (
-          <IndicatorChartSection 
-            key={indicator.key} 
-            title={indicator.label} 
-            realizedLabel={indicator.shortLabel}
-            realizedTotal={getRealizedForIndicator(indicator)} 
-            metaTotal={getMetaForIndicator(indicator)}
-            chartData={getChartDataForIndicator(indicator)} 
-            gradientId={`gradient-${indicator.key}`}
-            isAccumulated={viewMode === 'accumulated'}
-          />
-        ))}
-      </div>
+              <ToggleGroupItem 
+                value="daily" 
+                aria-label="Meta Diária"
+                className="data-[state=on]:bg-background data-[state=on]:shadow-sm gap-2 px-3"
+              >
+                <BarChart3 className="h-4 w-4" />
+                <span className="hidden sm:inline">Meta Diária</span>
+              </ToggleGroupItem>
+              <ToggleGroupItem 
+                value="accumulated" 
+                aria-label="Meta Acumulada"
+                className="data-[state=on]:bg-background data-[state=on]:shadow-sm gap-2 px-3"
+              >
+                <TrendingUp className="h-4 w-4" />
+                <span className="hidden sm:inline">Meta Acumulada</span>
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+          
+          {indicatorConfigs.map((indicator) => (
+            <IndicatorChartSection 
+              key={indicator.key} 
+              title={indicator.label} 
+              realizedLabel={indicator.shortLabel}
+              realizedTotal={getRealizedForIndicator(indicator)} 
+              metaTotal={getMetaForIndicator(indicator)}
+              chartData={getChartDataForIndicator(indicator)} 
+              gradientId={`gradient-${indicator.key}`}
+              isAccumulated={viewMode === 'accumulated'}
+            />
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* Analytics Section */}
       <AnalyticsSection buKey={selectedBU} startDate={startDate} endDate={endDate} />
