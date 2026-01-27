@@ -47,6 +47,24 @@ const indicatorConfigs: IndicatorConfig[] = [
   { key: 'venda', label: 'Vendas', shortLabel: 'Vendas', annualMeta: 240, useClosersMeta: true },
 ];
 
+// Monetary indicator configuration
+type MonetaryIndicatorKey = 'roi' | 'faturamento' | 'mrr' | 'setup' | 'pontual';
+
+interface MonetaryIndicatorConfig {
+  key: MonetaryIndicatorKey;
+  label: string;
+  shortLabel: string;
+  format: 'currency' | 'multiplier';
+}
+
+const monetaryIndicatorConfigs: MonetaryIndicatorConfig[] = [
+  { key: 'roi', label: 'ROI', shortLabel: 'ROI', format: 'multiplier' },
+  { key: 'faturamento', label: 'Faturamento', shortLabel: 'Fat.', format: 'currency' },
+  { key: 'mrr', label: 'MRR', shortLabel: 'MRR', format: 'currency' },
+  { key: 'setup', label: 'Setup', shortLabel: 'Setup', format: 'currency' },
+  { key: 'pontual', label: 'Pontual', shortLabel: 'Pont.', format: 'currency' },
+];
+
 const buOptions: MultiSelectOption[] = [
   { value: 'modelo_atual', label: 'Modelo Atual' },
   { value: 'o2_tax', label: 'O2 TAX' },
@@ -55,6 +73,22 @@ const buOptions: MultiSelectOption[] = [
 ];
 
 const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Math.round(value));
+
+// Format compact currency (R$ 1.2M, R$ 510k)
+const formatCompactCurrency = (value: number): string => {
+  if (value >= 1000000) {
+    return `R$ ${(value / 1000000).toFixed(1)}M`;
+  }
+  if (value >= 1000) {
+    return `R$ ${(value / 1000).toFixed(0)}k`;
+  }
+  return `R$ ${Math.round(value)}`;
+};
+
+// Format ROI multiplier (4.2x)
+const formatMultiplier = (value: number): string => {
+  return `${value.toFixed(1)}x`;
+};
 
 interface RadialProgressCardProps {
   title: string;
@@ -97,6 +131,55 @@ const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = fals
           </div>
         </div>
         <p className="text-sm text-muted-foreground mt-2">Meta: {formatNumber(meta)}</p>
+      </CardContent>
+    </Card>
+  );
+};
+
+interface MonetaryRadialCardProps {
+  title: string;
+  realized: number;
+  meta: number;
+  format: 'currency' | 'multiplier';
+  onClick?: () => void;
+  isClickable?: boolean;
+}
+
+const MonetaryRadialCard = ({ title, realized, meta, format, onClick, isClickable = false }: MonetaryRadialCardProps) => {
+  const percentage = meta > 0 ? (realized / meta) * 100 : 0;
+  const isAboveMeta = percentage >= 100;
+  const chartData = [{ value: Math.min(percentage, 100), fill: isAboveMeta ? "hsl(var(--chart-2))" : "hsl(var(--destructive))" }];
+
+  const formatValue = format === 'currency' ? formatCompactCurrency : formatMultiplier;
+
+  return (
+    <Card 
+      className={cn(
+        "bg-card border-border relative group transition-all duration-200",
+        isClickable && "cursor-pointer hover:border-primary/50 hover:shadow-md"
+      )}
+      onClick={onClick}
+    >
+      {isClickable && (
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <ExternalLink className="h-4 w-4 text-muted-foreground" />
+        </div>
+      )}
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground text-center">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col items-center pt-0">
+        <div className="relative w-32 h-32">
+          <RadialBarChart width={128} height={128} innerRadius="70%" outerRadius="100%" data={chartData} startAngle={90} endAngle={-270}>
+            <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
+            <RadialBar background={{ fill: "hsl(var(--muted))" }} dataKey="value" cornerRadius={10} />
+          </RadialBarChart>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-xl font-bold text-foreground">{formatValue(realized)}</span>
+            <span className={`text-sm font-medium ${isAboveMeta ? "text-chart-2" : "text-destructive"}`}>{Math.round(percentage)}%</span>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">Meta: {formatValue(meta)}</p>
       </CardContent>
     </Card>
   );
@@ -187,7 +270,7 @@ export function IndicatorsTab() {
   };
 
   const { getTotal, syncWithPipefy, isSyncing, isLoading } = useFunnelRealized(startDate, endDate);
-  const { getQtyForPeriod: getModeloAtualQty, getGroupedData: getModeloAtualGroupedData, isLoading: isLoadingModeloAtual } = useModeloAtualMetas(startDate, endDate);
+  const { getQtyForPeriod: getModeloAtualQty, getValueForPeriod: getModeloAtualValue, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getGroupedData: getModeloAtualGroupedData, isLoading: isLoadingModeloAtual } = useModeloAtualMetas(startDate, endDate);
   const { getQtyForPeriod: getExpansaoQty, getGroupedData: getExpansaoGroupedData, isLoading: isLoadingExpansao, refetch: refetchExpansao } = useExpansaoMetas(startDate, endDate);
   const { getQtyForPeriod: getO2TaxQty, getGroupedData: getO2TaxGroupedData, isLoading: isLoadingO2Tax } = useO2TaxMetas(startDate, endDate);
   const { getQtyForPeriod: getOxyHackerQty, getGroupedData: getOxyHackerGroupedData, isLoading: isLoadingOxyHacker } = useOxyHackerMetas(startDate, endDate);
@@ -670,6 +753,165 @@ export function IndicatorsTab() {
     setDetailSheetOpen(true);
   };
 
+  // === Monetary Indicators Logic ===
+  
+  // Get investimento from funnelData for ROI calculation
+  const getInvestimentoPeriodo = (): number => {
+    if (!funnelData) return 0;
+    
+    let total = 0;
+    const monthsInPeriod = eachMonthOfInterval({ start: startDate, end: endDate });
+    
+    for (const monthDate of monthsInPeriod) {
+      const monthName = monthNames[getMonth(monthDate)];
+      
+      if (includesModeloAtual && funnelData.modeloAtual) {
+        const item = funnelData.modeloAtual.find(f => f.month === monthName);
+        if (item) total += item.investimento || 0;
+      }
+      if (includesO2Tax && funnelData.o2Tax) {
+        const item = funnelData.o2Tax.find(f => f.month === monthName);
+        if (item) total += item.investimento || 0;
+      }
+      if (includesOxyHacker && funnelData.oxyHacker) {
+        const item = funnelData.oxyHacker.find(f => f.month === monthName);
+        if (item) total += item.investimento || 0;
+      }
+      if (includesFranquia && funnelData.franquia) {
+        const item = funnelData.franquia.find(f => f.month === monthName);
+        if (item) total += item.investimento || 0;
+      }
+    }
+    
+    return total;
+  };
+
+  // Get faturamento meta from funnelData (calcular de vendas * ticket médio ou valor fixo)
+  const getFaturamentoMetaPeriodo = (): number => {
+    if (!funnelData) return 0;
+    
+    // Calculate meta based on sales target * average ticket per BU
+    // Modelo Atual: avg ticket ~R$ 17.000
+    // O2 TAX: avg ticket ~R$ 15.000
+    // Franquia: avg ticket ~R$ 140.000
+    // Oxy Hacker: avg ticket ~R$ 54.000
+    
+    let total = 0;
+    const monthsInPeriod = eachMonthOfInterval({ start: startDate, end: endDate });
+    
+    for (const monthDate of monthsInPeriod) {
+      const monthName = monthNames[getMonth(monthDate)];
+      
+      if (includesModeloAtual && funnelData.modeloAtual) {
+        const item = funnelData.modeloAtual.find(f => f.month === monthName);
+        if (item) total += (item.vendas || 0) * 17000;
+      }
+      if (includesO2Tax && funnelData.o2Tax) {
+        const item = funnelData.o2Tax.find(f => f.month === monthName);
+        if (item) total += (item.vendas || 0) * 15000;
+      }
+      if (includesOxyHacker && funnelData.oxyHacker) {
+        const item = funnelData.oxyHacker.find(f => f.month === monthName);
+        if (item) total += (item.vendas || 0) * 54000;
+      }
+      if (includesFranquia && funnelData.franquia) {
+        const item = funnelData.franquia.find(f => f.month === monthName);
+        if (item) total += (item.vendas || 0) * 140000;
+      }
+    }
+    
+    return total;
+  };
+
+  // Get realized monetary value for monetary indicators
+  const getRealizedMonetaryForIndicator = (indicator: MonetaryIndicatorConfig): number => {
+    switch (indicator.key) {
+      case 'faturamento':
+        // Sum all sales value from selected BUs
+        let totalFaturamento = 0;
+        if (includesModeloAtual) {
+          totalFaturamento += getModeloAtualValue('venda', startDate, endDate);
+        }
+        // For other BUs, use qty * ticket (simplified)
+        if (includesO2Tax) {
+          totalFaturamento += getO2TaxQty('venda' as O2TaxIndicator, startDate, endDate) * 15000;
+        }
+        if (includesOxyHacker) {
+          totalFaturamento += getOxyHackerQty('venda' as OxyHackerIndicator, startDate, endDate) * 54000;
+        }
+        if (includesFranquia) {
+          totalFaturamento += getExpansaoQty('venda' as ExpansaoIndicator, startDate, endDate) * 140000;
+        }
+        return totalFaturamento;
+      
+      case 'roi':
+        const faturamento = getRealizedMonetaryForIndicator({ ...indicator, key: 'faturamento' });
+        const investimento = getInvestimentoPeriodo();
+        return investimento > 0 ? faturamento / investimento : 0;
+      
+      case 'mrr':
+        return getMrrForPeriod(startDate, endDate);
+      
+      case 'setup':
+        return getSetupForPeriod(startDate, endDate);
+      
+      case 'pontual':
+        return getPontualForPeriod(startDate, endDate);
+      
+      default:
+        return 0;
+    }
+  };
+
+  // Get meta for monetary indicators
+  const getMetaMonetaryForIndicator = (indicator: MonetaryIndicatorConfig): number => {
+    switch (indicator.key) {
+      case 'roi':
+        return 10; // Meta de 10x ROI
+      
+      case 'faturamento':
+        return getFaturamentoMetaPeriodo();
+      
+      case 'mrr':
+        // MRR = ~60% do faturamento
+        return getFaturamentoMetaPeriodo() * 0.6;
+      
+      case 'setup':
+        // Setup = ~25% do faturamento
+        return getFaturamentoMetaPeriodo() * 0.25;
+      
+      case 'pontual':
+        // Pontual = ~15% do faturamento
+        return getFaturamentoMetaPeriodo() * 0.15;
+      
+      default:
+        return 0;
+    }
+  };
+
+  // Handle monetary card click (drill-down to sales)
+  const handleMonetaryCardClick = (indicator: MonetaryIndicatorConfig) => {
+    if (indicator.key === 'roi') return; // ROI não tem drill-down
+    
+    // All monetary indicators show sales cards
+    const items = getItemsForIndicator('venda');
+    const columns: { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] = [
+      { key: 'product', label: 'Produto', format: columnFormatters.product },
+      { key: 'company', label: 'Empresa/Contato' },
+      { key: 'date', label: 'Data', format: columnFormatters.date },
+      { key: 'value', label: 'Valor Total', format: columnFormatters.currency },
+      { key: 'responsible', label: 'Responsável' },
+    ];
+    
+    const realized = getRealizedMonetaryForIndicator(indicator);
+    
+    setDetailSheetTitle(indicator.label);
+    setDetailSheetDescription(`${formatCompactCurrency(realized)} no período selecionado`);
+    setDetailSheetItems(items);
+    setDetailSheetColumns(columns);
+    setDetailSheetOpen(true);
+  };
+
   return (
     <div className="space-y-6">
       {/* Filters */}
@@ -747,7 +989,7 @@ export function IndicatorsTab() {
         </p>
       </div>
 
-      {/* Cards */}
+      {/* Cards - Quantity Indicators */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
         {indicatorConfigs.map((indicator) => (
           <RadialProgressCard 
@@ -757,6 +999,21 @@ export function IndicatorsTab() {
             meta={getMetaForIndicator(indicator)} 
             isClickable={true}
             onClick={() => handleRadialCardClick(indicator)}
+          />
+        ))}
+      </div>
+
+      {/* Cards - Monetary Indicators */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+        {monetaryIndicatorConfigs.map((indicator) => (
+          <MonetaryRadialCard 
+            key={indicator.key} 
+            title={indicator.label} 
+            realized={getRealizedMonetaryForIndicator(indicator)} 
+            meta={getMetaMonetaryForIndicator(indicator)}
+            format={indicator.format}
+            isClickable={indicator.key !== 'roi'}
+            onClick={() => handleMonetaryCardClick(indicator)}
           />
         ))}
       </div>
