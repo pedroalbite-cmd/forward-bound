@@ -43,7 +43,7 @@ function parseDate(dateValue: string | null): Date | null {
 
 export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['o2tax-metas-movements', startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ['o2tax-movements-all'],
     queryFn: async (): Promise<O2TaxMetasResult> => {
       // Use movements table for accurate phase tracking
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
