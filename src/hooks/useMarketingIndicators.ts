@@ -1,5 +1,14 @@
 import { useMemo } from 'react';
-import { MarketingMetrics, MarketingGoals, MarketingChannel, CampaignData } from '@/components/planning/marketing-indicators/types';
+import { 
+  MarketingMetrics, 
+  MarketingGoals, 
+  MarketingChannel, 
+  CampaignData,
+  InstagramMetrics,
+  RevenueMetrics,
+  CostPerStage,
+  RevenueGoals
+} from '@/components/planning/marketing-indicators/types';
 
 interface UseMarketingIndicatorsParams {
   startDate: Date;
@@ -41,6 +50,12 @@ export function useMarketingIndicators({
         cpl: 163.46,
         cpmql: 233.52,
         conversionRate: 70,
+        propostas: 140,
+        vendas: 9,
+        cprm: 390,
+        cprr: 486,
+        cpp: 607,
+        cpv: 9444,
       },
       {
         id: 'google_ads',
@@ -53,6 +68,12 @@ export function useMarketingIndicators({
         cpl: 163.16,
         cpmql: 233.08,
         conversionRate: 70,
+        propostas: 102,
+        vendas: 7,
+        cprm: 388,
+        cprr: 484,
+        cpp: 608,
+        cpv: 8857,
       },
       {
         id: 'eventos',
@@ -65,6 +86,12 @@ export function useMarketingIndicators({
         cpl: 294.74,
         cpmql: 345.68,
         conversionRate: 85,
+        propostas: 38,
+        vendas: 3,
+        cprm: 491,
+        cprr: 571,
+        cpp: 737,
+        cpv: 9333,
       },
     ];
 
@@ -127,6 +154,37 @@ export function useMarketingIndicators({
       },
     ];
 
+    const instagram: InstagramMetrics = {
+      instagramO2: 8000,
+      instagramPedro: 5000,
+      instagramTotal: 13000,
+    };
+
+    const revenue: RevenueMetrics = {
+      mrr: 125000,
+      setup: 45000,
+      pontual: 22000,
+      educacao: 18000,
+      gmv: 210000,
+    };
+
+    const totalInvestment = 175000;
+    const totalLeads = 995;
+    const totalMqls = 711;
+    const totalRms = 435;
+    const totalRrs = 352;
+    const totalPropostas = 280;
+    const totalVendas = 19;
+
+    const costPerStage: CostPerStage = {
+      cpl: Math.round(totalInvestment / totalLeads),
+      cpmql: Math.round(totalInvestment / totalMqls),
+      cprm: Math.round(totalInvestment / totalRms),
+      cprr: Math.round(totalInvestment / totalRrs),
+      cpp: Math.round(totalInvestment / totalPropostas),
+      cpv: Math.round(totalInvestment / totalVendas),
+    };
+
     const filteredChannels = selectedChannels.length > 0 
       ? channels.filter(c => selectedChannels.includes(c.id))
       : channels;
@@ -137,28 +195,44 @@ export function useMarketingIndicators({
       roiLtv: 4.5,
       cac: 9200,
       ltv: 38500,
-      totalInvestment: 175000,
-      totalLeads: 995,
-      totalMqls: 711,
-      totalRms: 435,
-      totalRrs: 352,
+      totalInvestment,
+      totalLeads,
+      totalMqls,
+      totalRms,
+      totalRrs,
+      totalPropostas,
+      totalVendas,
       channels: filteredChannels,
       campaigns,
+      instagram,
+      revenue,
+      costPerStage,
     };
   }, [startDate, endDate, selectedBUs, selectedChannels]);
 
   // Goals for comparison
-  const goals = useMemo<MarketingGoals>(() => ({
-    roas: 3.5,
-    roiLtv: 5.0,
-    cac: 8000,
-    ltv: 40000,
-    investment: 200000,
-    leads: 1200,
-    mqls: 840,
-    rms: 500,
-    rrs: 400,
-  }), []);
+  const goals = useMemo<MarketingGoals>(() => {
+    const revenueGoals: RevenueGoals = {
+      mrr: 150000,
+      setup: 50000,
+      pontual: 30000,
+      educacao: 25000,
+      gmv: 250000,
+    };
+
+    return {
+      roas: 3.5,
+      roiLtv: 5.0,
+      cac: 8000,
+      ltv: 40000,
+      investment: 200000,
+      leads: 1200,
+      mqls: 840,
+      rms: 500,
+      rrs: 400,
+      revenue: revenueGoals,
+    };
+  }, []);
 
   const refetch = () => {
     // Will trigger data refresh when integrated

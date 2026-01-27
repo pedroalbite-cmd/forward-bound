@@ -9,6 +9,12 @@ export interface MarketingChannel {
   cpl: number;      // Cost per Lead
   cpmql: number;    // Cost per MQL
   conversionRate: number; // MQL/Leads
+  propostas?: number;
+  vendas?: number;
+  cprm?: number;    // Cost per RM
+  cprr?: number;    // Cost per RR
+  cpp?: number;     // Cost per Proposta
+  cpv?: number;     // Cost per Venda
 }
 
 export interface CampaignData {
@@ -22,6 +28,37 @@ export interface CampaignData {
   roas: number;
   startDate: string;
   endDate?: string;
+}
+
+export interface InstagramMetrics {
+  instagramO2: number;
+  instagramPedro: number;
+  instagramTotal: number;
+}
+
+export interface RevenueMetrics {
+  mrr: number;
+  setup: number;
+  pontual: number;
+  educacao: number;
+  gmv: number;
+}
+
+export interface RevenueGoals {
+  mrr: number;
+  setup: number;
+  pontual: number;
+  educacao: number;
+  gmv: number;
+}
+
+export interface CostPerStage {
+  cpl: number;
+  cpmql: number;
+  cprm: number;
+  cprr: number;
+  cpp: number;
+  cpv: number;
 }
 
 export interface MarketingMetrics {
@@ -40,12 +77,23 @@ export interface MarketingMetrics {
   totalMqls: number;
   totalRms: number;
   totalRrs: number;
+  totalPropostas: number;
+  totalVendas: number;
   
   // By channel
   channels: MarketingChannel[];
   
   // Campaigns
   campaigns: CampaignData[];
+  
+  // Instagram breakdown
+  instagram: InstagramMetrics;
+  
+  // Revenue metrics
+  revenue: RevenueMetrics;
+  
+  // Cost per stage
+  costPerStage: CostPerStage;
 }
 
 export interface MarketingGoals {
@@ -58,6 +106,7 @@ export interface MarketingGoals {
   mqls: number;
   rms: number;
   rrs: number;
+  revenue: RevenueGoals;
 }
 
 export type ChannelId = 'meta_ads' | 'google_ads' | 'eventos' | 'organico' | 'outros';
