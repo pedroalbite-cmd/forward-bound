@@ -173,21 +173,6 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
           ))}
         </div>
 
-        {/* Legend */}
-        <div className="mt-4 pt-4 border-t border-border">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-            {stages.slice(1).map((stage, index) => (
-              <div key={stage.indicator} className="flex items-center gap-2">
-                <span className="text-muted-foreground">
-                  {stages[index].name} → {stage.name}:
-                </span>
-                <span className="font-medium text-foreground">
-                  {stage.conversionPercent.toFixed(1)}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
       </CardContent>
     </Card>
   );
