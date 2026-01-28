@@ -41,6 +41,13 @@ export function MultiSelect({
   };
 
   const handleToggleOption = (value: string) => {
+    // Se todos estão selecionados, clicar em um item seleciona APENAS ele
+    if (allSelected) {
+      onSelectionChange([value]);
+      return;
+    }
+    
+    // Comportamento normal de toggle
     if (selected.includes(value)) {
       onSelectionChange(selected.filter((v) => v !== value));
     } else {
