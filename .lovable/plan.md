@@ -1,64 +1,148 @@
 
-## Plano: Adicionar Coluna Total nos Drill-Downs
+## Plano: Adicionar Ordenação nas Colunas do DetailSheet
 
 ### Contexto
 
-As colunas MRR, Setup e Pontual já estão sendo exibidas, mas falta a coluna **Total** que mostra a soma desses valores.
+O usuário deseja que todas as colunas da tabela de drill-down (DetailSheet) sejam clicáveis para ordenar os dados. O comportamento esperado é:
+
+1. **Primeiro clique**: Ordem decrescente
+2. **Segundo clique**: Ordem crescente  
+3. **Terceiro clique**: Volta ao normal (sem ordenação)
 
 ---
 
-### Solução
+### Solução Proposta
 
-Adicionar a coluna `value` (que já contém a soma de MRR + Setup + Pontual) com o label "Total" após as colunas monetárias individuais.
+Adicionar estado de ordenação e lógica de sorting no componente `DetailSheet`.
 
-#### 1. Atualizar IndicatorsTab.tsx
+#### Implementação
 
-**Arquivo:** `src/components/planning/IndicatorsTab.tsx` (linhas 811-818)
+**Arquivo:** `src/components/planning/indicators/DetailSheet.tsx`
 
 ```typescript
-if (indicatorKey === 'proposta' || indicatorKey === 'venda') {
-  return [
-    ...baseColumns,
-    { key: 'mrr' as keyof DetailItem, label: 'MRR', format: columnFormatters.currency },
-    { key: 'setup' as keyof DetailItem, label: 'Setup', format: columnFormatters.currency },
-    { key: 'pontual' as keyof DetailItem, label: 'Pontual', format: columnFormatters.currency },
-    { key: 'value' as keyof DetailItem, label: 'Total', format: columnFormatters.currency }, // ← ADICIONAR
-    { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
-  ];
+import { useState, useMemo } from "react";
+import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+
+// Tipo para controle de ordenação
+type SortDirection = 'none' | 'desc' | 'asc';
+
+interface SortState {
+  column: keyof DetailItem | null;
+  direction: SortDirection;
+}
+
+export function DetailSheet({ open, onOpenChange, title, description, items, columns }: DetailSheetProps) {
+  const [sortState, setSortState] = useState<SortState>({ column: null, direction: 'none' });
+
+  // Função para alternar ordenação
+  const handleSort = (columnKey: keyof DetailItem) => {
+    setSortState(prev => {
+      if (prev.column !== columnKey) {
+        return { column: columnKey, direction: 'desc' };
+      }
+      if (prev.direction === 'desc') {
+        return { column: columnKey, direction: 'asc' };
+      }
+      if (prev.direction === 'asc') {
+        return { column: null, direction: 'none' };
+      }
+      return { column: columnKey, direction: 'desc' };
+    });
+  };
+
+  // Items ordenados
+  const sortedItems = useMemo(() => {
+    if (!sortState.column || sortState.direction === 'none') {
+      return items;
+    }
+
+    return [...items].sort((a, b) => {
+      const aVal = a[sortState.column!];
+      const bVal = b[sortState.column!];
+
+      // Tratamento de valores nulos
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
+
+      // Comparação por tipo
+      let comparison = 0;
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        comparison = aVal - bVal;
+      } else if (typeof aVal === 'string' && typeof bVal === 'string') {
+        comparison = aVal.localeCompare(bVal, 'pt-BR');
+      } else {
+        comparison = String(aVal).localeCompare(String(bVal), 'pt-BR');
+      }
+
+      return sortState.direction === 'desc' ? -comparison : comparison;
+    });
+  }, [items, sortState]);
+
+  // Reset ao fechar
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      setSortState({ column: null, direction: 'none' });
+    }
+    onOpenChange(open);
+  };
+
+  // Ícone de ordenação
+  const getSortIcon = (columnKey: keyof DetailItem) => {
+    if (sortState.column !== columnKey) {
+      return <ArrowUpDown className="h-3 w-3 ml-1 opacity-50" />;
+    }
+    if (sortState.direction === 'desc') {
+      return <ArrowDown className="h-3 w-3 ml-1" />;
+    }
+    return <ArrowUp className="h-3 w-3 ml-1" />;
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {/* ... resto do código ... */}
+      <TableHead 
+        key={col.key}
+        className="cursor-pointer hover:bg-muted/50 select-none"
+        onClick={() => handleSort(col.key)}
+      >
+        <div className="flex items-center">
+          {col.label}
+          {getSortIcon(col.key)}
+        </div>
+      </TableHead>
+      {/* ... usar sortedItems ao invés de items ... */}
+    </Dialog>
+  );
 }
 ```
 
-#### 2. Atualizar ClickableFunnelChart.tsx
+---
 
-**Arquivo:** `src/components/planning/ClickableFunnelChart.tsx` (linhas 179-186)
+### Detalhes Técnicos
 
-```typescript
-if (indicator === 'proposta' || indicator === 'venda') {
-  return [
-    ...baseColumns,
-    { key: 'mrr' as keyof DetailItem, label: 'MRR', format: columnFormatters.currency },
-    { key: 'setup' as keyof DetailItem, label: 'Setup', format: columnFormatters.currency },
-    { key: 'pontual' as keyof DetailItem, label: 'Pontual', format: columnFormatters.currency },
-    { key: 'value' as keyof DetailItem, label: 'Total', format: columnFormatters.currency }, // ← ADICIONAR
-    { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
-  ];
-}
-```
+| Aspecto | Implementação |
+|---------|---------------|
+| **Estado** | `useState` para armazenar coluna ativa e direção |
+| **Ordenação** | `useMemo` para performance, evita re-sort desnecessário |
+| **Tipos de dados** | Números comparados numericamente, strings com `localeCompare('pt-BR')` |
+| **Valores nulos** | Sempre ficam no final da lista |
+| **Reset** | Ao fechar o modal, ordenação volta ao estado inicial |
+| **Indicadores visuais** | `ArrowUpDown` (inativo), `ArrowDown` (desc), `ArrowUp` (asc) |
 
 ---
 
 ### Arquivos a Modificar
 
-| Arquivo | Linha | Ação |
-|---------|-------|------|
-| `src/components/planning/IndicatorsTab.tsx` | 817 | Adicionar coluna `value` com label "Total" |
-| `src/components/planning/ClickableFunnelChart.tsx` | 185 | Adicionar coluna `value` com label "Total" |
+| Arquivo | Ação |
+|---------|------|
+| `src/components/planning/indicators/DetailSheet.tsx` | Adicionar estado e lógica de ordenação |
 
 ---
 
 ### Resultado Esperado
 
-| Produto | Empresa | Data | Tempo | MRR | Setup | Pontual | Total | Responsável |
-|---------|---------|------|-------|-----|-------|---------|-------|-------------|
-| CaaS | Empresa ABC | 15/01/2026 | 5d 2h | R$ 8.500 | R$ 2.000 | R$ 500 | R$ 11.000 | Pedro |
-| O2 TAX | Empresa XYZ | 14/01/2026 | 3d 4h | R$ 15.000 | R$ 0 | R$ 0 | R$ 15.000 | Lucas |
+Os cabeçalhos das colunas terão:
+- Cursor pointer e hover effect indicando que são clicáveis
+- Ícone de setas mostrando estado da ordenação
+- Ciclo de 3 estados: Decrescente → Crescente → Normal
