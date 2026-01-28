@@ -14,6 +14,7 @@ export interface O2TaxCard {
   valorPontual: number;
   valorSetup: number;
   responsavel: string | null;
+  closer: string; // "Closer responsável" field for filtering
   motivoPerda: string | null;
   dataEntrada: Date;
   dataSaida: Date | null; // "Saída" from database
@@ -120,6 +121,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
         valorSetup: row['Valor Setup'] ? parseFloat(row['Valor Setup']) : null,
         faixa: row['Faixa de faturamento mensal'] || null,
         responsavel: row['Closer responsável'] || row['SDR responsável'] || null,
+        closer: String(row['Closer responsável'] ?? '').trim(),
         motivoPerda: row['Motivo da perda'] || null,
         contato: row['Nome - Interlocução O2'] || row['Nome'] || null,
         setor: row['Setor'] || null,
@@ -162,6 +164,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
         valorSetup,
         valor: valorPontual + valorSetup + valorMRR,
         responsavel: mov.responsavel || null,
+        closer: mov.closer || '',
         motivoPerda: mov.motivoPerda || null,
         dataEntrada,
         dataSaida,

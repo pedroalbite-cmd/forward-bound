@@ -292,10 +292,11 @@ export function IndicatorsTab() {
   const hasSingleBU = selectedBUs.length === 1;
   const selectedBU: BUType | 'all' = hasSingleBU ? selectedBUs[0] : 'all';
 
-  // Fixed list of closers for the filter dropdown (values match "Closer responsável" column in pipefy_moviment_cfos)
+  // Fixed list of closers for the filter dropdown (values match "Closer responsável" column in pipefy databases)
   const availableClosers: MultiSelectOption[] = [
     { value: 'Pedro Albite', label: 'Pedro' },
     { value: 'Daniel Trindade', label: 'Daniel' },
+    { value: 'Lucas Ilha', label: 'Lucas' },
   ];
 
   // Filter function - checks if a responsavel matches selected closers
@@ -452,9 +453,16 @@ export function IndicatorsTab() {
         selectedClosers.length > 0 ? selectedClosers : undefined
       );
     }
-    // Other BUs - no closer filter (closers only apply to Modelo Atual)
+    // O2 TAX - also apply closer filter if closers are selected
     if (includesO2Tax && funnelData.o2Tax) {
-      total += calcularMetaDoPeriodo(funnelData.o2Tax, indicator.key, startDate, endDate);
+      total += calcularMetaDoPeriodo(
+        funnelData.o2Tax, 
+        indicator.key, 
+        startDate, 
+        endDate,
+        'o2_tax',
+        selectedClosers.length > 0 ? selectedClosers : undefined
+      );
     }
     if (includesOxyHacker && funnelData.oxyHacker) {
       total += calcularMetaDoPeriodo(funnelData.oxyHacker, indicator.key, startDate, endDate);
@@ -485,7 +493,17 @@ export function IndicatorsTab() {
       }
     }
     if (includesO2Tax) {
-      total += getO2TaxQty(indicator.key as O2TaxIndicator, startDate, endDate);
+      // When closer filter is active for O2 TAX, use analytics hook to filter cards by closer field
+      if (selectedClosers.length > 0) {
+        const cards = o2TaxAnalytics.getDetailItemsForIndicator(indicator.key);
+        const filteredCards = cards.filter(card => {
+          const closerValue = (card.responsavel || '').trim();
+          return closerValue && selectedClosers.includes(closerValue);
+        });
+        total += filteredCards.length;
+      } else {
+        total += getO2TaxQty(indicator.key as O2TaxIndicator, startDate, endDate);
+      }
     }
     if (includesOxyHacker) {
       total += getOxyHackerQty(indicator.key as OxyHackerIndicator, startDate, endDate);
