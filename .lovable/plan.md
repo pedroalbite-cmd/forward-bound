@@ -1,66 +1,137 @@
 
+## Plano: Adicionar Colunas MRR, Setup e Pontual nos Drill-Downs
 
-## Plano: Corrigir Percentual do Lucas para 100%
+### Contexto
 
-### Problema
-
-O Lucas Ilha foi inserido com 50% de alocação para a O2 TAX, mas como ele é o **único closer** dessa BU, o valor correto é **100%**.
+Atualmente, os modais de drill-down (DetailSheet) exibem apenas a coluna "Valor" (que é a soma de MRR + Setup + Pontual + Educação). O usuário deseja visualizar essas informações **separadamente** para melhor análise.
 
 ---
 
-### Solução
+### Análise do Código Atual
 
-#### 1. Atualizar Registros no Banco de Dados
+| Componente | Arquivo | Colunas Atuais |
+|------------|---------|----------------|
+| **IndicatorsTab** (radial cards) | `IndicatorsTab.tsx` | Produto, Empresa/Contato, Data, Tempo na Fase, Valor ou Faixa, Responsável |
+| **ClickableFunnelChart** | `ClickableFunnelChart.tsx` | Produto, Título, Empresa, Fase, Data, Tempo, Valor ou Faixa, Responsável |
+| **LeadsMqlsStackedChart** | `LeadsMqlsStackedChart.tsx` | Título, Empresa, Fase, Data, Faixa Faturamento |
 
-Atualizar todos os registros do Lucas Ilha na O2 TAX para 100%:
+O `DetailItem` já possui os campos `mrr`, `setup` e `pontual` definidos, e o hook `useModeloAtualAnalytics` já popula esses campos no `toDetailItem`. Porém, os hooks `useO2TaxAnalytics` e `useExpansaoAnalytics` **NÃO** populam esses campos.
 
-```sql
-UPDATE closer_metas 
-SET percentage = 100, updated_at = now()
-WHERE bu = 'o2_tax' 
-  AND closer = 'Lucas Ilha'
-  AND year = 2026;
-```
+---
 
-#### 2. Ajustar Valor Padrão no Código
+### Solução Proposta
 
-Atualizar `src/hooks/useCloserMetas.ts` para que BUs com um único closer tenham padrão de 100%:
+#### 1. Atualizar Hooks de Analytics para Popular MRR, Setup e Pontual
 
-**Arquivo:** `src/hooks/useCloserMetas.ts`
+**Arquivo:** `src/hooks/useO2TaxAnalytics.ts`
 
-Na função `getPercentage`, ajustar o fallback para considerar se a BU tem apenas um closer:
+Atualizar a função `toDetailItem` para incluir os valores monetários:
 
 ```typescript
-const getPercentage = (bu: string, month: string, closer: string): number => {
-  if (!metas) {
-    // Se BU tem apenas 1 closer, default é 100%
-    const closersForBU = BU_CLOSERS[bu as BuType] || [];
-    return closersForBU.length === 1 ? 100 : 50;
+const toDetailItem = (card: O2TaxCard): DetailItem => ({
+  id: card.id,
+  name: card.titulo,
+  company: card.contato || card.titulo,
+  phase: PHASE_DISPLAY_MAP[card.faseAtual] || card.faseAtual,
+  date: card.dataEntrada.toISOString(),
+  value: card.valor,
+  reason: card.motivoPerda || undefined,
+  revenueRange: card.faixa || undefined,
+  responsible: card.responsavel || undefined,
+  closer: card.closer || undefined,
+  duration: card.duracao,
+  product: 'O2 TAX',
+  mrr: card.valorMRR,        // ← ADICIONAR
+  setup: card.valorSetup,    // ← ADICIONAR
+  pontual: card.valorPontual, // ← ADICIONAR
+});
+```
+
+**Arquivo:** `src/hooks/useExpansaoAnalytics.ts`
+
+Atualizar a função `toDetailItem` para incluir os valores monetários:
+
+```typescript
+const toDetailItem = (card: ExpansaoCard): DetailItem => ({
+  id: card.id,
+  name: card.titulo,
+  company: card.titulo,
+  phase: PHASE_DISPLAY_MAP[card.faseAtual] || card.faseAtual,
+  date: card.dataEntrada.toISOString(),
+  value: card.valor,
+  reason: card.motivoPerda || undefined,
+  responsible: card.responsavel || undefined,
+  duration: card.duracao,
+  product: card.produto,
+  mrr: card.valorMRR,        // ← ADICIONAR
+  setup: card.valorSetup,    // ← ADICIONAR
+  pontual: card.valorPontual, // ← ADICIONAR
+});
+```
+
+#### 2. Atualizar Colunas nos Componentes de Drill-Down
+
+**Arquivo:** `src/components/planning/IndicatorsTab.tsx`
+
+Na função `getColumnsForIndicator`, adicionar colunas MRR, Setup e Pontual para os indicadores de proposta e venda:
+
+```typescript
+const getColumnsForIndicator = (indicatorKey: IndicatorType) => {
+  const baseColumns = [
+    { key: 'product', label: 'Produto', format: columnFormatters.product },
+    { key: 'company', label: 'Empresa/Contato' },
+    { key: 'date', label: 'Data', format: columnFormatters.date },
+    { key: 'duration', label: 'Tempo na Fase', format: columnFormatters.duration },
+  ];
+
+  if (indicatorKey === 'proposta' || indicatorKey === 'venda') {
+    return [
+      ...baseColumns,
+      { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
+      { key: 'setup', label: 'Setup', format: columnFormatters.currency },
+      { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
+      { key: 'responsible', label: 'Responsável' },
+    ];
   }
-  
-  const meta = metas.find(m => 
-    m.bu === bu && m.month === month && m.closer === closer
-  );
-  
-  // Fallback: se BU tem apenas 1 closer, default é 100%
-  if (!meta) {
-    const closersForBU = BU_CLOSERS[bu as BuType] || [];
-    return closersForBU.length === 1 ? 100 : 50;
-  }
-  
-  return meta.percentage;
+
+  return [
+    ...baseColumns,
+    { key: 'revenueRange', label: 'Faixa Faturamento' },
+    { key: 'responsible', label: 'Responsável' },
+  ];
 };
 ```
 
-#### 3. Ajustar Valor Padrão no CloserMetasTab
+**Arquivo:** `src/components/planning/ClickableFunnelChart.tsx`
 
-Atualizar `src/components/planning/CloserMetasTab.tsx` na função `getLocalPercentage`:
+Na função `getColumnsForIndicator`, aplicar a mesma lógica:
 
 ```typescript
-const getLocalPercentage = (bu: string, month: string, closer: string): number => {
-  const key = `${bu}-${month}-${closer}`;
-  // Se só tem 1 closer na BU, o padrão é 100%
-  return localMetas[key] ?? (validClosers.length === 1 ? 100 : 50);
+const getColumnsForIndicator = (indicator: IndicatorType) => {
+  const baseColumns = [
+    { key: 'product', label: 'Produto', format: columnFormatters.product },
+    { key: 'name', label: 'Título' },
+    { key: 'company', label: 'Empresa/Contato' },
+    { key: 'phase', label: 'Fase', format: columnFormatters.phase },
+    { key: 'date', label: 'Data', format: columnFormatters.date },
+    { key: 'duration', label: 'Tempo na Fase', format: columnFormatters.duration },
+  ];
+
+  if (indicator === 'proposta' || indicator === 'venda') {
+    return [
+      ...baseColumns,
+      { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
+      { key: 'setup', label: 'Setup', format: columnFormatters.currency },
+      { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
+      { key: 'responsible', label: 'Responsável' },
+    ];
+  }
+
+  return [
+    ...baseColumns,
+    { key: 'revenueRange', label: 'Faixa Faturamento' },
+    { key: 'responsible', label: 'Responsável' },
+  ];
 };
 ```
 
@@ -70,14 +141,26 @@ const getLocalPercentage = (bu: string, month: string, closer: string): number =
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| **Banco de dados** | SQL | Atualizar registros do Lucas para 100% |
-| `src/hooks/useCloserMetas.ts` | Modificar | Ajustar fallback de `getPercentage` para 100% quando BU tem um único closer |
-| `src/components/planning/CloserMetasTab.tsx` | Modificar | Ajustar fallback de `getLocalPercentage` para 100% quando há um único closer |
+| `src/hooks/useO2TaxAnalytics.ts` | Modificar | Adicionar `mrr`, `setup`, `pontual` no `toDetailItem` |
+| `src/hooks/useExpansaoAnalytics.ts` | Modificar | Adicionar `mrr`, `setup`, `pontual` no `toDetailItem` |
+| `src/components/planning/IndicatorsTab.tsx` | Modificar | Atualizar `getColumnsForIndicator` para exibir colunas monetárias |
+| `src/components/planning/ClickableFunnelChart.tsx` | Modificar | Atualizar `getColumnsForIndicator` para exibir colunas monetárias |
 
 ---
 
 ### Resultado Esperado
 
-- **Lucas Ilha (O2 TAX)**: Sempre 100% (já que é o único closer)
-- **Pedro e Daniel (outras BUs)**: Padrão 50/50 (divisão entre dois closers)
+Ao clicar em **Proposta** ou **Venda** (nos radial cards ou no funil), o modal exibirá:
 
+| Produto | Empresa/Contato | Data | Tempo | MRR | Setup | Pontual | Responsável |
+|---------|-----------------|------|-------|-----|-------|---------|-------------|
+| CaaS | Empresa ABC | 15/01/2026 | 5d 2h | R$ 8.500 | R$ 2.000 | R$ 500 | Pedro |
+| O2 TAX | Empresa XYZ | 14/01/2026 | 3d 4h | R$ 15.000 | R$ 0 | R$ 0 | Lucas |
+
+Para outros indicadores (Leads, MQL, RM, RR), as colunas permanecerão como estão (sem valores monetários detalhados).
+
+---
+
+### Observação sobre Expansão (Franquia/Oxy Hacker)
+
+A tabela `pipefy_cards_movements_expansao` já possui os campos `Valor MRR`, `Valor Setup` e `Valor Pontual` sendo parseados no hook `useExpansaoAnalytics` (linhas 17-18), então os dados já estão disponíveis. Apenas precisamos adicioná-los ao `toDetailItem`.
