@@ -1,204 +1,178 @@
 
 
-## Plano: Redesenhar Gráfico de Faturamento para Multi-BU
+## Alternativas de Visualização: Gráfico de Faturamento por Período
 
-### Problema Atual
-
-O gráfico "Faturamento por Período" foi projetado para o **Modelo Atual** que possui:
-- MRR (Receita Recorrente)
-- Setup (Implantação)
-- Pontual (Único)
-
-Quando múltiplas BUs estão selecionadas, a visualização fica confusa porque:
-- **O2 TAX, Oxy Hacker, Franquia** = Vendas pontuais (não têm MRR real)
-- Tudo vai para a categoria "Pontual", desbalanceando o gráfico
-- Não fica claro de qual BU vem cada valor
+Analisei o código atual e os padrões de visualização existentes no projeto. Aqui estão **5 opções** para você escolher a melhor abordagem para o gráfico de faturamento quando múltiplas BUs estão selecionadas:
 
 ---
 
-### Proposta: Visualização por BU (Recomendação de BI)
+### Opção 1: Barras Agrupadas (Grouped Bars) - Lado a Lado
 
-Em vez de empilhar **MRR/Setup/Pontual**, empilhar **por BU** quando múltiplas estão selecionadas:
+```text
+                      Faturamento por Período
+   ┌─────────────────────────────────────────────────────────┐
+   │   [■ M.Atual] [■ O2 TAX] [■ Oxy Hacker] [■ Franquia]    │
+   │                                                         │
+   │   ██ ▓▓ ░░ ▒▒    ██ ▓▓ ░░ ▒▒    ██ ▓▓ ░░ ▒▒            │
+   │   ██ ▓▓ ░░ ▒▒    ██ ▓▓ ░░ ▒▒    ██ ▓▓ ░░ ▒▒            │
+   │   ██ ▓▓ ░░ ▒▒    ██ ▓▓ ░░ ▒▒    ██ ▓▓ ░░ ▒▒            │
+   │      Jan            Fev            Mar                  │
+   └─────────────────────────────────────────────────────────┘
+```
 
-| Cenário | Tipo de Gráfico |
-|---------|-----------------|
-| **1 BU selecionada** (ex: só Modelo Atual) | Manter MRR + Setup + Pontual empilhados |
-| **Múltiplas BUs selecionadas** | Mostrar faturamento total por BU empilhados |
+**Vantagens:**
+- Comparação direta entre BUs no mesmo período
+- Fácil identificar qual BU performou melhor
+- Padrão comum em dashboards de BI
+
+**Desvantagens:**
+- Fica congestionado com 4 BUs + linha de meta
+- Difícil ver o total agregado do período
 
 ---
 
-### Design Visual
+### Opção 2: Linhas por BU (Multi-Line Chart) - Similar ao SalesGoalsCharts
 
-#### Cenário 1: Uma BU (Modelo Atual)
-```
-┌─────────────────────────────────────────────────┐
-│  Faturamento por Período - Modelo Atual         │
-├─────────────────────────────────────────────────┤
-│   [■ MRR] [■ Setup] [■ Pontual] [-- Meta]       │
-│                                                 │
-│   █████████                                     │
-│   ████████▓▓▓                                   │
-│   ███████▓▓▓░░                                  │
-│   Jan   Fev   Mar   Abr   Mai                   │
-└─────────────────────────────────────────────────┘
+```text
+                      Faturamento por Período
+   ┌─────────────────────────────────────────────────────────┐
+   │   [─ M.Atual] [─ O2 TAX] [─ Expansão] [-- Meta Total]   │
+   │                                                         │
+   │              ______/                                    │
+   │           __/     \___                                  │
+   │        __/            \___                              │
+   │       /                   \                             │
+   │   ___/                                                  │
+   │   Jan    Fev    Mar    Abr    Mai    Jun               │
+   └─────────────────────────────────────────────────────────┘
 ```
 
-#### Cenário 2: Múltiplas BUs (Consolidado)
-```
-┌─────────────────────────────────────────────────┐
-│  Faturamento por Período - Consolidado          │
-├─────────────────────────────────────────────────┤
-│   [■ M.Atual] [■ O2 TAX] [■ Oxy] [■ Franq]      │
-│                                                 │
-│   ████████████████████                          │
-│   ██████████████████▓▓▓▓                        │
-│   █████████████████▓▓▓▓░░░░                     │
-│   Jan   Fev   Mar   Abr   Mai                   │
-└─────────────────────────────────────────────────┘
-```
+**Vantagens:**
+- Mostra tendência de cada BU ao longo do tempo
+- Visual limpo, menos poluído
+- Fica claro quando uma BU ultrapassa outra
+
+**Desvantagens:**
+- Difícil comparar volumes absolutos
+- Não mostra totais empilhados
 
 ---
 
-### Cores por BU
+### Opção 3: Área Empilhada (Stacked Area Chart)
 
-| BU | Cor | Código |
-|----|-----|--------|
-| Modelo Atual | Azul | `hsl(var(--primary))` / `#3b82f6` |
-| O2 TAX | Âmbar | `hsl(var(--warning))` / `#f59e0b` |
-| Oxy Hacker | Roxo | `hsl(var(--accent))` / `#8b5cf6` |
-| Franquia | Verde | `hsl(var(--franquia))` / `#22c55e` |
+```text
+                      Faturamento por Período
+   ┌─────────────────────────────────────────────────────────┐
+   │   [■ M.Atual] [■ O2 TAX] [■ Oxy Hacker] [■ Franquia]    │
+   │                                                         │
+   │   ████████████████████████████████████████████████████  │
+   │   ████████████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │
+   │   ██████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░░  │
+   │   ███▓▓▓▓▓▓▓░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒  │
+   │   Jan    Fev    Mar    Abr    Mai    Jun               │
+   └─────────────────────────────────────────────────────────┘
+```
+
+**Vantagens:**
+- Mostra total acumulado visualmente (altura total)
+- Identifica contribuição de cada BU
+- Fluxo visual suave entre períodos
+
+**Desvantagens:**
+- Pode ser difícil comparar BUs que não estão na base
+- Menos preciso para leitura de valores individuais
 
 ---
 
-### Implementação Técnica
+### Opção 4: Barras Empilhadas com Barra de Meta Separada (Atual + Refinamento)
 
-#### Arquivo: `src/components/planning/RevenueBreakdownChart.tsx`
-
-**1. Detectar modo de exibição:**
-```typescript
-const useBreakdownByBU = selectedBUs.length > 1;
-const singleBUKey = selectedBUs.length === 1 ? selectedBUs[0] : null;
+```text
+                      Faturamento por Período
+   ┌─────────────────────────────────────────────────────────┐
+   │   [■ M.Atual] [■ O2 TAX] [■ Oxy] [■ Franq] [□ Meta]     │
+   │                                                         │
+   │   ████████████ ░░░░░░░░░░░░                             │
+   │   ██████████▓▓ ░░░░░░░░░░░░    ████████████████ ░░░░░   │
+   │   ████████▓▓▓▓ ░░░░░░░░░░░░    ██████████████▓▓ ░░░░░   │
+   │      Jan           Meta           Fev          Meta     │
+   │                                                         │
+   └─────────────────────────────────────────────────────────┘
 ```
 
-**2. Alterar estrutura de dados:**
-```typescript
-// Modo Multi-BU: agregar por BU
-interface MultibuChartDataPoint {
-  label: string;
-  modelo_atual: number;
-  o2_tax: number;
-  oxy_hacker: number;
-  franquia: number;
-  total: number;
-  meta: number;
-  startDate: Date;
-  endDate: Date;
-}
+**Vantagens:**
+- Total claro (altura da barra empilhada)
+- Comparação lado a lado com meta
+- Drill-down natural por BU
 
-// Modo Single-BU: manter MRR/Setup/Pontual
-interface SingleBuChartDataPoint {
-  label: string;
-  mrr: number;
-  setup: number;
-  pontual: number;
-  total: number;
-  meta: number;
-  startDate: Date;
-  endDate: Date;
-}
-```
-
-**3. Renderização condicional do gráfico:**
-```typescript
-{useBreakdownByBU ? (
-  // Barras empilhadas por BU
-  <>
-    {selectedBUs.includes('modelo_atual') && (
-      <Bar dataKey="modelo_atual" stackId="revenue" fill="#3b82f6" name="Modelo Atual" />
-    )}
-    {selectedBUs.includes('o2_tax') && (
-      <Bar dataKey="o2_tax" stackId="revenue" fill="#f59e0b" name="O2 TAX" />
-    )}
-    {selectedBUs.includes('oxy_hacker') && (
-      <Bar dataKey="oxy_hacker" stackId="revenue" fill="#8b5cf6" name="Oxy Hacker" />
-    )}
-    {selectedBUs.includes('franquia') && (
-      <Bar dataKey="franquia" stackId="revenue" fill="#22c55e" name="Franquia" />
-    )}
-  </>
-) : (
-  // Barras empilhadas MRR/Setup/Pontual (single BU)
-  <>
-    <Bar dataKey="mrr" stackId="revenue" fill="#3b82f6" name="MRR" />
-    <Bar dataKey="setup" stackId="revenue" fill="#f97316" name="Setup" />
-    <Bar dataKey="pontual" stackId="revenue" fill="#8b5cf6" name="Pontual" />
-  </>
-)}
-```
-
-**4. Atualizar header/legenda dinamicamente:**
-```typescript
-// Multi-BU mode
-<div className="flex flex-wrap items-center gap-4 mt-3 text-sm">
-  <div className="flex items-center gap-2">
-    <span className="text-muted-foreground">Total:</span>
-    <span className="font-semibold text-green-500">{formatCompactCurrency(totals.total)}</span>
-  </div>
-  <div className="flex items-center gap-2">
-    <div className="w-3 h-3 rounded-sm border-2 border-green-500 border-dashed" />
-    <span className="text-muted-foreground">Meta:</span>
-    <span className="font-medium text-green-500">{formatCompactCurrency(totals.meta)}</span>
-  </div>
-  {useBreakdownByBU ? (
-    // Mostrar totais por BU
-    selectedBUs.map(bu => (
-      <div key={bu} className="flex items-center gap-2">
-        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: BU_COLORS[bu] }} />
-        <span className="text-muted-foreground">{BU_LABELS[bu]}:</span>
-        <span className="font-medium">{formatCompactCurrency(totals[bu])}</span>
-      </div>
-    ))
-  ) : (
-    // Mostrar MRR/Setup/Pontual
-    <>
-      <div className="flex items-center gap-2">
-        <div className="w-3 h-3 rounded-sm bg-blue-500" />
-        <span>MRR: {formatCompactCurrency(totals.mrr)}</span>
-      </div>
-      {/* ... */}
-    </>
-  )}
-</div>
-```
-
-**5. Atualizar drill-down:**
-- No modo Multi-BU, adicionar a coluna "Produto" como primeira coluna
-- No modo Single-BU (Modelo Atual), manter colunas MRR/Setup/Pontual
+**Desvantagens:**
+- Ocupa mais espaço horizontal
+- Meta como barra separada pode confundir
 
 ---
 
-### Arquivos a Modificar
+### Opção 5: Dashboard Compacto (Mini Cards + Gráfico Consolidado) - RECOMENDAÇÃO BI
 
-| Arquivo | Ação |
-|---------|------|
-| `src/components/planning/RevenueBreakdownChart.tsx` | Implementar lógica de modo dual (por BU vs por tipo de receita) |
+```text
+   ┌─────────────────────────────────────────────────────────┐
+   │   FATURAMENTO POR PERÍODO                               │
+   ├──────────┬──────────┬──────────┬──────────┬────────────┤
+   │ M.Atual  │ O2 TAX   │ Oxy Hack │ Franquia │   TOTAL    │
+   │ R$ 2.1M  │ R$ 180k  │ R$ 324k  │ R$ 420k  │  R$ 3.0M   │
+   │ ▆▆▆▆▆▆▆▆ │ ▆▆▆▆     │ ▆▆▆▆▆    │ ▆▆▆▆▆▆   │  ▆▆▆▆▆▆▆▆  │
+   │ 85% meta │ 72% meta │ 90% meta │ 100% meta│  87% meta  │
+   ├──────────┴──────────┴──────────┴──────────┴────────────┤
+   │                                                         │
+   │   Gráfico de barras empilhadas (total por período)      │
+   │   ████████████████████████████████████                  │
+   │   ██████████████████████████▓▓▓▓▓▓▓▓▓▓                  │
+   │   ████████████████████▓▓▓▓▓▓░░░░░░░░░░                  │
+   │       Jan      Fev      Mar      Abr                    │
+   │                                                         │
+   │   [-- Meta] linha tracejada verde                       │
+   └─────────────────────────────────────────────────────────┘
+```
+
+**Vantagens:**
+- **KPIs visíveis no topo** - responde a pergunta principal rapidamente
+- **Sparklines por BU** - mostra tendência individual sem poluir
+- Gráfico principal focado no **total consolidado**
+- Drill-down ao clicar em cada card ou barra
+- Separa "resumo" de "detalhes"
+
+**Desvantagens:**
+- Requer mais código/complexidade
+- Ocupa mais espaço vertical
 
 ---
 
-### Benefícios
+### Comparativo Rápido
 
-| Aspecto | Melhoria |
-|---------|----------|
-| **Clareza** | Fica óbvio de qual BU vem cada fatia do faturamento |
-| **Comparabilidade** | Fácil comparar performance entre BUs no mesmo período |
-| **Contexto** | Quando só 1 BU (Modelo Atual), mantém o breakdown MRR/Setup/Pontual útil para análise de mix |
-| **Consistência** | Cores consistentes com o resto do dashboard |
+| Opção | Clareza Multi-BU | Comparação | Total Visível | Complexidade |
+|-------|------------------|------------|---------------|--------------|
+| 1. Barras Agrupadas | Alta | Alta | Baixa | Baixa |
+| 2. Linhas Multi | Alta | Media | Nao | Baixa |
+| 3. Area Empilhada | Media | Baixa | Alta | Media |
+| 4. Barras + Meta | Alta | Alta | Alta | Media |
+| **5. Dashboard (Recomendado)** | **Muito Alta** | **Alta** | **Alta** | **Alta** |
 
 ---
 
-### Resultado Esperado
+### Minha Recomendação: Opção 5 (Dashboard Compacto)
 
-1. **Consolidado** (todas BUs): Gráfico com 4 cores mostrando contribuição de cada BU
-2. **Uma BU** (ex: Modelo Atual): Gráfico com breakdown MRR/Setup/Pontual como hoje
-3. **2-3 BUs**: Gráfico com as cores das BUs selecionadas
+Para um dashboard executivo, a **Opção 5** é a mais clara porque:
+
+1. **Responde rapidamente**: "Quanto vendemos por BU?" - cards no topo
+2. **Mostra tendência**: Sparklines em cada card
+3. **Foco no consolidado**: Gráfico principal mostra o total
+4. **Drill-down natural**: Clique no card ou barra para detalhes
+
+---
+
+### Alternativa Simples: Opção 1 (Barras Agrupadas)
+
+Se preferir algo mais simples e rápido de implementar, a **Opção 1** funciona bem e segue o padrão do `SalesGoalsCharts.tsx` que já existe no projeto.
+
+---
+
+Qual opção você prefere? Posso implementar qualquer uma delas ou uma combinação de ideias.
 
