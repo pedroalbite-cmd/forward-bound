@@ -538,6 +538,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     reason: card.motivoPerda || undefined,
     revenueRange: card.faixa || undefined,
     responsible: card.responsavel || undefined,
+    closer: card.closer || undefined,
     duration: card.duracao,
     product: 'O2 TAX',
   });

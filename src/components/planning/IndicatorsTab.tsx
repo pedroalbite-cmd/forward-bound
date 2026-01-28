@@ -497,7 +497,7 @@ export function IndicatorsTab() {
       if (selectedClosers.length > 0) {
         const cards = o2TaxAnalytics.getDetailItemsForIndicator(indicator.key);
         const filteredCards = cards.filter(card => {
-          const closerValue = (card.responsavel || '').trim();
+          const closerValue = (card.closer || card.responsible || '').trim();
           return closerValue && selectedClosers.includes(closerValue);
         });
         total += filteredCards.length;
