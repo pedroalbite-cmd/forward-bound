@@ -79,7 +79,8 @@ export function RevenueChartComparison({
       const monthsInPeriod = eachMonthOfInterval({ start, end });
       
       for (const monthDate of monthsInPeriod) {
-        const monthName = format(monthDate, 'MMM', { locale: ptBR });
+        const monthNameRaw = format(monthDate, 'MMM', { locale: ptBR });
+        const monthName = monthNameRaw.charAt(0).toUpperCase() + monthNameRaw.slice(1);
         const monthMeta = metas[monthName] || 0;
         
         const monthStartDate = startOfMonth(monthDate);
@@ -265,7 +266,8 @@ export function RevenueChartComparison({
       let total = 0;
       
       for (const monthDate of monthsInPeriod) {
-        const monthName = format(monthDate, 'MMM', { locale: ptBR });
+        const monthNameRaw = format(monthDate, 'MMM', { locale: ptBR });
+        const monthName = monthNameRaw.charAt(0).toUpperCase() + monthNameRaw.slice(1);
         const monthMeta = metas[monthName] || 0;
         
         const monthStartDate = startOfMonth(monthDate);
