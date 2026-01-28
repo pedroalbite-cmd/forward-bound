@@ -1,302 +1,131 @@
 
 
-## Plano: Expandir Métricas do Mkt Indicadores
+## Plano: Adicionar Lucas Ilha como Closer para O2 TAX
 
-### Objetivo
+### Contexto
 
-Adicionar as seguintes informações que ainda não estão presentes:
-
-| Categoria | Métricas Novas |
-|-----------|---------------|
-| **Mídia por Canal** | Mídia Google Ads, Leads Google Ads, CPL Google Ads, Mídia Meta Ads, Leads Meta Ads, CPL Meta Ads |
-| **Instagram** | Instagram O2, Instagram Pedro, Instagram Total |
-| **Totais** | Mídia Total, Leads Totais, CPL Total |
-| **Receita** | MRR, Setup, Pontual, Educação, GMV |
-| **Custos por Etapa** | CPL, CPMQL, CPRM, CPRR, CPP (proposta), CPV (venda) |
+Atualmente, o filtro de closers nos Indicadores está limitado a **Pedro Albite** e **Daniel Trindade**, e a lógica de filtro só é aplicada ao **Modelo Atual**. O Lucas Ilha é o Tax Manager da O2 TAX e precisa ser incluído como opção de closer para essa BU.
 
 ---
 
-### Estrutura Visual Proposta
+### Descobertas na Base de Dados
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│  Indicadores de Marketing                                   [Filtros: BU, Data, Canal]│
-├─────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                     │
-│  ┌───────────────────────────────────────────────────────────────────────────────┐  │
-│  │  MÍDIA E LEADS POR CANAL                                                       │  │
-│  │  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐ ┌────────────────┐  │  │
-│  │  │  Meta Ads      │ │  Google Ads    │ │  Instagram     │ │  TOTAIS        │  │  │
-│  │  │  Mídia: R$ 85k │ │  Mídia: R$ 62k │ │  O2: R$ 8k     │ │  Mídia: R$ 175k│  │  │
-│  │  │  Leads: 520    │ │  Leads: 380    │ │  Pedro: R$ 5k  │ │  Leads: 995    │  │  │
-│  │  │  CPL: R$ 163   │ │  CPL: R$ 163   │ │  Total: R$ 13k │ │  CPL: R$ 176   │  │  │
-│  │  └────────────────┘ └────────────────┘ └────────────────┘ └────────────────┘  │  │
-│  └───────────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                     │
-│  ┌───────────────────────────────────────────────────────────────────────────────┐  │
-│  │  RECEITA                                                                       │  │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌───────────┐│  │
-│  │  │    MRR      │ │   Setup     │ │  Pontual    │ │  Educação   │ │    GMV    ││  │
-│  │  │  R$ 125k    │ │  R$ 45k     │ │  R$ 22k     │ │  R$ 18k     │ │  R$ 210k  ││  │
-│  │  │ Meta: R$150k│ │ Meta: R$50k │ │ Meta: R$30k │ │ Meta: R$25k │ │Meta: R$250k│  │
-│  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘ └───────────┘│  │
-│  └───────────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                     │
-│  ┌───────────────────────────────────────────────────────────────────────────────┐  │
-│  │  CUSTO POR ETAPA DO FUNIL                                                      │  │
-│  │                                                                                │  │
-│  │  CPL (Lead) ──▶ CPMQL ──▶ CPRM ──▶ CPRR ──▶ CPP (Proposta) ──▶ CPV (Venda)   │  │
-│  │    R$ 176        R$ 246     R$ 402    R$ 497       R$ 625          R$ 9.200   │  │
-│  │                                                                                │  │
-│  └───────────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                     │
-│  ┌──────────────────────────────────┐  ┌─────────────────────────────────────────┐  │
-│  │  Performance (existente)         │  │  Funil de Aquisição (existente)         │  │
-│  │  ROAS | ROI LTV | CAC | LTV      │  │  Leads → MQL → RM → RR                  │  │
-│  └──────────────────────────────────┘  └─────────────────────────────────────────┘  │
-│                                                                                     │
-│  ┌───────────────────────────────────────────────────────────────────────────────┐  │
-│  │  Conversão por Canal (existente - adicionar colunas)                          │  │
-│  └───────────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                     │
-│  ┌───────────────────────────────────────────────────────────────────────────────┐  │
-│  │  Campanhas e Anúncios (existente)                                             │  │
-│  └───────────────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────────────┘
-```
+| Tabela | Campo | Status |
+|--------|-------|--------|
+| `pipefy_cards_movements` (O2 TAX) | `Closer responsável` | Existe, mas está `null` na maioria dos leads novos |
+| `closer_metas` | registros | Já tem Pedro e Daniel para todas as BUs (modelo_atual, o2_tax, oxy_hacker, franquia) |
+| `useCloserMetas.ts` | CLOSERS const | Hardcoded: `['Pedro Albite', 'Daniel Trindade']` |
+| `IndicatorsTab.tsx` | availableClosers | Hardcoded: Pedro e Daniel |
 
 ---
 
-### Novos Arquivos a Criar
+### Modificacoes Necessarias
 
-| Arquivo | Descrição |
-|---------|-----------|
-| `ChannelMetricsCards.tsx` | Cards com Mídia/Leads/CPL por canal (Meta Ads, Google Ads, Instagram, Totais) |
-| `RevenueMetricsCards.tsx` | Cards com MRR, Setup, Pontual, Educação, GMV |
-| `CostPerStageChart.tsx` | Visualização de custo por etapa do funil (CPL → CPV) |
+#### 1. Atualizar Hook useCloserMetas.ts
 
----
-
-### Modificações em Arquivos Existentes
-
-#### 1. types.ts - Novos tipos
+Adicionar Lucas Ilha à lista de closers:
 
 ```typescript
-// Adicionar ao MarketingChannel
-export interface MarketingChannel {
-  // ... campos existentes ...
-  propostas?: number;
-  vendas?: number;
-  cprm?: number;    // Cost per RM
-  cprr?: number;    // Cost per RR
-  cpp?: number;     // Cost per Proposta
-  cpv?: number;     // Cost per Venda
-}
-
-// Novo tipo para Instagram
-export interface InstagramMetrics {
-  instagramO2: number;
-  instagramPedro: number;
-  instagramTotal: number;
-}
-
-// Novo tipo para Receita
-export interface RevenueMetrics {
-  mrr: number;
-  setup: number;
-  pontual: number;
-  educacao: number;
-  gmv: number;
-}
-
-// Atualizar MarketingMetrics
-export interface MarketingMetrics {
-  // ... campos existentes ...
-  
-  // Novas métricas de receita
-  revenue: RevenueMetrics;
-  
-  // Instagram breakdown
-  instagram: InstagramMetrics;
-  
-  // Custo por etapa (agregado)
-  costPerStage: {
-    cpl: number;
-    cpmql: number;
-    cprm: number;
-    cprr: number;
-    cpp: number;
-    cpv: number;
-  };
-  
-  // Propostas e Vendas totais
-  totalPropostas: number;
-  totalVendas: number;
-}
+// Linha 15: adicionar Lucas
+const CLOSERS = ['Pedro Albite', 'Daniel Trindade', 'Lucas Ilha'] as const;
 ```
 
-#### 2. useMarketingIndicators.ts - Dados fictícios
+#### 2. Atualizar Filtro no IndicatorsTab.tsx
 
-Adicionar dados mockados para as novas métricas:
+Atualizar a lista de closers disponíveis para incluir Lucas:
 
 ```typescript
-// Instagram
-instagram: {
-  instagramO2: 8000,
-  instagramPedro: 5000,
-  instagramTotal: 13000,
-},
-
-// Receita
-revenue: {
-  mrr: 125000,
-  setup: 45000,
-  pontual: 22000,
-  educacao: 18000,
-  gmv: 210000,
-},
-
-// Custo por etapa
-costPerStage: {
-  cpl: 176,      // Investimento / Leads
-  cpmql: 246,    // Investimento / MQLs
-  cprm: 402,     // Investimento / RMs
-  cprr: 497,     // Investimento / RRs
-  cpp: 625,      // Investimento / Propostas
-  cpv: 9200,     // Investimento / Vendas (CAC)
-},
-
-totalPropostas: 280,
-totalVendas: 19,
+// Linhas 296-299: adicionar Lucas
+const availableClosers: MultiSelectOption[] = [
+  { value: 'Pedro Albite', label: 'Pedro' },
+  { value: 'Daniel Trindade', label: 'Daniel' },
+  { value: 'Lucas Ilha', label: 'Lucas' },
+];
 ```
 
-#### 3. MarketingIndicatorsTab.tsx - Layout atualizado
+#### 3. Estender Logica de Filtro para O2 TAX
 
-Reorganizar para incluir os novos componentes:
+Atualmente o filtro de closer so afeta o Modelo Atual. Precisa estender para O2 TAX:
+
+**Arquivo:** `src/components/planning/IndicatorsTab.tsx`
+
+Na funcao `getRealizedForIndicator` (linhas 471-498):
+- Adicionar logica de filtro por closer para O2 TAX similar ao Modelo Atual
+
+Na funcao `getMetaForIndicator` (linhas 439-467):
+- Aplicar filtro de closer para O2 TAX (ja funciona pois usa `getFilteredMeta`)
+
+#### 4. Atualizar useO2TaxAnalytics.ts
+
+Garantir que o hook da O2 TAX extraia e exponha o campo `closer`:
 
 ```typescript
-// Novo layout
-<div className="space-y-6">
-  {/* Filtros (existente) */}
-  
-  {/* NOVO: Cards de Mídia por Canal */}
-  <ChannelMetricsCards 
-    channels={data.channels} 
-    instagram={data.instagram}
-    totalInvestment={data.totalInvestment}
-    totalLeads={data.totalLeads}
-  />
-  
-  {/* NOVO: Cards de Receita */}
-  <RevenueMetricsCards 
-    revenue={data.revenue}
-    goals={goals.revenue}
-  />
-  
-  {/* NOVO: Custo por Etapa do Funil */}
-  <CostPerStageChart costPerStage={data.costPerStage} />
-  
-  {/* Performance Gauges (existente) */}
-  <PerformanceGauges ... />
-  
-  {/* Charts existentes */}
-  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    <InvestmentByChannelChart ... />
-    <AcquisitionFunnelChart ... />
-  </div>
-  
-  {/* Tabelas existentes */}
-  <ConversionsByChannelChart ... />
-  <CampaignsTable ... />
-</div>
+// Na linha 122: ja esta mapeando
+responsavel: row['Closer responsável'] || row['SDR responsável'] || null,
+```
+
+Adicionar campo `closer` especifico para filtragem (similar ao useModeloAtualAnalytics):
+
+```typescript
+// Adicionar campo closer separado
+closer: String(row['Closer responsável'] ?? '').trim(),
+```
+
+#### 5. Criar Registros para Lucas na closer_metas
+
+Adicionar registros iniciais (50% de alocacao) para Lucas Ilha na O2 TAX:
+
+**SQL para execucao via Cloud View:**
+
+```sql
+-- Inserir registros para Lucas Ilha na O2 TAX (todos os meses de 2026)
+INSERT INTO closer_metas (bu, month, closer, percentage, year)
+VALUES 
+  ('o2_tax', 'Jan', 'Lucas Ilha', 50, 2026),
+  ('o2_tax', 'Fev', 'Lucas Ilha', 50, 2026),
+  ('o2_tax', 'Mar', 'Lucas Ilha', 50, 2026),
+  ('o2_tax', 'Abr', 'Lucas Ilha', 50, 2026),
+  ('o2_tax', 'Mai', 'Lucas Ilha', 50, 2026),
+  ('o2_tax', 'Jun', 'Lucas Ilha', 50, 2026),
+  ('o2_tax', 'Jul', 'Lucas Ilha', 50, 2026),
+  ('o2_tax', 'Ago', 'Lucas Ilha', 50, 2026),
+  ('o2_tax', 'Set', 'Lucas Ilha', 50, 2026),
+  ('o2_tax', 'Out', 'Lucas Ilha', 50, 2026),
+  ('o2_tax', 'Nov', 'Lucas Ilha', 50, 2026),
+  ('o2_tax', 'Dez', 'Lucas Ilha', 50, 2026)
+ON CONFLICT DO NOTHING;
 ```
 
 ---
 
-### Componente: ChannelMetricsCards.tsx
-
-Grid de 4 cards mostrando:
-
-| Card | Conteúdo |
-|------|----------|
-| **Meta Ads** | Mídia R$ 85k, Leads 520, CPL R$ 163 |
-| **Google Ads** | Mídia R$ 62k, Leads 380, CPL R$ 163 |
-| **Instagram** | O2 R$ 8k, Pedro R$ 5k, Total R$ 13k |
-| **TOTAIS** | Mídia R$ 175k, Leads 995, CPL R$ 176 |
-
----
-
-### Componente: RevenueMetricsCards.tsx
-
-Grid de 5 cards com:
-- MRR (com barra de progresso vs meta)
-- Setup (com barra de progresso vs meta)
-- Pontual (com barra de progresso vs meta)
-- Educação (com barra de progresso vs meta)
-- GMV (com barra de progresso vs meta)
-
----
-
-### Componente: CostPerStageChart.tsx
-
-Visualização horizontal tipo "pipeline" mostrando:
-
-```text
-Lead ────▶ MQL ────▶ RM ────▶ RR ────▶ Proposta ────▶ Venda
-R$176      R$246     R$402    R$497      R$625        R$9.2k
-```
-
-Cada etapa mostra o custo acumulado por chegada nessa fase.
-
----
-
-### Dados Fictícios Completos
-
-**Meta Ads:**
-- Mídia: R$ 85.000
-- Leads: 520
-- CPL: R$ 163
-
-**Google Ads:**
-- Mídia: R$ 62.000
-- Leads: 380
-- CPL: R$ 163
-
-**Instagram:**
-- O2: R$ 8.000
-- Pedro: R$ 5.000
-- Total: R$ 13.000
-
-**Totais:**
-- Mídia Total: R$ 175.000
-- Leads Totais: 995
-- CPL Total: R$ 176
-
-**Receita:**
-- MRR: R$ 125.000 (Meta: R$ 150.000)
-- Setup: R$ 45.000 (Meta: R$ 50.000)
-- Pontual: R$ 22.000 (Meta: R$ 30.000)
-- Educação: R$ 18.000 (Meta: R$ 25.000)
-- GMV: R$ 210.000 (Meta: R$ 250.000)
-
-**Custo por Etapa:**
-- CPL: R$ 176
-- CPMQL: R$ 246
-- CPRM: R$ 402
-- CPRR: R$ 497
-- CPP: R$ 625
-- CPV: R$ 9.200
-
----
-
-### Resumo de Arquivos
+### Arquivos a Modificar
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `marketing-indicators/types.ts` | Modificar | Adicionar InstagramMetrics, RevenueMetrics, costPerStage |
-| `useMarketingIndicators.ts` | Modificar | Adicionar dados fictícios para todas as novas métricas |
-| `marketing-indicators/ChannelMetricsCards.tsx` | Criar | Cards com Mídia/Leads/CPL por canal + Instagram + Totais |
-| `marketing-indicators/RevenueMetricsCards.tsx` | Criar | Cards com MRR, Setup, Pontual, Educação, GMV |
-| `marketing-indicators/CostPerStageChart.tsx` | Criar | Visualização de custo por etapa do funil |
-| `MarketingIndicatorsTab.tsx` | Modificar | Integrar novos componentes no layout |
+| `src/hooks/useCloserMetas.ts` | Modificar | Adicionar 'Lucas Ilha' à const CLOSERS |
+| `src/hooks/useO2TaxAnalytics.ts` | Modificar | Adicionar campo `closer` separado para filtragem |
+| `src/components/planning/IndicatorsTab.tsx` | Modificar | Adicionar Lucas aos availableClosers e estender lógica de filtro para O2 TAX |
+
+---
+
+### Comportamento Esperado Apos Implementacao
+
+1. **Filtro de Closers** mostrara 3 opcoes: Pedro, Daniel, Lucas
+2. **Ao selecionar Lucas**:
+   - Para **O2 TAX**: filtra registros onde `Closer responsável = 'Lucas Ilha'`
+   - Para **Modelo Atual**: Lucas nao tera efeito (ele nao trabalha nessa BU)
+3. **Metas ajustadas** conforme percentuais configurados no Admin > Metas por Closer
+4. **Radial gauges, graficos e funil** refletirao os dados filtrados por closer
+
+---
+
+### Observacao Importante
+
+Os dados atuais da tabela `pipefy_cards_movements` mostram "Closer responsável" como `null` para leads recentes. O campo provavelmente so e preenchido quando o card avanca para fases mais avançadas do funil (RM, RR, Proposta). Isso significa que o filtro por Lucas tera efeito principalmente em:
+- Reunioes Agendadas (RM)
+- Reunioes Realizadas (RR)
+- Propostas
+- Vendas
+
+Leads iniciais podem nao ter closer atribuido ainda.
 
