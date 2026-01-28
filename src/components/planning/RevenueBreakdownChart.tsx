@@ -23,15 +23,28 @@ interface RevenueBreakdownChartProps {
   selectedClosers?: string[];
 }
 
-interface ChartDataPoint {
+// Base chart data point
+interface BaseChartDataPoint {
   label: string;
-  mrr: number;
-  setup: number;
-  pontual: number;
   total: number;
   meta: number;
   startDate: Date;
   endDate: Date;
+}
+
+// Single-BU mode: breakdown by revenue type
+interface SingleBuChartDataPoint extends BaseChartDataPoint {
+  mrr: number;
+  setup: number;
+  pontual: number;
+}
+
+// Multi-BU mode: breakdown by business unit
+interface MultiBuChartDataPoint extends BaseChartDataPoint {
+  modelo_atual: number;
+  o2_tax: number;
+  oxy_hacker: number;
+  franquia: number;
 }
 
 const formatCompactCurrency = (value: number): string => {
@@ -49,6 +62,21 @@ const DEFAULT_TICKETS = {
   o2_tax: 15000,
   oxy_hacker: 54000,
   franquia: 140000,
+};
+
+// BU colors and labels
+const BU_COLORS: Record<string, string> = {
+  modelo_atual: '#3b82f6',
+  o2_tax: '#f59e0b',
+  oxy_hacker: '#8b5cf6',
+  franquia: '#22c55e',
+};
+
+const BU_LABELS: Record<string, string> = {
+  modelo_atual: 'Modelo Atual',
+  o2_tax: 'O2 TAX',
+  oxy_hacker: 'Oxy Hacker',
+  franquia: 'Franquia',
 };
 
 export function RevenueBreakdownChart({ 
@@ -85,8 +113,10 @@ export function RevenueBreakdownChart({
   const useOxyHacker = selectedBUs.includes('oxy_hacker') || selectedBU === 'oxy_hacker';
   const useFranquia = selectedBUs.includes('franquia') || selectedBU === 'franquia';
   
-  // Check if at least one BU is selected
-  const hasAnyBUSelected = useModeloAtual || useO2Tax || useOxyHacker || useFranquia;
+  // Check if at least one BU is selected and count active BUs
+  const activeBUs = [useModeloAtual, useO2Tax, useOxyHacker, useFranquia].filter(Boolean);
+  const hasAnyBUSelected = activeBUs.length > 0;
+  const isMultiBUMode = activeBUs.length > 1;
 
   // Determine chart grouping based on period length
   const grouping: ChartGrouping = useMemo(() => {
@@ -166,15 +196,13 @@ export function RevenueBreakdownChart({
     return { mrr, setup, pontual };
   };
 
-  // Get grouped monetary data aggregating all BUs
+  // Get grouped monetary data - returns different structure based on mode
   const getGroupedMonetaryData = useMemo(() => {
     if (!hasAnyBUSelected) {
-      return { data: [] as ChartDataPoint[] };
+      return { data: [], isMultiBU: false };
     }
 
-    const result: ChartDataPoint[] = [];
-
-    // Get Modelo Atual sales cards (fase === 'Ganho')
+    // Get sales cards for each BU
     const maSalesCards = maMovements.filter(m => m.fase === 'Ganho');
     const maFilteredCards = selectedClosers.length === 0 ? maSalesCards : 
       maSalesCards.filter(m => {
@@ -182,160 +210,206 @@ export function RevenueBreakdownChart({
         return analyticsCard && selectedClosers.includes(analyticsCard.closer?.trim() || '');
       });
 
-    // Get O2 TAX sales (cards that entered 'Ganho' phase)
     const o2SalesMovements = o2TaxMetas.movements.filter(m => m.fase === 'Ganho');
-    
-    // Get Franquia and Oxy Hacker sales
     const franquiaSalesMovements = franquiaMetas.movements.filter(m => m.fase === 'Ganho');
     const oxyHackerSalesMovements = oxyHackerMetas.movements.filter(m => m.fase === 'Ganho');
 
-    // Helper function to process sales for a period
-    const processPeriod = (periodStart: Date, periodEnd: Date) => {
+    // Helper function to process sales for a period - returns by-BU breakdown
+    const processPeriodByBU = (periodStart: Date, periodEnd: Date) => {
       const periodStartTime = new Date(periodStart.getFullYear(), periodStart.getMonth(), periodStart.getDate()).getTime();
       const periodEndTime = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate(), 23, 59, 59, 999).getTime();
 
-      let mrr = 0, setup = 0, pontual = 0;
-      const processedIds = new Set<string>();
+      const result = {
+        modelo_atual: { mrr: 0, setup: 0, pontual: 0, total: 0 },
+        o2_tax: { mrr: 0, setup: 0, pontual: 0, total: 0 },
+        oxy_hacker: { mrr: 0, setup: 0, pontual: 0, total: 0 },
+        franquia: { mrr: 0, setup: 0, pontual: 0, total: 0 },
+      };
 
       // Process Modelo Atual
       if (useModeloAtual) {
+        const seen = new Set<string>();
         for (const card of maFilteredCards) {
           const moveTime = card.dataEntrada.getTime();
-          if (moveTime >= periodStartTime && moveTime <= periodEndTime && !processedIds.has(`ma-${card.id}`)) {
-            processedIds.add(`ma-${card.id}`);
-            mrr += card.valorMRR;
-            setup += card.valorSetup;
-            pontual += card.valorPontual;
+          if (moveTime >= periodStartTime && moveTime <= periodEndTime && !seen.has(card.id)) {
+            seen.add(card.id);
+            result.modelo_atual.mrr += card.valorMRR;
+            result.modelo_atual.setup += card.valorSetup;
+            result.modelo_atual.pontual += card.valorPontual;
+            result.modelo_atual.total += card.valorMRR + card.valorSetup + card.valorPontual;
           }
         }
       }
 
       // Process O2 TAX
       if (useO2Tax) {
-        const o2Seen = new Set<string>();
+        const seen = new Set<string>();
         for (const mov of o2SalesMovements) {
           const moveTime = mov.dataEntrada.getTime();
-          if (moveTime >= periodStartTime && moveTime <= periodEndTime && !o2Seen.has(mov.id)) {
-            o2Seen.add(mov.id);
+          if (moveTime >= periodStartTime && moveTime <= periodEndTime && !seen.has(mov.id)) {
+            seen.add(mov.id);
             const values = getO2TaxCardValue(mov);
-            mrr += values.mrr;
-            setup += values.setup;
-            pontual += values.pontual;
+            result.o2_tax.mrr += values.mrr;
+            result.o2_tax.setup += values.setup;
+            result.o2_tax.pontual += values.pontual;
+            result.o2_tax.total += values.mrr + values.setup + values.pontual;
           }
         }
       }
 
       // Process Franquia
       if (useFranquia) {
-        const frSeen = new Set<string>();
+        const seen = new Set<string>();
         for (const mov of franquiaSalesMovements) {
           const moveTime = mov.dataEntrada.getTime();
-          if (moveTime >= periodStartTime && moveTime <= periodEndTime && !frSeen.has(mov.id)) {
-            frSeen.add(mov.id);
+          if (moveTime >= periodStartTime && moveTime <= periodEndTime && !seen.has(mov.id)) {
+            seen.add(mov.id);
             const values = getExpansaoCardValue(mov, 'franquia');
-            mrr += values.mrr;
-            setup += values.setup;
-            pontual += values.pontual;
+            result.franquia.mrr += values.mrr;
+            result.franquia.setup += values.setup;
+            result.franquia.pontual += values.pontual;
+            result.franquia.total += values.mrr + values.setup + values.pontual;
           }
         }
       }
 
       // Process Oxy Hacker
       if (useOxyHacker) {
-        const ohSeen = new Set<string>();
+        const seen = new Set<string>();
         for (const mov of oxyHackerSalesMovements) {
           const moveTime = mov.dataEntrada.getTime();
-          if (moveTime >= periodStartTime && moveTime <= periodEndTime && !ohSeen.has(mov.id)) {
-            ohSeen.add(mov.id);
+          if (moveTime >= periodStartTime && moveTime <= periodEndTime && !seen.has(mov.id)) {
+            seen.add(mov.id);
             const values = getExpansaoCardValue(mov, 'oxy_hacker');
-            mrr += values.mrr;
-            setup += values.setup;
-            pontual += values.pontual;
+            result.oxy_hacker.mrr += values.mrr;
+            result.oxy_hacker.setup += values.setup;
+            result.oxy_hacker.pontual += values.pontual;
+            result.oxy_hacker.total += values.mrr + values.setup + values.pontual;
           }
         }
       }
 
-      return { mrr, setup, pontual };
+      return result;
     };
 
-    if (grouping === 'daily') {
-      const days = eachDayOfInterval({ start: startDate, end: endDate });
-      for (const day of days) {
-        const values = processPeriod(day, day);
-        result.push({
-          label: format(day, 'd', { locale: ptBR }),
-          mrr: values.mrr,
-          setup: values.setup,
-          pontual: values.pontual,
-          total: values.mrr + values.setup + values.pontual,
-          meta: calcularMetaDoPeriodo(day, day),
-          startDate: day,
-          endDate: day,
-        });
-      }
-    } else if (grouping === 'weekly') {
-      const totalDays = differenceInDays(endDate, startDate) + 1;
-      const numWeeks = Math.ceil(totalDays / 7);
+    // Generate periods based on grouping
+    const generatePeriods = () => {
+      const periods: { label: string; start: Date; end: Date }[] = [];
+      
+      if (grouping === 'daily') {
+        const days = eachDayOfInterval({ start: startDate, end: endDate });
+        for (const day of days) {
+          periods.push({
+            label: format(day, 'd', { locale: ptBR }),
+            start: day,
+            end: day,
+          });
+        }
+      } else if (grouping === 'weekly') {
+        const totalDays = differenceInDays(endDate, startDate) + 1;
+        const numWeeks = Math.ceil(totalDays / 7);
 
-      for (let i = 0; i < numWeeks; i++) {
-        const weekStart = addDays(startDate, i * 7);
-        const weekEnd = i === numWeeks - 1 ? endDate : addDays(weekStart, 6);
-        const values = processPeriod(weekStart, weekEnd);
-
-        result.push({
-          label: `S${i + 1}`,
-          mrr: values.mrr,
-          setup: values.setup,
-          pontual: values.pontual,
-          total: values.mrr + values.setup + values.pontual,
-          meta: calcularMetaDoPeriodo(weekStart, weekEnd),
-          startDate: weekStart,
-          endDate: weekEnd,
-        });
+        for (let i = 0; i < numWeeks; i++) {
+          const weekStart = addDays(startDate, i * 7);
+          const weekEnd = i === numWeeks - 1 ? endDate : addDays(weekStart, 6);
+          periods.push({
+            label: `S${i + 1}`,
+            start: weekStart,
+            end: weekEnd,
+          });
+        }
+      } else {
+        const months = eachMonthOfInterval({ start: startDate, end: endDate });
+        for (const monthDate of months) {
+          const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+          const lastDay = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+          periods.push({
+            label: format(monthDate, 'MMM', { locale: ptBR }),
+            start: monthStart,
+            end: lastDay,
+          });
+        }
       }
+      
+      return periods;
+    };
+
+    const periods = generatePeriods();
+
+    if (isMultiBUMode) {
+      // Multi-BU mode: breakdown by business unit
+      const result: MultiBuChartDataPoint[] = periods.map(period => {
+        const buData = processPeriodByBU(period.start, period.end);
+        return {
+          label: period.label,
+          modelo_atual: buData.modelo_atual.total,
+          o2_tax: buData.o2_tax.total,
+          oxy_hacker: buData.oxy_hacker.total,
+          franquia: buData.franquia.total,
+          total: buData.modelo_atual.total + buData.o2_tax.total + buData.oxy_hacker.total + buData.franquia.total,
+          meta: calcularMetaDoPeriodo(period.start, period.end),
+          startDate: period.start,
+          endDate: period.end,
+        };
+      });
+      return { data: result, isMultiBU: true };
     } else {
-      // Monthly
-      const months = eachMonthOfInterval({ start: startDate, end: endDate });
-      for (const monthDate of months) {
-        const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-        const lastDay = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
-        const values = processPeriod(monthStart, lastDay);
-
-        result.push({
-          label: format(monthDate, 'MMM', { locale: ptBR }),
-          mrr: values.mrr,
-          setup: values.setup,
-          pontual: values.pontual,
-          total: values.mrr + values.setup + values.pontual,
-          meta: calcularMetaDoPeriodo(monthStart, lastDay),
-          startDate: monthStart,
-          endDate: lastDay,
-        });
-      }
+      // Single-BU mode: breakdown by revenue type
+      const result: SingleBuChartDataPoint[] = periods.map(period => {
+        const buData = processPeriodByBU(period.start, period.end);
+        // Sum all active BUs (should be just one in single mode)
+        const mrr = buData.modelo_atual.mrr + buData.o2_tax.mrr + buData.oxy_hacker.mrr + buData.franquia.mrr;
+        const setup = buData.modelo_atual.setup + buData.o2_tax.setup + buData.oxy_hacker.setup + buData.franquia.setup;
+        const pontual = buData.modelo_atual.pontual + buData.o2_tax.pontual + buData.oxy_hacker.pontual + buData.franquia.pontual;
+        
+        return {
+          label: period.label,
+          mrr,
+          setup,
+          pontual,
+          total: mrr + setup + pontual,
+          meta: calcularMetaDoPeriodo(period.start, period.end),
+          startDate: period.start,
+          endDate: period.end,
+        };
+      });
+      return { data: result, isMultiBU: false };
     }
-
-    return { data: result };
   }, [
-    hasAnyBUSelected, useModeloAtual, useO2Tax, useOxyHacker, useFranquia,
+    hasAnyBUSelected, isMultiBUMode, useModeloAtual, useO2Tax, useOxyHacker, useFranquia,
     maMovements, modeloAtualAnalytics.cards, selectedClosers,
     o2TaxMetas.movements, franquiaMetas.movements, oxyHackerMetas.movements,
     grouping, startDate, endDate, metasPorBU
   ]);
 
-  // Calculate totals
+  // Calculate totals based on mode
   const totals = useMemo(() => {
-    const data = getGroupedMonetaryData.data;
-    return {
-      mrr: data.reduce((sum, d) => sum + d.mrr, 0),
-      setup: data.reduce((sum, d) => sum + d.setup, 0),
-      pontual: data.reduce((sum, d) => sum + d.pontual, 0),
-      total: data.reduce((sum, d) => sum + d.total, 0),
-      meta: data.reduce((sum, d) => sum + d.meta, 0),
-    };
+    const { data, isMultiBU } = getGroupedMonetaryData;
+    
+    if (isMultiBU) {
+      const multiBuData = data as MultiBuChartDataPoint[];
+      return {
+        modelo_atual: multiBuData.reduce((sum, d) => sum + d.modelo_atual, 0),
+        o2_tax: multiBuData.reduce((sum, d) => sum + d.o2_tax, 0),
+        oxy_hacker: multiBuData.reduce((sum, d) => sum + d.oxy_hacker, 0),
+        franquia: multiBuData.reduce((sum, d) => sum + d.franquia, 0),
+        total: multiBuData.reduce((sum, d) => sum + d.total, 0),
+        meta: multiBuData.reduce((sum, d) => sum + d.meta, 0),
+      };
+    } else {
+      const singleBuData = data as SingleBuChartDataPoint[];
+      return {
+        mrr: singleBuData.reduce((sum, d) => sum + d.mrr, 0),
+        setup: singleBuData.reduce((sum, d) => sum + d.setup, 0),
+        pontual: singleBuData.reduce((sum, d) => sum + d.pontual, 0),
+        total: singleBuData.reduce((sum, d) => sum + d.total, 0),
+        meta: singleBuData.reduce((sum, d) => sum + d.meta, 0),
+      };
+    }
   }, [getGroupedMonetaryData]);
 
   // Handle bar click for drill-down
-  const handleBarClick = (data: ChartDataPoint) => {
+  const handleBarClick = (data: any) => {
     const periodStart = data.startDate.getTime();
     const periodEnd = new Date(data.endDate.getFullYear(), data.endDate.getMonth(), data.endDate.getDate(), 23, 59, 59, 999).getTime();
 
@@ -448,12 +522,19 @@ export function RevenueBreakdownChart({
     }
 
     setDetailTitle(`Faturamento - ${data.label}`);
-    setDetailDescription(`Vendas realizadas no período (MRR + Setup + Pontual)`);
+    setDetailDescription(`Vendas realizadas no período`);
     setDetailItems(allItems);
     setDetailOpen(true);
   };
 
-  const detailColumns = [
+  // Determine columns based on mode
+  const detailColumns = isMultiBUMode ? [
+    { key: 'product' as keyof DetailItem, label: 'Produto', format: columnFormatters.product },
+    { key: 'company' as keyof DetailItem, label: 'Empresa/Contato' },
+    { key: 'date' as keyof DetailItem, label: 'Data', format: columnFormatters.date },
+    { key: 'value' as keyof DetailItem, label: 'Valor', format: columnFormatters.currency },
+    { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
+  ] : [
     { key: 'product' as keyof DetailItem, label: 'Produto', format: columnFormatters.product },
     { key: 'company' as keyof DetailItem, label: 'Empresa/Contato' },
     { key: 'date' as keyof DetailItem, label: 'Data', format: columnFormatters.date },
@@ -464,10 +545,20 @@ export function RevenueBreakdownChart({
     { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
   ];
 
+  // Get selected BU keys for multi-BU mode
+  const selectedBUKeys = [
+    useModeloAtual && 'modelo_atual',
+    useO2Tax && 'o2_tax',
+    useOxyHacker && 'oxy_hacker',
+    useFranquia && 'franquia',
+  ].filter(Boolean) as string[];
+
   // Don't render if no BU is selected
   if (!hasAnyBUSelected) {
     return null;
   }
+
+  const { isMultiBU } = getGroupedMonetaryData;
 
   return (
     <>
@@ -481,10 +572,13 @@ export function RevenueBreakdownChart({
               <div className="p-2 bg-green-500/10 rounded-lg">
                 <DollarSign className="h-5 w-5 text-green-500" />
               </div>
-              <CardTitle className="text-base font-semibold text-foreground">Faturamento por Período</CardTitle>
+              <CardTitle className="text-base font-semibold text-foreground">
+                Faturamento por Período
+                {isMultiBU && <span className="text-xs text-muted-foreground ml-2">(Consolidado)</span>}
+              </CardTitle>
             </div>
           </div>
-          {/* Summary totals */}
+          {/* Summary totals - dynamic based on mode */}
           <div className="flex flex-wrap items-center gap-4 mt-3 text-sm">
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">Total:</span>
@@ -495,21 +589,35 @@ export function RevenueBreakdownChart({
               <span className="text-muted-foreground">Meta:</span>
               <span className="font-medium text-green-500">{formatCompactCurrency(totals.meta)}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-sm bg-blue-500" />
-              <span className="text-muted-foreground">MRR:</span>
-              <span className="font-medium">{formatCompactCurrency(totals.mrr)}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-sm bg-orange-500" />
-              <span className="text-muted-foreground">Setup:</span>
-              <span className="font-medium">{formatCompactCurrency(totals.setup)}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-sm bg-purple-500" />
-              <span className="text-muted-foreground">Pontual:</span>
-              <span className="font-medium">{formatCompactCurrency(totals.pontual)}</span>
-            </div>
+            {isMultiBU ? (
+              // Multi-BU mode: show totals per BU
+              selectedBUKeys.map(bu => (
+                <div key={bu} className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: BU_COLORS[bu] }} />
+                  <span className="text-muted-foreground">{BU_LABELS[bu]}:</span>
+                  <span className="font-medium">{formatCompactCurrency((totals as any)[bu] || 0)}</span>
+                </div>
+              ))
+            ) : (
+              // Single-BU mode: show MRR/Setup/Pontual
+              <>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-sm bg-blue-500" />
+                  <span className="text-muted-foreground">MRR:</span>
+                  <span className="font-medium">{formatCompactCurrency((totals as any).mrr || 0)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-sm bg-orange-500" />
+                  <span className="text-muted-foreground">Setup:</span>
+                  <span className="font-medium">{formatCompactCurrency((totals as any).setup || 0)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-sm bg-purple-500" />
+                  <span className="text-muted-foreground">Pontual:</span>
+                  <span className="font-medium">{formatCompactCurrency((totals as any).pontual || 0)}</span>
+                </div>
+              </>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -542,41 +650,92 @@ export function RevenueBreakdownChart({
                   }}
                   formatter={(value: number, name: string) => [
                     formatCompactCurrency(value),
-                    name === 'mrr' ? 'MRR' : name === 'setup' ? 'Setup' : name === 'pontual' ? 'Pontual' : 'Meta'
+                    isMultiBU ? BU_LABELS[name] || name : 
+                      name === 'mrr' ? 'MRR' : name === 'setup' ? 'Setup' : name === 'pontual' ? 'Pontual' : 'Meta'
                   ]}
                   labelFormatter={(label) => `Período: ${label}`}
                 />
                 <Legend 
                   formatter={(value) => (
                     <span style={{ color: 'hsl(var(--foreground))' }}>
-                      {value === 'mrr' ? 'MRR' : value === 'setup' ? 'Setup' : value === 'pontual' ? 'Pontual' : 'Meta'}
+                      {isMultiBU ? BU_LABELS[value] || value :
+                        value === 'mrr' ? 'MRR' : value === 'setup' ? 'Setup' : value === 'pontual' ? 'Pontual' : 'Meta'}
                     </span>
                   )}
                 />
-                <Bar 
-                  dataKey="mrr" 
-                  stackId="revenue" 
-                  fill="#3b82f6" 
-                  name="mrr" 
-                  radius={[0, 0, 0, 0]}
-                  className="cursor-pointer"
-                />
-                <Bar 
-                  dataKey="setup" 
-                  stackId="revenue" 
-                  fill="#f97316" 
-                  name="setup" 
-                  radius={[0, 0, 0, 0]}
-                  className="cursor-pointer"
-                />
-                <Bar 
-                  dataKey="pontual" 
-                  stackId="revenue" 
-                  fill="#8b5cf6" 
-                  name="pontual" 
-                  radius={[4, 4, 0, 0]}
-                  className="cursor-pointer"
-                />
+                {isMultiBU ? (
+                  // Multi-BU mode: bars per BU
+                  <>
+                    {useModeloAtual && (
+                      <Bar 
+                        dataKey="modelo_atual" 
+                        stackId="revenue" 
+                        fill={BU_COLORS.modelo_atual} 
+                        name="modelo_atual" 
+                        radius={[0, 0, 0, 0]}
+                        className="cursor-pointer"
+                      />
+                    )}
+                    {useO2Tax && (
+                      <Bar 
+                        dataKey="o2_tax" 
+                        stackId="revenue" 
+                        fill={BU_COLORS.o2_tax} 
+                        name="o2_tax" 
+                        radius={[0, 0, 0, 0]}
+                        className="cursor-pointer"
+                      />
+                    )}
+                    {useOxyHacker && (
+                      <Bar 
+                        dataKey="oxy_hacker" 
+                        stackId="revenue" 
+                        fill={BU_COLORS.oxy_hacker} 
+                        name="oxy_hacker" 
+                        radius={[0, 0, 0, 0]}
+                        className="cursor-pointer"
+                      />
+                    )}
+                    {useFranquia && (
+                      <Bar 
+                        dataKey="franquia" 
+                        stackId="revenue" 
+                        fill={BU_COLORS.franquia} 
+                        name="franquia" 
+                        radius={[4, 4, 0, 0]}
+                        className="cursor-pointer"
+                      />
+                    )}
+                  </>
+                ) : (
+                  // Single-BU mode: MRR/Setup/Pontual bars
+                  <>
+                    <Bar 
+                      dataKey="mrr" 
+                      stackId="revenue" 
+                      fill="#3b82f6" 
+                      name="mrr" 
+                      radius={[0, 0, 0, 0]}
+                      className="cursor-pointer"
+                    />
+                    <Bar 
+                      dataKey="setup" 
+                      stackId="revenue" 
+                      fill="#f97316" 
+                      name="setup" 
+                      radius={[0, 0, 0, 0]}
+                      className="cursor-pointer"
+                    />
+                    <Bar 
+                      dataKey="pontual" 
+                      stackId="revenue" 
+                      fill="#8b5cf6" 
+                      name="pontual" 
+                      radius={[4, 4, 0, 0]}
+                      className="cursor-pointer"
+                    />
+                  </>
+                )}
                 <Line 
                   type="monotone" 
                   dataKey="meta" 
