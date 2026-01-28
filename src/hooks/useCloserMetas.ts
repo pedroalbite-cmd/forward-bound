@@ -18,6 +18,24 @@ export type BuType = typeof BUS[number];
 export type MonthType = typeof MONTHS[number];
 export type CloserType = typeof CLOSERS[number];
 
+// Mapeamento de closers por BU - define quais closers atuam em cada unidade de negócio
+export const BU_CLOSERS: Record<BuType, readonly CloserType[]> = {
+  modelo_atual: ['Pedro Albite', 'Daniel Trindade'],
+  o2_tax: ['Lucas Ilha'],
+  oxy_hacker: ['Pedro Albite', 'Daniel Trindade'],
+  franquia: ['Pedro Albite', 'Daniel Trindade'],
+} as const;
+
+// Helper function to get closers for a specific BU
+export const getClosersForBU = (bu: BuType): readonly CloserType[] => {
+  return BU_CLOSERS[bu] || [];
+};
+
+// Helper function to check if a closer operates in a specific BU
+export const closerOperatesInBU = (closer: CloserType, bu: BuType): boolean => {
+  return BU_CLOSERS[bu]?.includes(closer) || false;
+};
+
 export function useCloserMetas(year: number = 2026) {
   const queryClient = useQueryClient();
 
