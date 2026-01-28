@@ -1,8 +1,16 @@
+import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+
+type SortDirection = 'none' | 'desc' | 'asc';
+
+interface SortState {
+  column: keyof DetailItem | null;
+  direction: SortDirection;
+}
 
 export interface DetailItem {
   id: string;
@@ -39,8 +47,68 @@ const formatCurrency = (value: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(value);
 
 export function DetailSheet({ open, onOpenChange, title, description, items, columns }: DetailSheetProps) {
+  const [sortState, setSortState] = useState<SortState>({ column: null, direction: 'none' });
+
+  const handleSort = (columnKey: keyof DetailItem) => {
+    setSortState(prev => {
+      if (prev.column !== columnKey) {
+        return { column: columnKey, direction: 'desc' };
+      }
+      if (prev.direction === 'desc') {
+        return { column: columnKey, direction: 'asc' };
+      }
+      if (prev.direction === 'asc') {
+        return { column: null, direction: 'none' };
+      }
+      return { column: columnKey, direction: 'desc' };
+    });
+  };
+
+  const sortedItems = useMemo(() => {
+    if (!sortState.column || sortState.direction === 'none') {
+      return items;
+    }
+
+    return [...items].sort((a, b) => {
+      const aVal = a[sortState.column!];
+      const bVal = b[sortState.column!];
+
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
+
+      let comparison = 0;
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        comparison = aVal - bVal;
+      } else if (typeof aVal === 'string' && typeof bVal === 'string') {
+        comparison = aVal.localeCompare(bVal, 'pt-BR');
+      } else {
+        comparison = String(aVal).localeCompare(String(bVal), 'pt-BR');
+      }
+
+      return sortState.direction === 'desc' ? -comparison : comparison;
+    });
+  }, [items, sortState]);
+
+  const handleOpenChange = (isOpen: boolean) => {
+    if (!isOpen) {
+      setSortState({ column: null, direction: 'none' });
+    }
+    onOpenChange(isOpen);
+  };
+
+  const getSortIcon = (columnKey: keyof DetailItem) => {
+    if (sortState.column !== columnKey) {
+      return <ArrowUpDown className="h-3 w-3 ml-1 opacity-50" />;
+    }
+    if (sortState.direction === 'desc') {
+      return <ArrowDown className="h-3 w-3 ml-1" />;
+    }
+    return <ArrowUp className="h-3 w-3 ml-1" />;
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-[90vw] w-[90vw] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl">{title}</DialogTitle>
@@ -51,7 +119,7 @@ export function DetailSheet({ open, onOpenChange, title, description, items, col
         <div className="flex-1 overflow-hidden flex flex-col mt-4">
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm text-muted-foreground">
-              {items.length} {items.length === 1 ? 'registro' : 'registros'}
+              {sortedItems.length} {sortedItems.length === 1 ? 'registro' : 'registros'}
             </span>
           </div>
           <ScrollArea className="h-[calc(90vh-180px)]">
@@ -59,20 +127,29 @@ export function DetailSheet({ open, onOpenChange, title, description, items, col
               <TableHeader>
                 <TableRow>
                   {columns.map((col) => (
-                    <TableHead key={col.key}>{col.label}</TableHead>
+                    <TableHead 
+                      key={col.key}
+                      className="cursor-pointer hover:bg-muted/50 select-none transition-colors"
+                      onClick={() => handleSort(col.key)}
+                    >
+                      <div className="flex items-center">
+                        {col.label}
+                        {getSortIcon(col.key)}
+                      </div>
+                    </TableHead>
                   ))}
                   <TableHead className="w-[60px] text-center">Pipefy</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.length === 0 ? (
+                {sortedItems.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={columns.length + 1} className="text-center text-muted-foreground py-8">
                       Nenhum registro encontrado
                     </TableCell>
                   </TableRow>
                 ) : (
-                  items.map((item) => (
+                  sortedItems.map((item) => (
                     <TableRow key={item.id}>
                       {columns.map((col) => (
                         <TableCell key={col.key}>
