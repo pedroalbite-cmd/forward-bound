@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useCloserMetas, BuType, MonthType, CloserType } from '@/hooks/useCloserMetas';
+import { useCloserMetas, BuType, MonthType, CloserType, BU_CLOSERS, getClosersForBU } from '@/hooks/useCloserMetas';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -47,10 +47,15 @@ export function CloserMetasTab() {
     }
   }, [metas]);
 
+  // Get closers valid for the selected BU
+  const validClosers = useMemo(() => {
+    return getClosersForBU(selectedBu);
+  }, [selectedBu]);
+
   // Get local percentage value
   const getLocalPercentage = (bu: string, month: string, closer: string): number => {
     const key = `${bu}-${month}-${closer}`;
-    return localMetas[key] ?? 50;
+    return localMetas[key] ?? (validClosers.length === 1 ? 100 : 50);
   };
 
   // Update local percentage
@@ -58,8 +63,17 @@ export function CloserMetasTab() {
     const key = `${bu}-${month}-${closer}`;
     const clampedValue = Math.max(0, Math.min(100, value));
     
+    // If only one closer for this BU, set to 100%
+    if (validClosers.length === 1) {
+      setLocalMetas(prev => ({
+        ...prev,
+        [key]: 100,
+      }));
+      return;
+    }
+    
     // Auto-adjust the other closer to maintain 100% total
-    const otherCloser = CLOSERS.find(c => c !== closer);
+    const otherCloser = validClosers.find(c => c !== closer);
     if (otherCloser) {
       const otherKey = `${bu}-${month}-${otherCloser}`;
       const otherValue = 100 - clampedValue;
@@ -81,18 +95,18 @@ export function CloserMetasTab() {
 
   // Calculate total for a month
   const getMonthTotal = (bu: string, month: string): number => {
-    return CLOSERS.reduce((sum, closer) => sum + getLocalPercentage(bu, month, closer), 0);
+    return validClosers.reduce((sum, closer) => sum + getLocalPercentage(bu, month, closer), 0);
   };
 
   // Check if all months have valid totals (100%)
   const allMonthsValid = useMemo(() => {
     return MONTHS.every(month => getMonthTotal(selectedBu, month) === 100);
-  }, [localMetas, selectedBu]);
+  }, [localMetas, selectedBu, validClosers]);
 
   // Save changes
   const handleSave = async () => {
     const updates = MONTHS.flatMap(month => 
-      CLOSERS.map(closer => ({
+      validClosers.map(closer => ({
         bu: selectedBu,
         month,
         closer,
@@ -211,7 +225,7 @@ export function CloserMetasTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {CLOSERS.map(closer => (
+                {validClosers.map(closer => (
                   <TableRow key={closer}>
                     <TableCell className="sticky left-0 bg-background z-10 font-medium">
                       {closer.split(' ')[0]}
@@ -231,6 +245,7 @@ export function CloserMetasTab() {
                               parseInt(e.target.value) || 0
                             )}
                             className="w-16 h-8 text-center text-sm"
+                            disabled={validClosers.length === 1}
                           />
                           <span className="text-muted-foreground ml-1 text-xs">%</span>
                         </div>
