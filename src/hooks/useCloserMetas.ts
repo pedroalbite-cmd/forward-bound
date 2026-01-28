@@ -59,13 +59,17 @@ export function useCloserMetas(year: number = 2026) {
 
   // Get percentage for a specific BU/month/closer
   const getPercentage = (bu: string, month: string, closer: string): number => {
-    if (!metas) return 50; // Default fallback
+    // Se BU tem apenas 1 closer, default é 100%
+    const closersForBU = BU_CLOSERS[bu as BuType] || [];
+    const defaultPercentage = closersForBU.length === 1 ? 100 : 50;
+    
+    if (!metas) return defaultPercentage;
     
     const meta = metas.find(m => 
       m.bu === bu && m.month === month && m.closer === closer
     );
     
-    return meta?.percentage ?? 50;
+    return meta?.percentage ?? defaultPercentage;
   };
 
   // Get filtered meta value based on selected closers
