@@ -1,99 +1,134 @@
 
 
-## Plano: Adicionar Lucas Ilha como Closer para O2 TAX
+## Plano: Corrigir Mapeamento de Closers por BU
 
 ### Contexto
 
-Atualmente, o filtro de closers nos Indicadores está limitado a **Pedro Albite** e **Daniel Trindade**, e a lógica de filtro só é aplicada ao **Modelo Atual**. O Lucas Ilha é o Tax Manager da O2 TAX e precisa ser incluído como opção de closer para essa BU.
+Atualmente, o sistema trata todos os closers (Pedro, Daniel, Lucas) como disponíveis para todas as BUs. Isso está **incorreto**:
+
+| Closer | BUs onde atua |
+|--------|---------------|
+| **Pedro Albite** | Modelo Atual, Oxy Hacker, Franquia |
+| **Daniel Trindade** | Modelo Atual, Oxy Hacker, Franquia |
+| **Lucas Ilha** | O2 TAX (exclusivo) |
 
 ---
 
-### Descobertas na Base de Dados
+### Problemas Identificados
 
-| Tabela | Campo | Status |
-|--------|-------|--------|
-| `pipefy_cards_movements` (O2 TAX) | `Closer responsável` | Existe, mas está `null` na maioria dos leads novos |
-| `closer_metas` | registros | Já tem Pedro e Daniel para todas as BUs (modelo_atual, o2_tax, oxy_hacker, franquia) |
-| `useCloserMetas.ts` | CLOSERS const | Hardcoded: `['Pedro Albite', 'Daniel Trindade']` |
-| `IndicatorsTab.tsx` | availableClosers | Hardcoded: Pedro e Daniel |
+1. **Banco de dados**: A tabela `closer_metas` tem registros de Pedro e Daniel para O2 TAX (incorreto)
+2. **Filtro de closers**: Mostra todos os 3 closers independente das BUs selecionadas
+3. **Lógica de meta e realizado**: Aplica filtro de closer mesmo quando o closer não atua na BU
 
 ---
 
-### Modificacoes Necessarias
+### Solução Proposta
 
-#### 1. Atualizar Hook useCloserMetas.ts
+#### 1. Limpar Dados Incorretos no Banco
 
-Adicionar Lucas Ilha à lista de closers:
-
-```typescript
-// Linha 15: adicionar Lucas
-const CLOSERS = ['Pedro Albite', 'Daniel Trindade', 'Lucas Ilha'] as const;
-```
-
-#### 2. Atualizar Filtro no IndicatorsTab.tsx
-
-Atualizar a lista de closers disponíveis para incluir Lucas:
-
-```typescript
-// Linhas 296-299: adicionar Lucas
-const availableClosers: MultiSelectOption[] = [
-  { value: 'Pedro Albite', label: 'Pedro' },
-  { value: 'Daniel Trindade', label: 'Daniel' },
-  { value: 'Lucas Ilha', label: 'Lucas' },
-];
-```
-
-#### 3. Estender Logica de Filtro para O2 TAX
-
-Atualmente o filtro de closer so afeta o Modelo Atual. Precisa estender para O2 TAX:
-
-**Arquivo:** `src/components/planning/IndicatorsTab.tsx`
-
-Na funcao `getRealizedForIndicator` (linhas 471-498):
-- Adicionar logica de filtro por closer para O2 TAX similar ao Modelo Atual
-
-Na funcao `getMetaForIndicator` (linhas 439-467):
-- Aplicar filtro de closer para O2 TAX (ja funciona pois usa `getFilteredMeta`)
-
-#### 4. Atualizar useO2TaxAnalytics.ts
-
-Garantir que o hook da O2 TAX extraia e exponha o campo `closer`:
-
-```typescript
-// Na linha 122: ja esta mapeando
-responsavel: row['Closer responsável'] || row['SDR responsável'] || null,
-```
-
-Adicionar campo `closer` especifico para filtragem (similar ao useModeloAtualAnalytics):
-
-```typescript
-// Adicionar campo closer separado
-closer: String(row['Closer responsável'] ?? '').trim(),
-```
-
-#### 5. Criar Registros para Lucas na closer_metas
-
-Adicionar registros iniciais (50% de alocacao) para Lucas Ilha na O2 TAX:
-
-**SQL para execucao via Cloud View:**
+Remover registros de Pedro e Daniel da O2 TAX:
 
 ```sql
--- Inserir registros para Lucas Ilha na O2 TAX (todos os meses de 2026)
-INSERT INTO closer_metas (bu, month, closer, percentage, year)
-VALUES 
-  ('o2_tax', 'Jan', 'Lucas Ilha', 50, 2026),
-  ('o2_tax', 'Fev', 'Lucas Ilha', 50, 2026),
-  ('o2_tax', 'Mar', 'Lucas Ilha', 50, 2026),
-  ('o2_tax', 'Abr', 'Lucas Ilha', 50, 2026),
-  ('o2_tax', 'Mai', 'Lucas Ilha', 50, 2026),
-  ('o2_tax', 'Jun', 'Lucas Ilha', 50, 2026),
-  ('o2_tax', 'Jul', 'Lucas Ilha', 50, 2026),
-  ('o2_tax', 'Ago', 'Lucas Ilha', 50, 2026),
-  ('o2_tax', 'Set', 'Lucas Ilha', 50, 2026),
-  ('o2_tax', 'Out', 'Lucas Ilha', 50, 2026),
-  ('o2_tax', 'Nov', 'Lucas Ilha', 50, 2026),
-  ('o2_tax', 'Dez', 'Lucas Ilha', 50, 2026)
-ON CONFLICT DO NOTHING;
+DELETE FROM closer_metas 
+WHERE bu = 'o2_tax' 
+  AND closer IN ('Pedro Albite', 'Daniel Trindade')
+  AND year = 2026;
+```
+
+#### 2. Definir Mapeamento BU → Closers
+
+Adicionar constante que define quais closers atuam em cada BU:
+
+**Arquivo:** `src/hooks/useCloserMetas.ts`
+
+```typescript
+// Mapeamento de closers por BU
+export const BU_CLOSERS: Record<BuType, readonly CloserType[]> = {
+  modelo_atual: ['Pedro Albite', 'Daniel Trindade'],
+  o2_tax: ['Lucas Ilha'],
+  oxy_hacker: ['Pedro Albite', 'Daniel Trindade'],
+  franquia: ['Pedro Albite', 'Daniel Trindade'],
+} as const;
+```
+
+#### 3. Filtro de Closers Dinâmico
+
+Atualizar `IndicatorsTab.tsx` para mostrar apenas closers relevantes para as BUs selecionadas:
+
+```typescript
+// Calcular closers disponíveis baseado nas BUs selecionadas
+const availableClosers = useMemo((): MultiSelectOption[] => {
+  const closersSet = new Set<string>();
+  
+  selectedBUs.forEach(bu => {
+    const buClosers = BU_CLOSERS[bu] || [];
+    buClosers.forEach(closer => closersSet.add(closer));
+  });
+  
+  const allClosers = [
+    { value: 'Pedro Albite', label: 'Pedro' },
+    { value: 'Daniel Trindade', label: 'Daniel' },
+    { value: 'Lucas Ilha', label: 'Lucas' },
+  ];
+  
+  return allClosers.filter(c => closersSet.has(c.value));
+}, [selectedBUs]);
+```
+
+#### 4. Lógica de Filtro por BU
+
+Atualizar `getRealizedForIndicator` e `getMetaForIndicator` para aplicar filtro de closer apenas quando o closer atua na BU:
+
+```typescript
+// Para Modelo Atual - aplicar filtro só se closer selecionado atua na BU
+if (includesModeloAtual) {
+  const closersForBU = selectedClosers.filter(c => 
+    BU_CLOSERS.modelo_atual.includes(c as CloserType)
+  );
+  
+  if (closersForBU.length > 0) {
+    // Filtrar por closer
+  } else if (selectedClosers.length > 0) {
+    // Closer selecionado não atua nesta BU - não contar nada
+    total += 0;
+  } else {
+    // Sem filtro - contar tudo
+    total += getModeloAtualQty(...);
+  }
+}
+
+// Para O2 TAX - aplicar filtro só se Lucas está selecionado
+if (includesO2Tax) {
+  const closersForBU = selectedClosers.filter(c => 
+    BU_CLOSERS.o2_tax.includes(c as CloserType)
+  );
+  
+  if (closersForBU.length > 0) {
+    // Filtrar por Lucas
+  } else if (selectedClosers.length > 0) {
+    // Pedro ou Daniel selecionados - não contar O2 TAX
+    total += 0;
+  } else {
+    // Sem filtro - contar tudo
+    total += getO2TaxQty(...);
+  }
+}
+```
+
+#### 5. Limpar Seleção ao Mudar BU
+
+Quando as BUs selecionadas mudam, limpar closers que não atuam nas novas BUs:
+
+```typescript
+useEffect(() => {
+  const validClosers = selectedClosers.filter(closer => {
+    return selectedBUs.some(bu => BU_CLOSERS[bu]?.includes(closer as CloserType));
+  });
+  
+  if (validClosers.length !== selectedClosers.length) {
+    setSelectedClosers(validClosers);
+  }
+}, [selectedBUs]);
 ```
 
 ---
@@ -102,30 +137,50 @@ ON CONFLICT DO NOTHING;
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `src/hooks/useCloserMetas.ts` | Modificar | Adicionar 'Lucas Ilha' à const CLOSERS |
-| `src/hooks/useO2TaxAnalytics.ts` | Modificar | Adicionar campo `closer` separado para filtragem |
-| `src/components/planning/IndicatorsTab.tsx` | Modificar | Adicionar Lucas aos availableClosers e estender lógica de filtro para O2 TAX |
+| `src/hooks/useCloserMetas.ts` | Modificar | Adicionar constante `BU_CLOSERS` com mapeamento |
+| `src/components/planning/IndicatorsTab.tsx` | Modificar | Filtro dinâmico de closers + lógica de aplicação por BU |
+| `src/components/planning/CloserMetasTab.tsx` | Modificar | Mostrar apenas closers válidos para a BU selecionada |
+| **Banco de dados** | SQL | Remover registros incorretos (Pedro/Daniel na O2 TAX) |
 
 ---
 
-### Comportamento Esperado Apos Implementacao
+### Comportamento Esperado
 
-1. **Filtro de Closers** mostrara 3 opcoes: Pedro, Daniel, Lucas
-2. **Ao selecionar Lucas**:
-   - Para **O2 TAX**: filtra registros onde `Closer responsável = 'Lucas Ilha'`
-   - Para **Modelo Atual**: Lucas nao tera efeito (ele nao trabalha nessa BU)
-3. **Metas ajustadas** conforme percentuais configurados no Admin > Metas por Closer
-4. **Radial gauges, graficos e funil** refletirao os dados filtrados por closer
+| Cenário | Closers no Filtro | Resultado |
+|---------|-------------------|-----------|
+| Só **Modelo Atual** selecionado | Pedro, Daniel | Filtra por closer selecionado |
+| Só **O2 TAX** selecionado | Lucas | Filtra por Lucas |
+| **Consolidado** (todas BUs) | Pedro, Daniel, Lucas | Filtra dados de cada BU pelo closer que atua nela |
+| Modelo Atual + O2 TAX | Pedro, Daniel, Lucas | Cada BU filtrada pelo closer que atua nela |
+| Seleciona **Lucas** com Modelo Atual | Lucas aparece mas não tem dados | Modelo Atual mostra 0 |
 
 ---
 
-### Observacao Importante
+### Resumo Visual
 
-Os dados atuais da tabela `pipefy_cards_movements` mostram "Closer responsável" como `null` para leads recentes. O campo provavelmente so e preenchido quando o card avanca para fases mais avançadas do funil (RM, RR, Proposta). Isso significa que o filtro por Lucas tera efeito principalmente em:
-- Reunioes Agendadas (RM)
-- Reunioes Realizadas (RR)
-- Propostas
-- Vendas
-
-Leads iniciais podem nao ter closer atribuido ainda.
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│  ANTES                                                                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                   │
+│  │ Pedro        │  │ Daniel       │  │ Lucas        │  (sempre visíveis)│
+│  └──────────────┘  └──────────────┘  └──────────────┘                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│  DEPOIS                                                                  │
+│                                                                          │
+│  BU Selecionada: Modelo Atual                                           │
+│  ┌──────────────┐  ┌──────────────┐                                     │
+│  │ Pedro        │  │ Daniel       │  (Lucas não aparece)                │
+│  └──────────────┘  └──────────────┘                                     │
+│                                                                          │
+│  BU Selecionada: O2 TAX                                                 │
+│  ┌──────────────┐                                                        │
+│  │ Lucas        │  (Pedro e Daniel não aparecem)                        │
+│  └──────────────┘                                                        │
+│                                                                          │
+│  BU Selecionada: Consolidado                                            │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                   │
+│  │ Pedro        │  │ Daniel       │  │ Lucas        │  (todos aparecem) │
+│  └──────────────┘  └──────────────┘  └──────────────┘                   │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
