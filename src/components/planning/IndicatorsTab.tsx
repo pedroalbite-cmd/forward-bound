@@ -811,7 +811,9 @@ export function IndicatorsTab() {
     if (indicatorKey === 'proposta' || indicatorKey === 'venda') {
       return [
         ...baseColumns,
-        { key: 'value' as keyof DetailItem, label: 'Valor', format: columnFormatters.currency },
+        { key: 'mrr' as keyof DetailItem, label: 'MRR', format: columnFormatters.currency },
+        { key: 'setup' as keyof DetailItem, label: 'Setup', format: columnFormatters.currency },
+        { key: 'pontual' as keyof DetailItem, label: 'Pontual', format: columnFormatters.currency },
         { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
       ];
     }

@@ -217,6 +217,9 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
     responsible: card.responsavel || undefined,
     duration: card.duracao,
     product: card.produto, // Franquia or Oxy Hacker
+    mrr: card.valorMRR,
+    setup: card.valorSetup,
+    pontual: card.valorPontual,
   });
 
   // Get detail items for an indicator

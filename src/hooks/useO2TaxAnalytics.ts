@@ -541,6 +541,9 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     closer: card.closer || undefined,
     duration: card.duracao,
     product: 'O2 TAX',
+    mrr: card.valorMRR,
+    setup: card.valorSetup,
+    pontual: card.valorPontual,
   });
 
   return {
