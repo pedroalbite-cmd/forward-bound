@@ -4,6 +4,11 @@ import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, ResponsiveContai
 import { DollarSign, ExternalLink } from "lucide-react";
 import { useModeloAtualMetas, ChartGrouping } from "@/hooks/useModeloAtualMetas";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
+import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
+import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
+import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
+import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
+import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { differenceInDays, eachDayOfInterval, eachMonthOfInterval, addDays, format, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { BUType } from "@/hooks/useFunnelRealized";
@@ -39,6 +44,13 @@ const formatCompactCurrency = (value: number): string => {
   return `R$ ${Math.round(value)}`;
 };
 
+// Default ticket values by BU
+const DEFAULT_TICKETS = {
+  o2_tax: 15000,
+  oxy_hacker: 54000,
+  franquia: 140000,
+};
+
 export function RevenueBreakdownChart({ 
   startDate, 
   endDate, 
@@ -52,12 +64,29 @@ export function RevenueBreakdownChart({
   const [detailItems, setDetailItems] = useState<DetailItem[]>([]);
 
   // Hooks for data retrieval
-  const { movements, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod } = useModeloAtualMetas(startDate, endDate);
+  const { movements: maMovements } = useModeloAtualMetas(startDate, endDate);
   const modeloAtualAnalytics = useModeloAtualAnalytics(startDate, endDate);
+  
+  // O2 TAX hooks
+  const o2TaxMetas = useO2TaxMetas(startDate, endDate);
+  const o2TaxAnalytics = useO2TaxAnalytics(startDate, endDate);
+  
+  // Expansion hooks
+  const franquiaMetas = useExpansaoMetas(startDate, endDate);
+  const oxyHackerMetas = useOxyHackerMetas(startDate, endDate);
+  const franquiaAnalytics = useExpansaoAnalytics(startDate, endDate, 'Franquia');
+  const oxyHackerAnalytics = useExpansaoAnalytics(startDate, endDate, 'Oxy Hacker');
+  
   const { metasPorBU } = useMediaMetas();
 
   // Check which BUs are selected
   const useModeloAtual = selectedBUs.includes('modelo_atual') || selectedBU === 'modelo_atual';
+  const useO2Tax = selectedBUs.includes('o2_tax') || selectedBU === 'o2_tax';
+  const useOxyHacker = selectedBUs.includes('oxy_hacker') || selectedBU === 'oxy_hacker';
+  const useFranquia = selectedBUs.includes('franquia') || selectedBU === 'franquia';
+  
+  // Check if at least one BU is selected
+  const hasAnyBUSelected = useModeloAtual || useO2Tax || useOxyHacker || useFranquia;
 
   // Determine chart grouping based on period length
   const grouping: ChartGrouping = useMemo(() => {
@@ -67,81 +96,178 @@ export function RevenueBreakdownChart({
     return 'monthly';
   }, [startDate, endDate]);
 
-  // Filter cards by closer if needed
-  const filterByCloser = (cards: any[]) => {
-    if (selectedClosers.length === 0) return cards;
-    return cards.filter(card => selectedClosers.includes(card.closer?.trim() || ''));
-  };
-
-  // Calculate pro-rated meta for a period
+  // Calculate pro-rated meta for a period for specific BUs
   const calcularMetaDoPeriodo = (start: Date, end: Date): number => {
-    if (!metasPorBU || !useModeloAtual) return 0;
+    if (!metasPorBU) return 0;
     
-    const metas = metasPorBU.modelo_atual;
-    if (!metas || Object.keys(metas).length === 0) return 0;
-    
-    const monthsInPeriod = eachMonthOfInterval({ start, end });
     let total = 0;
     
-    for (const monthDate of monthsInPeriod) {
-      const monthName = format(monthDate, 'MMM', { locale: ptBR });
-      const monthMeta = metas[monthName] || 0;
+    const busToCheck = [
+      { key: 'modelo_atual', active: useModeloAtual },
+      { key: 'o2_tax', active: useO2Tax },
+      { key: 'oxy_hacker', active: useOxyHacker },
+      { key: 'franquia', active: useFranquia },
+    ];
+    
+    for (const bu of busToCheck) {
+      if (!bu.active) continue;
       
-      const monthStartDate = startOfMonth(monthDate);
-      const monthEndDate = endOfMonth(monthDate);
-      const overlapStart = start > monthStartDate ? start : monthStartDate;
-      const overlapEnd = end < monthEndDate ? end : monthEndDate;
-      const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
-      const daysInMonth = differenceInDays(monthEndDate, monthStartDate) + 1;
+      const metas = metasPorBU[bu.key as keyof typeof metasPorBU];
+      if (!metas || Object.keys(metas).length === 0) continue;
       
-      total += monthMeta * (overlapDays / daysInMonth);
+      const monthsInPeriod = eachMonthOfInterval({ start, end });
+      
+      for (const monthDate of monthsInPeriod) {
+        const monthName = format(monthDate, 'MMM', { locale: ptBR });
+        const monthMeta = metas[monthName] || 0;
+        
+        const monthStartDate = startOfMonth(monthDate);
+        const monthEndDate = endOfMonth(monthDate);
+        const overlapStart = start > monthStartDate ? start : monthStartDate;
+        const overlapEnd = end < monthEndDate ? end : monthEndDate;
+        const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
+        const daysInMonth = differenceInDays(monthEndDate, monthStartDate) + 1;
+        
+        total += monthMeta * (overlapDays / daysInMonth);
+      }
     }
     
     return total;
   };
 
-  // Get grouped monetary data for Modelo Atual
+  // Helper to get value for a card considering its BU
+  const getO2TaxCardValue = (movement: any): { mrr: number; setup: number; pontual: number } => {
+    const mrr = movement.valorMRR || 0;
+    const setup = movement.valorSetup || 0;
+    const pontual = movement.valorPontual || 0;
+    const sum = mrr + setup + pontual;
+    
+    // If no values, use default ticket
+    if (sum === 0) {
+      return { mrr: 0, setup: 0, pontual: DEFAULT_TICKETS.o2_tax };
+    }
+    return { mrr, setup, pontual };
+  };
+
+  const getExpansaoCardValue = (movement: any, buType: 'oxy_hacker' | 'franquia'): { mrr: number; setup: number; pontual: number } => {
+    const taxaFranquia = movement.taxaFranquia || 0;
+    if (taxaFranquia > 0) {
+      return { mrr: 0, setup: 0, pontual: taxaFranquia };
+    }
+    
+    const mrr = movement.valorMRR || 0;
+    const setup = movement.valorSetup || 0;
+    const pontual = movement.valorPontual || 0;
+    const sum = mrr + setup + pontual;
+    
+    if (sum === 0) {
+      return { mrr: 0, setup: 0, pontual: DEFAULT_TICKETS[buType] };
+    }
+    return { mrr, setup, pontual };
+  };
+
+  // Get grouped monetary data aggregating all BUs
   const getGroupedMonetaryData = useMemo(() => {
-    if (!useModeloAtual || movements.length === 0) {
+    if (!hasAnyBUSelected) {
       return { data: [] as ChartDataPoint[] };
     }
 
     const result: ChartDataPoint[] = [];
 
-    // Filter cards by 'Ganho' phase (venda) for monetary values
-    const salesCards = movements.filter(m => m.fase === 'Ganho');
-    const filteredCards = selectedClosers.length === 0 ? salesCards : 
-      salesCards.filter(m => {
-        // We need to match by card ID with analytics data for closer info
+    // Get Modelo Atual sales cards (fase === 'Ganho')
+    const maSalesCards = maMovements.filter(m => m.fase === 'Ganho');
+    const maFilteredCards = selectedClosers.length === 0 ? maSalesCards : 
+      maSalesCards.filter(m => {
         const analyticsCard = modeloAtualAnalytics.cards.find(c => c.id === m.id);
         return analyticsCard && selectedClosers.includes(analyticsCard.closer?.trim() || '');
       });
 
-    if (grouping === 'daily') {
-      const days = eachDayOfInterval({ start: startDate, end: endDate });
-      for (const day of days) {
-        const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
-        const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59, 999).getTime();
+    // Get O2 TAX sales (cards that entered 'Ganho' phase)
+    const o2SalesMovements = o2TaxMetas.movements.filter(m => m.fase === 'Ganho');
+    
+    // Get Franquia and Oxy Hacker sales
+    const franquiaSalesMovements = franquiaMetas.movements.filter(m => m.fase === 'Ganho');
+    const oxyHackerSalesMovements = oxyHackerMetas.movements.filter(m => m.fase === 'Ganho');
 
-        let mrr = 0, setup = 0, pontual = 0;
-        const cardIds = new Set<string>();
+    // Helper function to process sales for a period
+    const processPeriod = (periodStart: Date, periodEnd: Date) => {
+      const periodStartTime = new Date(periodStart.getFullYear(), periodStart.getMonth(), periodStart.getDate()).getTime();
+      const periodEndTime = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate(), 23, 59, 59, 999).getTime();
 
-        for (const card of filteredCards) {
+      let mrr = 0, setup = 0, pontual = 0;
+      const processedIds = new Set<string>();
+
+      // Process Modelo Atual
+      if (useModeloAtual) {
+        for (const card of maFilteredCards) {
           const moveTime = card.dataEntrada.getTime();
-          if (moveTime >= dayStart && moveTime <= dayEnd && !cardIds.has(card.id)) {
-            cardIds.add(card.id);
+          if (moveTime >= periodStartTime && moveTime <= periodEndTime && !processedIds.has(`ma-${card.id}`)) {
+            processedIds.add(`ma-${card.id}`);
             mrr += card.valorMRR;
             setup += card.valorSetup;
             pontual += card.valorPontual;
           }
         }
+      }
 
+      // Process O2 TAX
+      if (useO2Tax) {
+        const o2Seen = new Set<string>();
+        for (const mov of o2SalesMovements) {
+          const moveTime = mov.dataEntrada.getTime();
+          if (moveTime >= periodStartTime && moveTime <= periodEndTime && !o2Seen.has(mov.id)) {
+            o2Seen.add(mov.id);
+            const values = getO2TaxCardValue(mov);
+            mrr += values.mrr;
+            setup += values.setup;
+            pontual += values.pontual;
+          }
+        }
+      }
+
+      // Process Franquia
+      if (useFranquia) {
+        const frSeen = new Set<string>();
+        for (const mov of franquiaSalesMovements) {
+          const moveTime = mov.dataEntrada.getTime();
+          if (moveTime >= periodStartTime && moveTime <= periodEndTime && !frSeen.has(mov.id)) {
+            frSeen.add(mov.id);
+            const values = getExpansaoCardValue(mov, 'franquia');
+            mrr += values.mrr;
+            setup += values.setup;
+            pontual += values.pontual;
+          }
+        }
+      }
+
+      // Process Oxy Hacker
+      if (useOxyHacker) {
+        const ohSeen = new Set<string>();
+        for (const mov of oxyHackerSalesMovements) {
+          const moveTime = mov.dataEntrada.getTime();
+          if (moveTime >= periodStartTime && moveTime <= periodEndTime && !ohSeen.has(mov.id)) {
+            ohSeen.add(mov.id);
+            const values = getExpansaoCardValue(mov, 'oxy_hacker');
+            mrr += values.mrr;
+            setup += values.setup;
+            pontual += values.pontual;
+          }
+        }
+      }
+
+      return { mrr, setup, pontual };
+    };
+
+    if (grouping === 'daily') {
+      const days = eachDayOfInterval({ start: startDate, end: endDate });
+      for (const day of days) {
+        const values = processPeriod(day, day);
         result.push({
           label: format(day, 'd', { locale: ptBR }),
-          mrr,
-          setup,
-          pontual,
-          total: mrr + setup + pontual,
+          mrr: values.mrr,
+          setup: values.setup,
+          pontual: values.pontual,
+          total: values.mrr + values.setup + values.pontual,
           meta: calcularMetaDoPeriodo(day, day),
           startDate: day,
           endDate: day,
@@ -154,29 +280,14 @@ export function RevenueBreakdownChart({
       for (let i = 0; i < numWeeks; i++) {
         const weekStart = addDays(startDate, i * 7);
         const weekEnd = i === numWeeks - 1 ? endDate : addDays(weekStart, 6);
-
-        const weekStartTime = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate()).getTime();
-        const weekEndTime = new Date(weekEnd.getFullYear(), weekEnd.getMonth(), weekEnd.getDate(), 23, 59, 59, 999).getTime();
-
-        let mrr = 0, setup = 0, pontual = 0;
-        const cardIds = new Set<string>();
-
-        for (const card of filteredCards) {
-          const moveTime = card.dataEntrada.getTime();
-          if (moveTime >= weekStartTime && moveTime <= weekEndTime && !cardIds.has(card.id)) {
-            cardIds.add(card.id);
-            mrr += card.valorMRR;
-            setup += card.valorSetup;
-            pontual += card.valorPontual;
-          }
-        }
+        const values = processPeriod(weekStart, weekEnd);
 
         result.push({
           label: `S${i + 1}`,
-          mrr,
-          setup,
-          pontual,
-          total: mrr + setup + pontual,
+          mrr: values.mrr,
+          setup: values.setup,
+          pontual: values.pontual,
+          total: values.mrr + values.setup + values.pontual,
           meta: calcularMetaDoPeriodo(weekStart, weekEnd),
           startDate: weekStart,
           endDate: weekEnd,
@@ -188,29 +299,14 @@ export function RevenueBreakdownChart({
       for (const monthDate of months) {
         const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
         const lastDay = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
-        
-        const monthStartTime = monthStart.getTime();
-        const monthEndTime = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate(), 23, 59, 59, 999).getTime();
-
-        let mrr = 0, setup = 0, pontual = 0;
-        const cardIds = new Set<string>();
-
-        for (const card of filteredCards) {
-          const moveTime = card.dataEntrada.getTime();
-          if (moveTime >= monthStartTime && moveTime <= monthEndTime && !cardIds.has(card.id)) {
-            cardIds.add(card.id);
-            mrr += card.valorMRR;
-            setup += card.valorSetup;
-            pontual += card.valorPontual;
-          }
-        }
+        const values = processPeriod(monthStart, lastDay);
 
         result.push({
           label: format(monthDate, 'MMM', { locale: ptBR }),
-          mrr,
-          setup,
-          pontual,
-          total: mrr + setup + pontual,
+          mrr: values.mrr,
+          setup: values.setup,
+          pontual: values.pontual,
+          total: values.mrr + values.setup + values.pontual,
           meta: calcularMetaDoPeriodo(monthStart, lastDay),
           startDate: monthStart,
           endDate: lastDay,
@@ -219,7 +315,12 @@ export function RevenueBreakdownChart({
     }
 
     return { data: result };
-  }, [useModeloAtual, movements, modeloAtualAnalytics.cards, selectedClosers, grouping, startDate, endDate]);
+  }, [
+    hasAnyBUSelected, useModeloAtual, useO2Tax, useOxyHacker, useFranquia,
+    maMovements, modeloAtualAnalytics.cards, selectedClosers,
+    o2TaxMetas.movements, franquiaMetas.movements, oxyHackerMetas.movements,
+    grouping, startDate, endDate, metasPorBU
+  ]);
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -235,37 +336,120 @@ export function RevenueBreakdownChart({
 
   // Handle bar click for drill-down
   const handleBarClick = (data: ChartDataPoint) => {
-    if (!useModeloAtual) return;
-
-    const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
-    const filteredCards = selectedClosers.length === 0 ? salesCards :
-      salesCards.filter(card => selectedClosers.includes(card.closer?.trim() || ''));
-
     const periodStart = data.startDate.getTime();
     const periodEnd = new Date(data.endDate.getFullYear(), data.endDate.getMonth(), data.endDate.getDate(), 23, 59, 59, 999).getTime();
 
-    const periodCards = filteredCards.filter(card => {
-      const entryTime = card.dataEntrada.getTime();
-      return entryTime >= periodStart && entryTime <= periodEnd;
-    });
+    const allItems: DetailItem[] = [];
 
-    const detailItems: DetailItem[] = periodCards.map(card => ({
-      id: card.id,
-      name: card.titulo || card.empresa || 'Sem título',
-      company: card.empresa || card.contato,
-      phase: card.faseDestino,
-      date: card.dataEntrada.toISOString(),
-      value: card.valor,
-      mrr: card.valorMRR,
-      setup: card.valorSetup,
-      pontual: card.valorPontual,
-      responsible: card.closer || card.responsavel,
-      product: 'CaaS',
-    }));
+    // Add Modelo Atual cards
+    if (useModeloAtual) {
+      const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
+      const filteredCards = selectedClosers.length === 0 ? salesCards :
+        salesCards.filter(card => selectedClosers.includes(card.closer?.trim() || ''));
+
+      const periodCards = filteredCards.filter(card => {
+        const entryTime = card.dataEntrada.getTime();
+        return entryTime >= periodStart && entryTime <= periodEnd;
+      });
+
+      for (const card of periodCards) {
+        allItems.push({
+          id: card.id,
+          name: card.titulo || card.empresa || 'Sem título',
+          company: card.empresa || card.contato,
+          phase: card.faseDestino,
+          date: card.dataEntrada.toISOString(),
+          value: card.valor,
+          mrr: card.valorMRR,
+          setup: card.valorSetup,
+          pontual: card.valorPontual,
+          responsible: card.closer || card.responsavel,
+          product: 'CaaS',
+        });
+      }
+    }
+
+    // Add O2 TAX cards
+    if (useO2Tax) {
+      const o2WonData = o2TaxAnalytics.getDealsWon;
+      const o2Cards = o2WonData.cards.filter(card => 
+        card.dataEntrada.getTime() >= periodStart && 
+        card.dataEntrada.getTime() <= periodEnd
+      );
+      
+      for (const card of o2Cards) {
+        const values = getO2TaxCardValue(card);
+        allItems.push({
+          id: card.id,
+          name: card.titulo || 'Sem título',
+          company: card.contato || card.titulo,
+          phase: 'Ganho',
+          date: card.dataEntrada.toISOString(),
+          value: values.mrr + values.setup + values.pontual,
+          mrr: values.mrr,
+          setup: values.setup,
+          pontual: values.pontual,
+          responsible: card.closer || card.responsavel,
+          product: 'O2 TAX',
+        });
+      }
+    }
+
+    // Add Franquia cards
+    if (useFranquia) {
+      const frCards = franquiaAnalytics.getCardsForIndicator('venda');
+      const periodCards = frCards.filter(card => 
+        card.dataEntrada.getTime() >= periodStart && 
+        card.dataEntrada.getTime() <= periodEnd
+      );
+      
+      for (const card of periodCards) {
+        const values = getExpansaoCardValue(card, 'franquia');
+        allItems.push({
+          id: card.id,
+          name: card.titulo || 'Sem título',
+          company: card.titulo,
+          phase: 'Ganho',
+          date: card.dataEntrada.toISOString(),
+          value: values.mrr + values.setup + values.pontual,
+          mrr: values.mrr,
+          setup: values.setup,
+          pontual: values.pontual,
+          responsible: card.responsavel,
+          product: 'Franquia',
+        });
+      }
+    }
+
+    // Add Oxy Hacker cards
+    if (useOxyHacker) {
+      const ohCards = oxyHackerAnalytics.getCardsForIndicator('venda');
+      const periodCards = ohCards.filter(card => 
+        card.dataEntrada.getTime() >= periodStart && 
+        card.dataEntrada.getTime() <= periodEnd
+      );
+      
+      for (const card of periodCards) {
+        const values = getExpansaoCardValue(card, 'oxy_hacker');
+        allItems.push({
+          id: card.id,
+          name: card.titulo || 'Sem título',
+          company: card.titulo,
+          phase: 'Ganho',
+          date: card.dataEntrada.toISOString(),
+          value: values.mrr + values.setup + values.pontual,
+          mrr: values.mrr,
+          setup: values.setup,
+          pontual: values.pontual,
+          responsible: card.responsavel,
+          product: 'Oxy Hacker',
+        });
+      }
+    }
 
     setDetailTitle(`Faturamento - ${data.label}`);
     setDetailDescription(`Vendas realizadas no período (MRR + Setup + Pontual)`);
-    setDetailItems(detailItems);
+    setDetailItems(allItems);
     setDetailOpen(true);
   };
 
@@ -280,8 +464,8 @@ export function RevenueBreakdownChart({
     { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
   ];
 
-  // Don't render if no Modelo Atual data available
-  if (!useModeloAtual) {
+  // Don't render if no BU is selected
+  if (!hasAnyBUSelected) {
     return null;
   }
 
