@@ -12,7 +12,7 @@ export interface CloserMeta {
 
 const BUS = ['modelo_atual', 'o2_tax', 'oxy_hacker', 'franquia'] as const;
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'] as const;
-const CLOSERS = ['Pedro Albite', 'Daniel Trindade'] as const;
+const CLOSERS = ['Pedro Albite', 'Daniel Trindade', 'Lucas Ilha'] as const;
 
 export type BuType = typeof BUS[number];
 export type MonthType = typeof MONTHS[number];
