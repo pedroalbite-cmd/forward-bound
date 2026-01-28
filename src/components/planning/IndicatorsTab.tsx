@@ -25,6 +25,7 @@ import { LeadsMqlsStackedChart } from "./LeadsMqlsStackedChart";
 import { MeetingsScheduledChart } from "./MeetingsScheduledChart";
 import { ClickableFunnelChart } from "./ClickableFunnelChart";
 import { RevenueBreakdownChart } from "./RevenueBreakdownChart";
+import { RevenueChartComparison } from "./RevenueChartComparison";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
 import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select";
 
@@ -1295,6 +1296,14 @@ export function IndicatorsTab() {
         startDate={startDate} 
         endDate={endDate} 
         selectedBU={selectedBU} 
+        selectedBUs={selectedBUs}
+        selectedClosers={selectedClosers}
+      />
+
+      {/* Chart Comparison Section - Temporary for selection */}
+      <RevenueChartComparison
+        startDate={startDate}
+        endDate={endDate}
         selectedBUs={selectedBUs}
         selectedClosers={selectedClosers}
       />
