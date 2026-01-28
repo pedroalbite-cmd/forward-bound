@@ -814,6 +814,7 @@ export function IndicatorsTab() {
         { key: 'mrr' as keyof DetailItem, label: 'MRR', format: columnFormatters.currency },
         { key: 'setup' as keyof DetailItem, label: 'Setup', format: columnFormatters.currency },
         { key: 'pontual' as keyof DetailItem, label: 'Pontual', format: columnFormatters.currency },
+        { key: 'value' as keyof DetailItem, label: 'Total', format: columnFormatters.currency },
         { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
       ];
     }
