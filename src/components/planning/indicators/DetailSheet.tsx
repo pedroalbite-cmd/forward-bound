@@ -28,6 +28,7 @@ export interface DetailItem {
   setup?: number; // Valor Setup for monetary indicators
   pontual?: number; // Valor Pontual for monetary indicators
   closer?: string; // Closer responsável (for filtering)
+  sla?: number; // SLA time in minutes (for SLA indicator drill-down)
 }
 
 interface DetailSheetProps {

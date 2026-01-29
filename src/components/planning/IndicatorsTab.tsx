@@ -1131,7 +1131,43 @@ export function IndicatorsTab() {
 
   // Handle monetary card click (drill-down to sales)
   const handleMonetaryCardClick = (indicator: MonetaryIndicatorConfig) => {
-    if (indicator.key === 'sla') return; // SLA não tem drill-down
+    // SLA drill-down: show leads with individual response times
+    if (indicator.key === 'sla') {
+      const tentativasCards = modeloAtualAnalytics.cards.filter(card => 
+        card.fase === 'Tentativas de contato' && card.dataCriacao
+      ).map(card => {
+        // Calculate SLA in minutes for each card
+        const slaMinutes = (card.dataEntrada.getTime() - card.dataCriacao!.getTime()) / 1000 / 60;
+        return {
+          id: card.id,
+          name: card.titulo || card.empresa || 'Sem título',
+          company: card.empresa || card.contato || undefined,
+          phase: 'Tentativas de contato',
+          date: card.dataEntrada.toISOString(),
+          value: 0,
+          sla: slaMinutes,
+          responsible: card.responsavel || undefined,
+          product: 'CaaS',
+        } as DetailItem;
+      });
+      
+      const slaColumns: { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] = [
+        { key: 'product', label: 'Produto', format: columnFormatters.product },
+        { key: 'company', label: 'Empresa/Contato' },
+        { key: 'date', label: 'Data', format: columnFormatters.date },
+        { key: 'sla', label: 'Tempo SLA', format: (v: number) => columnFormatters.duration(v * 60) }, // Convert minutes to seconds for formatter
+        { key: 'responsible', label: 'Responsável' },
+      ];
+      
+      const averageSla = modeloAtualAnalytics.getAverageSlaMinutes;
+      
+      setDetailSheetTitle('SLA - Tempo de Resposta');
+      setDetailSheetDescription(`${tentativasCards.length} leads | Média: ${formatDuration(averageSla)}`);
+      setDetailSheetItems(tentativasCards);
+      setDetailSheetColumns(slaColumns);
+      setDetailSheetOpen(true);
+      return;
+    }
     
     // All monetary indicators show sales cards
     const items = getItemsForIndicator('venda');
@@ -1252,7 +1288,7 @@ export function IndicatorsTab() {
             realized={getRealizedMonetaryForIndicator(indicator)} 
             meta={getMetaMonetaryForIndicator(indicator)}
             format={indicator.format}
-            isClickable={indicator.key !== 'sla'}
+            isClickable={true}
             onClick={() => handleMonetaryCardClick(indicator)}
           />
         ))}
