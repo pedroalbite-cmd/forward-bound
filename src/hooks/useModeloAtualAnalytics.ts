@@ -13,6 +13,7 @@ export interface ModeloAtualCard {
   faseDestino: string;
   dataEntrada: Date;
   dataSaida: Date | null; // "Saída" from database
+  dataCriacao: Date | null; // "Data Criação" - card creation timestamp for SLA calculation
   valor: number;
   valorMRR: number;
   valorPontual: number;
@@ -29,8 +30,9 @@ const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
   // Leads - Total de leads (primeira etapa)
   'Novos Leads': 'leads',
   
-  // MQL - Leads qualificados
+  // MQL - Leads qualificados (inclui fase usada para cálculo do SLA)
   'MQLs': 'mql',
+  'Tentativas de contato': 'mql', // Fase usada para cálculo do SLA
   
   // RM - Reunião Marcada
   'Reunião agendada / Qualificado': 'rm',
@@ -139,6 +141,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         
         // Parse exit date and calculate duration dynamically
         const dataSaida = parseDate(row['Saída']);
+        const dataCriacao = parseDate(row['Data Criação']); // For SLA calculation
         let duracao = 0;
         if (dataSaida) {
           // Card already left the phase: difference between Exit and Entry
@@ -157,6 +160,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
           faseDestino: fase, // Same as fase for pipefy_moviment_cfos
           dataEntrada,
           dataSaida,
+          dataCriacao,
           valorMRR,
           valorPontual,
           valorEducacao,
@@ -249,6 +253,23 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     return indicatorCards.map(toDetailItem);
   };
 
+  // Calculate average SLA in minutes for cards entering "Tentativas de contato" phase
+  // SLA = Entry to "Tentativas de contato" - Card Creation Date
+  const getAverageSlaMinutes = useMemo(() => {
+    const tentativasCards = cardsInPeriod.filter(card => 
+      card.fase === 'Tentativas de contato' && card.dataCriacao
+    );
+    
+    if (tentativasCards.length === 0) return 0;
+    
+    const totalMinutes = tentativasCards.reduce((sum, card) => {
+      const diffMs = card.dataEntrada.getTime() - card.dataCriacao!.getTime();
+      return sum + (diffMs / 1000 / 60); // Convert to minutes
+    }, 0);
+    
+    return totalMinutes / tentativasCards.length;
+  }, [cardsInPeriod]);
+
   return {
     isLoading,
     error,
@@ -257,5 +278,6 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     getLeadsCards,
     toDetailItem,
     getDetailItemsForIndicator,
+    getAverageSlaMinutes,
   };
 }

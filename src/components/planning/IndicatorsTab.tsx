@@ -49,17 +49,17 @@ const indicatorConfigs: IndicatorConfig[] = [
 ];
 
 // Monetary indicator configuration
-type MonetaryIndicatorKey = 'roi' | 'faturamento' | 'mrr' | 'setup' | 'pontual';
+type MonetaryIndicatorKey = 'sla' | 'faturamento' | 'mrr' | 'setup' | 'pontual';
 
 interface MonetaryIndicatorConfig {
   key: MonetaryIndicatorKey;
   label: string;
   shortLabel: string;
-  format: 'currency' | 'multiplier';
+  format: 'currency' | 'multiplier' | 'duration';
 }
 
 const monetaryIndicatorConfigs: MonetaryIndicatorConfig[] = [
-  { key: 'roi', label: 'ROI', shortLabel: 'ROI', format: 'multiplier' },
+  { key: 'sla', label: 'SLA', shortLabel: 'SLA', format: 'duration' },
   { key: 'faturamento', label: 'Faturamento', shortLabel: 'Fat.', format: 'currency' },
   { key: 'mrr', label: 'MRR', shortLabel: 'MRR', format: 'currency' },
   { key: 'setup', label: 'Setup', shortLabel: 'Setup', format: 'currency' },
@@ -89,6 +89,16 @@ const formatCompactCurrency = (value: number): string => {
 // Format ROI multiplier (4.2x)
 const formatMultiplier = (value: number): string => {
   return `${value.toFixed(1)}x`;
+};
+
+// Format duration in hours/minutes (for SLA indicator)
+const formatDuration = (minutes: number): string => {
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+  return `${Math.round(minutes)}m`;
 };
 
 interface RadialProgressCardProps {
@@ -141,17 +151,23 @@ interface MonetaryRadialCardProps {
   title: string;
   realized: number;
   meta: number;
-  format: 'currency' | 'multiplier';
+  format: 'currency' | 'multiplier' | 'duration';
   onClick?: () => void;
   isClickable?: boolean;
 }
 
 const MonetaryRadialCard = ({ title, realized, meta, format, onClick, isClickable = false }: MonetaryRadialCardProps) => {
+  // For SLA (duration format), lower is better - invert the color logic
+  const isInverted = format === 'duration';
   const percentage = meta > 0 ? (realized / meta) * 100 : 0;
-  const isAboveMeta = percentage >= 100;
+  const isAboveMeta = isInverted ? percentage <= 100 : percentage >= 100;
   const chartData = [{ value: Math.min(percentage, 100), fill: isAboveMeta ? "hsl(var(--chart-2))" : "hsl(var(--destructive))" }];
 
-  const formatValue = format === 'currency' ? formatCompactCurrency : formatMultiplier;
+  const formatValue = format === 'currency' 
+    ? formatCompactCurrency 
+    : format === 'duration' 
+      ? formatDuration 
+      : formatMultiplier;
 
   return (
     <Card 
@@ -973,10 +989,13 @@ export function IndicatorsTab() {
         return total;
       }
       
-      case 'roi': {
-        const faturamento = getRealizedMonetaryForIndicator({ ...indicator, key: 'faturamento' });
-        const investimento = getInvestimentoPeriodo();
-        return investimento > 0 ? faturamento / investimento : 0;
+      case 'sla': {
+        // SLA: Average time from card creation to "Tentativas de contato" phase
+        // Only available for Modelo Atual which has this phase
+        if (includesModeloAtual) {
+          return modeloAtualAnalytics.getAverageSlaMinutes;
+        }
+        return 0;
       }
       
       case 'mrr': {
@@ -1087,8 +1106,8 @@ export function IndicatorsTab() {
     };
     
     switch (indicator.key) {
-      case 'roi':
-        return 10; // Meta de 10x ROI
+      case 'sla':
+        return 30; // Meta de 30 minutos para primeira tentativa de contato
       
       case 'faturamento':
         return getFilteredFaturamentoMeta();
@@ -1112,7 +1131,7 @@ export function IndicatorsTab() {
 
   // Handle monetary card click (drill-down to sales)
   const handleMonetaryCardClick = (indicator: MonetaryIndicatorConfig) => {
-    if (indicator.key === 'roi') return; // ROI não tem drill-down
+    if (indicator.key === 'sla') return; // SLA não tem drill-down
     
     // All monetary indicators show sales cards
     const items = getItemsForIndicator('venda');
@@ -1233,7 +1252,7 @@ export function IndicatorsTab() {
             realized={getRealizedMonetaryForIndicator(indicator)} 
             meta={getMetaMonetaryForIndicator(indicator)}
             format={indicator.format}
-            isClickable={indicator.key !== 'roi'}
+            isClickable={indicator.key !== 'sla'}
             onClick={() => handleMonetaryCardClick(indicator)}
           />
         ))}
