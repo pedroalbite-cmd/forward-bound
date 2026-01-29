@@ -75,6 +75,21 @@ const buOptions: MultiSelectOption[] = [
   { value: 'franquia', label: 'Franquia' },
 ];
 
+// SDR mapping by BU
+const BU_SDRS: Record<BuType, string[]> = {
+  modelo_atual: ['Amanda', 'Carol'],
+  o2_tax: ['Carlos'],
+  oxy_hacker: ['Amanda', 'Carol'],
+  franquia: ['Amanda', 'Carol'],
+};
+
+// SDR options for MultiSelect
+const sdrOptions: MultiSelectOption[] = [
+  { value: 'Amanda', label: 'Amanda' },
+  { value: 'Carol', label: 'Carol' },
+  { value: 'Carlos', label: 'Carlos' },
+];
+
 const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Math.round(value));
 
 // Format compact currency (R$ 1.2M, R$ 510k)
@@ -299,6 +314,8 @@ export function IndicatorsTab() {
   const [selectedBUs, setSelectedBUs] = useState<BUType[]>(['modelo_atual', 'o2_tax', 'oxy_hacker', 'franquia']);
   // Multi-selection state for Closers (empty = all closers)
   const [selectedClosers, setSelectedClosers] = useState<string[]>([]);
+  // Multi-selection state for SDRs (empty = all SDRs)
+  const [selectedSDRs, setSelectedSDRs] = useState<string[]>([]);
   const [startDate, setStartDate] = useState<Date>(startOfMonth(new Date()));
   const [endDate, setEndDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('daily');
@@ -359,6 +376,18 @@ export function IndicatorsTab() {
     return allClosers.filter(c => closersSet.has(c.value));
   }, [selectedBUs]);
 
+  // Calculate available SDRs based on selected BUs
+  const availableSDRs: MultiSelectOption[] = useMemo(() => {
+    const sdrsSet = new Set<string>();
+    
+    selectedBUs.forEach(bu => {
+      const buSdrs = BU_SDRS[bu as BuType] || [];
+      buSdrs.forEach(sdr => sdrsSet.add(sdr));
+    });
+    
+    return sdrOptions.filter(s => sdrsSet.has(s.value));
+  }, [selectedBUs]);
+
   // Clear selected closers that are not valid for the current BU selection
   useEffect(() => {
     const validClosers = selectedClosers.filter(closer => {
@@ -370,11 +399,32 @@ export function IndicatorsTab() {
     }
   }, [selectedBUs, selectedClosers]);
 
+  // Clear selected SDRs that are not valid for the current BU selection
+  useEffect(() => {
+    const validSDRs = selectedSDRs.filter(sdr => {
+      return selectedBUs.some(bu => BU_SDRS[bu as BuType]?.includes(sdr));
+    });
+    
+    if (validSDRs.length !== selectedSDRs.length) {
+      setSelectedSDRs(validSDRs);
+    }
+  }, [selectedBUs, selectedSDRs]);
+
   // Filter function - checks if a responsavel matches selected closers
   const matchesCloserFilter = (responsavel?: string | null): boolean => {
     if (selectedClosers.length === 0) return true; // No filter = show all
     if (!responsavel) return false;
     return selectedClosers.includes(responsavel);
+  };
+
+  // Filter function - checks if a responsible/SDR matches selected SDRs (partial match)
+  const matchesSdrFilter = (responsavel?: string | null): boolean => {
+    if (selectedSDRs.length === 0) return true; // No filter = show all
+    if (!responsavel) return false;
+    // Partial match: check if responsavel CONTAINS any selected SDR name
+    return selectedSDRs.some(sdr => 
+      responsavel.toLowerCase().includes(sdr.toLowerCase())
+    );
   };
   
   // Month name mapping for funnelData lookup
@@ -848,7 +898,7 @@ export function IndicatorsTab() {
     return viewMode === 'accumulated' ? toAccumulatedData(baseData) : baseData;
   };
 
-  // Get detail items for an indicator based on selected BUs and closer filter
+  // Get detail items for an indicator based on selected BUs and closer/SDR filters
   const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
     let items: DetailItem[] = [];
     
@@ -871,7 +921,12 @@ export function IndicatorsTab() {
     
     // Apply closer filter if any closers are selected
     if (selectedClosers.length > 0) {
-      items = items.filter(item => matchesCloserFilter(item.responsible));
+      items = items.filter(item => matchesCloserFilter(item.closer));
+    }
+    
+    // Apply SDR filter if any SDRs are selected
+    if (selectedSDRs.length > 0) {
+      items = items.filter(item => matchesSdrFilter(item.responsible));
     }
     
     return items;
@@ -1904,6 +1959,17 @@ export function IndicatorsTab() {
                 placeholder="Todos Closers"
                 allLabel="Todos Closers"
                 className="w-44"
+              />
+            )}
+
+            {availableSDRs.length > 0 && (
+              <MultiSelect
+                options={availableSDRs}
+                selected={selectedSDRs}
+                onSelectionChange={setSelectedSDRs}
+                placeholder="Todos SDRs"
+                allLabel="Todos SDRs"
+                className="w-40"
               />
             )}
 
