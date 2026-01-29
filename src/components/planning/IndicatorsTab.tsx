@@ -410,15 +410,23 @@ export function IndicatorsTab() {
     }
   }, [selectedBUs, selectedSDRs]);
 
+  // Treat "all closers selected" the same as "no filter" to avoid edge cases
+  // (e.g., when O2 TAX has only Lucas, selecting him makes selectedClosers.length === availableClosers.length)
+  const effectiveSelectedClosers = useMemo(() => {
+    if (selectedClosers.length === 0) return [];
+    if (selectedClosers.length === availableClosers.length) return []; // All selected = no filter
+    return selectedClosers;
+  }, [selectedClosers, availableClosers]);
+
   // Filter function - checks if a responsavel matches selected closers (partial match, case-insensitive)
   const matchesCloserFilter = (closerValue?: string | null): boolean => {
-    if (selectedClosers.length === 0) return true; // No filter = show all
+    if (effectiveSelectedClosers.length === 0) return true; // No filter = show all
     if (!closerValue) return false;
     
     // Comparação parcial (case-insensitive) para lidar com variações de nome
     // Ex: "Lucas" no banco deve corresponder a "Lucas Ilha" no filtro
     const normalizedCloser = closerValue.toLowerCase().trim();
-    return selectedClosers.some(selected => {
+    return effectiveSelectedClosers.some(selected => {
       const normalizedSelected = selected.toLowerCase().trim();
       // Match se o closer do banco está contido no filtro OU vice-versa
       return normalizedSelected.includes(normalizedCloser) || 
@@ -574,7 +582,7 @@ export function IndicatorsTab() {
     
     // Modelo Atual - apply closer filter only if selected closers operate in this BU
     if (includesModeloAtual && funnelData.modeloAtual) {
-      const closersForBU = selectedClosers.filter(c => 
+      const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.modelo_atual.includes(c as CloserType)
       );
       
@@ -587,7 +595,7 @@ export function IndicatorsTab() {
           'modelo_atual',
           closersForBU
         );
-      } else if (selectedClosers.length > 0) {
+      } else if (effectiveSelectedClosers.length > 0) {
         // Closer selecionado não atua nesta BU - não contar meta
         total += 0;
       } else {
@@ -597,7 +605,7 @@ export function IndicatorsTab() {
     }
     // O2 TAX - apply closer filter only if Lucas is selected
     if (includesO2Tax && funnelData.o2Tax) {
-      const closersForBU = selectedClosers.filter(c => 
+      const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.o2_tax.includes(c as CloserType)
       );
       
@@ -610,7 +618,7 @@ export function IndicatorsTab() {
           'o2_tax',
           closersForBU
         );
-      } else if (selectedClosers.length > 0) {
+      } else if (effectiveSelectedClosers.length > 0) {
         // Pedro ou Daniel selecionados - não contar O2 TAX
         total += 0;
       } else {
@@ -619,21 +627,21 @@ export function IndicatorsTab() {
       }
     }
     if (includesOxyHacker && funnelData.oxyHacker) {
-      const closersForBU = selectedClosers.filter(c => 
+      const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.oxy_hacker.includes(c as CloserType)
       );
       
-      if (closersForBU.length > 0 || selectedClosers.length === 0) {
+      if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
         total += calcularMetaDoPeriodo(funnelData.oxyHacker, indicator.key, startDate, endDate);
       }
       // Se closer selecionado não atua nesta BU, não conta
     }
     if (includesFranquia && funnelData.franquia) {
-      const closersForBU = selectedClosers.filter(c => 
+      const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.franquia.includes(c as CloserType)
       );
       
-      if (closersForBU.length > 0 || selectedClosers.length === 0) {
+      if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
         total += calcularMetaDoPeriodo(funnelData.franquia, indicator.key, startDate, endDate);
       }
       // Se closer selecionado não atua nesta BU, não conta
@@ -649,7 +657,7 @@ export function IndicatorsTab() {
     
     if (includesModeloAtual) {
       // Check if any selected closer operates in Modelo Atual
-      const closersForBU = selectedClosers.filter(c => 
+      const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.modelo_atual.includes(c as CloserType)
       );
       
@@ -661,7 +669,7 @@ export function IndicatorsTab() {
           return closerValue && matchesCloserFilter(closerValue);
         });
         total += filteredCards.length;
-      } else if (selectedClosers.length > 0) {
+      } else if (effectiveSelectedClosers.length > 0) {
         // Closer selecionado não atua nesta BU - não contar nada
         total += 0;
       } else {
@@ -671,7 +679,7 @@ export function IndicatorsTab() {
     }
     if (includesO2Tax) {
       // Check if any selected closer operates in O2 TAX (only Lucas)
-      const closersForBU = selectedClosers.filter(c => 
+      const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.o2_tax.includes(c as CloserType)
       );
       
@@ -683,7 +691,7 @@ export function IndicatorsTab() {
           return closerValue && matchesCloserFilter(closerValue);
         });
         total += filteredCards.length;
-      } else if (selectedClosers.length > 0) {
+      } else if (effectiveSelectedClosers.length > 0) {
         // Pedro ou Daniel selecionados - não contar O2 TAX
         total += 0;
       } else {
@@ -693,22 +701,22 @@ export function IndicatorsTab() {
     }
     if (includesOxyHacker) {
       // Check if any selected closer operates in Oxy Hacker
-      const closersForBU = selectedClosers.filter(c => 
+      const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.oxy_hacker.includes(c as CloserType)
       );
       
-      if (closersForBU.length > 0 || selectedClosers.length === 0) {
+      if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
         total += getOxyHackerQty(indicator.key as OxyHackerIndicator, startDate, endDate);
       }
       // Se closer selecionado não atua nesta BU, não conta
     }
     if (includesFranquia) {
       // Check if any selected closer operates in Franquia
-      const closersForBU = selectedClosers.filter(c => 
+      const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.franquia.includes(c as CloserType)
       );
       
-      if (closersForBU.length > 0 || selectedClosers.length === 0) {
+      if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
         total += getExpansaoQty(indicator.key as ExpansaoIndicator, startDate, endDate);
       }
       // Se closer selecionado não atua nesta BU, não conta

@@ -86,8 +86,10 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
 
   // Use the SAME data source and cache as useO2TaxMetas for consistency
   // Both hooks share queryKey ['o2tax-movements-all'] and return { movements: [] }
+  // Use DIFFERENT query key to avoid cache collision with useO2TaxMetas
+  // This ensures closer/sdr fields are preserved in the data
   const { data, isLoading, error } = useQuery({
-    queryKey: ['o2tax-movements-all'],
+    queryKey: ['o2tax-movements-analytics'],
     queryFn: async () => {
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
         body: { 
