@@ -418,6 +418,13 @@ export function IndicatorsTab() {
     return selectedClosers;
   }, [selectedClosers, availableClosers]);
 
+  // Treat "all SDRs selected" the same as "no filter" to avoid edge cases
+  const effectiveSelectedSDRs = useMemo(() => {
+    if (selectedSDRs.length === 0) return [];
+    if (selectedSDRs.length === availableSDRs.length) return []; // All selected = no filter
+    return selectedSDRs;
+  }, [selectedSDRs, availableSDRs]);
+
   // Filter function - checks if a responsavel matches selected closers (partial match, case-insensitive)
   const matchesCloserFilter = (closerValue?: string | null): boolean => {
     if (effectiveSelectedClosers.length === 0) return true; // No filter = show all
@@ -436,10 +443,10 @@ export function IndicatorsTab() {
 
   // Filter function - checks if a responsible/SDR matches selected SDRs (partial match)
   const matchesSdrFilter = (responsavel?: string | null): boolean => {
-    if (selectedSDRs.length === 0) return true; // No filter = show all
+    if (effectiveSelectedSDRs.length === 0) return true; // No filter = show all
     if (!responsavel) return false;
     // Partial match: check if responsavel CONTAINS any selected SDR name
-    return selectedSDRs.some(sdr => 
+    return effectiveSelectedSDRs.some(sdr => 
       responsavel.toLowerCase().includes(sdr.toLowerCase())
     );
   };
@@ -651,75 +658,120 @@ export function IndicatorsTab() {
   };
 
   // Get realized value for indicator - sums realized from selected BUs
-  // Applies closer filter only when the selected closer operates in that BU
+  // Applies closer AND SDR filters when the selected closer/SDR operates in that BU
   const getRealizedForIndicator = (indicator: IndicatorConfig) => {
     let total = 0;
     
     if (includesModeloAtual) {
-      // Check if any selected closer operates in Modelo Atual
+      // Check if any selected closer/SDR operates in Modelo Atual
       const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.modelo_atual.includes(c as CloserType)
       );
+      const sdrsForBU = effectiveSelectedSDRs.filter(s => 
+        BU_SDRS.modelo_atual.includes(s)
+      );
       
-      if (closersForBU.length > 0) {
-        // Filter cards by closers that operate in this BU (using partial match)
-        const cards = modeloAtualAnalytics.getCardsForIndicator(indicator.key);
-        const filteredCards = cards.filter(card => {
-          const closerValue = (card.closer || '').trim();
-          return closerValue && matchesCloserFilter(closerValue);
-        });
-        total += filteredCards.length;
-      } else if (effectiveSelectedClosers.length > 0) {
-        // Closer selecionado não atua nesta BU - não contar nada
-        total += 0;
-      } else {
-        // Sem filtro - contar tudo
-        total += getModeloAtualQty(indicator.key as ModeloAtualIndicator, startDate, endDate);
+      // Include BU if: no closer filter OR at least one selected closer operates here
+      // AND: no SDR filter OR at least one selected SDR operates here
+      const includeByCloser = closersForBU.length > 0 || effectiveSelectedClosers.length === 0;
+      const includeBySdr = sdrsForBU.length > 0 || effectiveSelectedSDRs.length === 0;
+      
+      if (includeByCloser && includeBySdr) {
+        // If either filter is active, use card-level filtering
+        if (effectiveSelectedClosers.length > 0 || effectiveSelectedSDRs.length > 0) {
+          const cards = modeloAtualAnalytics.getCardsForIndicator(indicator.key);
+          const filteredCards = cards.filter(card => {
+            const matchCloser = effectiveSelectedClosers.length === 0 || matchesCloserFilter(card.closer);
+            const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(card.responsavel || card.sdr);
+            return matchCloser && matchSdr;
+          });
+          total += filteredCards.length;
+        } else {
+          // No filters - use aggregated count
+          total += getModeloAtualQty(indicator.key as ModeloAtualIndicator, startDate, endDate);
+        }
       }
     }
+    
     if (includesO2Tax) {
-      // Check if any selected closer operates in O2 TAX (only Lucas)
+      // Check if any selected closer/SDR operates in O2 TAX
       const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.o2_tax.includes(c as CloserType)
       );
+      const sdrsForBU = effectiveSelectedSDRs.filter(s => 
+        BU_SDRS.o2_tax.includes(s)
+      );
       
-      if (closersForBU.length > 0) {
-        // Filter cards by Lucas (using partial match for name variations)
-        const cards = o2TaxAnalytics.getDetailItemsForIndicator(indicator.key);
-        const filteredCards = cards.filter(card => {
-          const closerValue = (card.closer || card.responsible || '').trim();
-          return closerValue && matchesCloserFilter(closerValue);
-        });
-        total += filteredCards.length;
-      } else if (effectiveSelectedClosers.length > 0) {
-        // Pedro ou Daniel selecionados - não contar O2 TAX
-        total += 0;
-      } else {
-        // Sem filtro - contar tudo
-        total += getO2TaxQty(indicator.key as O2TaxIndicator, startDate, endDate);
+      const includeByCloser = closersForBU.length > 0 || effectiveSelectedClosers.length === 0;
+      const includeBySdr = sdrsForBU.length > 0 || effectiveSelectedSDRs.length === 0;
+      
+      if (includeByCloser && includeBySdr) {
+        if (effectiveSelectedClosers.length > 0 || effectiveSelectedSDRs.length > 0) {
+          const cards = o2TaxAnalytics.getDetailItemsForIndicator(indicator.key);
+          const filteredCards = cards.filter(card => {
+            const matchCloser = effectiveSelectedClosers.length === 0 || matchesCloserFilter(card.closer || card.responsible);
+            const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(card.responsible);
+            return matchCloser && matchSdr;
+          });
+          total += filteredCards.length;
+        } else {
+          total += getO2TaxQty(indicator.key as O2TaxIndicator, startDate, endDate);
+        }
       }
     }
+    
     if (includesOxyHacker) {
-      // Check if any selected closer operates in Oxy Hacker
+      // Check if any selected closer/SDR operates in Oxy Hacker
       const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.oxy_hacker.includes(c as CloserType)
       );
+      const sdrsForBU = effectiveSelectedSDRs.filter(s => 
+        BU_SDRS.oxy_hacker.includes(s)
+      );
       
-      if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
-        total += getOxyHackerQty(indicator.key as OxyHackerIndicator, startDate, endDate);
+      const includeByCloser = closersForBU.length > 0 || effectiveSelectedClosers.length === 0;
+      const includeBySdr = sdrsForBU.length > 0 || effectiveSelectedSDRs.length === 0;
+      
+      if (includeByCloser && includeBySdr) {
+        if (effectiveSelectedClosers.length > 0 || effectiveSelectedSDRs.length > 0) {
+          const cards = oxyHackerAnalytics.getDetailItemsForIndicator(indicator.key);
+          const filteredCards = cards.filter(card => {
+            const matchCloser = effectiveSelectedClosers.length === 0 || matchesCloserFilter(card.closer || card.responsible);
+            const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(card.responsible);
+            return matchCloser && matchSdr;
+          });
+          total += filteredCards.length;
+        } else {
+          total += getOxyHackerQty(indicator.key as OxyHackerIndicator, startDate, endDate);
+        }
       }
-      // Se closer selecionado não atua nesta BU, não conta
     }
+    
     if (includesFranquia) {
-      // Check if any selected closer operates in Franquia
+      // Check if any selected closer/SDR operates in Franquia
       const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.franquia.includes(c as CloserType)
       );
+      const sdrsForBU = effectiveSelectedSDRs.filter(s => 
+        BU_SDRS.franquia.includes(s)
+      );
       
-      if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
-        total += getExpansaoQty(indicator.key as ExpansaoIndicator, startDate, endDate);
+      const includeByCloser = closersForBU.length > 0 || effectiveSelectedClosers.length === 0;
+      const includeBySdr = sdrsForBU.length > 0 || effectiveSelectedSDRs.length === 0;
+      
+      if (includeByCloser && includeBySdr) {
+        if (effectiveSelectedClosers.length > 0 || effectiveSelectedSDRs.length > 0) {
+          const cards = franquiaAnalytics.getDetailItemsForIndicator(indicator.key);
+          const filteredCards = cards.filter(card => {
+            const matchCloser = effectiveSelectedClosers.length === 0 || matchesCloserFilter(card.closer || card.responsible);
+            const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(card.responsible);
+            return matchCloser && matchSdr;
+          });
+          total += filteredCards.length;
+        } else {
+          total += getExpansaoQty(indicator.key as ExpansaoIndicator, startDate, endDate);
+        }
       }
-      // Se closer selecionado não atua nesta BU, não conta
     }
     
     return total;
@@ -917,73 +969,100 @@ export function IndicatorsTab() {
 
   // Get detail items for an indicator based on selected BUs and closer/SDR filters
   // Uses the SAME BU exclusion logic as getRealizedForIndicator:
-  // If a closer is selected and doesn't operate in a BU, skip that BU entirely
+  // If a closer/SDR is selected and doesn't operate in a BU, skip that BU entirely
   const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
     let items: DetailItem[] = [];
     
-    // Modelo Atual: Include if no closer filter OR at least one selected closer operates here
+    // Modelo Atual: Include if no closer/SDR filter OR at least one selected closer/SDR operates here
     if (includesModeloAtual) {
       const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.modelo_atual.includes(c as CloserType)
       );
-      if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
+      const sdrsForBU = effectiveSelectedSDRs.filter(s => 
+        BU_SDRS.modelo_atual.includes(s)
+      );
+      
+      const includeByCloser = closersForBU.length > 0 || effectiveSelectedClosers.length === 0;
+      const includeBySdr = sdrsForBU.length > 0 || effectiveSelectedSDRs.length === 0;
+      
+      if (includeByCloser && includeBySdr) {
         const buItems = modeloAtualAnalytics.getDetailItemsForIndicator(indicatorKey);
-        if (effectiveSelectedClosers.length > 0) {
-          items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
-        } else {
-          items = [...items, ...buItems];
-        }
+        const filteredItems = buItems.filter(item => {
+          const matchCloser = effectiveSelectedClosers.length === 0 || matchesCloserFilter(item.closer);
+          const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(item.responsible || item.sdr);
+          return matchCloser && matchSdr;
+        });
+        items = [...items, ...filteredItems];
       }
     }
     
-    // O2 TAX: Include if no closer filter OR at least one selected closer operates here
+    // O2 TAX: Include if no closer/SDR filter OR at least one selected closer/SDR operates here
     if (includesO2Tax) {
       const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.o2_tax.includes(c as CloserType)
       );
-      if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
+      const sdrsForBU = effectiveSelectedSDRs.filter(s => 
+        BU_SDRS.o2_tax.includes(s)
+      );
+      
+      const includeByCloser = closersForBU.length > 0 || effectiveSelectedClosers.length === 0;
+      const includeBySdr = sdrsForBU.length > 0 || effectiveSelectedSDRs.length === 0;
+      
+      if (includeByCloser && includeBySdr) {
         const buItems = o2TaxAnalytics.getDetailItemsForIndicator(indicatorKey);
-        if (effectiveSelectedClosers.length > 0) {
-          items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
-        } else {
-          items = [...items, ...buItems];
-        }
+        const filteredItems = buItems.filter(item => {
+          const matchCloser = effectiveSelectedClosers.length === 0 || matchesCloserFilter(item.closer || item.responsible);
+          const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(item.responsible);
+          return matchCloser && matchSdr;
+        });
+        items = [...items, ...filteredItems];
       }
     }
     
-    // Franquia: Include if no closer filter OR at least one selected closer operates here
+    // Franquia: Include if no closer/SDR filter OR at least one selected closer/SDR operates here
     if (includesFranquia) {
       const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.franquia.includes(c as CloserType)
       );
-      if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
+      const sdrsForBU = effectiveSelectedSDRs.filter(s => 
+        BU_SDRS.franquia.includes(s)
+      );
+      
+      const includeByCloser = closersForBU.length > 0 || effectiveSelectedClosers.length === 0;
+      const includeBySdr = sdrsForBU.length > 0 || effectiveSelectedSDRs.length === 0;
+      
+      if (includeByCloser && includeBySdr) {
         const buItems = franquiaAnalytics.getDetailItemsForIndicator(indicatorKey);
-        if (effectiveSelectedClosers.length > 0) {
-          items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
-        } else {
-          items = [...items, ...buItems];
-        }
+        const filteredItems = buItems.filter(item => {
+          const matchCloser = effectiveSelectedClosers.length === 0 || matchesCloserFilter(item.closer || item.responsible);
+          const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(item.responsible);
+          return matchCloser && matchSdr;
+        });
+        items = [...items, ...filteredItems];
       }
     }
     
-    // Oxy Hacker: Include if no closer filter OR at least one selected closer operates here
+    // Oxy Hacker: Include if no closer/SDR filter OR at least one selected closer/SDR operates here
     if (includesOxyHacker) {
       const closersForBU = effectiveSelectedClosers.filter(c => 
         BU_CLOSERS.oxy_hacker.includes(c as CloserType)
       );
-      if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
+      const sdrsForBU = effectiveSelectedSDRs.filter(s => 
+        BU_SDRS.oxy_hacker.includes(s)
+      );
+      
+      const includeByCloser = closersForBU.length > 0 || effectiveSelectedClosers.length === 0;
+      const includeBySdr = sdrsForBU.length > 0 || effectiveSelectedSDRs.length === 0;
+      
+      if (includeByCloser && includeBySdr) {
         const buItems = oxyHackerAnalytics.getDetailItemsForIndicator(indicatorKey);
-        if (effectiveSelectedClosers.length > 0) {
-          items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
-        } else {
-          items = [...items, ...buItems];
-        }
+        const filteredItems = buItems.filter(item => {
+          const matchCloser = effectiveSelectedClosers.length === 0 || matchesCloserFilter(item.closer || item.responsible);
+          const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(item.responsible);
+          return matchCloser && matchSdr;
+        });
+        items = [...items, ...filteredItems];
       }
-    }
-    
-    // Apply SDR filter if any SDRs are selected
-    if (selectedSDRs.length > 0) {
-      items = items.filter(item => matchesSdrFilter(item.responsible));
     }
     
     return items;
