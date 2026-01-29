@@ -1,15 +1,40 @@
 
 
-## Plano: Atualizar Colunas do Drill-Down do Funil
+## Plano: Adicionar Porcentagens de Conversão Entre Etapas do Funil
 
-### Alterações Solicitadas
+### Situação Atual
 
-| Remover | Adicionar |
-|---------|-----------|
-| `phase` (Fase) | `mrr` (MRR) |
-| `duration` (Tempo na Fase) | `setup` (Setup) |
-| | `pontual` (Pontual) |
-| | `value` (Total) |
+O código já calcula as taxas de conversão (linhas 133-140):
+```typescript
+{ number: 2, name: 'MQL', indicator: 'mql', value: totals.mql, conversionPercent: totals.leads > 0 ? (totals.mql / totals.leads) * 100 : 100 },
+{ number: 3, name: 'Reuniões Agendadas', indicator: 'rm', value: totals.rm, conversionPercent: totals.mql > 0 ? (totals.rm / totals.mql) * 100 : 0 },
+// etc...
+```
+
+Porém, a renderização (linhas 329-335) exibe apenas o número da etapa, nome e quantidade:
+```typescript
+<span className="bg-white/20 rounded-full w-5 h-5">{stage.number}</span>
+<span className="hidden sm:inline truncate">{stage.name}</span>
+<span className="font-bold">{formatNumber(stage.value)}</span>
+```
+
+---
+
+### Solução Proposta
+
+Adicionar a porcentagem de conversão ao lado do valor de cada etapa (exceto Leads que é sempre 100%):
+
+```text
+                        ANTES                           DEPOIS
+   ┌─────────────────────────────────┐    ┌─────────────────────────────────────┐
+   │ (1) Leads              1.234    │    │ (1) Leads                   1.234   │
+   │ (2) MQL                  567    │    │ (2) MQL              567 (46%)      │
+   │ (3) Reuniões Agendadas   234    │    │ (3) Reuniões Agend.  234 (41%)      │
+   │ (4) Reunião Realizada    189    │    │ (4) Reunião Realiz.  189 (81%)      │
+   │ (5) Proposta Enviada      87    │    │ (5) Proposta Env.     87 (46%)      │
+   │ (6) Contrato Assinado     23    │    │ (6) Contrato Ass.     23 (26%)      │
+   └─────────────────────────────────┘    └─────────────────────────────────────┘
+```
 
 ---
 
@@ -17,66 +42,58 @@
 
 **`src/components/planning/ClickableFunnelChart.tsx`**
 
-#### Antes (linhas 169-195):
-```typescript
-const getColumnsForIndicator = (indicator: IndicatorType) => {
-  const baseColumns = [
-    { key: 'product', label: 'Produto', format: columnFormatters.product },
-    { key: 'name', label: 'Título' },
-    { key: 'company', label: 'Empresa/Contato' },
-    { key: 'phase', label: 'Fase', format: columnFormatters.phase },        // ← REMOVER
-    { key: 'date', label: 'Data', format: columnFormatters.date },
-    { key: 'duration', label: 'Tempo na Fase', format: columnFormatters.duration }, // ← REMOVER
-  ];
+#### Linhas 329-335 - Adicionar Conversão
 
-  if (indicator === 'proposta' || indicator === 'venda') {
-    return [...baseColumns, mrr, setup, pontual, value, responsible];
-  }
-
-  return [...baseColumns, revenueRange, responsible];
-};
+**Antes:**
+```tsx
+<div className="flex items-center gap-2 text-white text-sm font-medium whitespace-nowrap overflow-hidden">
+  <span className="bg-white/20 rounded-full w-5 h-5 flex-shrink-0 flex items-center justify-center text-xs">
+    {stage.number}
+  </span>
+  <span className="hidden sm:inline truncate">{stage.name}</span>
+  <span className="font-bold flex-shrink-0">{formatNumber(stage.value)}</span>
+</div>
 ```
 
-#### Depois:
-```typescript
-const getColumnsForIndicator = (indicator: IndicatorType) => {
-  // Colunas base para todos os indicadores (sem Fase e Tempo na Fase)
-  const baseColumns = [
-    { key: 'product', label: 'Produto', format: columnFormatters.product },
-    { key: 'name', label: 'Título' },
-    { key: 'company', label: 'Empresa/Contato' },
-    { key: 'date', label: 'Data', format: columnFormatters.date },
-  ];
-
-  // Colunas monetárias (agora para TODOS os indicadores)
-  const monetaryColumns = [
-    { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
-    { key: 'setup', label: 'Setup', format: columnFormatters.currency },
-    { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
-    { key: 'value', label: 'Total', format: columnFormatters.currency },
-  ];
-
-  return [
-    ...baseColumns,
-    ...monetaryColumns,
-    { key: 'responsible', label: 'Responsável' },
-  ];
-};
+**Depois:**
+```tsx
+<div className="flex items-center gap-2 text-white text-sm font-medium whitespace-nowrap overflow-hidden">
+  <span className="bg-white/20 rounded-full w-5 h-5 flex-shrink-0 flex items-center justify-center text-xs">
+    {stage.number}
+  </span>
+  <span className="hidden sm:inline truncate">{stage.name}</span>
+  <span className="font-bold flex-shrink-0">{formatNumber(stage.value)}</span>
+  {index > 0 && stage.value > 0 && (
+    <span className="text-xs text-white/70 flex-shrink-0">
+      ({stage.conversionPercent.toFixed(0)}%)
+    </span>
+  )}
+</div>
 ```
 
 ---
 
 ### Resultado Visual
 
-A tabela de drill-down para qualquer etapa do funil (Leads, MQL, RM, RR, Proposta, Venda) exibirá:
+| Etapa | Quantidade | Conversão |
+|-------|------------|-----------|
+| Leads | 1.234 | - |
+| MQL | 567 | (46%) |
+| Reuniões Agendadas | 234 | (41%) |
+| Reunião Realizada | 189 | (81%) |
+| Proposta Enviada | 87 | (46%) |
+| Contrato Assinado | 23 | (26%) |
 
-| Produto | Título | Empresa/Contato | Data | MRR | Setup | Pontual | Total | Responsável | Pipefy |
-|---------|--------|-----------------|------|-----|-------|---------|-------|-------------|--------|
-| CaaS | Card XYZ | Empresa ABC | 15/01/2026 | R$ 5.000 | R$ 2.000 | R$ 1.000 | R$ 8.000 | Pedro | 🔗 |
+A porcentagem indica quantas pessoas "sobreviveram" de uma etapa para a próxima.
 
 ---
 
 ### Observação
 
-Para indicadores que não possuem valores monetários (como Leads, MQL, RM, RR), as colunas MRR, Setup, Pontual e Total exibirão "-" quando os dados não estiverem disponíveis, graças ao formatter `columnFormatters.currency` que já trata valores nulos.
+A conversão é calculada de etapa para etapa anterior (não em relação ao topo do funil):
+- MQL→Leads: 567/1234 = 46%
+- RM→MQL: 234/567 = 41%
+- RR→RM: 189/234 = 81%
+- Proposta→RR: 87/189 = 46%
+- Venda→Proposta: 23/87 = 26%
 
