@@ -28,18 +28,6 @@ import { RevenueBreakdownChart } from "./RevenueBreakdownChart";
 import { RevenueChartComparison } from "./RevenueChartComparison";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
 import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select";
-import { 
-  formatCompactCurrency as formatCompactCurrencyHelper, 
-  formatDuration as formatDurationHelper,
-  isPremiumFaixa,
-  findTopPerformer,
-  findTopPerformerByRevenue,
-  findOldestDeal,
-  findMaxItem,
-  calcWithinThreshold,
-  calcMedian,
-  getShortName,
-} from "./indicators/drillDownHelpers";
 
 type ViewMode = 'daily' | 'accumulated';
 
@@ -828,6 +816,33 @@ export function IndicatorsTab() {
     return viewMode === 'accumulated' ? toAccumulatedData(baseData) : baseData;
   };
 
+  // Get columns for indicator type
+  const getColumnsForIndicator = (indicatorKey: IndicatorType): { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] => {
+    const baseColumns: { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] = [
+      { key: 'product', label: 'Produto', format: columnFormatters.product },
+      { key: 'company', label: 'Empresa/Contato' },
+      { key: 'date', label: 'Data', format: columnFormatters.date },
+      { key: 'duration', label: 'Tempo na Fase', format: columnFormatters.duration },
+    ];
+
+    if (indicatorKey === 'proposta' || indicatorKey === 'venda') {
+      return [
+        ...baseColumns,
+        { key: 'mrr' as keyof DetailItem, label: 'MRR', format: columnFormatters.currency },
+        { key: 'setup' as keyof DetailItem, label: 'Setup', format: columnFormatters.currency },
+        { key: 'pontual' as keyof DetailItem, label: 'Pontual', format: columnFormatters.currency },
+        { key: 'value' as keyof DetailItem, label: 'Total', format: columnFormatters.currency },
+        { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
+      ];
+    }
+
+    return [
+      ...baseColumns,
+      { key: 'revenueRange' as keyof DetailItem, label: 'Faixa Faturamento' },
+      { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
+    ];
+  };
+
   // Get detail items for an indicator based on selected BUs and closer filter
   const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
     let items: DetailItem[] = [];
@@ -857,167 +872,16 @@ export function IndicatorsTab() {
     return items;
   };
 
-  // Handle radial card click - STRATEGIC DRILL-DOWNS
+  // Handle radial card click
   const handleRadialCardClick = (indicator: IndicatorConfig) => {
     const items = getItemsForIndicator(indicator.key);
-    const now = new Date();
+    const columns = getColumnsForIndicator(indicator.key);
+    const realized = getRealizedForIndicator(indicator);
     
-    // Enrich items with calculated fields
-    const enrichedItems = items.map(item => {
-      const enriched = { ...item };
-      if (item.date) {
-        const entryDate = new Date(item.date);
-        const diffDays = Math.floor((now.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24));
-        
-        switch (indicator.key) {
-          case 'mql':
-            enriched.diasAteQualificar = diffDays;
-            break;
-          case 'rm':
-            enriched.diasComoMQL = diffDays;
-            break;
-          case 'proposta':
-            enriched.diasEmProposta = diffDays;
-            break;
-          case 'venda':
-            enriched.cicloVenda = diffDays;
-            break;
-        }
-      }
-      return enriched;
-    });
-    
-    switch (indicator.key) {
-      case 'mql': {
-        // MQL - "Qualidade do Pipeline Entrante"
-        const premiumCount = enrichedItems.filter(i => isPremiumFaixa(i.revenueRange)).length;
-        const premiumPct = enrichedItems.length > 0 ? Math.round((premiumCount / enrichedItems.length) * 100) : 0;
-        const avgDias = enrichedItems.length > 0 
-          ? Math.round(enrichedItems.reduce((sum, i) => sum + (i.diasAteQualificar || 0), 0) / enrichedItems.length)
-          : 0;
-        const topSDR = findTopPerformer(enrichedItems, 'responsible');
-        
-        setDetailSheetTitle('MQL - Qualidade do Pipeline');
-        setDetailSheetDescription(
-          `${enrichedItems.length} MQLs | ${premiumPct}% faixa premium | Média ${avgDias}d para qualificar | Top: ${getShortName(topSDR.name)} (${topSDR.count})`
-        );
-        setDetailSheetColumns([
-          { key: 'product', label: 'Produto', format: columnFormatters.product },
-          { key: 'company', label: 'Empresa' },
-          { key: 'revenueRange', label: 'Faixa Faturamento', format: columnFormatters.revenueRange },
-          { key: 'diasAteQualificar', label: 'Dias até MQL', format: columnFormatters.daysSimple },
-          { key: 'responsible', label: 'SDR' },
-          { key: 'date', label: 'Data', format: columnFormatters.date },
-        ]);
-        break;
-      }
-      
-      case 'rm': {
-        // RM - "Eficiência de Agendamento"
-        const mqlCount = getItemsForIndicator('mql').length;
-        const taxaAgendamento = mqlCount > 0 ? Math.round((enrichedItems.length / mqlCount) * 100) : 0;
-        const avgDias = enrichedItems.length > 0
-          ? Math.round(enrichedItems.reduce((sum, i) => sum + (i.diasComoMQL || 0), 0) / enrichedItems.length)
-          : 0;
-        const topCloser = findTopPerformer(enrichedItems, 'responsible');
-        
-        setDetailSheetTitle('Reuniões Agendadas - Eficiência');
-        setDetailSheetDescription(
-          `${enrichedItems.length} reuniões | Taxa MQL→RM: ${taxaAgendamento}% | Tempo médio: ${avgDias}d | Top: ${getShortName(topCloser.name)} (${topCloser.count})`
-        );
-        setDetailSheetColumns([
-          { key: 'product', label: 'Produto', format: columnFormatters.product },
-          { key: 'company', label: 'Empresa' },
-          { key: 'responsible', label: 'Closer' },
-          { key: 'date', label: 'Data Agendamento', format: columnFormatters.date },
-          { key: 'diasComoMQL', label: 'Dias como MQL', format: columnFormatters.agingWithAlert },
-          { key: 'revenueRange', label: 'Faixa Faturamento', format: columnFormatters.revenueRange },
-        ]);
-        break;
-      }
-      
-      case 'rr': {
-        // RR - "Taxa de Comparecimento"
-        const rmCount = getItemsForIndicator('rm').length;
-        const taxaShow = rmCount > 0 ? Math.round((enrichedItems.length / rmCount) * 100) : 0;
-        const noShows = rmCount - enrichedItems.length;
-        const topCloser = findTopPerformer(enrichedItems, 'responsible');
-        
-        setDetailSheetTitle('Reuniões Realizadas - Comparecimento');
-        setDetailSheetDescription(
-          `${enrichedItems.length} realizadas | Taxa show: ${taxaShow}% | ${noShows} no-shows | Melhor: ${getShortName(topCloser.name)} (${topCloser.count})`
-        );
-        setDetailSheetColumns([
-          { key: 'product', label: 'Produto', format: columnFormatters.product },
-          { key: 'company', label: 'Empresa' },
-          { key: 'responsible', label: 'Closer' },
-          { key: 'date', label: 'Data Reunião', format: columnFormatters.date },
-          { key: 'revenueRange', label: 'Faixa Faturamento', format: columnFormatters.revenueRange },
-        ]);
-        break;
-      }
-      
-      case 'proposta': {
-        // Proposta - "Pipeline de Negociação"
-        const pipeline = enrichedItems.reduce((sum, i) => sum + (i.value || 0), 0);
-        const avgTicket = enrichedItems.length > 0 ? pipeline / enrichedItems.length : 0;
-        const oldest = findOldestDeal(enrichedItems);
-        
-        setDetailSheetTitle('Propostas - Pipeline em Negociação');
-        setDetailSheetDescription(
-          `${enrichedItems.length} propostas | Pipeline: ${formatCompactCurrency(pipeline)} | Ticket médio: ${formatCompactCurrency(avgTicket)} | Mais antiga: ${oldest.days}d (⚠️ ${oldest.company.substring(0, 15)}...)`
-        );
-        setDetailSheetColumns([
-          { key: 'product', label: 'Produto', format: columnFormatters.product },
-          { key: 'company', label: 'Empresa' },
-          { key: 'value', label: 'Valor Total', format: columnFormatters.currency },
-          { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
-          { key: 'responsible', label: 'Closer' },
-          { key: 'diasEmProposta', label: 'Dias em Proposta', format: columnFormatters.agingWithAlert },
-          { key: 'date', label: 'Data Envio', format: columnFormatters.date },
-        ]);
-        break;
-      }
-      
-      case 'venda': {
-        // Venda - "Celebração + Análise"
-        const total = enrichedItems.reduce((sum, i) => sum + (i.value || 0), 0);
-        const totalMrr = enrichedItems.reduce((sum, i) => sum + (i.mrr || 0), 0);
-        const mrrPct = total > 0 ? Math.round((totalMrr / total) * 100) : 0;
-        const topCloser = findTopPerformerByRevenue(enrichedItems, 'responsible');
-        
-        setDetailSheetTitle('Vendas - Celebração + Análise');
-        setDetailSheetDescription(
-          `${enrichedItems.length} contratos | Total: ${formatCompactCurrency(total)} | MRR: ${formatCompactCurrency(totalMrr)} (${mrrPct}%) | Top: ${getShortName(topCloser.name)} (${formatCompactCurrency(topCloser.value)})`
-        );
-        setDetailSheetColumns([
-          { key: 'product', label: 'Produto', format: columnFormatters.product },
-          { key: 'company', label: 'Empresa' },
-          { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
-          { key: 'setup', label: 'Setup', format: columnFormatters.currency },
-          { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
-          { key: 'value', label: 'Total', format: columnFormatters.currency },
-          { key: 'responsible', label: 'Closer' },
-          { key: 'cicloVenda', label: 'Ciclo (dias)', format: columnFormatters.daysSimple },
-        ]);
-        break;
-      }
-      
-      default: {
-        // Fallback for any other indicators
-        setDetailSheetTitle(indicator.label);
-        setDetailSheetDescription(`${enrichedItems.length} registros no período`);
-        setDetailSheetColumns([
-          { key: 'product', label: 'Produto', format: columnFormatters.product },
-          { key: 'company', label: 'Empresa/Contato' },
-          { key: 'date', label: 'Data', format: columnFormatters.date },
-          { key: 'revenueRange', label: 'Faixa Faturamento', format: columnFormatters.revenueRange },
-          { key: 'responsible', label: 'Responsável' },
-        ]);
-      }
-    }
-    
-    setDetailSheetItems(enrichedItems);
+    setDetailSheetTitle(indicator.label);
+    setDetailSheetDescription(`${formatNumber(realized)} registros no período selecionado`);
+    setDetailSheetItems(items);
+    setDetailSheetColumns(columns);
     setDetailSheetOpen(true);
   };
 
@@ -1265,202 +1129,63 @@ export function IndicatorsTab() {
     }
   };
 
-  // Handle monetary card click - STRATEGIC DRILL-DOWNS
+  // Handle monetary card click (drill-down to sales)
   const handleMonetaryCardClick = (indicator: MonetaryIndicatorConfig) => {
-    switch (indicator.key) {
-      case 'sla': {
-        // SLA - "Velocidade de Primeiro Contato"
-        const tentativasCards = modeloAtualAnalytics.cards.filter(card => 
-          card.fase === 'Tentativas de contato' && card.dataCriacao
-        ).map(card => {
-          const slaMinutes = (card.dataEntrada.getTime() - card.dataCriacao!.getTime()) / 1000 / 60;
-          return {
-            id: card.id,
-            name: card.titulo || card.empresa || 'Sem título',
-            company: card.empresa || card.contato || undefined,
-            phase: 'Tentativas de contato',
-            date: card.dataEntrada.toISOString(),
-            dataCriacao: card.dataCriacao?.toISOString(),
-            dataPrimeiraTentativa: card.dataEntrada.toISOString(),
-            value: 0,
-            sla: slaMinutes,
-            responsible: card.responsavel || undefined,
-            product: 'CaaS',
-          } as DetailItem;
-        });
-        
-        const averageSla = modeloAtualAnalytics.getAverageSlaMinutes;
-        const medianSla = calcMedian(tentativasCards, 'sla');
-        const withinTarget = calcWithinThreshold(tentativasCards, 'sla', 30);
-        const worstSla = findMaxItem(tentativasCards, 'sla');
-        
-        setDetailSheetTitle('SLA - Velocidade de Resposta');
-        setDetailSheetDescription(
-          `${tentativasCards.length} leads | Média: ${formatDuration(averageSla)} | Dentro da meta (<30m): ${withinTarget.percentage}% | Mediana: ${formatDuration(medianSla)} | Pior: ${formatDuration(worstSla.value)} (⚠️ ${worstSla.company.substring(0, 12)}...)`
-        );
-        setDetailSheetColumns([
-          { key: 'product', label: 'Produto', format: columnFormatters.product },
-          { key: 'company', label: 'Empresa' },
-          { key: 'sla', label: 'Tempo SLA', format: columnFormatters.slaStatus },
-          { key: 'dataCriacao', label: 'Data Criação', format: columnFormatters.date },
-          { key: 'dataPrimeiraTentativa', label: '1ª Tentativa', format: columnFormatters.date },
-          { key: 'responsible', label: 'SDR' },
-        ]);
-        setDetailSheetItems(tentativasCards);
-        setDetailSheetOpen(true);
-        return;
-      }
+    // SLA drill-down: show leads with individual response times
+    if (indicator.key === 'sla') {
+      const tentativasCards = modeloAtualAnalytics.cards.filter(card => 
+        card.fase === 'Tentativas de contato' && card.dataCriacao
+      ).map(card => {
+        // Calculate SLA in minutes for each card
+        const slaMinutes = (card.dataEntrada.getTime() - card.dataCriacao!.getTime()) / 1000 / 60;
+        return {
+          id: card.id,
+          name: card.titulo || card.empresa || 'Sem título',
+          company: card.empresa || card.contato || undefined,
+          phase: 'Tentativas de contato',
+          date: card.dataEntrada.toISOString(),
+          value: 0,
+          sla: slaMinutes,
+          responsible: card.responsavel || undefined,
+          product: 'CaaS',
+        } as DetailItem;
+      });
       
-      case 'faturamento': {
-        // Faturamento - "Composição da Receita"
-        const salesItems = getItemsForIndicator('venda');
-        const total = salesItems.reduce((sum, i) => sum + (i.value || 0), 0);
-        const totalMrr = salesItems.reduce((sum, i) => sum + (i.mrr || 0), 0);
-        const totalSetup = salesItems.reduce((sum, i) => sum + (i.setup || 0), 0);
-        const totalPontual = salesItems.reduce((sum, i) => sum + (i.pontual || 0), 0);
-        const mrrPct = total > 0 ? Math.round((totalMrr / total) * 100) : 0;
-        const setupPct = total > 0 ? Math.round((totalSetup / total) * 100) : 0;
-        const pontualPct = total > 0 ? Math.round((totalPontual / total) * 100) : 0;
-        const metaFat = getMetaMonetaryForIndicator(indicator);
-        const vsMeta = metaFat > 0 ? Math.round((total / metaFat) * 100) : 0;
-        
-        // Enrich with % do total
-        const enrichedItems = salesItems.map(item => ({
-          ...item,
-          percentualTotal: total > 0 && item.value ? (item.value / total) * 100 : 0,
-        }));
-        
-        setDetailSheetTitle('Faturamento - Composição da Receita');
-        setDetailSheetDescription(
-          `Total: ${formatCompactCurrency(total)} | MRR: ${formatCompactCurrency(totalMrr)} (${mrrPct}%) | Setup: ${formatCompactCurrency(totalSetup)} (${setupPct}%) | Pontual: ${formatCompactCurrency(totalPontual)} (${pontualPct}%) | vs Meta: ${vsMeta}%`
-        );
-        setDetailSheetColumns([
-          { key: 'product', label: 'Produto', format: columnFormatters.product },
-          { key: 'company', label: 'Empresa' },
-          { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
-          { key: 'setup', label: 'Setup', format: columnFormatters.currency },
-          { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
-          { key: 'value', label: 'Total', format: columnFormatters.currency },
-          { key: 'percentualTotal', label: '% do Total', format: columnFormatters.percentual },
-          { key: 'responsible', label: 'Closer' },
-        ]);
-        setDetailSheetItems(enrichedItems);
-        setDetailSheetOpen(true);
-        return;
-      }
+      const slaColumns: { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] = [
+        { key: 'product', label: 'Produto', format: columnFormatters.product },
+        { key: 'company', label: 'Empresa/Contato' },
+        { key: 'date', label: 'Data', format: columnFormatters.date },
+        { key: 'sla', label: 'Tempo SLA', format: (v: number) => columnFormatters.duration(v * 60) }, // Convert minutes to seconds for formatter
+        { key: 'responsible', label: 'Responsável' },
+      ];
       
-      case 'mrr': {
-        // MRR - "Construção de Base Recorrente"
-        const salesItems = getItemsForIndicator('venda').filter(item => (item.mrr || 0) > 0);
-        const totalMrr = salesItems.reduce((sum, i) => sum + (i.mrr || 0), 0);
-        const arrProjetado = totalMrr * 12;
-        const maxMrr = findMaxItem(salesItems, 'mrr');
-        
-        // Enrich with % of MRR total
-        const enrichedItems = salesItems.map(item => ({
-          ...item,
-          percentualTotal: totalMrr > 0 && item.mrr ? (item.mrr / totalMrr) * 100 : 0,
-        }));
-        
-        setDetailSheetTitle('MRR - Base Recorrente');
-        setDetailSheetDescription(
-          `${salesItems.length} contratos com MRR | Total: ${formatCompactCurrency(totalMrr)}/mês | ARR projetado: ${formatCompactCurrency(arrProjetado)} | Maior: ${formatCompactCurrency(maxMrr.value)} (${maxMrr.company.substring(0, 15)}...)`
-        );
-        setDetailSheetColumns([
-          { key: 'product', label: 'Produto', format: columnFormatters.product },
-          { key: 'company', label: 'Empresa' },
-          { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
-          { key: 'percentualTotal', label: '% do MRR', format: columnFormatters.percentual },
-          { key: 'value', label: 'Total Contrato', format: columnFormatters.currency },
-          { key: 'responsible', label: 'Closer' },
-          { key: 'date', label: 'Data', format: columnFormatters.date },
-        ]);
-        setDetailSheetItems(enrichedItems);
-        setDetailSheetOpen(true);
-        return;
-      }
+      const averageSla = modeloAtualAnalytics.getAverageSlaMinutes;
       
-      case 'setup': {
-        // Setup - "Projetos de Implantação"
-        const salesItems = getItemsForIndicator('venda').filter(item => (item.setup || 0) > 0);
-        const totalSetup = salesItems.reduce((sum, i) => sum + (i.setup || 0), 0);
-        const avgSetup = salesItems.length > 0 ? totalSetup / salesItems.length : 0;
-        const maxSetup = findMaxItem(salesItems, 'setup');
-        const totalFat = getRealizedMonetaryForIndicator({ key: 'faturamento', label: '', shortLabel: '', format: 'currency' });
-        const pctFat = totalFat > 0 ? Math.round((totalSetup / totalFat) * 100) : 0;
-        
-        // Enrich with % of Setup total
-        const enrichedItems = salesItems.map(item => ({
-          ...item,
-          percentualTotal: totalSetup > 0 && item.setup ? (item.setup / totalSetup) * 100 : 0,
-        }));
-        
-        setDetailSheetTitle('Setup - Implantações');
-        setDetailSheetDescription(
-          `${salesItems.length} projetos | Total: ${formatCompactCurrency(totalSetup)} | Média: ${formatCompactCurrency(avgSetup)} | Maior: ${formatCompactCurrency(maxSetup.value)} (${maxSetup.company.substring(0, 12)}...) | ${pctFat}% do faturamento`
-        );
-        setDetailSheetColumns([
-          { key: 'product', label: 'Produto', format: columnFormatters.product },
-          { key: 'company', label: 'Empresa' },
-          { key: 'setup', label: 'Setup', format: columnFormatters.currency },
-          { key: 'percentualTotal', label: '% do Setup', format: columnFormatters.percentual },
-          { key: 'mrr', label: 'MRR Associado', format: columnFormatters.currency },
-          { key: 'responsible', label: 'Closer' },
-          { key: 'date', label: 'Data', format: columnFormatters.date },
-        ]);
-        setDetailSheetItems(enrichedItems);
-        setDetailSheetOpen(true);
-        return;
-      }
-      
-      case 'pontual': {
-        // Pontual - "Receitas Extraordinárias"
-        const salesItems = getItemsForIndicator('venda').filter(item => (item.pontual || 0) > 0);
-        const totalPontual = salesItems.reduce((sum, i) => sum + (i.pontual || 0), 0);
-        const avgPontual = salesItems.length > 0 ? totalPontual / salesItems.length : 0;
-        const maxPontual = findMaxItem(salesItems, 'pontual');
-        const totalFat = getRealizedMonetaryForIndicator({ key: 'faturamento', label: '', shortLabel: '', format: 'currency' });
-        const pctFat = totalFat > 0 ? Math.round((totalPontual / totalFat) * 100) : 0;
-        
-        // Enrich with % of Pontual total
-        const enrichedItems = salesItems.map(item => ({
-          ...item,
-          percentualTotal: totalPontual > 0 && item.pontual ? (item.pontual / totalPontual) * 100 : 0,
-        }));
-        
-        setDetailSheetTitle('Pontual - Receitas Extraordinárias');
-        setDetailSheetDescription(
-          `${salesItems.length} ocorrências | Total: ${formatCompactCurrency(totalPontual)} | Média: ${formatCompactCurrency(avgPontual)} | Maior: ${formatCompactCurrency(maxPontual.value)} (${maxPontual.company.substring(0, 12)}...) | ${pctFat}% do faturamento`
-        );
-        setDetailSheetColumns([
-          { key: 'product', label: 'Produto', format: columnFormatters.product },
-          { key: 'company', label: 'Empresa' },
-          { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
-          { key: 'percentualTotal', label: '% do Pontual', format: columnFormatters.percentual },
-          { key: 'mrr', label: 'MRR Associado', format: columnFormatters.currency },
-          { key: 'responsible', label: 'Closer' },
-          { key: 'date', label: 'Data', format: columnFormatters.date },
-        ]);
-        setDetailSheetItems(enrichedItems);
-        setDetailSheetOpen(true);
-        return;
-      }
-      
-      default: {
-        // Fallback
-        const items = getItemsForIndicator('venda');
-        setDetailSheetTitle(indicator.label);
-        setDetailSheetDescription(`${formatCompactCurrency(getRealizedMonetaryForIndicator(indicator))} no período`);
-        setDetailSheetColumns([
-          { key: 'product', label: 'Produto', format: columnFormatters.product },
-          { key: 'company', label: 'Empresa' },
-          { key: 'value', label: 'Valor', format: columnFormatters.currency },
-          { key: 'responsible', label: 'Closer' },
-        ]);
-        setDetailSheetItems(items);
-        setDetailSheetOpen(true);
-      }
+      setDetailSheetTitle('SLA - Tempo de Resposta');
+      setDetailSheetDescription(`${tentativasCards.length} leads | Média: ${formatDuration(averageSla)}`);
+      setDetailSheetItems(tentativasCards);
+      setDetailSheetColumns(slaColumns);
+      setDetailSheetOpen(true);
+      return;
     }
+    
+    // All monetary indicators show sales cards
+    const items = getItemsForIndicator('venda');
+    const columns: { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] = [
+      { key: 'product', label: 'Produto', format: columnFormatters.product },
+      { key: 'company', label: 'Empresa/Contato' },
+      { key: 'date', label: 'Data', format: columnFormatters.date },
+      { key: 'value', label: 'Valor Total', format: columnFormatters.currency },
+      { key: 'responsible', label: 'Responsável' },
+    ];
+    
+    const realized = getRealizedMonetaryForIndicator(indicator);
+    
+    setDetailSheetTitle(indicator.label);
+    setDetailSheetDescription(`${formatCompactCurrency(realized)} no período selecionado`);
+    setDetailSheetItems(items);
+    setDetailSheetColumns(columns);
+    setDetailSheetOpen(true);
   };
 
   return (

@@ -29,17 +29,6 @@ export interface DetailItem {
   pontual?: number; // Valor Pontual for monetary indicators
   closer?: string; // Closer responsável (for filtering)
   sla?: number; // SLA time in minutes (for SLA indicator drill-down)
-  
-  // Calculated fields for strategic drill-downs
-  diasAteQualificar?: number;    // MQL: Days from creation to MQL entry
-  diasComoMQL?: number;          // RM: Days as MQL before scheduling meeting
-  diasEmProposta?: number;       // Proposta: Days in proposal phase (aging)
-  cicloVenda?: number;           // Venda: Full sales cycle in days
-  percentualTotal?: number;      // Monetary: % of total revenue
-  slaStatus?: 'ok' | 'warning' | 'danger'; // SLA visual status
-  setor?: string;                // MQL: Business sector
-  dataCriacao?: string;          // Original creation date for SLA calc
-  dataPrimeiraTentativa?: string; // First contact attempt date
 }
 
 interface DetailSheetProps {
@@ -227,52 +216,6 @@ export const columnFormatters = {
     
     return (
       <Badge className={`font-normal ${colorClass}`}>
-        {value}
-      </Badge>
-    );
-  },
-  // New formatters for strategic drill-downs
-  daysSimple: (value: number) => value !== undefined && value !== null ? `${value}d` : '-',
-  agingWithAlert: (days: number) => {
-    if (days === undefined || days === null) return '-';
-    if (days > 30) return <span className="text-destructive font-medium">{days}d 🔴</span>;
-    if (days > 14) return <span className="text-amber-600 dark:text-amber-400">{days}d ⚠️</span>;
-    return <span className="text-chart-2">{days}d ✅</span>;
-  },
-  slaStatus: (minutes: number) => {
-    if (minutes === undefined || minutes === null) return '-';
-    if (minutes <= 30) {
-      return (
-        <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 font-normal">
-          ✅ {Math.round(minutes)}m
-        </Badge>
-      );
-    }
-    if (minutes <= 60) {
-      return (
-        <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 font-normal">
-          ⚠️ {Math.round(minutes)}m
-        </Badge>
-      );
-    }
-    const hours = Math.floor(minutes / 60);
-    const mins = Math.round(minutes % 60);
-    return (
-      <Badge className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 font-normal">
-        🔴 {hours}h{mins > 0 ? ` ${mins}m` : ''}
-      </Badge>
-    );
-  },
-  percentual: (value: number) => value !== undefined && value !== null ? `${value.toFixed(1)}%` : '-',
-  revenueRange: (value: string) => {
-    if (!value) return '-';
-    // Check if premium range (>R$50k)
-    const isPremium = value.toLowerCase().includes('50') || 
-                      value.toLowerCase().includes('100') || 
-                      value.toLowerCase().includes('500') ||
-                      value.toLowerCase().includes('acima');
-    return (
-      <Badge className={`font-normal ${isPremium ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-muted text-muted-foreground'}`}>
         {value}
       </Badge>
     );
