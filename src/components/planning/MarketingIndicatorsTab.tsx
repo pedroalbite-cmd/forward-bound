@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useMarketingIndicators } from "@/hooks/useMarketingIndicators";
 import { PerformanceGauges } from "./marketing-indicators/PerformanceGauges";
@@ -15,8 +16,9 @@ import { ConversionsByChannelChart } from "./marketing-indicators/ConversionsByC
 import { CampaignsTable } from "./marketing-indicators/CampaignsTable";
 import { ChannelMetricsCards } from "./marketing-indicators/ChannelMetricsCards";
 import { RevenueMetricsCards } from "./marketing-indicators/RevenueMetricsCards";
-import { CostPerStageChart } from "./marketing-indicators/CostPerStageChart";
-import { CHANNEL_LABELS, ChannelId } from "./marketing-indicators/types";
+import { CostPerStageGauges } from "./marketing-indicators/CostPerStageGauges";
+import { DrillDownBarChart } from "./indicators/DrillDownBarChart";
+import { CHANNEL_LABELS, ChannelId, CostPerStage } from "./marketing-indicators/types";
 
 const BU_OPTIONS = [
   { value: 'Modelo Atual', label: 'Modelo Atual' },
@@ -40,8 +42,14 @@ export function MarketingIndicatorsTab() {
   const [selectedBUs, setSelectedBUs] = useState<string[]>(['Modelo Atual']);
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
 
+  // Drill-down state for cost gauges
+  const [costDrillDown, setCostDrillDown] = useState<{
+    isOpen: boolean;
+    costKey: keyof CostPerStage | null;
+  }>({ isOpen: false, costKey: null });
+
   // Fetch data
-  const { data, goals, isLoading, refetch } = useMarketingIndicators({
+  const { data, goals, costGoals, costByChannel, isLoading, refetch } = useMarketingIndicators({
     startDate: dateRange.from,
     endDate: dateRange.to,
     selectedBUs,
@@ -157,8 +165,127 @@ export function MarketingIndicatorsTab() {
         goals={goals.revenue}
       />
 
-      {/* Cost Per Stage Chart - NEW */}
-      <CostPerStageChart costPerStage={data.costPerStage} />
+      {/* Cost Per Stage Gauges */}
+      <CostPerStageGauges 
+        costPerStage={data.costPerStage} 
+        goals={costGoals}
+        onCostClick={(costKey) => setCostDrillDown({ isOpen: true, costKey })}
+      />
+
+      {/* Cost Drill-Down Modal */}
+      <Dialog 
+        open={costDrillDown.isOpen} 
+        onOpenChange={(open) => setCostDrillDown({ isOpen: open, costKey: open ? costDrillDown.costKey : null })}
+      >
+        <DialogContent className="max-w-[90vw] max-h-[90vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {costDrillDown.costKey?.toUpperCase()} - Custo por {
+                costDrillDown.costKey === 'cpl' ? 'Lead' :
+                costDrillDown.costKey === 'cpmql' ? 'MQL' :
+                costDrillDown.costKey === 'cprm' ? 'Reunião Marcada' :
+                costDrillDown.costKey === 'cprr' ? 'Reunião Realizada' :
+                costDrillDown.costKey === 'cpp' ? 'Proposta' :
+                costDrillDown.costKey === 'cpv' ? 'Venda' : ''
+              }
+            </DialogTitle>
+          </DialogHeader>
+          
+          {costDrillDown.costKey && (
+            <div className="space-y-6">
+              {/* KPI Summary */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-muted/50 p-4 rounded-lg text-center">
+                  <p className="text-xs text-muted-foreground">Custo Geral</p>
+                  <p className="text-xl font-bold">
+                    R$ {data.costPerStage[costDrillDown.costKey].toLocaleString('pt-BR')}
+                  </p>
+                </div>
+                <div className="bg-muted/50 p-4 rounded-lg text-center">
+                  <p className="text-xs text-muted-foreground">Meta</p>
+                  <p className="text-xl font-bold">
+                    R$ {costGoals[costDrillDown.costKey].toLocaleString('pt-BR')}
+                  </p>
+                </div>
+                <div className="bg-muted/50 p-4 rounded-lg text-center">
+                  <p className="text-xs text-muted-foreground">Investimento Total</p>
+                  <p className="text-xl font-bold">
+                    R$ {(data.totalInvestment / 1000).toFixed(0)}k
+                  </p>
+                </div>
+                <div className="bg-muted/50 p-4 rounded-lg text-center">
+                  <p className="text-xs text-muted-foreground">vs Meta</p>
+                  <p className={cn(
+                    "text-xl font-bold",
+                    data.costPerStage[costDrillDown.costKey] <= costGoals[costDrillDown.costKey] 
+                      ? "text-green-500" 
+                      : "text-red-500"
+                  )}>
+                    {((data.costPerStage[costDrillDown.costKey] / costGoals[costDrillDown.costKey]) * 100).toFixed(0)}%
+                  </p>
+                </div>
+              </div>
+
+              {/* Chart: Cost by Channel */}
+              <DrillDownBarChart
+                title={`${costDrillDown.costKey.toUpperCase()} por Canal`}
+                data={costByChannel.map(c => ({
+                  label: c.channelName,
+                  value: c[costDrillDown.costKey as keyof typeof c] as number,
+                  highlight: (c[costDrillDown.costKey as keyof typeof c] as number) <= costGoals[costDrillDown.costKey] 
+                    ? 'success' as const 
+                    : 'danger' as const,
+                }))}
+                formatValue={(v) => `R$ ${v.toLocaleString('pt-BR')}`}
+              />
+
+              {/* Table: Channel Details */}
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left p-3 font-medium">Canal</th>
+                      <th className="text-right p-3 font-medium">Investimento</th>
+                      <th className="text-right p-3 font-medium">Volume</th>
+                      <th className="text-right p-3 font-medium">{costDrillDown.costKey.toUpperCase()}</th>
+                      <th className="text-right p-3 font-medium">% Invest</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {costByChannel.map((channel) => {
+                      const volumeKey = 
+                        costDrillDown.costKey === 'cpl' ? 'leads' :
+                        costDrillDown.costKey === 'cpmql' ? 'mqls' :
+                        costDrillDown.costKey === 'cprm' ? 'rms' :
+                        costDrillDown.costKey === 'cprr' ? 'rrs' :
+                        costDrillDown.costKey === 'cpp' ? 'propostas' : 'vendas';
+                      const costValue = channel[costDrillDown.costKey as keyof typeof channel] as number;
+                      const isGood = costValue <= costGoals[costDrillDown.costKey];
+                      
+                      return (
+                        <tr key={channel.channelId} className="border-t">
+                          <td className="p-3">{channel.channelName}</td>
+                          <td className="text-right p-3">R$ {(channel.investment / 1000).toFixed(0)}k</td>
+                          <td className="text-right p-3">{channel[volumeKey as keyof typeof channel]}</td>
+                          <td className={cn(
+                            "text-right p-3 font-medium",
+                            isGood ? "text-green-600" : "text-red-600"
+                          )}>
+                            R$ {costValue.toLocaleString('pt-BR')}
+                          </td>
+                          <td className="text-right p-3">
+                            {((channel.investment / data.totalInvestment) * 100).toFixed(1)}%
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Performance Gauges */}
       <PerformanceGauges

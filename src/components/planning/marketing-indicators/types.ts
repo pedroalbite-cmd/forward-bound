@@ -61,6 +61,33 @@ export interface CostPerStage {
   cpv: number;
 }
 
+export interface CostPerStageGoals {
+  cpl: number;
+  cpmql: number;
+  cprm: number;
+  cprr: number;
+  cpp: number;
+  cpv: number;
+}
+
+export interface CostPerChannelStage {
+  channelId: string;
+  channelName: string;
+  investment: number;
+  leads: number;
+  mqls: number;
+  rms: number;
+  rrs: number;
+  propostas: number;
+  vendas: number;
+  cpl: number;
+  cpmql: number;
+  cprm: number;
+  cprr: number;
+  cpp: number;
+  cpv: number;
+}
+
 export interface MarketingMetrics {
   // Performance metrics
   roas: number;
