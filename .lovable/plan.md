@@ -1,112 +1,102 @@
 
-## Plano: Adicionar Colunas SDR e Data Assinatura no Drill-Down de Vendas
+
+## Plano: Definir Lucas como Closer e Carlos como SDR para Todos os Cards da O2 TAX
 
 ### Contexto
 
-O drill-down de **Vendas** (modal que abre ao clicar no acelerador "Vendas") atualmente exibe as seguintes colunas:
+A BU **O2 TAX** possui uma estrutura de equipe fixa:
+- **Closer**: Lucas Ilha (único closer da O2 TAX)
+- **SDR**: Carlos (único SDR da O2 TAX)
 
-| Produto | Empresa | MRR | Setup | Pontual | Total | Closer | Ciclo |
-|---------|---------|-----|-------|---------|-------|--------|-------|
-
-O usuário solicitou adicionar:
-1. **Coluna "SDR"** - antes da coluna "Closer" - mostrando qual SDR passou o lead para o closer
-2. **Coluna "Data Assinatura"** - após "Empresa" - mostrando a data de assinatura do contrato
+Atualmente, os dados vindos do banco externo (`pipefy_cards_movements`) podem não ter esses campos preenchidos corretamente em todos os registros. A solicitação é garantir que:
+1. Todos os cards da O2 TAX exibam **"Lucas"** como Closer
+2. Todos os cards da O2 TAX exibam **"Carlos"** como SDR
 
 ---
 
-### Nova Estrutura de Colunas
+### Alterações Necessárias
 
-| Produto | Empresa | Data Assinatura | MRR | Setup | Pontual | Total | SDR | Closer | Ciclo |
-|---------|---------|-----------------|-----|-------|---------|-------|-----|--------|-------|
+| Arquivo | Mudança |
+|---------|---------|
+| `src/hooks/useO2TaxAnalytics.ts` | Definir valores fixos para `sdr` e `closer` no mapeamento de cards |
 
 ---
 
 ### Seção Técnica
 
-#### Arquivos a Modificar
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/planning/indicators/DetailSheet.tsx` | Adicionar campos `sdr` e `dataAssinatura` na interface `DetailItem` |
-| `src/hooks/useModeloAtualAnalytics.ts` | Extrair campo "Data de assinatura do contrato" da tabela externa e separar `sdr` do `responsavel` |
-| `src/components/planning/IndicatorsTab.tsx` | Atualizar as colunas do case `'venda'` no `handleFunnelIndicatorClick` |
-| `src/components/planning/ClickableFunnelChart.tsx` | Atualizar as colunas para incluir SDR e Data Assinatura quando indicador = venda |
-
-#### Alterações na Interface DetailItem
+#### Alterações na Interface O2TaxCard
 
 ```typescript
-export interface DetailItem {
+export interface O2TaxCard {
   // ... campos existentes ...
-  sdr?: string;              // NOVO: SDR responsável original
-  dataAssinatura?: string;   // NOVO: Data de assinatura do contrato (ISO string)
+  sdr: string;  // NOVO: SDR responsável (fixo: "Carlos" para O2 TAX)
 }
 ```
 
-#### Alterações no Hook useModeloAtualAnalytics
+#### Alterações no Mapeamento de Dados
+
+Na `queryFn`, ao criar os movements:
 
 ```typescript
-// Interface ModeloAtualCard - adicionar campos
-export interface ModeloAtualCard {
-  // ... existentes ...
-  sdr?: string;              // Extraído de "SDR responsável"
-  dataAssinatura: Date | null; // Extraído de "Data de assinatura do contrato"
-}
+const movements = responseData.data.map((row: any) => ({
+  // ... campos existentes ...
+  // O2 TAX tem equipe fixa: Lucas (closer) e Carlos (SDR)
+  closer: 'Lucas',
+  sdr: 'Carlos',
+}));
+```
 
-// Na queryFn, extrair os novos campos:
-const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
-const sdr = String(row['SDR responsável'] || '').trim();
+No `useMemo` que transforma movements em O2TaxCards:
 
-// Em toDetailItem, mapear os campos:
-const toDetailItem = (card: ModeloAtualCard): DetailItem => ({
-  // ... existentes ...
-  sdr: card.sdr || undefined,
-  dataAssinatura: card.dataAssinatura?.toISOString() || undefined,
+```typescript
+return {
+  // ... campos existentes ...
+  closer: 'Lucas',  // Fixo para O2 TAX
+  sdr: 'Carlos',    // Fixo para O2 TAX
+} as O2TaxCard;
+```
+
+#### Alterações na Função toDetailItem
+
+```typescript
+const toDetailItem = (card: O2TaxCard): DetailItem => ({
+  // ... campos existentes ...
+  sdr: card.sdr || 'Carlos',         // SDR fixo para O2 TAX
+  closer: card.closer || 'Lucas',    // Closer fixo para O2 TAX
+  responsible: 'Lucas',              // Usar Lucas como responsável padrão
 });
 ```
 
-#### Alterações nas Colunas de Vendas (IndicatorsTab.tsx)
+---
 
-```typescript
-case 'venda': {
-  // ...
-  setDetailSheetColumns([
-    { key: 'product', label: 'Produto', format: columnFormatters.product },
-    { key: 'company', label: 'Empresa' },
-    { key: 'dataAssinatura', label: 'Data Assinatura', format: columnFormatters.date }, // NOVO
-    { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
-    { key: 'setup', label: 'Setup', format: columnFormatters.currency },
-    { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
-    { key: 'value', label: 'Total', format: columnFormatters.currency },
-    { key: 'sdr', label: 'SDR' },           // NOVO - antes do Closer
-    { key: 'responsible', label: 'Closer' },
-    { key: 'cicloVenda', label: 'Ciclo', format: columnFormatters.cicloVenda },
-  ]);
-  // ...
-}
-```
+### Comportamento Esperado
+
+Após a implementação:
+
+| Coluna | Valor Exibido (O2 TAX) |
+|--------|------------------------|
+| SDR | Carlos |
+| Closer | Lucas |
+
+Isso se aplica a:
+- Drill-down dos aceleradores (Leads, MQL, RM, RR, Proposta, Venda)
+- Drill-down do funil
+- Filtros de SDR e Closer
 
 ---
 
-### Campo "Data de Assinatura do Contrato" no Banco
+### Impacto nos Filtros
 
-De acordo com a memória do sistema, o campo `Data de assinatura do contrato` existe na tabela `pipefy_moviment_cfos` e era usado anteriormente para determinar a data da venda. Agora ele será recuperado apenas para exibição, já que a lógica de contabilização usa a data de entrada na fase "Ganho".
-
----
-
-### Considerações Sobre Outras BUs
-
-As BUs **O2 TAX**, **Oxy Hacker** e **Franquia** utilizam hooks diferentes (`useO2TaxAnalytics`, `useExpansaoAnalytics`). Para que a coluna SDR funcione corretamente nessas BUs também, será necessário:
-
-1. Verificar se essas tabelas possuem os campos equivalentes
-2. Atualizar os hooks correspondentes para extrair `sdr` e `dataAssinatura`
-
-Se os campos não existirem nessas BUs, as colunas exibirão "-" como fallback.
+Com esta alteração:
+- Ao filtrar por **SDR = Carlos** com BU = O2 TAX, todos os registros serão exibidos
+- Ao filtrar por **Closer = Lucas** com BU = O2 TAX, todos os registros serão exibidos
+- Se o usuário tentar filtrar por outro SDR/Closer na O2 TAX, nenhum resultado será retornado (comportamento correto)
 
 ---
 
 ### Resumo das Alterações
 
-1. **DetailSheet.tsx** - Adicionar `sdr?: string` e `dataAssinatura?: string` à interface `DetailItem`
-2. **useModeloAtualAnalytics.ts** - Adicionar campos `sdr` e `dataAssinatura` na extração e mapeamento
-3. **IndicatorsTab.tsx** - Atualizar colunas do drill-down de vendas (adicionar SDR antes de Closer, Data Assinatura após Empresa)
-4. **ClickableFunnelChart.tsx** - Atualizar colunas para manter consistência no drill-down via funil
+1. **useO2TaxAnalytics.ts** - Adicionar campo `sdr` na interface `O2TaxCard`
+2. **useO2TaxAnalytics.ts** - Definir `closer: 'Lucas'` e `sdr: 'Carlos'` no mapeamento dos movements
+3. **useO2TaxAnalytics.ts** - Atualizar `toDetailItem` para incluir `sdr` no objeto retornado
+
