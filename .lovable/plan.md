@@ -1,139 +1,115 @@
 
 
-## Plano: Corrigir Drill-down dos Acelerômetros para Filtro de Closer
+## Plano: Corrigir Filtro de SDR nos Indicadores
 
 ### Problema Identificado
 
-Quando o usuário seleciona **Consolidado** + **Lucas** como Closer e clica nos acelerômetros (radial cards), o drill-down retorna **lista vazia** (0 itens).
+O filtro de SDR (Amanda, Carol, Carlos) **não está funcionando** nos acelerômetros (radial cards) e gráficos de indicadores. O usuário seleciona um SDR mas os números não mudam.
 
-**Causa raiz**: A função `getItemsForIndicator` busca dados de **todas as 4 BUs** e depois tenta filtrar por closer. Como Lucas só opera na O2 TAX:
-- Items de Modelo Atual, Franquia, Oxy Hacker → não têm Lucas como closer → são filtrados fora
-- Items da O2 TAX → podem ter closer preenchido ou não (dependendo da fase)
+**Causa raiz**: O filtro de SDR está sendo aplicado **apenas no drill-down** (`getItemsForIndicator`), mas **NÃO nos cálculos de totais** (`getRealizedForIndicator`) que alimentam os acelerômetros.
 
-**Resultado**: lista vazia mesmo quando existem dados.
+Atualmente:
+- `getRealizedForIndicator`: Aplica filtro de **Closer** ✅, mas **NÃO aplica filtro de SDR** ❌
+- `getItemsForIndicator`: Aplica filtro de **Closer** ✅ e filtro de **SDR** ✅ (só no drill-down)
 
 ### Solução
 
-Aplicar a mesma lógica de exclusão de BU do `getRealizedForIndicator` no `getItemsForIndicator`:
-
-> Se um closer está selecionado e ele **não opera** em uma BU, não buscar dados dessa BU para o drill-down.
-
----
-
-### Seção Técnica
-
-#### Alteração em `IndicatorsTab.tsx` (função `getItemsForIndicator`)
-
-**Antes** (linhas 919-950):
-```typescript
-const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
-  let items: DetailItem[] = [];
-  
-  // Aggregate items from selected BUs
-  if (includesModeloAtual) {
-    items = [...items, ...modeloAtualAnalytics.getDetailItemsForIndicator(indicatorKey)];
-  }
-  
-  if (includesO2Tax) {
-    items = [...items, ...o2TaxAnalytics.getDetailItemsForIndicator(indicatorKey)];
-  }
-  
-  // ... outras BUs
-  
-  // Apply closer filter if any closers are selected
-  if (selectedClosers.length > 0) {
-    items = items.filter(item => matchesCloserFilter(item.closer));
-  }
-  
-  return items;
-};
-```
-
-**Depois**:
-```typescript
-const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
-  let items: DetailItem[] = [];
-  
-  // Apply the SAME BU exclusion logic as getRealizedForIndicator
-  // If a closer is selected and doesn't operate in a BU, skip that BU entirely
-  
-  if (includesModeloAtual) {
-    const closersForBU = effectiveSelectedClosers.filter(c => 
-      BU_CLOSERS.modelo_atual.includes(c as CloserType)
-    );
-    // Include BU if: no closer filter OR at least one selected closer operates here
-    if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
-      const buItems = modeloAtualAnalytics.getDetailItemsForIndicator(indicatorKey);
-      // If closer filter is active, apply it to items from this BU
-      if (effectiveSelectedClosers.length > 0) {
-        items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
-      } else {
-        items = [...items, ...buItems];
-      }
-    }
-  }
-  
-  if (includesO2Tax) {
-    const closersForBU = effectiveSelectedClosers.filter(c => 
-      BU_CLOSERS.o2_tax.includes(c as CloserType)
-    );
-    if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
-      const buItems = o2TaxAnalytics.getDetailItemsForIndicator(indicatorKey);
-      if (effectiveSelectedClosers.length > 0) {
-        items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
-      } else {
-        items = [...items, ...buItems];
-      }
-    }
-  }
-  
-  if (includesFranquia) {
-    const closersForBU = effectiveSelectedClosers.filter(c => 
-      BU_CLOSERS.franquia.includes(c as CloserType)
-    );
-    if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
-      const buItems = franquiaAnalytics.getDetailItemsForIndicator(indicatorKey);
-      if (effectiveSelectedClosers.length > 0) {
-        items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
-      } else {
-        items = [...items, ...buItems];
-      }
-    }
-  }
-  
-  if (includesOxyHacker) {
-    const closersForBU = effectiveSelectedClosers.filter(c => 
-      BU_CLOSERS.oxy_hacker.includes(c as CloserType)
-    );
-    if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
-      const buItems = oxyHackerAnalytics.getDetailItemsForIndicator(indicatorKey);
-      if (effectiveSelectedClosers.length > 0) {
-        items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
-      } else {
-        items = [...items, ...buItems];
-      }
-    }
-  }
-  
-  // Apply SDR filter if any SDRs are selected
-  if (selectedSDRs.length > 0) {
-    items = items.filter(item => matchesSdrFilter(item.responsible));
-  }
-  
-  return items;
-};
-```
-
----
+Aplicar a lógica de filtro de SDR **também nos cálculos de totais** (`getRealizedForIndicator`), similar ao que é feito com o filtro de Closer.
 
 ### Comportamento Esperado Após a Correção
 
 | Cenário | Resultado Esperado |
 |---------|-------------------|
-| Consolidado + Lucas | Drill-down mostra apenas items da O2 TAX com closer Lucas |
-| Consolidado + Pedro | Drill-down mostra items de Modelo Atual, Franquia, Oxy Hacker com closer Pedro |
-| Consolidado + Todos Closers | Drill-down mostra todos os items de todas as BUs |
-| O2 TAX + Lucas | Drill-down mostra items da O2 TAX (mesmo que closer não esteja preenchido) |
+| Consolidado + SDR Amanda | Aceleradores mostram totais filtrados apenas para leads gerados por Amanda |
+| O2 TAX + SDR Carlos | Aceleradores mostram totais filtrados apenas para leads gerados por Carlos |
+| Consolidado + Closer Lucas + SDR Carlos | Aceleradores combinam ambos filtros (BU O2 TAX, closer Lucas, sdr Carlos) |
+| Sem filtro de SDR | Aceleradores mostram todos os registros (comportamento atual) |
+
+---
+
+### Seção Técnica
+
+#### 1. Adicionar `effectiveSelectedSDRs` (similar ao effectiveSelectedClosers)
+
+Para manter consistência e evitar problemas quando todos os SDRs estão selecionados:
+
+```typescript
+// Tratar "todos SDRs selecionados" como "sem filtro"
+const effectiveSelectedSDRs = useMemo(() => {
+  if (selectedSDRs.length === 0) return [];
+  if (selectedSDRs.length === availableSDRs.length) return []; // All selected = no filter
+  return selectedSDRs;
+}, [selectedSDRs, availableSDRs]);
+```
+
+#### 2. Atualizar `matchesSdrFilter` para usar `effectiveSelectedSDRs`
+
+```typescript
+const matchesSdrFilter = (responsavel?: string | null): boolean => {
+  if (effectiveSelectedSDRs.length === 0) return true; // No filter = show all
+  if (!responsavel) return false;
+  return effectiveSelectedSDRs.some(sdr => 
+    responsavel.toLowerCase().includes(sdr.toLowerCase())
+  );
+};
+```
+
+#### 3. Refatorar `getRealizedForIndicator` para aplicar filtro de SDR
+
+A função precisa usar `getCardsForIndicator` quando um SDR está selecionado e filtrar pelo campo `responsavel`/`sdr`:
+
+```typescript
+const getRealizedForIndicator = (indicator: IndicatorConfig) => {
+  let total = 0;
+  
+  if (includesModeloAtual) {
+    const closersForBU = effectiveSelectedClosers.filter(c => 
+      BU_CLOSERS.modelo_atual.includes(c as CloserType)
+    );
+    const sdrsForBU = effectiveSelectedSDRs.filter(s => 
+      BU_SDRS.modelo_atual.includes(s)
+    );
+    
+    // Check if this BU should be included based on closer/SDR filters
+    const includeByCloser = closersForBU.length > 0 || effectiveSelectedClosers.length === 0;
+    const includeBySdr = sdrsForBU.length > 0 || effectiveSelectedSDRs.length === 0;
+    
+    if (includeByCloser && includeBySdr) {
+      // If either filter is active, use card-level filtering
+      if (effectiveSelectedClosers.length > 0 || effectiveSelectedSDRs.length > 0) {
+        const cards = modeloAtualAnalytics.getCardsForIndicator(indicator.key);
+        const filteredCards = cards.filter(card => {
+          const matchCloser = effectiveSelectedClosers.length === 0 || matchesCloserFilter(card.closer);
+          const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(card.responsavel || card.sdr);
+          return matchCloser && matchSdr;
+        });
+        total += filteredCards.length;
+      } else {
+        // No filters - use aggregated count
+        total += getModeloAtualQty(indicator.key as ModeloAtualIndicator, startDate, endDate);
+      }
+    }
+  }
+  
+  // Similar logic for O2 TAX, Franquia, Oxy Hacker...
+  // (cada BU aplica a mesma lógica combinada de Closer + SDR)
+  
+  return total;
+};
+```
+
+#### 4. Ajustar lógica para cada BU
+
+| BU | SDRs Disponíveis | Closers Disponíveis |
+|----|------------------|---------------------|
+| Modelo Atual | Amanda, Carol | Pedro, Daniel |
+| O2 TAX | Carlos | Lucas |
+| Oxy Hacker | Amanda, Carol | Pedro, Daniel |
+| Franquia | Amanda, Carol | Pedro, Daniel |
+
+Cada BU só será incluída no cálculo se:
+1. Nenhum filtro de SDR ativo **OU** pelo menos um SDR selecionado pertence à BU
+2. **E** nenhum filtro de Closer ativo **OU** pelo menos um Closer selecionado pertence à BU
 
 ---
 
@@ -141,15 +117,19 @@ const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/planning/IndicatorsTab.tsx` | Refatorar `getItemsForIndicator` para aplicar lógica de exclusão de BU baseada no closer selecionado |
+| `src/components/planning/IndicatorsTab.tsx` | 1. Adicionar `effectiveSelectedSDRs` <br> 2. Atualizar `matchesSdrFilter` <br> 3. Refatorar `getRealizedForIndicator` para aplicar filtro combinado de Closer + SDR <br> 4. Atualizar `getMetaForIndicator` se necessário para metas filtradas por SDR |
 
 ---
 
-### Nota Importante sobre Closer na O2 TAX
+### Risco/Impacto
 
-O campo "Closer responsável" na O2 TAX geralmente só é preenchido em fases mais avançadas (RM, RR, Proposta, Ganho). Portanto:
-- Para **MQL e Leads** da O2 TAX, o filtro por closer pode retornar lista vazia mesmo que Lucas seja o único closer
-- Isso é comportamento esperado do banco de dados, não um bug do sistema
+- **Baixo**: Alteração isolada na lógica de filtro do frontend
+- **Benefício**: Filtro de SDR funcionará nos acelerômetros e será combinável com outros filtros (BU, Closer, Data)
 
-Se for desejado mostrar **todos os items da O2 TAX** quando Lucas está selecionado (já que ele é o único closer da BU), seria necessário uma lógica adicional que trata BUs com closer único de forma especial.
+### Critério de "Feito"
+
+1. Selecionar SDR "Amanda" → aceleradores mostram apenas leads/MQLs gerados por Amanda
+2. Selecionar SDR "Carlos" com BU "O2 TAX" → aceleradores mostram dados filtrados por Carlos
+3. Combinação de filtros (Closer + SDR) funciona corretamente
+4. Drill-down continua funcionando e mostra mesma contagem que o acelerômetro
 
