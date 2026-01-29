@@ -11,6 +11,13 @@ O SLA (Service Level Agreement) neste contexto mede o **tempo médio entre a cri
 SLA = Data de Entrada na fase "Tentativas de contato" - Data de Criação do Card
 ```
 
+**Exemplo Real do Banco:**
+| Campo | Valor |
+|-------|-------|
+| Data Criação | 2026-01-29 11:31:04 |
+| Entrada (Tentativas) | 2026-01-29 11:53:15 |
+| **SLA** | **22 min** |
+
 ---
 
 ### Alterações Planejadas
@@ -25,79 +32,18 @@ O ROI permanecerá disponível apenas na aba de Marketing Indicators.
 
 ---
 
-#### 2. Modificações no arquivo `src/components/planning/IndicatorsTab.tsx`
+### Seção Técnica
 
-**A) Atualizar configuração de indicadores monetários (linhas 52-67)**
+#### Arquivos a Modificar
 
-```typescript
-// Antes
-type MonetaryIndicatorKey = 'roi' | 'faturamento' | 'mrr' | 'setup' | 'pontual';
-
-const monetaryIndicatorConfigs: MonetaryIndicatorConfig[] = [
-  { key: 'roi', label: 'ROI', shortLabel: 'ROI', format: 'multiplier' },
-  // ...
-];
-
-// Depois
-type MonetaryIndicatorKey = 'sla' | 'faturamento' | 'mrr' | 'setup' | 'pontual';
-
-const monetaryIndicatorConfigs: MonetaryIndicatorConfig[] = [
-  { key: 'sla', label: 'SLA', shortLabel: 'SLA', format: 'duration' }, // Novo formato
-  // ...
-];
-```
-
-**B) Adicionar formato de duração para o SLA**
-
-Criar nova função para formatar duração em horas/minutos:
-```typescript
-const formatDuration = (minutes: number): string => {
-  if (minutes >= 60) {
-    const hours = Math.floor(minutes / 60);
-    const mins = Math.round(minutes % 60);
-    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-  }
-  return `${Math.round(minutes)}m`;
-};
-```
-
-**C) Atualizar o MonetaryRadialCard para suportar formato de duração**
-
-Adicionar suporte ao novo formato `'duration'`:
-```typescript
-interface MonetaryRadialCardProps {
-  format: 'currency' | 'multiplier' | 'duration'; // Adicionar 'duration'
-}
-
-const formatValue = format === 'currency' 
-  ? formatCompactCurrency 
-  : format === 'duration' 
-    ? formatDuration 
-    : formatMultiplier;
-```
-
-**D) Implementar cálculo do SLA realizado**
-
-Adicionar lógica no `getRealizedMonetaryForIndicator`:
-```typescript
-case 'sla': {
-  // Buscar todos os movimentos para "Tentativas de contato" no período
-  const cards = modeloAtualAnalytics.cards.filter(card => 
-    card.fase === 'Tentativas de contato'
-  );
-  
-  if (cards.length === 0) return 0;
-  
-  // Calcular média do SLA (em minutos)
-  // Precisa acessar "Data Criação" que não está mapeado ainda
-  // ...ver modificação no hook abaixo
-  return averageSlaMinutes;
-}
-```
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useModeloAtualAnalytics.ts` | Adicionar campo `dataCriacao` na interface e método `getAverageSlaMinutes` |
+| `src/components/planning/IndicatorsTab.tsx` | Substituir ROI por SLA, adicionar formato de duração, implementar lógica de cálculo |
 
 ---
 
-#### 3. Modificações no hook `src/hooks/useModeloAtualAnalytics.ts`
+#### 1. Modificações no hook `src/hooks/useModeloAtualAnalytics.ts`
 
 **A) Adicionar campo `dataCriacao` na interface `ModeloAtualCard`**
 
@@ -108,7 +54,16 @@ export interface ModeloAtualCard {
 }
 ```
 
-**B) Fazer parse do campo ao processar os dados**
+**B) Atualizar o mapeamento de fases para incluir "Tentativas de contato"**
+
+```typescript
+const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
+  // ... fases existentes
+  'Tentativas de contato': 'mql', // Fase usada para cálculo do SLA
+};
+```
+
+**C) Fazer parse do campo ao processar os dados**
 
 ```typescript
 cards.push({
@@ -117,7 +72,7 @@ cards.push({
 });
 ```
 
-**C) Adicionar método para calcular SLA médio**
+**D) Adicionar método para calcular SLA médio**
 
 ```typescript
 // Calcular SLA médio em minutos para cards que entraram em "Tentativas de contato"
@@ -137,50 +92,125 @@ const getAverageSlaMinutes = useMemo(() => {
 }, [cardsInPeriod]);
 ```
 
----
+**E) Exportar o método no retorno do hook**
 
-#### 4. Meta do SLA
-
-O SLA ideal (meta) precisa ser definido. Sugestões:
-- **15 minutos** (resposta ultra-rápida)
-- **30 minutos** (padrão de mercado B2B)
-- **60 minutos** (1 hora - margem maior)
-
-O indicador será **invertido** - quanto MENOR o valor, melhor (similar ao CAC).
+```typescript
+return {
+  // ... retorno existente
+  getAverageSlaMinutes,
+};
+```
 
 ---
 
-### Seção Técnica
+#### 2. Modificações no arquivo `src/components/planning/IndicatorsTab.tsx`
 
-#### Arquivos a Modificar
+**A) Atualizar tipo e configuração de indicadores monetários**
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useModeloAtualAnalytics.ts` | Adicionar campo `dataCriacao` e método `getAverageSlaMinutes` |
-| `src/components/planning/IndicatorsTab.tsx` | Substituir ROI por SLA, adicionar formato de duração |
+```typescript
+// Antes
+type MonetaryIndicatorKey = 'roi' | 'faturamento' | 'mrr' | 'setup' | 'pontual';
 
-#### Estrutura de Dados do Banco
+const monetaryIndicatorConfigs: MonetaryIndicatorConfig[] = [
+  { key: 'roi', label: 'ROI', shortLabel: 'ROI', format: 'multiplier' },
+  // ...
+];
 
-A tabela `pipefy_moviment_cfos` contém:
-- `"Data Criação"` (timestamp) - momento de criação do card no Pipefy
-- `"Entrada"` (timestamp) - momento de entrada na fase atual
-- `"Fase"` = `"Tentativas de contato"` - fase alvo para cálculo do SLA
+// Depois
+type MonetaryIndicatorKey = 'sla' | 'faturamento' | 'mrr' | 'setup' | 'pontual';
 
-#### Exemplo Real
+interface MonetaryIndicatorConfig {
+  key: MonetaryIndicatorKey;
+  label: string;
+  shortLabel: string;
+  format: 'currency' | 'multiplier' | 'duration'; // Adicionar 'duration'
+}
 
-| Campo | Valor |
-|-------|-------|
-| Data Criação | 2026-01-29 11:31:04 |
-| Entrada (Tentativas) | 2026-01-29 11:35:28 |
-| **SLA** | **4 min 24s** |
+const monetaryIndicatorConfigs: MonetaryIndicatorConfig[] = [
+  { key: 'sla', label: 'SLA', shortLabel: 'SLA', format: 'duration' },
+  { key: 'faturamento', label: 'Faturamento', shortLabel: 'Fat.', format: 'currency' },
+  { key: 'mrr', label: 'MRR', shortLabel: 'MRR', format: 'currency' },
+  { key: 'setup', label: 'Setup', shortLabel: 'Setup', format: 'currency' },
+  { key: 'pontual', label: 'Pontual', shortLabel: 'Pont.', format: 'currency' },
+];
+```
+
+**B) Adicionar função para formatar duração**
+
+```typescript
+// Format duration in hours/minutes
+const formatDuration = (minutes: number): string => {
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+  return `${Math.round(minutes)}m`;
+};
+```
+
+**C) Atualizar o MonetaryRadialCard para suportar formato de duração**
+
+```typescript
+interface MonetaryRadialCardProps {
+  format: 'currency' | 'multiplier' | 'duration'; // Adicionar 'duration'
+}
+
+const MonetaryRadialCard = ({ title, realized, meta, format, onClick, isClickable = false }: MonetaryRadialCardProps) => {
+  // Para SLA, quanto MENOR melhor (inverter a lógica de cores)
+  const isInverted = format === 'duration';
+  const percentage = meta > 0 ? (realized / meta) * 100 : 0;
+  const isAboveMeta = isInverted ? percentage <= 100 : percentage >= 100;
+  
+  const formatValue = format === 'currency' 
+    ? formatCompactCurrency 
+    : format === 'duration' 
+      ? formatDuration 
+      : formatMultiplier;
+  
+  // ... resto do componente
+};
+```
+
+**D) Implementar cálculo do SLA realizado**
+
+```typescript
+case 'sla': {
+  // Para Modelo Atual: usar o método do hook de analytics
+  if (includesModeloAtual) {
+    return modeloAtualAnalytics.getAverageSlaMinutes;
+  }
+  // Para outras BUs: implementar lógica similar ou retornar 0
+  return 0;
+}
+```
+
+**E) Definir meta do SLA**
+
+```typescript
+case 'sla':
+  return 30; // Meta de 30 minutos para primeira tentativa de contato
+```
 
 ---
 
-### Pergunta Pendente
+### Resultado Visual
 
-Qual deve ser a **meta ideal do SLA** (tempo máximo para primeira tentativa de contato)?
-- 15 minutos (agressivo)
-- 30 minutos (padrão)
-- 60 minutos (conservador)
-- Outro valor?
+O indicador SLA será exibido assim:
+
+| Título | Realizado | Meta | Cor |
+|--------|-----------|------|-----|
+| SLA | 22m | 30m | Verde (73% ✓) |
+| SLA | 45m | 30m | Vermelho (150% ✗) |
+
+**Lógica de cores invertida**: Para o SLA, valores MENORES que a meta são verdes (bom), valores MAIORES são vermelhos (ruim).
+
+---
+
+### Observações
+
+1. **Fase-alvo**: A fase "Tentativas de contato" existe no banco e é a primeira ação ativa do SDR após a criação do lead
+2. **Meta sugerida**: 30 minutos (padrão B2B) - pode ser ajustado posteriormente
+3. **ROI**: Permanece disponível na aba Marketing Indicators
+4. **Escopo**: Inicialmente implementado apenas para Modelo Atual (BU que tem a fase "Tentativas de contato" no Pipefy)
 
