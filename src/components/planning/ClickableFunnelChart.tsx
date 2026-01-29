@@ -332,6 +332,11 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
                     </span>
                     <span className="hidden sm:inline truncate">{stage.name}</span>
                     <span className="font-bold flex-shrink-0">{formatNumber(stage.value)}</span>
+                    {index > 0 && stage.value > 0 && (
+                      <span className="text-xs text-white/70 flex-shrink-0">
+                        ({stage.conversionPercent.toFixed(0)}%)
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
