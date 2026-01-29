@@ -1083,13 +1083,11 @@ export function IndicatorsTab() {
           return range.includes('50') || range.includes('100') || range.includes('acima');
         }).length;
         const premiumPct = items.length > 0 ? Math.round((premiumCount / items.length) * 100) : 0;
-        const topSDR = findTopPerformer(items, 'sdr');
         
         // KPIs para MQL
         const kpis: KpiItem[] = [
           { icon: '📊', value: items.length, label: 'Total MQLs', highlight: 'neutral' },
           { icon: '💎', value: `${premiumPct}%`, label: 'Premium', highlight: premiumPct >= 30 ? 'success' : premiumPct >= 15 ? 'neutral' : 'warning' },
-          { icon: '🏆', value: topSDR.name.split(' ')[0], label: `Top (${topSDR.count})`, highlight: 'neutral' },
         ];
         
         // Charts para MQL - Distribuição por Faixa de Faturamento
@@ -1111,7 +1109,7 @@ export function IndicatorsTab() {
         
         setDetailSheetTitle('MQL - De Onde Vêm Nossos Melhores Leads?');
         setDetailSheetDescription(
-          `${items.length} MQLs captados | ${premiumPct}% faixa premium (>R$50k) | Top SDR: ${topSDR.name} (${topSDR.count})`
+          `${items.length} MQLs captados | ${premiumPct}% faixa premium (>R$50k)`
         );
         setDetailSheetKpis(kpis);
         setDetailSheetCharts(charts);
@@ -1119,7 +1117,6 @@ export function IndicatorsTab() {
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
           { key: 'revenueRange', label: 'Faixa Faturamento', format: columnFormatters.revenueRange },
-          { key: 'sdr', label: 'SDR' },
           { key: 'date', label: 'Data', format: columnFormatters.date },
         ]);
         setDetailSheetItems(items);
