@@ -7,6 +7,8 @@ import {
   InstagramMetrics,
   RevenueMetrics,
   CostPerStage,
+  CostPerStageGoals,
+  CostPerChannelStage,
   RevenueGoals
 } from '@/components/planning/marketing-indicators/types';
 
@@ -20,6 +22,8 @@ interface UseMarketingIndicatorsParams {
 interface UseMarketingIndicatorsResult {
   data: MarketingMetrics;
   goals: MarketingGoals;
+  costGoals: CostPerStageGoals;
+  costByChannel: CostPerChannelStage[];
   isLoading: boolean;
   refetch: () => void;
 }
@@ -234,6 +238,37 @@ export function useMarketingIndicators({
     };
   }, []);
 
+  // Cost per stage goals (benchmarks)
+  const costGoals = useMemo<CostPerStageGoals>(() => ({
+    cpl: 200,
+    cpmql: 280,
+    cprm: 450,
+    cprr: 550,
+    cpp: 650,
+    cpv: 9500,
+  }), []);
+
+  // Cost breakdown by channel
+  const costByChannel = useMemo<CostPerChannelStage[]>(() => {
+    return data.channels.map(channel => ({
+      channelId: channel.id,
+      channelName: channel.name,
+      investment: channel.investment,
+      leads: channel.leads,
+      mqls: channel.mqls,
+      rms: channel.rms,
+      rrs: channel.rrs,
+      propostas: channel.propostas || 0,
+      vendas: channel.vendas || 0,
+      cpl: channel.cpl,
+      cpmql: channel.cpmql,
+      cprm: channel.cprm || 0,
+      cprr: channel.cprr || 0,
+      cpp: channel.cpp || 0,
+      cpv: channel.cpv || 0,
+    }));
+  }, [data.channels]);
+
   const refetch = () => {
     // Will trigger data refresh when integrated
     console.log('Marketing indicators refetch triggered', { startDate, endDate, selectedBUs, selectedChannels });
@@ -242,6 +277,8 @@ export function useMarketingIndicators({
   return {
     data,
     goals,
+    costGoals,
+    costByChannel,
     isLoading: false,
     refetch,
   };
