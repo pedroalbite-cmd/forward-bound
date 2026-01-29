@@ -122,7 +122,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
         valorPontual: row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : null,
         valorSetup: row['Valor Setup'] ? parseFloat(row['Valor Setup']) : null,
         faixa: row['Faixa de faturamento mensal'] || null,
-        responsavel: row['Closer responsável'] || row['SDR responsável'] || null,
+        responsavel: row['SDR responsável'] || null, // SDR field (separate from Closer)
         closer: String(row['Closer responsável'] ?? '').trim(),
         motivoPerda: row['Motivo da perda'] || null,
         contato: row['Nome - Interlocução O2'] || row['Nome'] || null,
