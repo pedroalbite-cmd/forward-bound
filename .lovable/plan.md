@@ -1,69 +1,155 @@
 
-Objetivo
-- Fazer o filtro de Closer “Lucas” realmente refletir os números da O2 TAX na aba Indicadores (hoje tudo fica 0), validando com teste real na UI antes de concluir.
 
-O que eu testei e confirmei (no preview)
-- Entrei na aba “Indicadores”.
-- Selecionei “Lucas” em Closers: os KPIs ficaram 0.
-- Selecionei BU = “O2 TAX”: ainda assim os KPIs ficaram 0.
-- No console, o hook de metas da O2 TAX mostra que existem dados no período:
-  - mql 43, rm 21, rr 7, proposta 1, venda 3 (logo, não é “falta de dados”).
+## Plano: Corrigir Drill-down dos Acelerômetros para Filtro de Closer
 
-Causa raiz mais provável (com evidência no código)
-1) Colisão de cache do React Query (mesma queryKey com “formatos diferentes”)
-- useO2TaxMetas e useO2TaxAnalytics usam a mesma queryKey: ['o2tax-movements-all'].
-- Mas eles não precisam/retornam exatamente o mesmo “shape” de dados:
-  - useO2TaxMetas mapeia só campos de fase/valores (não inclui closer/sdr).
-  - useO2TaxAnalytics precisa de closer/sdr etc para filtrar e montar drill-down.
-- Com a mesma key, o React Query pode entregar para o useO2TaxAnalytics um cache “pobre” (sem closer), fazendo:
-  - card.closer virar '' em praticamente tudo
-  - quando o filtro de closer está ativo, tudo é filtrado fora => 0.
+### Problema Identificado
 
-2) “Todos Closers” na UI pode significar “todos selecionados”, não “sem filtro”
-- No MultiSelect, quando existe 1 único closer disponível (O2 TAX), selecionar Lucas faz selectedClosers.length === options.length, e o texto exibido vira “Todos Closers”.
-- Isso pode manter o filtro efetivamente ativo sem ficar óbvio (mas o principal bug ainda é o cache/shapes).
+Quando o usuário seleciona **Consolidado** + **Lucas** como Closer e clica nos acelerômetros (radial cards), o drill-down retorna **lista vazia** (0 itens).
 
-Correção proposta (2 ajustes pequenos e seguros)
+**Causa raiz**: A função `getItemsForIndicator` busca dados de **todas as 4 BUs** e depois tenta filtrar por closer. Como Lucas só opera na O2 TAX:
+- Items de Modelo Atual, Franquia, Oxy Hacker → não têm Lucas como closer → são filtrados fora
+- Items da O2 TAX → podem ter closer preenchido ou não (dependendo da fase)
 
-A) Eliminar colisão de cache entre metas e analytics (principal)
-Opção preferida (mais direta, menor risco de regressão):
-- Mudar a queryKey do useO2TaxAnalytics para uma key diferente, por exemplo:
-  - ['o2tax-movements-analytics']
-- Manter o queryFn do useO2TaxAnalytics como está (mapeando closer/sdr etc).
-Resultado esperado:
-- Ao filtrar por Lucas, o o2TaxAnalytics passa a ter closer preenchido (quando existe no banco) e o filtro volta a funcionar.
+**Resultado**: lista vazia mesmo quando existem dados.
 
-Alternativa (se você preferir “uma fonte única”):
-- Padronizar o “shape” no useO2TaxMetas para incluir closer/sdr (mesmo que ele não use), garantindo que qualquer cache compartilhado tenha os campos necessários.
-(Escolho a opção preferida para finalizar rápido e evitar dependências entre hooks.)
+### Solução
 
-B) Tratar “todos closers selecionados” como “sem filtro” (qualidade/UX)
-- Criar uma variável no IndicatorsTab:
-  - effectiveSelectedClosers = (selectedClosers.length === availableClosers.length) ? [] : selectedClosers
-- Usar effectiveSelectedClosers em:
-  - matchesCloserFilter
-  - filtros de meta/realizado (closersForBU)
-Resultado esperado:
-- Quando estiver aparecendo “Todos Closers”, o sistema se comporta como “sem filtro”, evitando casos confusos (especialmente em BU com 1 closer).
+Aplicar a mesma lógica de exclusão de BU do `getRealizedForIndicator` no `getItemsForIndicator`:
 
-Como vou testar (antes de dizer que corrigiu)
-Checklist de teste visual (no preview):
-1) BU = O2 TAX, Closers = Todos Closers
-- Esperado: MQL 43, RM 21, RR 7, Proposta 1, Vendas 3 (para 01/01/2026–29/01/2026)
-2) BU = Consolidado, Closers = Lucas
-- Esperado: os indicadores devem refletir apenas a O2 TAX (mesmos números acima), e não zerar tudo.
-3) BU = Consolidado, Closers = Pedro ou Daniel
-- Esperado: O2 TAX não entra no cálculo (continua funcionando como regra atual), e o Modelo Atual aparece normal.
-4) (Sanidade) Abrir drill-down de um indicador (ex: MQL) com filtro Lucas
-- Esperado: lista não vazia (desde que existam registros com closer preenchido para aquela etapa).
+> Se um closer está selecionado e ele **não opera** em uma BU, não buscar dados dessa BU para o drill-down.
 
-Arquivos a alterar
-- src/hooks/useO2TaxAnalytics.ts (mudar queryKey para não colidir com useO2TaxMetas)
-- src/components/planning/IndicatorsTab.tsx (introduzir effectiveSelectedClosers e usá-lo no matchesCloserFilter e nos pontos de cálculo que dependem de selectedClosers)
+---
 
-Risco/impacto
-- Baixo: mudança isolada, sem alteração de backend.
-- Benefício: filtro por Lucas deixa de zerar tudo e passa a refletir os dados reais.
+### Seção Técnica
 
-Critério de “feito”
-- Eu consigo reproduzir no preview que “BU Consolidado + Closer Lucas” não zera os KPIs e exibe números coerentes com os logs do useO2TaxMetas.
+#### Alteração em `IndicatorsTab.tsx` (função `getItemsForIndicator`)
+
+**Antes** (linhas 919-950):
+```typescript
+const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
+  let items: DetailItem[] = [];
+  
+  // Aggregate items from selected BUs
+  if (includesModeloAtual) {
+    items = [...items, ...modeloAtualAnalytics.getDetailItemsForIndicator(indicatorKey)];
+  }
+  
+  if (includesO2Tax) {
+    items = [...items, ...o2TaxAnalytics.getDetailItemsForIndicator(indicatorKey)];
+  }
+  
+  // ... outras BUs
+  
+  // Apply closer filter if any closers are selected
+  if (selectedClosers.length > 0) {
+    items = items.filter(item => matchesCloserFilter(item.closer));
+  }
+  
+  return items;
+};
+```
+
+**Depois**:
+```typescript
+const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
+  let items: DetailItem[] = [];
+  
+  // Apply the SAME BU exclusion logic as getRealizedForIndicator
+  // If a closer is selected and doesn't operate in a BU, skip that BU entirely
+  
+  if (includesModeloAtual) {
+    const closersForBU = effectiveSelectedClosers.filter(c => 
+      BU_CLOSERS.modelo_atual.includes(c as CloserType)
+    );
+    // Include BU if: no closer filter OR at least one selected closer operates here
+    if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
+      const buItems = modeloAtualAnalytics.getDetailItemsForIndicator(indicatorKey);
+      // If closer filter is active, apply it to items from this BU
+      if (effectiveSelectedClosers.length > 0) {
+        items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
+      } else {
+        items = [...items, ...buItems];
+      }
+    }
+  }
+  
+  if (includesO2Tax) {
+    const closersForBU = effectiveSelectedClosers.filter(c => 
+      BU_CLOSERS.o2_tax.includes(c as CloserType)
+    );
+    if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
+      const buItems = o2TaxAnalytics.getDetailItemsForIndicator(indicatorKey);
+      if (effectiveSelectedClosers.length > 0) {
+        items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
+      } else {
+        items = [...items, ...buItems];
+      }
+    }
+  }
+  
+  if (includesFranquia) {
+    const closersForBU = effectiveSelectedClosers.filter(c => 
+      BU_CLOSERS.franquia.includes(c as CloserType)
+    );
+    if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
+      const buItems = franquiaAnalytics.getDetailItemsForIndicator(indicatorKey);
+      if (effectiveSelectedClosers.length > 0) {
+        items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
+      } else {
+        items = [...items, ...buItems];
+      }
+    }
+  }
+  
+  if (includesOxyHacker) {
+    const closersForBU = effectiveSelectedClosers.filter(c => 
+      BU_CLOSERS.oxy_hacker.includes(c as CloserType)
+    );
+    if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
+      const buItems = oxyHackerAnalytics.getDetailItemsForIndicator(indicatorKey);
+      if (effectiveSelectedClosers.length > 0) {
+        items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
+      } else {
+        items = [...items, ...buItems];
+      }
+    }
+  }
+  
+  // Apply SDR filter if any SDRs are selected
+  if (selectedSDRs.length > 0) {
+    items = items.filter(item => matchesSdrFilter(item.responsible));
+  }
+  
+  return items;
+};
+```
+
+---
+
+### Comportamento Esperado Após a Correção
+
+| Cenário | Resultado Esperado |
+|---------|-------------------|
+| Consolidado + Lucas | Drill-down mostra apenas items da O2 TAX com closer Lucas |
+| Consolidado + Pedro | Drill-down mostra items de Modelo Atual, Franquia, Oxy Hacker com closer Pedro |
+| Consolidado + Todos Closers | Drill-down mostra todos os items de todas as BUs |
+| O2 TAX + Lucas | Drill-down mostra items da O2 TAX (mesmo que closer não esteja preenchido) |
+
+---
+
+### Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/planning/IndicatorsTab.tsx` | Refatorar `getItemsForIndicator` para aplicar lógica de exclusão de BU baseada no closer selecionado |
+
+---
+
+### Nota Importante sobre Closer na O2 TAX
+
+O campo "Closer responsável" na O2 TAX geralmente só é preenchido em fases mais avançadas (RM, RR, Proposta, Ganho). Portanto:
+- Para **MQL e Leads** da O2 TAX, o filtro por closer pode retornar lista vazia mesmo que Lucas seja o único closer
+- Isso é comportamento esperado do banco de dados, não um bug do sistema
+
+Se for desejado mostrar **todos os items da O2 TAX** quando Lucas está selecionado (já que ele é o único closer da BU), seria necessário uma lógica adicional que trata BUs com closer único de forma especial.
+
