@@ -1278,10 +1278,12 @@ export function IndicatorsTab() {
         setDetailSheetColumns([
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
+          { key: 'dataAssinatura', label: 'Data Assinatura', format: columnFormatters.date },
           { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
           { key: 'setup', label: 'Setup', format: columnFormatters.currency },
           { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
           { key: 'value', label: 'Total', format: columnFormatters.currency },
+          { key: 'sdr', label: 'SDR' },
           { key: 'responsible', label: 'Closer' },
           { key: 'cicloVenda', label: 'Ciclo', format: columnFormatters.cicloVenda },
         ]);
