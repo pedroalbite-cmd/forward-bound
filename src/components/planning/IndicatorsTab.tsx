@@ -410,11 +410,20 @@ export function IndicatorsTab() {
     }
   }, [selectedBUs, selectedSDRs]);
 
-  // Filter function - checks if a responsavel matches selected closers
-  const matchesCloserFilter = (responsavel?: string | null): boolean => {
+  // Filter function - checks if a responsavel matches selected closers (partial match, case-insensitive)
+  const matchesCloserFilter = (closerValue?: string | null): boolean => {
     if (selectedClosers.length === 0) return true; // No filter = show all
-    if (!responsavel) return false;
-    return selectedClosers.includes(responsavel);
+    if (!closerValue) return false;
+    
+    // Comparação parcial (case-insensitive) para lidar com variações de nome
+    // Ex: "Lucas" no banco deve corresponder a "Lucas Ilha" no filtro
+    const normalizedCloser = closerValue.toLowerCase().trim();
+    return selectedClosers.some(selected => {
+      const normalizedSelected = selected.toLowerCase().trim();
+      // Match se o closer do banco está contido no filtro OU vice-versa
+      return normalizedSelected.includes(normalizedCloser) || 
+             normalizedCloser.includes(normalizedSelected);
+    });
   };
 
   // Filter function - checks if a responsible/SDR matches selected SDRs (partial match)
