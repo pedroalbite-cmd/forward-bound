@@ -1,170 +1,112 @@
 
-## Plano: Adicionar Filtro de SDR na Aba Indicadores
+## Plano: Adicionar Colunas SDR e Data Assinatura no Drill-Down de Vendas
 
-### Contexto Atual
+### Contexto
 
-A aba **Indicadores** já possui:
-- ✅ Filtro de **BUs** (Consolidado, Modelo Atual, O2 TAX, etc.) usando `MultiSelect`
-- ✅ Filtro de **Closers** (Pedro, Daniel, Lucas) usando `MultiSelect`
-- ✅ Dados de **SDR responsável** já sendo extraídos pelo hook `useModeloAtualAnalytics`
-- ✅ Campo `responsavel` nos cards já contém o nome do SDR
+O drill-down de **Vendas** (modal que abre ao clicar no acelerador "Vendas") atualmente exibe as seguintes colunas:
 
-**O que está faltando:**
-- ❌ Um **MultiSelect** separado para filtrar por SDR
-- ❌ Lista de **SDRs disponíveis** baseada nos dados reais
-- ❌ Lógica para **aplicar o filtro de SDR** nos dados exibidos
+| Produto | Empresa | MRR | Setup | Pontual | Total | Closer | Ciclo |
+|---------|---------|-----|-------|---------|-------|--------|-------|
+
+O usuário solicitou adicionar:
+1. **Coluna "SDR"** - antes da coluna "Closer" - mostrando qual SDR passou o lead para o closer
+2. **Coluna "Data Assinatura"** - após "Empresa" - mostrando a data de assinatura do contrato
 
 ---
 
-### Estrutura Visual Proposta
+### Nova Estrutura de Colunas
 
-```text
-┌─────────────────────────────────────────────────────────────────────────────────────────────┐
-│  Visão Meta Pace                                                                            │
-├─────────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                             │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌──────────┐  ┌──────────┐       │
-│  │ Consolidado ▾ │  │ Todos Closers▾│  │ Todos SDRs  ▾ │  │De: 01/01 │  │Até: 29/01│       │
-│  └───────────────┘  └───────────────┘  └───────────────┘  └──────────┘  └──────────┘       │
-│                                                                                             │
-│  Período: 29 dias | Agrupamento: Diário                                                     │
-│                                                                                             │
-└─────────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### SDRs Conhecidos (Baseado na Memória do Sistema)
-
-| SDR | BUs Onde Atuam |
-|-----|----------------|
-| **Amanda** | Modelo Atual |
-| **Carol** | Modelo Atual |
-| **Carlos** | O2 TAX |
+| Produto | Empresa | Data Assinatura | MRR | Setup | Pontual | Total | SDR | Closer | Ciclo |
+|---------|---------|-----------------|-----|-------|---------|-------|-----|--------|-------|
 
 ---
 
 ### Seção Técnica
 
-#### Alterações no Arquivo `src/components/planning/IndicatorsTab.tsx`
+#### Arquivos a Modificar
 
-| Item | Alteração |
-|------|-----------|
-| **Estado** | Adicionar `selectedSDRs: string[]` similar a `selectedClosers` |
-| **Constante** | Definir `sdrOptions: MultiSelectOption[]` com Amanda, Carol, Carlos |
-| **Mapeamento BU→SDR** | Definir `BU_SDRS` análogo a `BU_CLOSERS` |
-| **useMemo** | Calcular `availableSDRs` baseado nas BUs selecionadas |
-| **useEffect** | Limpar SDRs selecionados quando BU muda (como já faz com closers) |
-| **Filtro** | Criar função `matchesSdrFilter()` similar a `matchesCloserFilter()` |
-| **UI** | Adicionar novo `MultiSelect` para SDRs após o de Closers |
-| **getItemsForIndicator** | Aplicar filtro de SDR junto com filtro de Closer |
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/planning/indicators/DetailSheet.tsx` | Adicionar campos `sdr` e `dataAssinatura` na interface `DetailItem` |
+| `src/hooks/useModeloAtualAnalytics.ts` | Extrair campo "Data de assinatura do contrato" da tabela externa e separar `sdr` do `responsavel` |
+| `src/components/planning/IndicatorsTab.tsx` | Atualizar as colunas do case `'venda'` no `handleFunnelIndicatorClick` |
+| `src/components/planning/ClickableFunnelChart.tsx` | Atualizar as colunas para incluir SDR e Data Assinatura quando indicador = venda |
 
-#### Constantes a Adicionar
+#### Alterações na Interface DetailItem
 
 ```typescript
-// Mapeamento de SDRs por BU
-const BU_SDRS: Record<BuType, string[]> = {
-  modelo_atual: ['Amanda', 'Carol'],
-  o2_tax: ['Carlos'],
-  oxy_hacker: ['Amanda', 'Carol'], // Compartilha com Modelo Atual
-  franquia: ['Amanda', 'Carol'],   // Compartilha com Modelo Atual
-};
-
-// Opções de SDRs para o MultiSelect
-const sdrOptions: MultiSelectOption[] = [
-  { value: 'Amanda', label: 'Amanda' },
-  { value: 'Carol', label: 'Carol' },
-  { value: 'Carlos', label: 'Carlos' },
-];
+export interface DetailItem {
+  // ... campos existentes ...
+  sdr?: string;              // NOVO: SDR responsável original
+  dataAssinatura?: string;   // NOVO: Data de assinatura do contrato (ISO string)
+}
 ```
 
-#### Lógica de Filtro
+#### Alterações no Hook useModeloAtualAnalytics
 
 ```typescript
-// Estado para SDRs selecionados
-const [selectedSDRs, setSelectedSDRs] = useState<string[]>([]);
+// Interface ModeloAtualCard - adicionar campos
+export interface ModeloAtualCard {
+  // ... existentes ...
+  sdr?: string;              // Extraído de "SDR responsável"
+  dataAssinatura: Date | null; // Extraído de "Data de assinatura do contrato"
+}
 
-// Calcular SDRs disponíveis baseado nas BUs selecionadas
-const availableSDRs: MultiSelectOption[] = useMemo(() => {
-  const sdrsSet = new Set<string>();
-  
-  selectedBUs.forEach(bu => {
-    const buSdrs = BU_SDRS[bu as BuType] || [];
-    buSdrs.forEach(sdr => sdrsSet.add(sdr));
-  });
-  
-  return sdrOptions.filter(s => sdrsSet.has(s.value));
-}, [selectedBUs]);
+// Na queryFn, extrair os novos campos:
+const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
+const sdr = String(row['SDR responsável'] || '').trim();
 
-// Função de filtro
-const matchesSdrFilter = (responsavel?: string | null): boolean => {
-  if (selectedSDRs.length === 0) return true;
-  if (!responsavel) return false;
-  // Match parcial: se o nome do responsável CONTÉM um dos SDRs selecionados
-  return selectedSDRs.some(sdr => 
-    responsavel.toLowerCase().includes(sdr.toLowerCase())
-  );
-};
-
-// Aplicar filtro em getItemsForIndicator
-const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
-  let items: DetailItem[] = [];
-  // ... agregação de BUs ...
-  
-  // Aplicar filtro de Closer
-  if (selectedClosers.length > 0) {
-    items = items.filter(item => matchesCloserFilter(item.closer));
-  }
-  
-  // Aplicar filtro de SDR (NOVO)
-  if (selectedSDRs.length > 0) {
-    items = items.filter(item => matchesSdrFilter(item.responsible));
-  }
-  
-  return items;
-};
+// Em toDetailItem, mapear os campos:
+const toDetailItem = (card: ModeloAtualCard): DetailItem => ({
+  // ... existentes ...
+  sdr: card.sdr || undefined,
+  dataAssinatura: card.dataAssinatura?.toISOString() || undefined,
+});
 ```
 
-#### Componente UI
+#### Alterações nas Colunas de Vendas (IndicatorsTab.tsx)
 
 ```typescript
-{availableSDRs.length > 0 && (
-  <MultiSelect
-    options={availableSDRs}
-    selected={selectedSDRs}
-    onSelectionChange={setSelectedSDRs}
-    placeholder="Todos SDRs"
-    allLabel="Todos SDRs"
-    className="w-44"
-  />
-)}
+case 'venda': {
+  // ...
+  setDetailSheetColumns([
+    { key: 'product', label: 'Produto', format: columnFormatters.product },
+    { key: 'company', label: 'Empresa' },
+    { key: 'dataAssinatura', label: 'Data Assinatura', format: columnFormatters.date }, // NOVO
+    { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
+    { key: 'setup', label: 'Setup', format: columnFormatters.currency },
+    { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
+    { key: 'value', label: 'Total', format: columnFormatters.currency },
+    { key: 'sdr', label: 'SDR' },           // NOVO - antes do Closer
+    { key: 'responsible', label: 'Closer' },
+    { key: 'cicloVenda', label: 'Ciclo', format: columnFormatters.cicloVenda },
+  ]);
+  // ...
+}
 ```
 
 ---
 
-### Fluxo de Implementação
+### Campo "Data de Assinatura do Contrato" no Banco
 
-1. **Adicionar constantes** - `BU_SDRS` e `sdrOptions` no início do componente
-2. **Adicionar estado** - `selectedSDRs` com `useState`
-3. **Calcular SDRs disponíveis** - `useMemo` baseado em `selectedBUs`
-4. **Limpar SDRs inválidos** - `useEffect` quando BU muda
-5. **Criar função de filtro** - `matchesSdrFilter()`
-6. **Atualizar getItemsForIndicator** - Aplicar ambos os filtros
-7. **Adicionar UI** - Novo `MultiSelect` na barra de filtros
+De acordo com a memória do sistema, o campo `Data de assinatura do contrato` existe na tabela `pipefy_moviment_cfos` e era usado anteriormente para determinar a data da venda. Agora ele será recuperado apenas para exibição, já que a lógica de contabilização usa a data de entrada na fase "Ganho".
 
 ---
 
-### Considerações Importantes
+### Considerações Sobre Outras BUs
 
-- O filtro de SDR afeta **MQLs e etapas anteriores** (onde SDR é o responsável)
-- O filtro de Closer afeta **RM e etapas posteriores** (onde Closer é o responsável)
-- Ambos os filtros podem ser usados simultaneamente
-- A lógica de match usa `includes()` para ser flexível com variações de nome
+As BUs **O2 TAX**, **Oxy Hacker** e **Franquia** utilizam hooks diferentes (`useO2TaxAnalytics`, `useExpansaoAnalytics`). Para que a coluna SDR funcione corretamente nessas BUs também, será necessário:
+
+1. Verificar se essas tabelas possuem os campos equivalentes
+2. Atualizar os hooks correspondentes para extrair `sdr` e `dataAssinatura`
+
+Se os campos não existirem nessas BUs, as colunas exibirão "-" como fallback.
 
 ---
 
-### Próximos Passos
+### Resumo das Alterações
 
-1. ✅ Implementar filtro de SDR (CONCLUÍDO)
-2. 🔜 Opcionalmente, extrair lista de SDRs dinamicamente dos dados
-3. 🔜 Considerar ajuste de metas por SDR (similar ao que existe para Closers)
+1. **DetailSheet.tsx** - Adicionar `sdr?: string` e `dataAssinatura?: string` à interface `DetailItem`
+2. **useModeloAtualAnalytics.ts** - Adicionar campos `sdr` e `dataAssinatura` na extração e mapeamento
+3. **IndicatorsTab.tsx** - Atualizar colunas do drill-down de vendas (adicionar SDR antes de Closer, Data Assinatura após Empresa)
+4. **ClickableFunnelChart.tsx** - Atualizar colunas para manter consistência no drill-down via funil
