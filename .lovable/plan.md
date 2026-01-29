@@ -1,78 +1,82 @@
 
-## Plano: Corrigir Lookup de Metas de Faturamento no Gráfico
 
-### Problema Identificado
+## Plano: Atualizar Colunas do Drill-Down do Funil
 
-O sistema não está puxando as metas de faturamento porque há uma **inconsistência de case** (maiúsculas/minúsculas) entre as chaves:
+### Alterações Solicitadas
 
-| Local | Formato | Exemplo |
-|-------|---------|---------|
-| `usePlanGrowthData.ts` (armazenamento) | Primeira letra maiúscula | `"Jan"`, `"Fev"`, `"Mar"` |
-| `RevenueChartComparison.tsx` (leitura) | Minúsculo (date-fns + ptBR) | `"jan"`, `"fev"`, `"mar"` |
-
-Quando o código faz `metas["jan"]` mas a chave real é `"Jan"`, retorna `undefined`, e com `|| 0` a meta fica zerada.
+| Remover | Adicionar |
+|---------|-----------|
+| `phase` (Fase) | `mrr` (MRR) |
+| `duration` (Tempo na Fase) | `setup` (Setup) |
+| | `pontual` (Pontual) |
+| | `value` (Total) |
 
 ---
 
-### Solução
+### Arquivo a Modificar
 
-Capitalizar a primeira letra do mês formatado antes de usar como chave de lookup:
+**`src/components/planning/ClickableFunnelChart.tsx`**
 
+#### Antes (linhas 169-195):
 ```typescript
-// Antes (falha):
-const monthName = format(monthDate, 'MMM', { locale: ptBR }); // "jan"
-const monthMeta = metas[monthName] || 0; // metas["jan"] = undefined
+const getColumnsForIndicator = (indicator: IndicatorType) => {
+  const baseColumns = [
+    { key: 'product', label: 'Produto', format: columnFormatters.product },
+    { key: 'name', label: 'Título' },
+    { key: 'company', label: 'Empresa/Contato' },
+    { key: 'phase', label: 'Fase', format: columnFormatters.phase },        // ← REMOVER
+    { key: 'date', label: 'Data', format: columnFormatters.date },
+    { key: 'duration', label: 'Tempo na Fase', format: columnFormatters.duration }, // ← REMOVER
+  ];
 
-// Depois (correto):
-const monthNameRaw = format(monthDate, 'MMM', { locale: ptBR }); // "jan"
-const monthName = monthNameRaw.charAt(0).toUpperCase() + monthNameRaw.slice(1); // "Jan"
-const monthMeta = metas[monthName] || 0; // metas["Jan"] = valor correto
+  if (indicator === 'proposta' || indicator === 'venda') {
+    return [...baseColumns, mrr, setup, pontual, value, responsible];
+  }
+
+  return [...baseColumns, revenueRange, responsible];
+};
+```
+
+#### Depois:
+```typescript
+const getColumnsForIndicator = (indicator: IndicatorType) => {
+  // Colunas base para todos os indicadores (sem Fase e Tempo na Fase)
+  const baseColumns = [
+    { key: 'product', label: 'Produto', format: columnFormatters.product },
+    { key: 'name', label: 'Título' },
+    { key: 'company', label: 'Empresa/Contato' },
+    { key: 'date', label: 'Data', format: columnFormatters.date },
+  ];
+
+  // Colunas monetárias (agora para TODOS os indicadores)
+  const monetaryColumns = [
+    { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
+    { key: 'setup', label: 'Setup', format: columnFormatters.currency },
+    { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
+    { key: 'value', label: 'Total', format: columnFormatters.currency },
+  ];
+
+  return [
+    ...baseColumns,
+    ...monetaryColumns,
+    { key: 'responsible', label: 'Responsável' },
+  ];
+};
 ```
 
 ---
 
-### Arquivos a Modificar
+### Resultado Visual
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/planning/RevenueChartComparison.tsx` | Capitalizar `monthName` em `calcularMetaDoPeriodo()` (linha 82) e em `calcBUMeta()` (linha 268) |
-| `src/components/planning/RevenueBreakdownChart.tsx` | Capitalizar `monthName` em `calcularMetaDoPeriodo()` (linha 151) |
+A tabela de drill-down para qualquer etapa do funil (Leads, MQL, RM, RR, Proposta, Venda) exibirá:
 
----
-
-### Código da Correção
-
-#### `RevenueChartComparison.tsx` - Função `calcularMetaDoPeriodo`
-```typescript
-// Linha 82 - Capitalizar primeira letra
-const monthNameRaw = format(monthDate, 'MMM', { locale: ptBR });
-const monthName = monthNameRaw.charAt(0).toUpperCase() + monthNameRaw.slice(1);
-const monthMeta = metas[monthName] || 0;
-```
-
-#### `RevenueChartComparison.tsx` - Função `calcBUMeta`
-```typescript
-// Linha 268 - Capitalizar primeira letra
-const monthNameRaw = format(monthDate, 'MMM', { locale: ptBR });
-const monthName = monthNameRaw.charAt(0).toUpperCase() + monthNameRaw.slice(1);
-const monthMeta = metas[monthName] || 0;
-```
-
-#### `RevenueBreakdownChart.tsx` - Função `calcularMetaDoPeriodo`
-```typescript
-// Linha 151 - Capitalizar primeira letra
-const monthNameRaw = format(monthDate, 'MMM', { locale: ptBR });
-const monthName = monthNameRaw.charAt(0).toUpperCase() + monthNameRaw.slice(1);
-const monthMeta = metas[monthName] || 0;
-```
+| Produto | Título | Empresa/Contato | Data | MRR | Setup | Pontual | Total | Responsável | Pipefy |
+|---------|--------|-----------------|------|-----|-------|---------|-------|-------------|--------|
+| CaaS | Card XYZ | Empresa ABC | 15/01/2026 | R$ 5.000 | R$ 2.000 | R$ 1.000 | R$ 8.000 | Pedro | 🔗 |
 
 ---
 
-### Resultado Esperado
+### Observação
 
-Após a correção:
+Para indicadores que não possuem valores monetários (como Leads, MQL, RM, RR), as colunas MRR, Setup, Pontual e Total exibirão "-" quando os dados não estiverem disponíveis, graças ao formatter `columnFormatters.currency` que já trata valores nulos.
 
-1. As metas de faturamento serão exibidas corretamente para todas as BUs
-2. Os gráficos mostrarão a linha/barra de meta com valores corretos
-3. Os KPI cards do Dashboard Compacto (Opção 5) exibirão os percentuais de atingimento de meta corretamente
-4. As metas pro-rata funcionarão corretamente para períodos parciais do mês
