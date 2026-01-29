@@ -101,6 +101,34 @@ const formatDuration = (minutes: number): string => {
   return `${Math.round(minutes)}m`;
 };
 
+// Helper to find top performer from items
+const findTopPerformer = (items: DetailItem[], key: 'responsible' | 'closer'): { name: string; count: number } => {
+  const counts = new Map<string, number>();
+  items.forEach(item => {
+    const value = item[key] || item.responsible || '';
+    if (value) counts.set(value, (counts.get(value) || 0) + 1);
+  });
+  let topName = '-';
+  let topCount = 0;
+  counts.forEach((count, name) => {
+    if (count > topCount) { topName = name; topCount = count; }
+  });
+  return { name: topName, count: topCount };
+};
+
+// Helper to find top performer by revenue
+const findTopPerformerByRevenue = (items: DetailItem[]): { name: string; total: number }[] => {
+  const totals = new Map<string, number>();
+  items.forEach(item => {
+    const name = item.responsible || item.closer || '';
+    if (name) totals.set(name, (totals.get(name) || 0) + (item.value || 0));
+  });
+  return Array.from(totals.entries())
+    .map(([name, total]) => ({ name, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 3);
+};
+
 interface RadialProgressCardProps {
   title: string;
   realized: number;
@@ -816,33 +844,6 @@ export function IndicatorsTab() {
     return viewMode === 'accumulated' ? toAccumulatedData(baseData) : baseData;
   };
 
-  // Get columns for indicator type
-  const getColumnsForIndicator = (indicatorKey: IndicatorType): { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] => {
-    const baseColumns: { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] = [
-      { key: 'product', label: 'Produto', format: columnFormatters.product },
-      { key: 'company', label: 'Empresa/Contato' },
-      { key: 'date', label: 'Data', format: columnFormatters.date },
-      { key: 'duration', label: 'Tempo na Fase', format: columnFormatters.duration },
-    ];
-
-    if (indicatorKey === 'proposta' || indicatorKey === 'venda') {
-      return [
-        ...baseColumns,
-        { key: 'mrr' as keyof DetailItem, label: 'MRR', format: columnFormatters.currency },
-        { key: 'setup' as keyof DetailItem, label: 'Setup', format: columnFormatters.currency },
-        { key: 'pontual' as keyof DetailItem, label: 'Pontual', format: columnFormatters.currency },
-        { key: 'value' as keyof DetailItem, label: 'Total', format: columnFormatters.currency },
-        { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
-      ];
-    }
-
-    return [
-      ...baseColumns,
-      { key: 'revenueRange' as keyof DetailItem, label: 'Faixa Faturamento' },
-      { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
-    ];
-  };
-
   // Get detail items for an indicator based on selected BUs and closer filter
   const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
     let items: DetailItem[] = [];
@@ -872,17 +873,223 @@ export function IndicatorsTab() {
     return items;
   };
 
-  // Handle radial card click
+  // === STRATEGIC DRILL-DOWN HANDLERS ===
+  
+  // Handle radial card click with strategic narratives
   const handleRadialCardClick = (indicator: IndicatorConfig) => {
     const items = getItemsForIndicator(indicator.key);
-    const columns = getColumnsForIndicator(indicator.key);
-    const realized = getRealizedForIndicator(indicator);
+    const now = new Date();
     
-    setDetailSheetTitle(indicator.label);
-    setDetailSheetDescription(`${formatNumber(realized)} registros no período selecionado`);
-    setDetailSheetItems(items);
-    setDetailSheetColumns(columns);
-    setDetailSheetOpen(true);
+    switch (indicator.key) {
+      case 'mql': {
+        // MQL: "De Onde Vêm Nossos Melhores Leads?"
+        const itemsWithCalcs = items.map(item => {
+          const entryDate = item.date ? new Date(item.date) : now;
+          // diasAteQualificar: estimate from duration (already in seconds, convert to days)
+          const diasAteQualificar = item.duration ? Math.floor(item.duration / 86400) : 0;
+          return { ...item, diasAteQualificar };
+        });
+        
+        const premiumCount = itemsWithCalcs.filter(i => {
+          const range = (i.revenueRange || '').toLowerCase();
+          return range.includes('50') || range.includes('100') || range.includes('acima');
+        }).length;
+        const premiumPct = items.length > 0 ? Math.round((premiumCount / items.length) * 100) : 0;
+        const avgDias = itemsWithCalcs.length > 0 
+          ? Math.round(itemsWithCalcs.reduce((sum, i) => sum + (i.diasAteQualificar || 0), 0) / itemsWithCalcs.length)
+          : 0;
+        const topSDR = findTopPerformer(items, 'responsible');
+        
+        setDetailSheetTitle('MQL - De Onde Vêm Nossos Melhores Leads?');
+        setDetailSheetDescription(
+          `${items.length} MQLs captados | ${premiumPct}% faixa premium (>R$50k) | Top SDR: ${topSDR.name} (${topSDR.count}) | Tempo médio: ${avgDias}d`
+        );
+        setDetailSheetColumns([
+          { key: 'product', label: 'Produto', format: columnFormatters.product },
+          { key: 'company', label: 'Empresa' },
+          { key: 'revenueRange', label: 'Faixa Faturamento', format: columnFormatters.revenueRange },
+          { key: 'diasAteQualificar', label: 'Dias até MQL', format: columnFormatters.diasAteQualificar },
+          { key: 'responsible', label: 'SDR' },
+          { key: 'date', label: 'Data', format: columnFormatters.date },
+        ]);
+        setDetailSheetItems(itemsWithCalcs);
+        setDetailSheetOpen(true);
+        return;
+      }
+      
+      case 'rm': {
+        // RM: "Estamos Convertendo MQLs em Reuniões?"
+        const mqlCount = getRealizedForIndicator(indicatorConfigs.find(c => c.key === 'mql')!);
+        const taxaMqlRm = mqlCount > 0 ? Math.round((items.length / mqlCount) * 100) : 0;
+        
+        const itemsWithCalcs = items.map(item => {
+          const diasComoMQL = item.duration ? Math.floor(item.duration / 86400) : 0;
+          return { ...item, diasComoMQL };
+        });
+        
+        const avgDias = itemsWithCalcs.length > 0 
+          ? Math.round(itemsWithCalcs.reduce((sum, i) => sum + (i.diasComoMQL || 0), 0) / itemsWithCalcs.length)
+          : 0;
+        const topCloser = findTopPerformer(items, 'closer');
+        
+        setDetailSheetTitle('RM - Estamos Convertendo MQLs em Reuniões?');
+        setDetailSheetDescription(
+          `${items.length} reuniões agendadas | Taxa MQL→RM: ${taxaMqlRm}% | Tempo médio: ${avgDias}d | Top: ${topCloser.name} (${topCloser.count})`
+        );
+        setDetailSheetColumns([
+          { key: 'product', label: 'Produto', format: columnFormatters.product },
+          { key: 'company', label: 'Empresa' },
+          { key: 'responsible', label: 'Closer' },
+          { key: 'diasComoMQL', label: 'Dias como MQL', format: columnFormatters.diasAteAgendar },
+          { key: 'revenueRange', label: 'Faixa Faturamento', format: columnFormatters.revenueRange },
+          { key: 'date', label: 'Data', format: columnFormatters.date },
+        ]);
+        setDetailSheetItems(itemsWithCalcs);
+        setDetailSheetOpen(true);
+        return;
+      }
+      
+      case 'rr': {
+        // RR: "Quem Apareceu nas Reuniões?"
+        const rmCount = getRealizedForIndicator(indicatorConfigs.find(c => c.key === 'rm')!);
+        const taxaShow = rmCount > 0 ? Math.round((items.length / rmCount) * 100) : 0;
+        const noShows = rmCount - items.length;
+        const potencial = items.reduce((sum, i) => sum + (i.value || 0), 0);
+        const topCloser = findTopPerformer(items, 'closer');
+        
+        setDetailSheetTitle('RR - Quem Apareceu nas Reuniões?');
+        setDetailSheetDescription(
+          `${items.length} realizadas | Taxa Show: ${taxaShow}% (${items.length} de ${rmCount}) | ${noShows > 0 ? `${noShows} no-shows | ` : ''}Potencial: ${formatCompactCurrency(potencial)} | Top: ${topCloser.name}`
+        );
+        setDetailSheetColumns([
+          { key: 'product', label: 'Produto', format: columnFormatters.product },
+          { key: 'company', label: 'Empresa' },
+          { key: 'responsible', label: 'Closer' },
+          { key: 'revenueRange', label: 'Faixa Faturamento', format: columnFormatters.revenueRange },
+          { key: 'duration', label: 'Tempo até Reunir', format: columnFormatters.duration },
+          { key: 'date', label: 'Data', format: columnFormatters.date },
+        ]);
+        setDetailSheetItems(items);
+        setDetailSheetOpen(true);
+        return;
+      }
+      
+      case 'proposta': {
+        // Proposta: "Onde o Pipeline Está Travando?"
+        const itemsWithAging = items.map(item => {
+          const entryDate = item.date ? new Date(item.date) : now;
+          const diasEmProposta = Math.floor((now.getTime() - entryDate.getTime()) / 86400000);
+          return { ...item, diasEmProposta };
+        });
+        
+        const pipeline = items.reduce((sum, i) => sum + (i.value || 0), 0);
+        const ticketMedio = items.length > 0 ? pipeline / items.length : 0;
+        const propostasAntigas = itemsWithAging.filter(i => (i.diasEmProposta || 0) > 14);
+        const valorEmRisco = propostasAntigas.reduce((sum, i) => sum + (i.value || 0), 0);
+        
+        const descricao = `${items.length} propostas | Pipeline: ${formatCompactCurrency(pipeline)} | Ticket médio: ${formatCompactCurrency(ticketMedio)}` +
+          (propostasAntigas.length > 0 
+            ? ` | ⚠️ ${propostasAntigas.length} com mais de 14 dias (${formatCompactCurrency(valorEmRisco)} em risco)` 
+            : ' | ✅ Nenhuma envelhecida');
+        
+        setDetailSheetTitle('Propostas - Onde o Pipeline Está Travando?');
+        setDetailSheetDescription(descricao);
+        setDetailSheetColumns([
+          { key: 'product', label: 'Produto', format: columnFormatters.product },
+          { key: 'company', label: 'Empresa' },
+          { key: 'value', label: 'Valor Total', format: columnFormatters.currency },
+          { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
+          { key: 'responsible', label: 'Closer' },
+          { key: 'diasEmProposta', label: 'Dias em Proposta', format: columnFormatters.agingWithAlert },
+          { key: 'date', label: 'Data Envio', format: columnFormatters.date },
+        ]);
+        // Sort by aging descending (oldest first = action needed)
+        setDetailSheetItems(itemsWithAging.sort((a, b) => (b.diasEmProposta || 0) - (a.diasEmProposta || 0)));
+        setDetailSheetOpen(true);
+        return;
+      }
+      
+      case 'venda': {
+        // Venda: "O Que Fechamos e Como?"
+        const totalFaturamento = items.reduce((sum, i) => sum + (i.value || 0), 0);
+        const totalMrr = items.reduce((sum, i) => sum + (i.mrr || 0), 0);
+        const totalSetup = items.reduce((sum, i) => sum + (i.setup || 0), 0);
+        const totalPontual = items.reduce((sum, i) => sum + (i.pontual || 0), 0);
+        
+        const pctMrr = totalFaturamento > 0 ? Math.round((totalMrr / totalFaturamento) * 100) : 0;
+        const pctSetup = totalFaturamento > 0 ? Math.round((totalSetup / totalFaturamento) * 100) : 0;
+        const pctPontual = totalFaturamento > 0 ? Math.round((totalPontual / totalFaturamento) * 100) : 0;
+        
+        // Calculate cycle for each item and podium
+        const itemsWithCycle = items.map(item => {
+          const cicloVenda = item.duration ? Math.floor(item.duration / 86400) : 0;
+          const percentualTotal = totalFaturamento > 0 ? ((item.value || 0) / totalFaturamento) * 100 : 0;
+          return { ...item, cicloVenda, percentualTotal };
+        });
+        
+        const podium = findTopPerformerByRevenue(items);
+        const podiumStr = podium.map((p, i) => {
+          const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+          return `${medal}${p.name.split(' ')[0]}`;
+        }).join(' ');
+        
+        setDetailSheetTitle('Vendas - O Que Fechamos e Como?');
+        setDetailSheetDescription(
+          `${items.length} contratos | Total: ${formatCompactCurrency(totalFaturamento)} | Composição: MRR ${pctMrr}% + Setup ${pctSetup}% + Pontual ${pctPontual}% | ${podiumStr}`
+        );
+        setDetailSheetColumns([
+          { key: 'product', label: 'Produto', format: columnFormatters.product },
+          { key: 'company', label: 'Empresa' },
+          { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
+          { key: 'setup', label: 'Setup', format: columnFormatters.currency },
+          { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
+          { key: 'value', label: 'Total', format: columnFormatters.currency },
+          { key: 'responsible', label: 'Closer' },
+          { key: 'cicloVenda', label: 'Ciclo', format: columnFormatters.cicloVenda },
+        ]);
+        // Sort by value descending
+        setDetailSheetItems(itemsWithCycle.sort((a, b) => (b.value || 0) - (a.value || 0)));
+        setDetailSheetOpen(true);
+        return;
+      }
+      
+      default: {
+        // Fallback for other indicators
+        const columns = getColumnsForIndicator(indicator.key);
+        setDetailSheetTitle(indicator.label);
+        setDetailSheetDescription(`${formatNumber(items.length)} registros no período`);
+        setDetailSheetItems(items);
+        setDetailSheetColumns(columns);
+        setDetailSheetOpen(true);
+      }
+    }
+  };
+
+  // Get columns for indicator type (legacy, used as fallback)
+  const getColumnsForIndicator = (indicatorKey: IndicatorType): { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] => {
+    const baseColumns: { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] = [
+      { key: 'product', label: 'Produto', format: columnFormatters.product },
+      { key: 'company', label: 'Empresa/Contato' },
+      { key: 'date', label: 'Data', format: columnFormatters.date },
+      { key: 'duration', label: 'Tempo na Fase', format: columnFormatters.duration },
+    ];
+
+    if (indicatorKey === 'proposta' || indicatorKey === 'venda') {
+      return [
+        ...baseColumns,
+        { key: 'mrr' as keyof DetailItem, label: 'MRR', format: columnFormatters.currency },
+        { key: 'setup' as keyof DetailItem, label: 'Setup', format: columnFormatters.currency },
+        { key: 'pontual' as keyof DetailItem, label: 'Pontual', format: columnFormatters.currency },
+        { key: 'value' as keyof DetailItem, label: 'Total', format: columnFormatters.currency },
+        { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
+      ];
+    }
+
+    return [
+      ...baseColumns,
+      { key: 'revenueRange' as keyof DetailItem, label: 'Faixa Faturamento' },
+      { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
+    ];
   };
 
   // === Monetary Indicators Logic ===
@@ -1129,15 +1336,21 @@ export function IndicatorsTab() {
     }
   };
 
-  // Handle monetary card click (drill-down to sales)
+  // Handle monetary card click with strategic narratives
   const handleMonetaryCardClick = (indicator: MonetaryIndicatorConfig) => {
-    // SLA drill-down: show leads with individual response times
+    const items = getItemsForIndicator('venda');
+    const totalFaturamento = items.reduce((sum, i) => sum + (i.value || 0), 0);
+    const totalMrr = items.reduce((sum, i) => sum + (i.mrr || 0), 0);
+    const totalSetup = items.reduce((sum, i) => sum + (i.setup || 0), 0);
+    const totalPontual = items.reduce((sum, i) => sum + (i.pontual || 0), 0);
+    
+    // SLA drill-down: "Estamos Respondendo Rápido?"
     if (indicator.key === 'sla') {
       const tentativasCards = modeloAtualAnalytics.cards.filter(card => 
         card.fase === 'Tentativas de contato' && card.dataCriacao
       ).map(card => {
-        // Calculate SLA in minutes for each card
         const slaMinutes = (card.dataEntrada.getTime() - card.dataCriacao!.getTime()) / 1000 / 60;
+        const slaStatus: 'ok' | 'warning' | 'danger' = slaMinutes <= 30 ? 'ok' : slaMinutes <= 60 ? 'warning' : 'danger';
         return {
           id: card.id,
           name: card.titulo || card.empresa || 'Sem título',
@@ -1146,46 +1359,174 @@ export function IndicatorsTab() {
           date: card.dataEntrada.toISOString(),
           value: 0,
           sla: slaMinutes,
+          slaStatus,
           responsible: card.responsavel || undefined,
           product: 'CaaS',
         } as DetailItem;
       });
       
-      const slaColumns: { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] = [
+      // Calculate SLA metrics
+      const avgSla = modeloAtualAnalytics.getAverageSlaMinutes;
+      const withinTarget = tentativasCards.filter(c => (c.sla || 0) <= 30).length;
+      const withinTargetPct = tentativasCards.length > 0 ? Math.round((withinTarget / tentativasCards.length) * 100) : 0;
+      const slaValues = tentativasCards.map(c => c.sla || 0).sort((a, b) => a - b);
+      const medianSla = slaValues.length > 0 ? slaValues[Math.floor(slaValues.length / 2)] : 0;
+      const outliers = tentativasCards.filter(c => (c.sla || 0) > 120).length;
+      
+      setDetailSheetTitle('SLA - Estamos Respondendo Rápido?');
+      setDetailSheetDescription(
+        `${tentativasCards.length} leads | SLA médio: ${formatDuration(avgSla)} | Dentro da meta (<30m): ${withinTargetPct}% | Mediana: ${formatDuration(medianSla)}` +
+        (outliers > 0 ? ` | ⚠️ ${outliers} leads com SLA > 2h` : '')
+      );
+      setDetailSheetColumns([
         { key: 'product', label: 'Produto', format: columnFormatters.product },
-        { key: 'company', label: 'Empresa/Contato' },
+        { key: 'company', label: 'Empresa' },
+        { key: 'sla', label: 'Tempo SLA', format: columnFormatters.slaWithStatus },
+        { key: 'responsible', label: 'SDR' },
         { key: 'date', label: 'Data', format: columnFormatters.date },
-        { key: 'sla', label: 'Tempo SLA', format: (v: number) => columnFormatters.duration(v * 60) }, // Convert minutes to seconds for formatter
-        { key: 'responsible', label: 'Responsável' },
-      ];
-      
-      const averageSla = modeloAtualAnalytics.getAverageSlaMinutes;
-      
-      setDetailSheetTitle('SLA - Tempo de Resposta');
-      setDetailSheetDescription(`${tentativasCards.length} leads | Média: ${formatDuration(averageSla)}`);
-      setDetailSheetItems(tentativasCards);
-      setDetailSheetColumns(slaColumns);
+      ]);
+      // Sort by SLA descending (worst first = coaching)
+      setDetailSheetItems(tentativasCards.sort((a, b) => (b.sla || 0) - (a.sla || 0)));
       setDetailSheetOpen(true);
       return;
     }
     
-    // All monetary indicators show sales cards
-    const items = getItemsForIndicator('venda');
-    const columns: { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] = [
-      { key: 'product', label: 'Produto', format: columnFormatters.product },
-      { key: 'company', label: 'Empresa/Contato' },
-      { key: 'date', label: 'Data', format: columnFormatters.date },
-      { key: 'value', label: 'Valor Total', format: columnFormatters.currency },
-      { key: 'responsible', label: 'Responsável' },
-    ];
+    // Faturamento: "De Onde Veio o Dinheiro?"
+    if (indicator.key === 'faturamento') {
+      const meta = getMetaMonetaryForIndicator(indicator);
+      const pctMeta = meta > 0 ? Math.round((totalFaturamento / meta) * 100) : 0;
+      const pctMrr = totalFaturamento > 0 ? Math.round((totalMrr / totalFaturamento) * 100) : 0;
+      const pctSetup = totalFaturamento > 0 ? Math.round((totalSetup / totalFaturamento) * 100) : 0;
+      const pctPontual = totalFaturamento > 0 ? Math.round((totalPontual / totalFaturamento) * 100) : 0;
+      
+      const itemsWithPct = items.map(item => ({
+        ...item,
+        percentualTotal: totalFaturamento > 0 ? ((item.value || 0) / totalFaturamento) * 100 : 0
+      }));
+      
+      const topCliente = items.length > 0 
+        ? items.reduce((top, i) => (i.value || 0) > (top.value || 0) ? i : top, items[0])
+        : null;
+      
+      setDetailSheetTitle('Faturamento - De Onde Veio o Dinheiro?');
+      setDetailSheetDescription(
+        `Total: ${formatCompactCurrency(totalFaturamento)} | Composição: MRR ${formatCompactCurrency(totalMrr)} (${pctMrr}%) + Setup ${formatCompactCurrency(totalSetup)} (${pctSetup}%) + Pontual ${formatCompactCurrency(totalPontual)} (${pctPontual}%) | vs Meta: ${pctMeta}%` +
+        (topCliente ? ` | Top: ${topCliente.company || topCliente.name} (${formatCompactCurrency(topCliente.value || 0)})` : '')
+      );
+      setDetailSheetColumns([
+        { key: 'product', label: 'Produto', format: columnFormatters.product },
+        { key: 'company', label: 'Empresa' },
+        { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
+        { key: 'setup', label: 'Setup', format: columnFormatters.currency },
+        { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
+        { key: 'value', label: 'Total', format: columnFormatters.currency },
+        { key: 'percentualTotal', label: '% do Fat.', format: columnFormatters.percentualTotal },
+        { key: 'responsible', label: 'Closer' },
+      ]);
+      setDetailSheetItems(itemsWithPct.sort((a, b) => (b.value || 0) - (a.value || 0)));
+      setDetailSheetOpen(true);
+      return;
+    }
     
-    const realized = getRealizedMonetaryForIndicator(indicator);
+    // MRR: "Quanto de Base Recorrente Construímos?"
+    if (indicator.key === 'mrr') {
+      const mrrItems = items.filter(i => (i.mrr || 0) > 0);
+      const arrProjetado = totalMrr * 12;
+      const avgMrr = mrrItems.length > 0 ? totalMrr / mrrItems.length : 0;
+      const topCliente = mrrItems.length > 0 
+        ? mrrItems.reduce((top, i) => (i.mrr || 0) > (top.mrr || 0) ? i : top, mrrItems[0])
+        : null;
+      
+      const itemsWithPct = mrrItems.map(item => ({
+        ...item,
+        percentualTotal: totalMrr > 0 ? ((item.mrr || 0) / totalMrr) * 100 : 0
+      }));
+      
+      setDetailSheetTitle('MRR - Quanto de Base Recorrente Construímos?');
+      setDetailSheetDescription(
+        `${mrrItems.length} contratos com MRR | Total: ${formatCompactCurrency(totalMrr)}/mês | ARR projetado: ${formatCompactCurrency(arrProjetado)} | Média: ${formatCompactCurrency(avgMrr)}` +
+        (topCliente ? ` | Maior: ${topCliente.company || topCliente.name} (${formatCompactCurrency(topCliente.mrr || 0)}/mês)` : '')
+      );
+      setDetailSheetColumns([
+        { key: 'product', label: 'Produto', format: columnFormatters.product },
+        { key: 'company', label: 'Empresa' },
+        { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
+        { key: 'percentualTotal', label: '% do MRR', format: columnFormatters.percentualTotal },
+        { key: 'value', label: 'Total Contrato', format: columnFormatters.currency },
+        { key: 'responsible', label: 'Closer' },
+        { key: 'date', label: 'Data', format: columnFormatters.date },
+      ]);
+      setDetailSheetItems(itemsWithPct.sort((a, b) => (b.mrr || 0) - (a.mrr || 0)));
+      setDetailSheetOpen(true);
+      return;
+    }
     
-    setDetailSheetTitle(indicator.label);
-    setDetailSheetDescription(`${formatCompactCurrency(realized)} no período selecionado`);
-    setDetailSheetItems(items);
-    setDetailSheetColumns(columns);
-    setDetailSheetOpen(true);
+    // Setup: "Quantas Implantações Vendemos?"
+    if (indicator.key === 'setup') {
+      const setupItems = items.filter(i => (i.setup || 0) > 0);
+      const avgSetup = setupItems.length > 0 ? totalSetup / setupItems.length : 0;
+      const pctFaturamento = totalFaturamento > 0 ? Math.round((totalSetup / totalFaturamento) * 100) : 0;
+      const topCliente = setupItems.length > 0 
+        ? setupItems.reduce((top, i) => (i.setup || 0) > (top.setup || 0) ? i : top, setupItems[0])
+        : null;
+      
+      const itemsWithPct = setupItems.map(item => ({
+        ...item,
+        percentualTotal: totalSetup > 0 ? ((item.setup || 0) / totalSetup) * 100 : 0
+      }));
+      
+      setDetailSheetTitle('Setup - Quantas Implantações Vendemos?');
+      setDetailSheetDescription(
+        `${setupItems.length} projetos com setup | Total: ${formatCompactCurrency(totalSetup)} | Média: ${formatCompactCurrency(avgSetup)} | Setup = ${pctFaturamento}% do faturamento` +
+        (topCliente ? ` | Maior: ${topCliente.company || topCliente.name} (${formatCompactCurrency(topCliente.setup || 0)})` : '')
+      );
+      setDetailSheetColumns([
+        { key: 'product', label: 'Produto', format: columnFormatters.product },
+        { key: 'company', label: 'Empresa' },
+        { key: 'setup', label: 'Setup', format: columnFormatters.currency },
+        { key: 'mrr', label: 'MRR Associado', format: columnFormatters.currency },
+        { key: 'value', label: 'Total Contrato', format: columnFormatters.currency },
+        { key: 'responsible', label: 'Closer' },
+        { key: 'date', label: 'Data', format: columnFormatters.date },
+      ]);
+      setDetailSheetItems(itemsWithPct.sort((a, b) => (b.setup || 0) - (a.setup || 0)));
+      setDetailSheetOpen(true);
+      return;
+    }
+    
+    // Pontual: "Receitas Extraordinárias"
+    if (indicator.key === 'pontual') {
+      const pontualItems = items.filter(i => (i.pontual || 0) > 0);
+      const avgPontual = pontualItems.length > 0 ? totalPontual / pontualItems.length : 0;
+      const pctFaturamento = totalFaturamento > 0 ? Math.round((totalPontual / totalFaturamento) * 100) : 0;
+      const topCliente = pontualItems.length > 0 
+        ? pontualItems.reduce((top, i) => (i.pontual || 0) > (top.pontual || 0) ? i : top, pontualItems[0])
+        : null;
+      
+      const itemsWithPct = pontualItems.map(item => ({
+        ...item,
+        percentualTotal: totalPontual > 0 ? ((item.pontual || 0) / totalPontual) * 100 : 0
+      }));
+      
+      setDetailSheetTitle('Pontual - Receitas Extraordinárias');
+      setDetailSheetDescription(
+        `${pontualItems.length} ocorrências | Total: ${formatCompactCurrency(totalPontual)} | Média: ${formatCompactCurrency(avgPontual)} | Pontual = ${pctFaturamento}% do faturamento` +
+        (pctFaturamento > 30 ? ' ⚠️ Alta dependência' : '') +
+        (topCliente ? ` | Maior: ${topCliente.company || topCliente.name} (${formatCompactCurrency(topCliente.pontual || 0)})` : '')
+      );
+      setDetailSheetColumns([
+        { key: 'product', label: 'Produto', format: columnFormatters.product },
+        { key: 'company', label: 'Empresa' },
+        { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
+        { key: 'mrr', label: 'MRR Associado', format: columnFormatters.currency },
+        { key: 'value', label: 'Total Contrato', format: columnFormatters.currency },
+        { key: 'responsible', label: 'Closer' },
+        { key: 'date', label: 'Data', format: columnFormatters.date },
+      ]);
+      setDetailSheetItems(itemsWithPct.sort((a, b) => (b.pontual || 0) - (a.pontual || 0)));
+      setDetailSheetOpen(true);
+      return;
+    }
   };
 
   return (
