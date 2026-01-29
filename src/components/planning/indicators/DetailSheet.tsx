@@ -32,6 +32,8 @@ export interface DetailItem {
   pontual?: number; // Valor Pontual for monetary indicators
   closer?: string; // Closer responsável (for filtering)
   sla?: number; // SLA time in minutes (for SLA indicator drill-down)
+  sdr?: string; // SDR responsável original (for display in sales drill-down)
+  dataAssinatura?: string; // Data de assinatura do contrato (ISO string)
   // Strategic drill-down calculated fields
   diasAteQualificar?: number;    // MQL: Data Entrada - Data Criação
   diasComoMQL?: number;          // RM: tempo antes de agendar

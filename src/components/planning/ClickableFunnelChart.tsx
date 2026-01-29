@@ -166,7 +166,23 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
   ];
 
   // Get columns for indicator type
-  const getColumnsForIndicator = (_indicator: IndicatorType) => {
+  const getColumnsForIndicator = (indicator: IndicatorType) => {
+    // For venda (sales), include SDR and Data Assinatura columns
+    if (indicator === 'venda') {
+      return [
+        { key: 'product' as keyof DetailItem, label: 'Produto', format: columnFormatters.product },
+        { key: 'name' as keyof DetailItem, label: 'Título' },
+        { key: 'company' as keyof DetailItem, label: 'Empresa/Contato' },
+        { key: 'dataAssinatura' as keyof DetailItem, label: 'Data Assinatura', format: columnFormatters.date },
+        { key: 'mrr' as keyof DetailItem, label: 'MRR', format: columnFormatters.currency },
+        { key: 'setup' as keyof DetailItem, label: 'Setup', format: columnFormatters.currency },
+        { key: 'pontual' as keyof DetailItem, label: 'Pontual', format: columnFormatters.currency },
+        { key: 'value' as keyof DetailItem, label: 'Total', format: columnFormatters.currency },
+        { key: 'sdr' as keyof DetailItem, label: 'SDR' },
+        { key: 'responsible' as keyof DetailItem, label: 'Closer' },
+      ];
+    }
+    
     return [
       { key: 'product' as keyof DetailItem, label: 'Produto', format: columnFormatters.product },
       { key: 'name' as keyof DetailItem, label: 'Título' },

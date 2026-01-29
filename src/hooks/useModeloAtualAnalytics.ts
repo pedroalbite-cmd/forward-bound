@@ -14,12 +14,14 @@ export interface ModeloAtualCard {
   dataEntrada: Date;
   dataSaida: Date | null; // "Saída" from database
   dataCriacao: Date | null; // "Data Criação" - card creation timestamp for SLA calculation
+  dataAssinatura: Date | null; // "Data de assinatura do contrato" - for display in sales
   valor: number;
   valorMRR: number;
   valorPontual: number;
   valorEducacao: number;
   valorSetup: number;
   responsavel?: string;
+  sdr?: string; // SDR responsável - specifically for display
   closer?: string; // Specifically the "Closer responsável" field for filtering
   faixa?: string;
   duracao: number; // Duration calculated dynamically from Entrada/Saída
@@ -131,8 +133,8 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         if (!id || !fase) continue;
         if (!PHASE_TO_INDICATOR[fase]) continue;
 
-        // Note: Logic for "Data de assinatura do contrato" removed since
-        // we now use "Ganho" phase for sales instead of "Contrato assinado"
+        // Parse additional dates
+        const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
         const valorMRR = parseNumericValue(row['Valor MRR'] || row['valor_mrr'] || 0);
         const valorPontual = parseNumericValue(row['Valor Pontual'] || row['valor_pontual'] || 0);
         const valorEducacao = parseNumericValue(row['Valor Educação'] || row['Valor Educacao'] || row['valor_educacao'] || 0);
@@ -151,6 +153,9 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
           duracao = Math.floor((Date.now() - dataEntrada.getTime()) / 1000);
         }
         
+        // Extract SDR for display
+        const sdr = String(row['SDR responsável'] || '').trim();
+        
         cards.push({
           id,
           titulo: row['Título'] || row['titulo'] || row['Nome'] || '',
@@ -161,11 +166,13 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
           dataEntrada,
           dataSaida,
           dataCriacao,
+          dataAssinatura,
           valorMRR,
           valorPontual,
           valorEducacao,
           valorSetup,
           valor,
+          sdr: sdr || undefined,
           closer: String(row['Closer responsável'] ?? '').trim(), // Closer specific field for filtering - normalized
           responsavel: String(row['SDR responsável'] || row['Responsável'] || row['responsavel'] || '').trim(),
           faixa: row['Faixa de faturamento mensal'] || row['Faixa'] || row['faixa'] || '',
@@ -243,6 +250,8 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     setup: card.valorSetup,
     pontual: card.valorPontual,
     closer: card.closer,
+    sdr: card.sdr,
+    dataAssinatura: card.dataAssinatura?.toISOString() || undefined,
   });
 
   // Get detail items for a specific indicator
