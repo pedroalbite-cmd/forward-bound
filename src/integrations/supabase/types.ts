@@ -83,6 +83,45 @@ export type Database = {
         }
         Relationships: []
       }
+      monetary_metas: {
+        Row: {
+          bu: string
+          created_at: string
+          faturamento: number | null
+          id: string
+          month: string
+          mrr: number | null
+          pontual: number | null
+          setup: number | null
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          bu: string
+          created_at?: string
+          faturamento?: number | null
+          id?: string
+          month: string
+          mrr?: number | null
+          pontual?: number | null
+          setup?: number | null
+          updated_at?: string
+          year?: number
+        }
+        Update: {
+          bu?: string
+          created_at?: string
+          faturamento?: number | null
+          id?: string
+          month?: string
+          mrr?: number | null
+          pontual?: number | null
+          setup?: number | null
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
