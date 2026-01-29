@@ -1,99 +1,186 @@
 
 
-## Plano: Adicionar Porcentagens de Conversão Entre Etapas do Funil
+## Plano: Adicionar SLA (Tempo para Tentativas de Contato) nos Indicadores
 
-### Situação Atual
+### O que é SLA?
 
-O código já calcula as taxas de conversão (linhas 133-140):
+O SLA (Service Level Agreement) neste contexto mede o **tempo médio entre a criação do lead e a primeira tentativa de contato**. É um KR crítico que indica a velocidade de resposta da equipe comercial.
+
+**Cálculo:**
+```
+SLA = Data de Entrada na fase "Tentativas de contato" - Data de Criação do Card
+```
+
+---
+
+### Alterações Planejadas
+
+#### 1. Substituir ROI por SLA nos indicadores monetários
+
+| Antes | Depois |
+|-------|--------|
+| ROI, Faturamento, MRR, Setup, Pontual | **SLA**, Faturamento, MRR, Setup, Pontual |
+
+O ROI permanecerá disponível apenas na aba de Marketing Indicators.
+
+---
+
+#### 2. Modificações no arquivo `src/components/planning/IndicatorsTab.tsx`
+
+**A) Atualizar configuração de indicadores monetários (linhas 52-67)**
+
 ```typescript
-{ number: 2, name: 'MQL', indicator: 'mql', value: totals.mql, conversionPercent: totals.leads > 0 ? (totals.mql / totals.leads) * 100 : 100 },
-{ number: 3, name: 'Reuniões Agendadas', indicator: 'rm', value: totals.rm, conversionPercent: totals.mql > 0 ? (totals.rm / totals.mql) * 100 : 0 },
-// etc...
+// Antes
+type MonetaryIndicatorKey = 'roi' | 'faturamento' | 'mrr' | 'setup' | 'pontual';
+
+const monetaryIndicatorConfigs: MonetaryIndicatorConfig[] = [
+  { key: 'roi', label: 'ROI', shortLabel: 'ROI', format: 'multiplier' },
+  // ...
+];
+
+// Depois
+type MonetaryIndicatorKey = 'sla' | 'faturamento' | 'mrr' | 'setup' | 'pontual';
+
+const monetaryIndicatorConfigs: MonetaryIndicatorConfig[] = [
+  { key: 'sla', label: 'SLA', shortLabel: 'SLA', format: 'duration' }, // Novo formato
+  // ...
+];
 ```
 
-Porém, a renderização (linhas 329-335) exibe apenas o número da etapa, nome e quantidade:
+**B) Adicionar formato de duração para o SLA**
+
+Criar nova função para formatar duração em horas/minutos:
 ```typescript
-<span className="bg-white/20 rounded-full w-5 h-5">{stage.number}</span>
-<span className="hidden sm:inline truncate">{stage.name}</span>
-<span className="font-bold">{formatNumber(stage.value)}</span>
+const formatDuration = (minutes: number): string => {
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+  return `${Math.round(minutes)}m`;
+};
+```
+
+**C) Atualizar o MonetaryRadialCard para suportar formato de duração**
+
+Adicionar suporte ao novo formato `'duration'`:
+```typescript
+interface MonetaryRadialCardProps {
+  format: 'currency' | 'multiplier' | 'duration'; // Adicionar 'duration'
+}
+
+const formatValue = format === 'currency' 
+  ? formatCompactCurrency 
+  : format === 'duration' 
+    ? formatDuration 
+    : formatMultiplier;
+```
+
+**D) Implementar cálculo do SLA realizado**
+
+Adicionar lógica no `getRealizedMonetaryForIndicator`:
+```typescript
+case 'sla': {
+  // Buscar todos os movimentos para "Tentativas de contato" no período
+  const cards = modeloAtualAnalytics.cards.filter(card => 
+    card.fase === 'Tentativas de contato'
+  );
+  
+  if (cards.length === 0) return 0;
+  
+  // Calcular média do SLA (em minutos)
+  // Precisa acessar "Data Criação" que não está mapeado ainda
+  // ...ver modificação no hook abaixo
+  return averageSlaMinutes;
+}
 ```
 
 ---
 
-### Solução Proposta
+#### 3. Modificações no hook `src/hooks/useModeloAtualAnalytics.ts`
 
-Adicionar a porcentagem de conversão ao lado do valor de cada etapa (exceto Leads que é sempre 100%):
+**A) Adicionar campo `dataCriacao` na interface `ModeloAtualCard`**
 
-```text
-                        ANTES                           DEPOIS
-   ┌─────────────────────────────────┐    ┌─────────────────────────────────────┐
-   │ (1) Leads              1.234    │    │ (1) Leads                   1.234   │
-   │ (2) MQL                  567    │    │ (2) MQL              567 (46%)      │
-   │ (3) Reuniões Agendadas   234    │    │ (3) Reuniões Agend.  234 (41%)      │
-   │ (4) Reunião Realizada    189    │    │ (4) Reunião Realiz.  189 (81%)      │
-   │ (5) Proposta Enviada      87    │    │ (5) Proposta Env.     87 (46%)      │
-   │ (6) Contrato Assinado     23    │    │ (6) Contrato Ass.     23 (26%)      │
-   └─────────────────────────────────┘    └─────────────────────────────────────┘
+```typescript
+export interface ModeloAtualCard {
+  // ... campos existentes
+  dataCriacao: Date | null; // Nova: "Data Criação" do card
+}
+```
+
+**B) Fazer parse do campo ao processar os dados**
+
+```typescript
+cards.push({
+  // ... campos existentes
+  dataCriacao: parseDate(row['Data Criação']),
+});
+```
+
+**C) Adicionar método para calcular SLA médio**
+
+```typescript
+// Calcular SLA médio em minutos para cards que entraram em "Tentativas de contato"
+const getAverageSlaMinutes = useMemo(() => {
+  const tentativasCards = cardsInPeriod.filter(card => 
+    card.fase === 'Tentativas de contato' && card.dataCriacao
+  );
+  
+  if (tentativasCards.length === 0) return 0;
+  
+  const totalMinutes = tentativasCards.reduce((sum, card) => {
+    const diffMs = card.dataEntrada.getTime() - card.dataCriacao!.getTime();
+    return sum + (diffMs / 1000 / 60); // Converter para minutos
+  }, 0);
+  
+  return totalMinutes / tentativasCards.length;
+}, [cardsInPeriod]);
 ```
 
 ---
 
-### Arquivo a Modificar
+#### 4. Meta do SLA
 
-**`src/components/planning/ClickableFunnelChart.tsx`**
+O SLA ideal (meta) precisa ser definido. Sugestões:
+- **15 minutos** (resposta ultra-rápida)
+- **30 minutos** (padrão de mercado B2B)
+- **60 minutos** (1 hora - margem maior)
 
-#### Linhas 329-335 - Adicionar Conversão
-
-**Antes:**
-```tsx
-<div className="flex items-center gap-2 text-white text-sm font-medium whitespace-nowrap overflow-hidden">
-  <span className="bg-white/20 rounded-full w-5 h-5 flex-shrink-0 flex items-center justify-center text-xs">
-    {stage.number}
-  </span>
-  <span className="hidden sm:inline truncate">{stage.name}</span>
-  <span className="font-bold flex-shrink-0">{formatNumber(stage.value)}</span>
-</div>
-```
-
-**Depois:**
-```tsx
-<div className="flex items-center gap-2 text-white text-sm font-medium whitespace-nowrap overflow-hidden">
-  <span className="bg-white/20 rounded-full w-5 h-5 flex-shrink-0 flex items-center justify-center text-xs">
-    {stage.number}
-  </span>
-  <span className="hidden sm:inline truncate">{stage.name}</span>
-  <span className="font-bold flex-shrink-0">{formatNumber(stage.value)}</span>
-  {index > 0 && stage.value > 0 && (
-    <span className="text-xs text-white/70 flex-shrink-0">
-      ({stage.conversionPercent.toFixed(0)}%)
-    </span>
-  )}
-</div>
-```
+O indicador será **invertido** - quanto MENOR o valor, melhor (similar ao CAC).
 
 ---
 
-### Resultado Visual
+### Seção Técnica
 
-| Etapa | Quantidade | Conversão |
-|-------|------------|-----------|
-| Leads | 1.234 | - |
-| MQL | 567 | (46%) |
-| Reuniões Agendadas | 234 | (41%) |
-| Reunião Realizada | 189 | (81%) |
-| Proposta Enviada | 87 | (46%) |
-| Contrato Assinado | 23 | (26%) |
+#### Arquivos a Modificar
 
-A porcentagem indica quantas pessoas "sobreviveram" de uma etapa para a próxima.
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useModeloAtualAnalytics.ts` | Adicionar campo `dataCriacao` e método `getAverageSlaMinutes` |
+| `src/components/planning/IndicatorsTab.tsx` | Substituir ROI por SLA, adicionar formato de duração |
+
+#### Estrutura de Dados do Banco
+
+A tabela `pipefy_moviment_cfos` contém:
+- `"Data Criação"` (timestamp) - momento de criação do card no Pipefy
+- `"Entrada"` (timestamp) - momento de entrada na fase atual
+- `"Fase"` = `"Tentativas de contato"` - fase alvo para cálculo do SLA
+
+#### Exemplo Real
+
+| Campo | Valor |
+|-------|-------|
+| Data Criação | 2026-01-29 11:31:04 |
+| Entrada (Tentativas) | 2026-01-29 11:35:28 |
+| **SLA** | **4 min 24s** |
 
 ---
 
-### Observação
+### Pergunta Pendente
 
-A conversão é calculada de etapa para etapa anterior (não em relação ao topo do funil):
-- MQL→Leads: 567/1234 = 46%
-- RM→MQL: 234/567 = 41%
-- RR→RM: 189/234 = 81%
-- Proposta→RR: 87/189 = 46%
-- Venda→Proposta: 23/87 = 26%
+Qual deve ser a **meta ideal do SLA** (tempo máximo para primeira tentativa de contato)?
+- 15 minutos (agressivo)
+- 30 minutos (padrão)
+- 60 minutos (conservador)
+- Outro valor?
 
