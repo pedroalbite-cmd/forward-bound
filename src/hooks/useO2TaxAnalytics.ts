@@ -14,8 +14,7 @@ export interface O2TaxCard {
   valorPontual: number;
   valorSetup: number;
   responsavel: string | null;
-  closer: string; // Fixed: "Lucas" for O2 TAX
-  sdr: string; // Fixed: "Carlos" for O2 TAX
+  closer: string; // "Closer responsável" field for filtering
   motivoPerda: string | null;
   dataEntrada: Date;
   dataSaida: Date | null; // "Saída" from database
@@ -110,7 +109,6 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
       console.log(`[O2 TAX Analytics] Loaded ${responseData.data.length} movements`);
 
       // Return movements in the SAME structure as useO2TaxMetas
-      // O2 TAX has fixed team: Lucas (closer) and Carlos (SDR)
       const movements = responseData.data.map((row: any) => ({
         id: String(row.ID),
         titulo: row['Título'] || '',
@@ -122,9 +120,8 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
         valorPontual: row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : null,
         valorSetup: row['Valor Setup'] ? parseFloat(row['Valor Setup']) : null,
         faixa: row['Faixa de faturamento mensal'] || null,
-        responsavel: 'Lucas', // Fixed for O2 TAX
-        closer: 'Lucas', // Fixed for O2 TAX
-        sdr: 'Carlos', // Fixed for O2 TAX
+        responsavel: row['Closer responsável'] || row['SDR responsável'] || null,
+        closer: String(row['Closer responsável'] ?? '').trim(),
         motivoPerda: row['Motivo da perda'] || null,
         contato: row['Nome - Interlocução O2'] || row['Nome'] || null,
         setor: row['Setor'] || null,
@@ -166,9 +163,8 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
         valorPontual,
         valorSetup,
         valor: valorPontual + valorSetup + valorMRR,
-        responsavel: 'Lucas', // Fixed for O2 TAX
-        closer: 'Lucas', // Fixed for O2 TAX
-        sdr: 'Carlos', // Fixed for O2 TAX
+        responsavel: mov.responsavel || null,
+        closer: mov.closer || '',
         motivoPerda: mov.motivoPerda || null,
         dataEntrada,
         dataSaida,
@@ -532,7 +528,6 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
   };
 
   // Helper function to convert O2TaxCard to DetailItem
-  // O2 TAX has fixed team: Lucas (closer) and Carlos (SDR)
   const toDetailItem = (card: O2TaxCard): DetailItem => ({
     id: card.id,
     name: card.titulo,
@@ -542,9 +537,8 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     value: card.valor,
     reason: card.motivoPerda || undefined,
     revenueRange: card.faixa || undefined,
-    responsible: 'Lucas', // Fixed for O2 TAX
-    closer: 'Lucas', // Fixed for O2 TAX
-    sdr: 'Carlos', // Fixed for O2 TAX
+    responsible: card.responsavel || undefined,
+    closer: card.closer || undefined,
     duration: card.duracao,
     product: 'O2 TAX',
     mrr: card.valorMRR,
