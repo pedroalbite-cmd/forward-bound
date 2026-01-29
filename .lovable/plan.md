@@ -1,181 +1,88 @@
 
 
-## Plano: Drill-Down como Mini-Dashboard Analítico Completo
+## Plano: Acelerômetros de Custo por Etapa do Funil
 
-### Diagnóstico da Situação Atual
+### Contexto Atual
 
-O que temos hoje:
-- ✅ KPI cards simples no topo (números isolados)
-- ✅ Tabela detalhada com alertas visuais
-- ✅ Narrativas descritivas
+A aba **Mkt Indicadores** já possui:
+- ✅ `CostPerStageChart` - Uma visualização linear de círculos com CPL → CPMQL → CPRM → CPRR → CPP → CPV
+- ✅ `PerformanceGauges` - Acelerômetros radiais para ROAS, ROI LTV, CAC, LTV, Investimento
+- ✅ Dados de custo por etapa calculados no hook `useMarketingIndicators`
 
-**O que está faltando para ser um dashboard de verdade:**
-- ❌ **Gráficos visuais** que revelam padrões e distribuições
-- ❌ **Visualização de ranking** (quem está performando melhor/pior)
-- ❌ **Comparativos temporais** (evolução ao longo do período)
-- ❌ **Segmentação visual** (por produto, por closer, por faixa)
-- ❌ **Interatividade** (filtrar ao clicar em segmentos)
+**O que está faltando:**
+- ❌ **Acelerômetros radiais clicáveis** para cada custo (CPL, CPMQL, CPRM, CPRR, CPP, CPV)
+- ❌ **Metas de referência** para cada custo (benchmark para saber se está bom ou ruim)
+- ❌ **Drill-down** ao clicar mostrando breakdown por canal
+- ❌ **Lógica de cores invertida** (custo menor = verde, custo maior = vermelho)
 
 ---
 
-### A Nova Experiência: Modal como Dashboard Analítico
+### A Nova Estrutura: Acelerômetros de Custo
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│  "Propostas - Onde o Pipeline Está Travando?"                                           │
-├─────────────────────────────────────────────────────────────────────────────────────────┤
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐                  │
-│  │ 📊 12    │  │ 💰 R$2.1M│  │ 🎯 R$175k│  │ ⚠️ 4     │  │ 🔴 R$800k│                  │
-│  │Propostas │  │ Pipeline │  │  Ticket  │  │Envelhecid│  │ em Risco │                  │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └──────────┘                  │
-├─────────────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                         │
-│  ┌─────────────────────────────────┐  ┌──────────────────────────────────────────────┐  │
-│  │   📊 Distribuição por Closer    │  │              🎯 Aging das Propostas          │  │
-│  │                                 │  │                                              │  │
-│  │   Pedro    ████████░░  R$ 800k  │  │   0-7d   ██████████████████░░░░  6 (50%)    │  │
-│  │   Daniel   █████░░░░░  R$ 600k  │  │   8-14d  ████████░░░░░░░░░░░░░░  2 (17%)    │  │
-│  │   Lucas    ███░░░░░░░  R$ 350k  │  │   15-30d ██████░░░░░░░░░░░░░░░░  3 (25%)    │  │
-│  │                                 │  │   30d+   ██░░░░░░░░░░░░░░░░░░░░  1 (8%) 🔴  │  │
-│  └─────────────────────────────────┘  └──────────────────────────────────────────────┘  │
-│                                                                                         │
-├─────────────────────────────────────────────────────────────────────────────────────────┤
-│  📋 12 registros                                                 [ordenar por coluna]   │
-│  ┌─────────────────────────────────────────────────────────────────────────────────────┐│
-│  │  Empresa       │ Valor   │ MRR   │ Closer │ Dias │ Data Envio │ Pipefy            ││
-│  │  ACME Corp     │ R$ 350k │ R$ 25k│ Pedro  │ 45d🔴│ 15/12/2025 │ 🔗                ││
-│  │  TechCo        │ R$ 200k │ R$ 15k│ Daniel │ 32d🔴│ 28/12/2025 │ 🔗                ││
-│  │  ...                                                                              ││
-│  └─────────────────────────────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│                           💰 Custo por Etapa do Funil                                     │
+├──────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                          │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐ │
+│  │   CPL    │   │  CPMQL   │   │   CPRM   │   │   CPRR   │   │   CPP    │   │   CPV    │ │
+│  │ ◉ R$ 176 │   │ ◉ R$ 246 │   │ ◉ R$ 402 │   │ ◉ R$ 497 │   │ ◉ R$ 625 │   │ ◉ R$ 9.2k│ │
+│  │   88%    │   │   92%    │   │   84%    │   │   89%    │   │  104% 🔴 │   │   98%    │ │
+│  │Meta: 200 │   │Meta: 267 │   │Meta: 480 │   │Meta: 560 │   │Meta: 600 │   │Meta: 9.4k│ │
+│  └──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘ │
+│                                                                                          │
+│  ⚠️ CPP acima da meta! Investigar taxa de conversão RR → Proposta                        │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Componentes de Visualização a Criar
+### Indicadores de Custo Propostos
 
-#### 1. `DrillDownBarChart` - Gráfico de Barras Horizontal para Rankings
-
-Mostra distribuição por dimensão (closer, produto, faixa de faturamento):
-- Barras horizontais ordenadas por valor
-- Cor indicando performance (verde = acima da média, vermelho = abaixo)
-- Clicável para filtrar a tabela abaixo
-
-**Uso por indicador:**
-| Indicador | Dimensão Principal | Métrica |
-|-----------|-------------------|---------|
-| MQL | Faixa Faturamento | Quantidade |
-| RM | Closer | Quantidade |
-| RR | Closer | Taxa Show |
-| Proposta | Closer | Valor Pipeline |
-| Venda | Closer | Valor Total |
-| SLA | SDR | SLA Médio |
-| Faturamento | Closer | Valor |
-| MRR | Closer | Valor MRR |
-
-#### 2. `DrillDownProgressBars` - Barras de Distribuição/Aging
-
-Mostra distribuição em faixas (aging, SLA ranges, faixas de valor):
-- Barras segmentadas com cores (verde/amarelo/vermelho)
-- Percentual e quantidade em cada faixa
-- Visual imediato de onde estão os problemas
-
-**Uso por indicador:**
-| Indicador | Distribuição |
-|-----------|-------------|
-| Proposta | Aging (0-7d, 8-14d, 15-30d, 30d+) |
-| SLA | Tempo (< 30m, 30m-1h, 1h-2h, > 2h) |
-| MQL | Tempo até Qualificar (1-3d, 4-7d, 8-14d, 14d+) |
-| Venda | Ciclo de Venda (< 30d, 30-60d, 60-90d, > 90d) |
-
-#### 3. `DrillDownPieChart` - Gráfico de Pizza para Composição
-
-Mostra composição percentual:
-- Segmentos clicáveis para filtrar
-- Legenda com valores absolutos
-
-**Uso por indicador:**
-| Indicador | Composição |
-|-----------|-----------|
-| Faturamento | MRR vs Setup vs Pontual |
-| MQL | Por Produto (CaaS, O2 TAX, etc.) |
-| Venda | Por Produto |
+| Indicador | Nome | Descrição | Meta Sugerida | Lógica de Cor |
+|-----------|------|-----------|---------------|---------------|
+| **CPL** | Custo por Lead | Investimento ÷ Leads | R$ 200 | Invertida (menor = verde) |
+| **CPMQL** | Custo por MQL | Investimento ÷ MQLs | R$ 280 | Invertida |
+| **CPRM** | Custo por RM | Investimento ÷ Reuniões Marcadas | R$ 450 | Invertida |
+| **CPRR** | Custo por RR | Investimento ÷ Reuniões Realizadas | R$ 550 | Invertida |
+| **CPP** | Custo por Proposta | Investimento ÷ Propostas | R$ 650 | Invertida |
+| **CPV** | Custo por Venda | Investimento ÷ Vendas | R$ 9.500 | Invertida |
 
 ---
 
-### Configuração por Indicador
+### Drill-Down ao Clicar no Acelerômetro
 
-#### MQL - "De Onde Vêm Nossos Melhores Leads?"
+Ao clicar em um acelerômetro (ex: CPMQL), abre um modal com:
 
-| Seção | Visualização |
-|-------|--------------|
-| KPIs | Total, % Premium, Tempo Médio, Top SDR |
-| Gráfico 1 | **Barras**: Distribuição por Faixa Faturamento |
-| Gráfico 2 | **Progress**: Tempo até Qualificar |
-| Tabela | Lista completa |
-
-#### RM - "Estamos Convertendo MQLs em Reuniões?"
-
-| Seção | Visualização |
-|-------|--------------|
-| KPIs | Total, Taxa MQL→RM, Tempo Médio, Top Closer |
-| Gráfico 1 | **Barras**: Ranking de Closers (quantidade) |
-| Gráfico 2 | **Progress**: Tempo como MQL antes de agendar |
-| Tabela | Lista completa |
-
-#### RR - "Quem Apareceu nas Reuniões?"
-
-| Seção | Visualização |
-|-------|--------------|
-| KPIs | Realizadas, Taxa Show, No-Shows, Potencial |
-| Gráfico 1 | **Barras**: Ranking de Closers (taxa show) |
-| Gráfico 2 | **Progress**: Tempo entre agendar e realizar |
-| Tabela | Lista completa |
-
-#### Proposta - "Onde o Pipeline Está Travando?"
-
-| Seção | Visualização |
-|-------|--------------|
-| KPIs | Total, Pipeline, Ticket Médio, Envelhecidas, em Risco |
-| Gráfico 1 | **Barras**: Pipeline por Closer (valor R$) |
-| Gráfico 2 | **Progress**: Aging das Propostas (cores de alerta) |
-| Tabela | Lista ordenada por aging |
-
-#### Venda - "O Que Fechamos e Como?"
-
-| Seção | Visualização |
-|-------|--------------|
-| KPIs | Contratos, Total, % MRR, % Setup, Top Closer |
-| Gráfico 1 | **Barras**: Ranking de Closers (valor R$) |
-| Gráfico 2 | **Pizza**: Composição (MRR/Setup/Pontual) |
-| Tabela | Lista ordenada por valor |
-
-#### SLA - "Estamos Respondendo Rápido?"
-
-| Seção | Visualização |
-|-------|--------------|
-| KPIs | Leads, SLA Médio, % Meta, Mediana, Outliers |
-| Gráfico 1 | **Barras**: SLA Médio por SDR |
-| Gráfico 2 | **Progress**: Distribuição de SLA (faixas de tempo) |
-| Tabela | Lista ordenada por SLA (piores primeiro) |
-
-#### Faturamento - "De Onde Veio o Dinheiro?"
-
-| Seção | Visualização |
-|-------|--------------|
-| KPIs | Total, % MRR, % Setup, % Pontual, vs Meta |
-| Gráfico 1 | **Barras**: Faturamento por Closer |
-| Gráfico 2 | **Pizza**: Composição MRR/Setup/Pontual |
-| Tabela | Lista ordenada por valor |
-
-#### MRR, Setup, Pontual
-
-| Seção | Visualização |
-|-------|--------------|
-| KPIs | Contratos, Total, ARR/Média, % do Fat., Maior |
-| Gráfico 1 | **Barras**: Ranking por Closer |
-| Gráfico 2 | **Progress**: Concentração (top 3 clientes vs resto) |
-| Tabela | Lista ordenada por valor |
+```text
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│  CPMQL - Custo por MQL                                                                  │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐                                │
+│  │ 💰 R$ 246│  │ 📊 711   │  │ 🎯 R$ 280│  │ 📉 12%   │                                │
+│  │CPMQL Geral│  │ MQLs     │  │ Meta     │  │ Abaixo   │                                │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘                                │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                         │
+│  ┌─────────────────────────────────────┐  ┌─────────────────────────────────────────┐  │
+│  │   📊 CPMQL por Canal                │  │       📈 Eficiência (MQLs/Investimento) │  │
+│  │                                     │  │                                         │  │
+│  │   Meta Ads   ████████░░  R$ 234     │  │   Meta Ads    ██████████████░░  70%     │  │
+│  │   Google Ads █████████░  R$ 233     │  │   Google Ads  █████████████░░░  65%     │  │
+│  │   Eventos    ██████░░░░  R$ 346 ⚠️  │  │   Eventos     ████████░░░░░░░░  45%     │  │
+│  │                                     │  │                                         │  │
+│  └─────────────────────────────────────┘  └─────────────────────────────────────────┘  │
+│                                                                                         │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│  📋 Detalhamento por Canal                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐│
+│  │  Canal      │ Investimento │ MQLs  │ CPMQL  │ % Invest │ Taxa Conv │              ││
+│  │  Meta Ads   │ R$ 85k       │ 364   │ R$ 234 │ 48.6%    │ 70%       │              ││
+│  │  Google Ads │ R$ 62k       │ 266   │ R$ 233 │ 35.4%    │ 70%       │              ││
+│  │  Eventos    │ R$ 28k       │ 81    │ R$ 346 │ 16.0%    │ 85%       │              ││
+│  └─────────────────────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -185,168 +92,152 @@ Mostra composição percentual:
 
 | Arquivo | Descrição |
 |---------|-----------|
-| `src/components/planning/indicators/DrillDownBarChart.tsx` | Gráfico de barras horizontais para rankings |
-| `src/components/planning/indicators/DrillDownDistribution.tsx` | Barras de distribuição/aging com cores |
-| `src/components/planning/indicators/DrillDownPieChart.tsx` | Gráfico de pizza para composição |
-| `src/components/planning/indicators/DrillDownCharts.tsx` | Container que orquestra os gráficos por indicador |
+| `src/components/planning/marketing-indicators/CostPerStageGauges.tsx` | Linha de acelerômetros radiais para CPL, CPMQL, etc. |
 
 #### Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `DetailSheet.tsx` | Adicionar prop `charts` com configuração de gráficos, renderizar área de gráficos |
-| `IndicatorsTab.tsx` | Configurar gráficos específicos para cada indicador nos handlers |
+| `src/components/planning/marketing-indicators/types.ts` | Adicionar `CostPerStageGoals` e métricas por canal |
+| `src/hooks/useMarketingIndicators.ts` | Adicionar metas de custo e cálculos por canal |
+| `src/components/planning/MarketingIndicatorsTab.tsx` | Adicionar o novo componente, estado de drill-down |
 
-#### Interface de Configuração de Gráficos
+#### Novas Interfaces
 
 ```typescript
-interface ChartConfig {
-  type: 'bar' | 'distribution' | 'pie';
-  title: string;
-  data: ChartDataItem[];
+// Metas de custo por etapa
+interface CostPerStageGoals {
+  cpl: number;    // Meta R$ 200
+  cpmql: number;  // Meta R$ 280
+  cprm: number;   // Meta R$ 450
+  cprr: number;   // Meta R$ 550
+  cpp: number;    // Meta R$ 650
+  cpv: number;    // Meta R$ 9500
 }
 
-interface ChartDataItem {
+// Custo por canal por etapa
+interface CostPerChannelStage {
+  channelId: string;
+  channelName: string;
+  investment: number;
+  leads: number;
+  mqls: number;
+  rms: number;
+  rrs: number;
+  propostas: number;
+  vendas: number;
+  cpl: number;
+  cpmql: number;
+  cprm: number;
+  cprr: number;
+  cpp: number;
+  cpv: number;
+}
+```
+
+#### Componente CostPerStageGauges
+
+```typescript
+interface CostGaugeProps {
   label: string;
+  sublabel: string;
   value: number;
-  color?: string;
-  highlight?: 'success' | 'warning' | 'danger' | 'neutral';
+  goal: number;
+  onClick?: () => void;
 }
 
-interface DetailSheetProps {
-  // ... existing props ...
-  charts?: ChartConfig[];
-}
-```
-
-#### Exemplo de Configuração para Proposta
-
-```typescript
-case 'proposta': {
-  // ... cálculos existentes ...
-  
-  // Chart 1: Pipeline por Closer
-  const closerTotals = new Map<string, number>();
-  items.forEach(i => {
-    const closer = i.responsible || 'Sem Closer';
-    closerTotals.set(closer, (closerTotals.get(closer) || 0) + (i.value || 0));
-  });
-  const pipelineByCloser: ChartDataItem[] = Array.from(closerTotals.entries())
-    .map(([label, value]) => ({ label, value }))
-    .sort((a, b) => b.value - a.value);
-  
-  // Chart 2: Aging Distribution
-  const agingBuckets = [
-    { label: '0-7 dias', count: itemsWithAging.filter(i => (i.diasEmProposta || 0) <= 7).length, highlight: 'success' },
-    { label: '8-14 dias', count: itemsWithAging.filter(i => (i.diasEmProposta || 0) > 7 && (i.diasEmProposta || 0) <= 14).length, highlight: 'neutral' },
-    { label: '15-30 dias', count: itemsWithAging.filter(i => (i.diasEmProposta || 0) > 14 && (i.diasEmProposta || 0) <= 30).length, highlight: 'warning' },
-    { label: '30+ dias', count: itemsWithAging.filter(i => (i.diasEmProposta || 0) > 30).length, highlight: 'danger' },
-  ];
-  
-  const charts: ChartConfig[] = [
-    { type: 'bar', title: 'Pipeline por Closer', data: pipelineByCloser },
-    { type: 'distribution', title: 'Aging das Propostas', data: agingBuckets.map(b => ({ label: b.label, value: b.count, highlight: b.highlight })) },
-  ];
-  
-  setDetailSheetCharts(charts);
-  // ... resto do código ...
-}
-```
-
-#### Componente DrillDownBarChart
-
-```typescript
-interface DrillDownBarChartProps {
-  title: string;
-  data: { label: string; value: number; highlight?: string }[];
-  formatValue?: (value: number) => string;
-}
-
-export function DrillDownBarChart({ title, data, formatValue = String }: DrillDownBarChartProps) {
-  const maxValue = Math.max(...data.map(d => d.value));
+function CostGauge({ label, sublabel, value, goal, onClick }: CostGaugeProps) {
+  const percentage = goal > 0 ? (value / goal) * 100 : 0;
+  // Invertido: abaixo da meta = verde (bom), acima = vermelho (ruim)
+  const isGood = percentage <= 100;
   
   return (
-    <div className="space-y-3">
-      <h4 className="text-sm font-medium text-foreground">{title}</h4>
-      <div className="space-y-2">
-        {data.slice(0, 5).map((item, index) => (
-          <div key={item.label} className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground w-20 truncate">{item.label}</span>
-            <div className="flex-1 h-6 bg-muted rounded overflow-hidden">
-              <div 
-                className={cn(
-                  "h-full rounded transition-all",
-                  item.highlight === 'success' ? 'bg-green-500' :
-                  item.highlight === 'danger' ? 'bg-red-500' :
-                  item.highlight === 'warning' ? 'bg-amber-500' :
-                  'bg-primary'
-                )}
-                style={{ width: `${(item.value / maxValue) * 100}%` }}
-              />
-            </div>
-            <span className="text-sm font-medium w-24 text-right">{formatValue(item.value)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+    <Card className="cursor-pointer hover:border-primary/50" onClick={onClick}>
+      <CardContent className="flex flex-col items-center p-4">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <RadialBarChart ...>
+          {/* Gráfico radial */}
+        </RadialBarChart>
+        <span className="text-xl font-bold">{formatCurrency(value)}</span>
+        <span className={isGood ? 'text-green-500' : 'text-red-500'}>
+          {percentage.toFixed(0)}%
+        </span>
+        <span className="text-xs text-muted-foreground">Meta: {formatCurrency(goal)}</span>
+      </CardContent>
+    </Card>
   );
 }
-```
 
-#### Componente DrillDownDistribution
-
-```typescript
-interface DrillDownDistributionProps {
-  title: string;
-  data: { label: string; value: number; highlight?: string }[];
-}
-
-export function DrillDownDistribution({ title, data }: DrillDownDistributionProps) {
-  const total = data.reduce((sum, d) => sum + d.value, 0);
+export function CostPerStageGauges({ 
+  costPerStage, 
+  goals,
+  onCostClick 
+}: CostPerStageGaugesProps) {
+  const stages = [
+    { key: 'cpl', label: 'CPL', sublabel: 'Lead' },
+    { key: 'cpmql', label: 'CPMQL', sublabel: 'MQL' },
+    { key: 'cprm', label: 'CPRM', sublabel: 'RM' },
+    { key: 'cprr', label: 'CPRR', sublabel: 'RR' },
+    { key: 'cpp', label: 'CPP', sublabel: 'Proposta' },
+    { key: 'cpv', label: 'CPV', sublabel: 'Venda' },
+  ];
   
   return (
-    <div className="space-y-3">
-      <h4 className="text-sm font-medium text-foreground">{title}</h4>
-      <div className="space-y-2">
-        {data.map((item) => {
-          const pct = total > 0 ? (item.value / total) * 100 : 0;
-          return (
-            <div key={item.label} className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground w-20">{item.label}</span>
-              <div className="flex-1 h-4 bg-muted rounded overflow-hidden">
-                <div 
-                  className={cn(
-                    "h-full rounded-l",
-                    item.highlight === 'success' ? 'bg-green-500' :
-                    item.highlight === 'danger' ? 'bg-red-500' :
-                    item.highlight === 'warning' ? 'bg-amber-500' :
-                    'bg-blue-500'
-                  )}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <span className="text-sm w-20 text-right">
-                {item.value} ({Math.round(pct)}%)
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Custo por Etapa do Funil</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {stages.map(stage => (
+            <CostGauge
+              key={stage.key}
+              label={stage.label}
+              sublabel={stage.sublabel}
+              value={costPerStage[stage.key]}
+              goal={goals[stage.key]}
+              onClick={() => onCostClick(stage.key)}
+            />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 ```
 
 ---
 
-### Resultado Final
+### Fluxo de Implementação
 
-Cada drill-down agora será um **mini-dashboard analítico** completo com:
+1. **Atualizar tipos** - Adicionar `CostPerStageGoals` em `types.ts`
+2. **Atualizar hook** - Adicionar metas de custo no `useMarketingIndicators`
+3. **Criar componente** - `CostPerStageGauges.tsx` com acelerômetros clicáveis
+4. **Integrar drill-down** - Usar `DetailSheet` existente para mostrar breakdown por canal
+5. **Substituir visualização** - Trocar `CostPerStageChart` (círculos lineares) pelos acelerômetros radiais
 
-1. **KPI Cards** - Métricas-chave destacadas visualmente
-2. **Gráfico de Ranking** - Quem está performando melhor/pior
-3. **Gráfico de Distribuição** - Onde estão os problemas (aging, SLA, etc.)
-4. **Tabela Detalhada** - Lista completa para análise granular
+---
 
-Isso transforma o clique no acelerômetro de uma simples lista para uma **experiência analítica completa** que responde perguntas de negócio instantaneamente.
+### Valores de Meta Sugeridos
+
+Baseado nas melhores práticas e benchmarks de CAC do mercado B2B SaaS:
+
+| Métrica | Meta | Justificativa |
+|---------|------|---------------|
+| CPL | R$ 200 | Custo eficiente de lead em mercado B2B |
+| CPMQL | R$ 280 | ~40% acima do CPL (conversão ~70%) |
+| CPRM | R$ 450 | Considera taxa de agendamento (~60%) |
+| CPRR | R$ 550 | Taxa show ~80% do agendado |
+| CPP | R$ 650 | Taxa de proposta ~80% do RR |
+| CPV | R$ 9.500 | Alinhado com CAC atual ~R$ 9.2k |
+
+Esses valores serão configuráveis depois que a função de dados reais for implementada.
+
+---
+
+### Próximos Passos
+
+1. ✅ Criar componentes e integrar na UI
+2. 🔜 Conectar com dados reais (função a ser criada depois)
+3. 🔜 Permitir configuração de metas pelo usuário
 
