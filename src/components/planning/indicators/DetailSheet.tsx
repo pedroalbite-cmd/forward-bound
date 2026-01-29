@@ -4,6 +4,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { KpiCardsRow } from "./KpiCardsRow";
+import { KpiItem } from "./KpiCard";
 
 type SortDirection = 'none' | 'desc' | 'asc';
 
@@ -49,12 +51,13 @@ interface DetailSheetProps {
     label: string;
     format?: (value: any) => React.ReactNode;
   }[];
+  kpis?: KpiItem[];
 }
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(value);
 
-export function DetailSheet({ open, onOpenChange, title, description, items, columns }: DetailSheetProps) {
+export function DetailSheet({ open, onOpenChange, title, description, items, columns, kpis }: DetailSheetProps) {
   const [sortState, setSortState] = useState<SortState>({ column: null, direction: 'none' });
 
   const handleSort = (columnKey: keyof DetailItem) => {
@@ -125,12 +128,15 @@ export function DetailSheet({ open, onOpenChange, title, description, items, col
           )}
         </DialogHeader>
         <div className="flex-1 overflow-hidden flex flex-col mt-4">
+          {kpis && kpis.length > 0 && (
+            <KpiCardsRow kpis={kpis} />
+          )}
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm text-muted-foreground">
               {sortedItems.length} {sortedItems.length === 1 ? 'registro' : 'registros'}
             </span>
           </div>
-          <ScrollArea className="h-[calc(90vh-180px)]">
+          <ScrollArea className="h-[calc(90vh-220px)]">
             <Table>
               <TableHeader>
                 <TableRow>
