@@ -1,80 +1,87 @@
 
 
-## Plano: Corrigir Filtro de Closer para O2 TAX
+## Plano: Corrigir Filtro de Closer no Cálculo de Realizado (O2 TAX)
 
 ### Problema Identificado
 
-O filtro de Closers não funciona para a BU **O2 TAX** porque:
+O filtro de Closer na aba Indicadores mostra **0** para todos os indicadores quando Lucas está selecionado na O2 TAX.
 
-| Fonte | Campo `Closer responsável` | Mapeamento |
-|-------|---------------------------|------------|
-| `pipefy_moviment_cfos` (Modelo Atual) | `"Daniel Trindade"` | `BU_CLOSERS['modelo_atual']` = `['Pedro Albite', 'Daniel Trindade']` |
-| `pipefy_cards_movements` (O2 TAX) | `"Lucas"` | `BU_CLOSERS['o2_tax']` = `['Lucas Ilha']` |
+A causa está na função `getRealizedForIndicator()` no arquivo `IndicatorsTab.tsx`:
 
-A função `matchesCloserFilter` usa comparação **exata**: `selectedClosers.includes(responsavel)`, então:
-- `"Lucas Ilha".includes("Lucas")` → **FALSE** (falha!)
+| Linha | Código Problemático |
+|-------|---------------------|
+| 661 | `return closerValue && closersForBU.includes(closerValue);` |
+| 683 | `return closerValue && closersForBU.includes(closerValue);` |
+
+Este código usa **comparação exata** enquanto os dados são:
+- **Filtro selecionado**: `"Lucas Ilha"` (de `BU_CLOSERS.o2_tax`)
+- **Valor no banco**: `"Lucas"` (apenas primeiro nome)
+
+Resultado: `['Lucas Ilha'].includes('Lucas')` = **false**
 
 ### Solução
 
-Modificar a função `matchesCloserFilter` para usar comparação **parcial** (case-insensitive), similar ao que já fazemos com `matchesSdrFilter`.
+Substituir as comparações exatas `.includes(closerValue)` por uma **função auxiliar de match parcial** que reutiliza a mesma lógica já implementada em `matchesCloserFilter`.
 
 ---
 
 ### Seção Técnica
 
-#### Alteração em `IndicatorsTab.tsx`
+#### Alterações em `IndicatorsTab.tsx`
 
-Antes:
-```typescript
-const matchesCloserFilter = (responsavel?: string | null): boolean => {
-  if (selectedClosers.length === 0) return true;
-  if (!responsavel) return false;
-  return selectedClosers.includes(responsavel); // Comparação exata - FALHA!
-};
-```
+**1. Criar função helper de match parcial:**
 
-Depois:
 ```typescript
-const matchesCloserFilter = (closerValue?: string | null): boolean => {
-  if (selectedClosers.length === 0) return true;
+// Helper function for partial closer matching (reuses same logic as matchesCloserFilter)
+const matchesCloserPartial = (closerValue: string, closerList: string[]): boolean => {
   if (!closerValue) return false;
-  
-  // Comparação parcial (case-insensitive) para lidar com variações de nome
-  // Ex: "Lucas" no banco deve corresponder a "Lucas Ilha" no filtro
   const normalizedCloser = closerValue.toLowerCase().trim();
-  return selectedClosers.some(selected => {
+  return closerList.some(selected => {
     const normalizedSelected = selected.toLowerCase().trim();
-    // Match se o closer do banco está contido no filtro OU vice-versa
     return normalizedSelected.includes(normalizedCloser) || 
            normalizedCloser.includes(normalizedSelected);
   });
 };
 ```
 
+**2. Atualizar `getRealizedForIndicator()` - Modelo Atual (linha ~661):**
+
+Antes:
+```typescript
+return closerValue && closersForBU.includes(closerValue);
+```
+
+Depois:
+```typescript
+return closerValue && matchesCloserPartial(closerValue, closersForBU);
+```
+
+**3. Atualizar `getRealizedForIndicator()` - O2 TAX (linha ~683):**
+
+Antes:
+```typescript
+return closerValue && closersForBU.includes(closerValue);
+```
+
+Depois:
+```typescript
+return closerValue && matchesCloserPartial(closerValue, closersForBU);
+```
+
 ---
 
-### Por que Comparação Bidirecional?
-
-| Valor no Banco | Valor no Filtro | `banco.includes(filtro)` | `filtro.includes(banco)` | Resultado |
-|----------------|-----------------|-------------------------|-------------------------|-----------|
-| `"Lucas"` | `"Lucas Ilha"` | false | true | Match |
-| `"Daniel Trindade"` | `"Daniel Trindade"` | true | true | Match |
-| `"Pedro Albite"` | `"Pedro Albite"` | true | true | Match |
-
----
-
-### Arquivos a Modificar
+### Resumo das Alterações
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/planning/IndicatorsTab.tsx` | Alterar `matchesCloserFilter` para usar comparação parcial bidirecional |
+| `src/components/planning/IndicatorsTab.tsx` | Adicionar `matchesCloserPartial()` e substituir comparações exatas por chamadas a esta função |
 
 ---
 
 ### Comportamento Esperado
 
 Após a correção:
-1. Selecionar **Lucas** na O2 TAX → Mostra todos os registros com `Closer responsável = "Lucas"`
-2. Selecionar **Pedro** no Modelo Atual → Mostra todos os registros com `Closer responsável = "Pedro Albite"`
-3. Selecionar **Daniel** no Modelo Atual → Mostra todos os registros com `Closer responsável = "Daniel Trindade"`
+- Selecionar **O2 TAX** + **Lucas** → Mostra todos os indicadores com dados do Lucas
+- Os totais (Realizado) corresponderão aos dados no drill-down
+- A lógica será consistente em todo o componente
 
