@@ -119,7 +119,7 @@ const formatDuration = (minutes: number): string => {
 };
 
 // Helper to find top performer from items
-const findTopPerformer = (items: DetailItem[], key: 'responsible' | 'closer'): { name: string; count: number } => {
+const findTopPerformer = (items: DetailItem[], key: 'responsible' | 'closer' | 'sdr'): { name: string; count: number } => {
   const counts = new Map<string, number>();
   items.forEach(item => {
     const value = item[key] || item.responsible || '';
@@ -1078,33 +1078,21 @@ export function IndicatorsTab() {
     switch (indicator.key) {
       case 'mql': {
         // MQL: "De Onde Vêm Nossos Melhores Leads?"
-        const itemsWithCalcs = items.map(item => {
-          const entryDate = item.date ? new Date(item.date) : now;
-          // diasAteQualificar: estimate from duration (already in seconds, convert to days)
-          const diasAteQualificar = item.duration ? Math.floor(item.duration / 86400) : 0;
-          return { ...item, diasAteQualificar };
-        });
-        
-        const premiumCount = itemsWithCalcs.filter(i => {
+        const premiumCount = items.filter(i => {
           const range = (i.revenueRange || '').toLowerCase();
           return range.includes('50') || range.includes('100') || range.includes('acima');
         }).length;
         const premiumPct = items.length > 0 ? Math.round((premiumCount / items.length) * 100) : 0;
-        const avgDias = itemsWithCalcs.length > 0 
-          ? Math.round(itemsWithCalcs.reduce((sum, i) => sum + (i.diasAteQualificar || 0), 0) / itemsWithCalcs.length)
-          : 0;
-        const topSDR = findTopPerformer(items, 'responsible');
+        const topSDR = findTopPerformer(items, 'sdr');
         
         // KPIs para MQL
         const kpis: KpiItem[] = [
           { icon: '📊', value: items.length, label: 'Total MQLs', highlight: 'neutral' },
           { icon: '💎', value: `${premiumPct}%`, label: 'Premium', highlight: premiumPct >= 30 ? 'success' : premiumPct >= 15 ? 'neutral' : 'warning' },
-          { icon: '⏱️', value: `${avgDias}d`, label: 'Tempo Médio', highlight: avgDias <= 3 ? 'success' : avgDias <= 7 ? 'neutral' : 'warning' },
           { icon: '🏆', value: topSDR.name.split(' ')[0], label: `Top (${topSDR.count})`, highlight: 'neutral' },
         ];
         
-        // Charts para MQL
-        // 1. Distribuição por Faixa de Faturamento
+        // Charts para MQL - Distribuição por Faixa de Faturamento
         const revenueRangeCounts = new Map<string, number>();
         items.forEach(i => {
           const range = i.revenueRange || 'Não informado';
@@ -1117,22 +1105,13 @@ export function IndicatorsTab() {
           })
           .sort((a, b) => b.value - a.value);
         
-        // 2. Tempo até qualificar (distribuição)
-        const tempoDistribution = [
-          { label: '1-3 dias', value: itemsWithCalcs.filter(i => (i.diasAteQualificar || 0) <= 3).length, highlight: 'success' as const },
-          { label: '4-7 dias', value: itemsWithCalcs.filter(i => (i.diasAteQualificar || 0) > 3 && (i.diasAteQualificar || 0) <= 7).length, highlight: 'neutral' as const },
-          { label: '8-14 dias', value: itemsWithCalcs.filter(i => (i.diasAteQualificar || 0) > 7 && (i.diasAteQualificar || 0) <= 14).length, highlight: 'warning' as const },
-          { label: '14+ dias', value: itemsWithCalcs.filter(i => (i.diasAteQualificar || 0) > 14).length, highlight: 'danger' as const },
-        ];
-        
         const charts: ChartConfig[] = [
           { type: 'bar', title: 'Por Faixa de Faturamento', data: revenueRangeData },
-          { type: 'distribution', title: 'Tempo até Qualificar', data: tempoDistribution },
         ];
         
         setDetailSheetTitle('MQL - De Onde Vêm Nossos Melhores Leads?');
         setDetailSheetDescription(
-          `${items.length} MQLs captados | ${premiumPct}% faixa premium (>R$50k) | Top SDR: ${topSDR.name} (${topSDR.count}) | Tempo médio: ${avgDias}d`
+          `${items.length} MQLs captados | ${premiumPct}% faixa premium (>R$50k) | Top SDR: ${topSDR.name} (${topSDR.count})`
         );
         setDetailSheetKpis(kpis);
         setDetailSheetCharts(charts);
@@ -1140,11 +1119,10 @@ export function IndicatorsTab() {
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
           { key: 'revenueRange', label: 'Faixa Faturamento', format: columnFormatters.revenueRange },
-          { key: 'diasAteQualificar', label: 'Dias até MQL', format: columnFormatters.diasAteQualificar },
-          { key: 'responsible', label: 'SDR' },
+          { key: 'sdr', label: 'SDR' },
           { key: 'date', label: 'Data', format: columnFormatters.date },
         ]);
-        setDetailSheetItems(itemsWithCalcs);
+        setDetailSheetItems(items);
         setDetailSheetOpen(true);
         return;
       }
