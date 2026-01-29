@@ -1393,7 +1393,17 @@ export function IndicatorsTab() {
           .map(([label, value]) => ({ label: label.split(' ')[0], value }))
           .sort((a, b) => b.value - a.value);
         
-        // 2. Composição MRR/Setup/Pontual (Pie)
+        // 2. Ranking de SDRs por valor originado
+        const sdrTotals = new Map<string, number>();
+        items.forEach(i => {
+          const sdrName = i.sdr || i.responsible || 'Sem SDR';
+          sdrTotals.set(sdrName, (sdrTotals.get(sdrName) || 0) + (i.value || 0));
+        });
+        const sdrRankingData = Array.from(sdrTotals.entries())
+          .map(([label, value]) => ({ label: label.split(' ')[0], value }))
+          .sort((a, b) => b.value - a.value);
+        
+        // 3. Composição MRR/Setup/Pontual (Pie)
         const compositionData = [
           { label: 'MRR', value: totalMrr },
           { label: 'Setup', value: totalSetup },
@@ -1402,6 +1412,7 @@ export function IndicatorsTab() {
         
         const charts: ChartConfig[] = [
           { type: 'bar', title: 'Ranking por Closer', data: closerRankingData, formatValue: formatCompactCurrency },
+          { type: 'bar', title: 'Vendas por SDR', data: sdrRankingData, formatValue: formatCompactCurrency },
           { type: 'pie', title: 'Composição do Faturamento', data: compositionData, formatValue: formatCompactCurrency },
         ];
         

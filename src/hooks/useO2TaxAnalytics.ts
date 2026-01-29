@@ -541,6 +541,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     revenueRange: card.faixa || undefined,
     responsible: card.responsavel || undefined,
     closer: card.closer || undefined,
+    sdr: card.responsavel || undefined, // SDR field for O2 TAX (maps to "SDR responsável")
     duration: card.duracao,
     product: 'O2 TAX',
     mrr: card.valorMRR,
