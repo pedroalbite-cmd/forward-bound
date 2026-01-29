@@ -916,29 +916,69 @@ export function IndicatorsTab() {
   };
 
   // Get detail items for an indicator based on selected BUs and closer/SDR filters
+  // Uses the SAME BU exclusion logic as getRealizedForIndicator:
+  // If a closer is selected and doesn't operate in a BU, skip that BU entirely
   const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
     let items: DetailItem[] = [];
     
-    // Aggregate items from selected BUs
+    // Modelo Atual: Include if no closer filter OR at least one selected closer operates here
     if (includesModeloAtual) {
-      items = [...items, ...modeloAtualAnalytics.getDetailItemsForIndicator(indicatorKey)];
+      const closersForBU = effectiveSelectedClosers.filter(c => 
+        BU_CLOSERS.modelo_atual.includes(c as CloserType)
+      );
+      if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
+        const buItems = modeloAtualAnalytics.getDetailItemsForIndicator(indicatorKey);
+        if (effectiveSelectedClosers.length > 0) {
+          items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
+        } else {
+          items = [...items, ...buItems];
+        }
+      }
     }
     
+    // O2 TAX: Include if no closer filter OR at least one selected closer operates here
     if (includesO2Tax) {
-      items = [...items, ...o2TaxAnalytics.getDetailItemsForIndicator(indicatorKey)];
+      const closersForBU = effectiveSelectedClosers.filter(c => 
+        BU_CLOSERS.o2_tax.includes(c as CloserType)
+      );
+      if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
+        const buItems = o2TaxAnalytics.getDetailItemsForIndicator(indicatorKey);
+        if (effectiveSelectedClosers.length > 0) {
+          items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
+        } else {
+          items = [...items, ...buItems];
+        }
+      }
     }
     
+    // Franquia: Include if no closer filter OR at least one selected closer operates here
     if (includesFranquia) {
-      items = [...items, ...franquiaAnalytics.getDetailItemsForIndicator(indicatorKey)];
+      const closersForBU = effectiveSelectedClosers.filter(c => 
+        BU_CLOSERS.franquia.includes(c as CloserType)
+      );
+      if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
+        const buItems = franquiaAnalytics.getDetailItemsForIndicator(indicatorKey);
+        if (effectiveSelectedClosers.length > 0) {
+          items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
+        } else {
+          items = [...items, ...buItems];
+        }
+      }
     }
     
+    // Oxy Hacker: Include if no closer filter OR at least one selected closer operates here
     if (includesOxyHacker) {
-      items = [...items, ...oxyHackerAnalytics.getDetailItemsForIndicator(indicatorKey)];
-    }
-    
-    // Apply closer filter if any closers are selected
-    if (selectedClosers.length > 0) {
-      items = items.filter(item => matchesCloserFilter(item.closer));
+      const closersForBU = effectiveSelectedClosers.filter(c => 
+        BU_CLOSERS.oxy_hacker.includes(c as CloserType)
+      );
+      if (closersForBU.length > 0 || effectiveSelectedClosers.length === 0) {
+        const buItems = oxyHackerAnalytics.getDetailItemsForIndicator(indicatorKey);
+        if (effectiveSelectedClosers.length > 0) {
+          items = [...items, ...buItems.filter(item => matchesCloserFilter(item.closer))];
+        } else {
+          items = [...items, ...buItems];
+        }
+      }
     }
     
     // Apply SDR filter if any SDRs are selected
