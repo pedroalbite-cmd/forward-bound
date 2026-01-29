@@ -166,30 +166,16 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
   ];
 
   // Get columns for indicator type
-  const getColumnsForIndicator = (indicator: IndicatorType) => {
-    const baseColumns: { key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[] = [
-      { key: 'product', label: 'Produto', format: columnFormatters.product },
-      { key: 'name', label: 'Título' },
-      { key: 'company', label: 'Empresa/Contato' },
-      { key: 'phase', label: 'Fase', format: columnFormatters.phase },
-      { key: 'date', label: 'Data', format: columnFormatters.date },
-      { key: 'duration', label: 'Tempo na Fase', format: columnFormatters.duration },
-    ];
-
-    if (indicator === 'proposta' || indicator === 'venda') {
-      return [
-        ...baseColumns,
-        { key: 'mrr' as keyof DetailItem, label: 'MRR', format: columnFormatters.currency },
-        { key: 'setup' as keyof DetailItem, label: 'Setup', format: columnFormatters.currency },
-        { key: 'pontual' as keyof DetailItem, label: 'Pontual', format: columnFormatters.currency },
-        { key: 'value' as keyof DetailItem, label: 'Total', format: columnFormatters.currency },
-        { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
-      ];
-    }
-
+  const getColumnsForIndicator = (_indicator: IndicatorType) => {
     return [
-      ...baseColumns,
-      { key: 'revenueRange' as keyof DetailItem, label: 'Faixa Faturamento' },
+      { key: 'product' as keyof DetailItem, label: 'Produto', format: columnFormatters.product },
+      { key: 'name' as keyof DetailItem, label: 'Título' },
+      { key: 'company' as keyof DetailItem, label: 'Empresa/Contato' },
+      { key: 'date' as keyof DetailItem, label: 'Data', format: columnFormatters.date },
+      { key: 'mrr' as keyof DetailItem, label: 'MRR', format: columnFormatters.currency },
+      { key: 'setup' as keyof DetailItem, label: 'Setup', format: columnFormatters.currency },
+      { key: 'pontual' as keyof DetailItem, label: 'Pontual', format: columnFormatters.currency },
+      { key: 'value' as keyof DetailItem, label: 'Total', format: columnFormatters.currency },
       { key: 'responsible' as keyof DetailItem, label: 'Responsável' },
     ];
   };
