@@ -29,6 +29,13 @@ export interface DetailItem {
   pontual?: number; // Valor Pontual for monetary indicators
   closer?: string; // Closer responsável (for filtering)
   sla?: number; // SLA time in minutes (for SLA indicator drill-down)
+  // Strategic drill-down calculated fields
+  diasAteQualificar?: number;    // MQL: Data Entrada - Data Criação
+  diasComoMQL?: number;          // RM: tempo antes de agendar
+  diasEmProposta?: number;       // Proposta: aging atual
+  cicloVenda?: number;           // Venda: Lead → Fechamento
+  percentualTotal?: number;      // % deste item no total
+  slaStatus?: 'ok' | 'warning' | 'danger'; // Visual do SLA
 }
 
 interface DetailSheetProps {
@@ -219,5 +226,51 @@ export const columnFormatters = {
         {value}
       </Badge>
     );
+  },
+  // Strategic drill-down formatters with visual alerts
+  agingWithAlert: (days: number) => {
+    if (days == null || days < 0) return '-';
+    if (days > 30) return <span className="text-destructive font-medium">{days}d 🔴</span>;
+    if (days > 14) return <span className="text-amber-600">{days}d ⚠️</span>;
+    return <span className="text-chart-2">{days}d</span>;
+  },
+  slaWithStatus: (minutes: number) => {
+    if (minutes == null || minutes < 0) return '-';
+    if (minutes <= 30) return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">✅ {Math.round(minutes)}m</Badge>;
+    if (minutes <= 60) return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">⚠️ {Math.round(minutes)}m</Badge>;
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+    return <Badge className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">🔴 {hours}h{mins > 0 ? ` ${mins}m` : ''}</Badge>;
+  },
+  revenueRange: (range: string) => {
+    if (!range) return <Badge variant="secondary">-</Badge>;
+    const lower = range.toLowerCase();
+    const isPremium = lower.includes('50') || lower.includes('100') || lower.includes('acima');
+    const isMedium = lower.includes('20') || lower.includes('30') || lower.includes('40');
+    
+    if (isPremium) return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 font-normal">{range}</Badge>;
+    if (isMedium) return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 font-normal">{range}</Badge>;
+    return <Badge variant="secondary" className="font-normal">{range}</Badge>;
+  },
+  diasAteQualificar: (days: number) => {
+    if (days == null || days < 0) return '-';
+    if (days > 7) return <span className="text-destructive font-medium">{days}d 🔴</span>;
+    if (days > 3) return <span className="text-amber-600">{days}d ⚠️</span>;
+    return <span className="text-chart-2">{days}d</span>;
+  },
+  diasAteAgendar: (days: number) => {
+    if (days == null || days < 0) return '-';
+    if (days > 14) return <span className="text-destructive font-medium">{days}d 🔴</span>;
+    if (days > 7) return <span className="text-amber-600">{days}d ⚠️</span>;
+    return <span className="text-chart-2">{days}d</span>;
+  },
+  cicloVenda: (days: number) => {
+    if (days == null || days < 0) return '-';
+    return `${days}d`;
+  },
+  percentualTotal: (pct: number) => {
+    if (pct == null || pct < 0) return '-';
+    if (pct >= 20) return <span className="font-medium text-amber-600">{pct.toFixed(1)}% ⚠️</span>;
+    return `${pct.toFixed(1)}%`;
   },
 };
