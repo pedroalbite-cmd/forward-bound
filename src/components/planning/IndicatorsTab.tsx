@@ -654,11 +654,11 @@ export function IndicatorsTab() {
       );
       
       if (closersForBU.length > 0) {
-        // Filter cards by closers that operate in this BU
+        // Filter cards by closers that operate in this BU (using partial match)
         const cards = modeloAtualAnalytics.getCardsForIndicator(indicator.key);
         const filteredCards = cards.filter(card => {
           const closerValue = (card.closer || '').trim();
-          return closerValue && closersForBU.includes(closerValue);
+          return closerValue && matchesCloserFilter(closerValue);
         });
         total += filteredCards.length;
       } else if (selectedClosers.length > 0) {
@@ -676,11 +676,11 @@ export function IndicatorsTab() {
       );
       
       if (closersForBU.length > 0) {
-        // Filter cards by Lucas
+        // Filter cards by Lucas (using partial match for name variations)
         const cards = o2TaxAnalytics.getDetailItemsForIndicator(indicator.key);
         const filteredCards = cards.filter(card => {
           const closerValue = (card.closer || card.responsible || '').trim();
-          return closerValue && closersForBU.includes(closerValue);
+          return closerValue && matchesCloserFilter(closerValue);
         });
         total += filteredCards.length;
       } else if (selectedClosers.length > 0) {
