@@ -165,6 +165,6 @@ const getItemsForIndicator = (indicatorKey: IndicatorType): DetailItem[] => {
 
 ### Próximos Passos
 
-1. ✅ Implementar filtro de SDR
+1. ✅ Implementar filtro de SDR (CONCLUÍDO)
 2. 🔜 Opcionalmente, extrair lista de SDRs dinamicamente dos dados
 3. 🔜 Considerar ajuste de metas por SDR (similar ao que existe para Closers)
