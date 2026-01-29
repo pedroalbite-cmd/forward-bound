@@ -28,6 +28,7 @@ import { RevenueBreakdownChart } from "./RevenueBreakdownChart";
 import { RevenueChartComparison } from "./RevenueChartComparison";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
 import { KpiItem } from "./indicators/KpiCard";
+import { ChartConfig } from "./indicators/DrillDownCharts";
 import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select";
 
 type ViewMode = 'daily' | 'accumulated';
@@ -309,6 +310,7 @@ export function IndicatorsTab() {
   const [detailSheetItems, setDetailSheetItems] = useState<DetailItem[]>([]);
   const [detailSheetColumns, setDetailSheetColumns] = useState<{ key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[]>([]);
   const [detailSheetKpis, setDetailSheetKpis] = useState<KpiItem[]>([]);
+  const [detailSheetCharts, setDetailSheetCharts] = useState<ChartConfig[]>([]);
   
 
   const handleSync = () => {
@@ -910,11 +912,39 @@ export function IndicatorsTab() {
           { icon: '🏆', value: topSDR.name.split(' ')[0], label: `Top (${topSDR.count})`, highlight: 'neutral' },
         ];
         
+        // Charts para MQL
+        // 1. Distribuição por Faixa de Faturamento
+        const revenueRangeCounts = new Map<string, number>();
+        items.forEach(i => {
+          const range = i.revenueRange || 'Não informado';
+          revenueRangeCounts.set(range, (revenueRangeCounts.get(range) || 0) + 1);
+        });
+        const revenueRangeData = Array.from(revenueRangeCounts.entries())
+          .map(([label, value]) => {
+            const isHigh = label.toLowerCase().includes('50') || label.toLowerCase().includes('100') || label.toLowerCase().includes('acima');
+            return { label, value, highlight: isHigh ? 'success' as const : 'neutral' as const };
+          })
+          .sort((a, b) => b.value - a.value);
+        
+        // 2. Tempo até qualificar (distribuição)
+        const tempoDistribution = [
+          { label: '1-3 dias', value: itemsWithCalcs.filter(i => (i.diasAteQualificar || 0) <= 3).length, highlight: 'success' as const },
+          { label: '4-7 dias', value: itemsWithCalcs.filter(i => (i.diasAteQualificar || 0) > 3 && (i.diasAteQualificar || 0) <= 7).length, highlight: 'neutral' as const },
+          { label: '8-14 dias', value: itemsWithCalcs.filter(i => (i.diasAteQualificar || 0) > 7 && (i.diasAteQualificar || 0) <= 14).length, highlight: 'warning' as const },
+          { label: '14+ dias', value: itemsWithCalcs.filter(i => (i.diasAteQualificar || 0) > 14).length, highlight: 'danger' as const },
+        ];
+        
+        const charts: ChartConfig[] = [
+          { type: 'bar', title: 'Por Faixa de Faturamento', data: revenueRangeData },
+          { type: 'distribution', title: 'Tempo até Qualificar', data: tempoDistribution },
+        ];
+        
         setDetailSheetTitle('MQL - De Onde Vêm Nossos Melhores Leads?');
         setDetailSheetDescription(
           `${items.length} MQLs captados | ${premiumPct}% faixa premium (>R$50k) | Top SDR: ${topSDR.name} (${topSDR.count}) | Tempo médio: ${avgDias}d`
         );
         setDetailSheetKpis(kpis);
+        setDetailSheetCharts(charts);
         setDetailSheetColumns([
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
@@ -951,11 +981,36 @@ export function IndicatorsTab() {
           { icon: '🏆', value: topCloser.name.split(' ')[0], label: `Top (${topCloser.count})`, highlight: 'neutral' },
         ];
         
+        // Charts para RM
+        // 1. Ranking de Closers por quantidade
+        const closerCounts = new Map<string, number>();
+        items.forEach(i => {
+          const closer = i.responsible || i.closer || 'Sem Closer';
+          closerCounts.set(closer, (closerCounts.get(closer) || 0) + 1);
+        });
+        const closerRankingData = Array.from(closerCounts.entries())
+          .map(([label, value]) => ({ label: label.split(' ')[0], value }))
+          .sort((a, b) => b.value - a.value);
+        
+        // 2. Tempo como MQL antes de agendar
+        const tempoDistribution = [
+          { label: '1-7 dias', value: itemsWithCalcs.filter(i => (i.diasComoMQL || 0) <= 7).length, highlight: 'success' as const },
+          { label: '8-14 dias', value: itemsWithCalcs.filter(i => (i.diasComoMQL || 0) > 7 && (i.diasComoMQL || 0) <= 14).length, highlight: 'neutral' as const },
+          { label: '15-30 dias', value: itemsWithCalcs.filter(i => (i.diasComoMQL || 0) > 14 && (i.diasComoMQL || 0) <= 30).length, highlight: 'warning' as const },
+          { label: '30+ dias', value: itemsWithCalcs.filter(i => (i.diasComoMQL || 0) > 30).length, highlight: 'danger' as const },
+        ];
+        
+        const charts: ChartConfig[] = [
+          { type: 'bar', title: 'Ranking por Closer', data: closerRankingData },
+          { type: 'distribution', title: 'Tempo como MQL', data: tempoDistribution },
+        ];
+        
         setDetailSheetTitle('RM - Estamos Convertendo MQLs em Reuniões?');
         setDetailSheetDescription(
           `${items.length} reuniões agendadas | Taxa MQL→RM: ${taxaMqlRm}% | Tempo médio: ${avgDias}d | Top: ${topCloser.name} (${topCloser.count})`
         );
         setDetailSheetKpis(kpis);
+        setDetailSheetCharts(charts);
         setDetailSheetColumns([
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
@@ -986,11 +1041,40 @@ export function IndicatorsTab() {
           { icon: '🏆', value: topCloser.name.split(' ')[0], label: `Top`, highlight: 'neutral' },
         ];
         
+        // Charts para RR
+        // 1. Ranking de Closers por taxa de show
+        const closerStats = new Map<string, { realized: number }>();
+        items.forEach(i => {
+          const closer = i.responsible || i.closer || 'Sem Closer';
+          const stats = closerStats.get(closer) || { realized: 0 };
+          stats.realized += 1;
+          closerStats.set(closer, stats);
+        });
+        const closerRankingData = Array.from(closerStats.entries())
+          .map(([label, stats]) => ({ label: label.split(' ')[0], value: stats.realized }))
+          .sort((a, b) => b.value - a.value);
+        
+        // 2. Potencial por faixa de faturamento
+        const revenueRangeCounts = new Map<string, number>();
+        items.forEach(i => {
+          const range = i.revenueRange || 'Não informado';
+          revenueRangeCounts.set(range, (revenueRangeCounts.get(range) || 0) + 1);
+        });
+        const revenueRangeData = Array.from(revenueRangeCounts.entries())
+          .map(([label, value]) => ({ label, value }))
+          .sort((a, b) => b.value - a.value);
+        
+        const charts: ChartConfig[] = [
+          { type: 'bar', title: 'Ranking por Closer', data: closerRankingData },
+          { type: 'bar', title: 'Por Faixa Faturamento', data: revenueRangeData },
+        ];
+        
         setDetailSheetTitle('RR - Quem Apareceu nas Reuniões?');
         setDetailSheetDescription(
           `${items.length} realizadas | Taxa Show: ${taxaShow}% (${items.length} de ${rmCount}) | ${noShows > 0 ? `${noShows} no-shows | ` : ''}Potencial: ${formatCompactCurrency(potencial)} | Top: ${topCloser.name}`
         );
         setDetailSheetKpis(kpis);
+        setDetailSheetCharts(charts);
         setDetailSheetColumns([
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
@@ -1026,6 +1110,30 @@ export function IndicatorsTab() {
           { icon: '🔴', value: formatCompactCurrency(valorEmRisco), label: 'em Risco', highlight: valorEmRisco > 0 ? 'danger' : 'success' },
         ];
         
+        // Charts para Proposta
+        // 1. Pipeline por Closer
+        const closerTotals = new Map<string, number>();
+        itemsWithAging.forEach(i => {
+          const closer = i.responsible || i.closer || 'Sem Closer';
+          closerTotals.set(closer, (closerTotals.get(closer) || 0) + (i.value || 0));
+        });
+        const pipelineByCloserData = Array.from(closerTotals.entries())
+          .map(([label, value]) => ({ label: label.split(' ')[0], value }))
+          .sort((a, b) => b.value - a.value);
+        
+        // 2. Aging das Propostas
+        const agingDistribution = [
+          { label: '0-7 dias', value: itemsWithAging.filter(i => (i.diasEmProposta || 0) <= 7).length, highlight: 'success' as const },
+          { label: '8-14 dias', value: itemsWithAging.filter(i => (i.diasEmProposta || 0) > 7 && (i.diasEmProposta || 0) <= 14).length, highlight: 'neutral' as const },
+          { label: '15-30 dias', value: itemsWithAging.filter(i => (i.diasEmProposta || 0) > 14 && (i.diasEmProposta || 0) <= 30).length, highlight: 'warning' as const },
+          { label: '30+ dias', value: itemsWithAging.filter(i => (i.diasEmProposta || 0) > 30).length, highlight: 'danger' as const },
+        ];
+        
+        const charts: ChartConfig[] = [
+          { type: 'bar', title: 'Pipeline por Closer', data: pipelineByCloserData, formatValue: formatCompactCurrency },
+          { type: 'distribution', title: 'Aging das Propostas', data: agingDistribution },
+        ];
+        
         const descricao = `${items.length} propostas | Pipeline: ${formatCompactCurrency(pipeline)} | Ticket médio: ${formatCompactCurrency(ticketMedio)}` +
           (propostasAntigas.length > 0 
             ? ` | ⚠️ ${propostasAntigas.length} com mais de 14 dias (${formatCompactCurrency(valorEmRisco)} em risco)` 
@@ -1034,6 +1142,7 @@ export function IndicatorsTab() {
         setDetailSheetTitle('Propostas - Onde o Pipeline Está Travando?');
         setDetailSheetDescription(descricao);
         setDetailSheetKpis(kpis);
+        setDetailSheetCharts(charts);
         setDetailSheetColumns([
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
@@ -1082,11 +1191,35 @@ export function IndicatorsTab() {
           { icon: '🏆', value: podium[0]?.name.split(' ')[0] || '-', label: 'Top Closer', highlight: 'neutral' },
         ];
         
+        // Charts para Venda
+        // 1. Ranking de Closers por valor
+        const closerTotals = new Map<string, number>();
+        items.forEach(i => {
+          const closer = i.responsible || i.closer || 'Sem Closer';
+          closerTotals.set(closer, (closerTotals.get(closer) || 0) + (i.value || 0));
+        });
+        const closerRankingData = Array.from(closerTotals.entries())
+          .map(([label, value]) => ({ label: label.split(' ')[0], value }))
+          .sort((a, b) => b.value - a.value);
+        
+        // 2. Composição MRR/Setup/Pontual (Pie)
+        const compositionData = [
+          { label: 'MRR', value: totalMrr },
+          { label: 'Setup', value: totalSetup },
+          { label: 'Pontual', value: totalPontual },
+        ].filter(d => d.value > 0);
+        
+        const charts: ChartConfig[] = [
+          { type: 'bar', title: 'Ranking por Closer', data: closerRankingData, formatValue: formatCompactCurrency },
+          { type: 'pie', title: 'Composição do Faturamento', data: compositionData, formatValue: formatCompactCurrency },
+        ];
+        
         setDetailSheetTitle('Vendas - O Que Fechamos e Como?');
         setDetailSheetDescription(
           `${items.length} contratos | Total: ${formatCompactCurrency(totalFaturamento)} | Composição: MRR ${pctMrr}% + Setup ${pctSetup}% + Pontual ${pctPontual}% | ${podiumStr}`
         );
         setDetailSheetKpis(kpis);
+        setDetailSheetCharts(charts);
         setDetailSheetColumns([
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
@@ -1109,6 +1242,7 @@ export function IndicatorsTab() {
         setDetailSheetTitle(indicator.label);
         setDetailSheetDescription(`${formatNumber(items.length)} registros no período`);
         setDetailSheetKpis([]);
+        setDetailSheetCharts([]);
         setDetailSheetItems(items);
         setDetailSheetColumns(columns);
         setDetailSheetOpen(true);
@@ -1433,12 +1567,47 @@ export function IndicatorsTab() {
         { icon: '⚠️', value: outliers > 0 ? outliers : '-', label: 'Outliers', highlight: outliers > 5 ? 'danger' : outliers > 0 ? 'warning' : 'success' },
       ];
       
+      // Charts para SLA
+      // 1. SLA por SDR
+      const sdrSlaMap = new Map<string, { total: number; count: number }>();
+      tentativasCards.forEach(c => {
+        const sdr = c.responsible || 'Sem SDR';
+        const stats = sdrSlaMap.get(sdr) || { total: 0, count: 0 };
+        stats.total += c.sla || 0;
+        stats.count += 1;
+        sdrSlaMap.set(sdr, stats);
+      });
+      const sdrSlaData = Array.from(sdrSlaMap.entries())
+        .map(([label, stats]) => {
+          const avgMinutes = stats.count > 0 ? Math.round(stats.total / stats.count) : 0;
+          return {
+            label: label.split(' ')[0],
+            value: avgMinutes,
+            highlight: avgMinutes <= 30 ? 'success' as const : avgMinutes <= 60 ? 'warning' as const : 'danger' as const
+          };
+        })
+        .sort((a, b) => b.value - a.value);
+      
+      // 2. Distribuição de SLA
+      const slaDistribution = [
+        { label: '< 30m', value: tentativasCards.filter(c => (c.sla || 0) <= 30).length, highlight: 'success' as const },
+        { label: '30m-1h', value: tentativasCards.filter(c => (c.sla || 0) > 30 && (c.sla || 0) <= 60).length, highlight: 'warning' as const },
+        { label: '1h-2h', value: tentativasCards.filter(c => (c.sla || 0) > 60 && (c.sla || 0) <= 120).length, highlight: 'warning' as const },
+        { label: '> 2h', value: tentativasCards.filter(c => (c.sla || 0) > 120).length, highlight: 'danger' as const },
+      ];
+      
+      const charts: ChartConfig[] = [
+        { type: 'bar', title: 'SLA Médio por SDR (min)', data: sdrSlaData },
+        { type: 'distribution', title: 'Distribuição de SLA', data: slaDistribution },
+      ];
+      
       setDetailSheetTitle('SLA - Estamos Respondendo Rápido?');
       setDetailSheetDescription(
         `${tentativasCards.length} leads | SLA médio: ${formatDuration(avgSla)} | Dentro da meta (<30m): ${withinTargetPct}% | Mediana: ${formatDuration(medianSla)}` +
         (outliers > 0 ? ` | ⚠️ ${outliers} leads com SLA > 2h` : '')
       );
       setDetailSheetKpis(kpis);
+      setDetailSheetCharts(charts);
       setDetailSheetColumns([
         { key: 'product', label: 'Produto', format: columnFormatters.product },
         { key: 'company', label: 'Empresa' },
@@ -1478,12 +1647,36 @@ export function IndicatorsTab() {
         { icon: '🎯', value: `${pctMeta}%`, label: 'vs Meta', highlight: pctMeta >= 100 ? 'success' : pctMeta >= 70 ? 'neutral' : 'warning' },
       ];
       
+      // Charts para Faturamento
+      // 1. Faturamento por Closer
+      const closerTotals = new Map<string, number>();
+      items.forEach(i => {
+        const closer = i.responsible || i.closer || 'Sem Closer';
+        closerTotals.set(closer, (closerTotals.get(closer) || 0) + (i.value || 0));
+      });
+      const closerRankingData = Array.from(closerTotals.entries())
+        .map(([label, value]) => ({ label: label.split(' ')[0], value }))
+        .sort((a, b) => b.value - a.value);
+      
+      // 2. Composição MRR/Setup/Pontual (Pie)
+      const compositionData = [
+        { label: 'MRR', value: totalMrr },
+        { label: 'Setup', value: totalSetup },
+        { label: 'Pontual', value: totalPontual },
+      ].filter(d => d.value > 0);
+      
+      const charts: ChartConfig[] = [
+        { type: 'bar', title: 'Faturamento por Closer', data: closerRankingData, formatValue: formatCompactCurrency },
+        { type: 'pie', title: 'Composição', data: compositionData, formatValue: formatCompactCurrency },
+      ];
+      
       setDetailSheetTitle('Faturamento - De Onde Veio o Dinheiro?');
       setDetailSheetDescription(
         `Total: ${formatCompactCurrency(totalFaturamento)} | Composição: MRR ${formatCompactCurrency(totalMrr)} (${pctMrr}%) + Setup ${formatCompactCurrency(totalSetup)} (${pctSetup}%) + Pontual ${formatCompactCurrency(totalPontual)} (${pctPontual}%) | vs Meta: ${pctMeta}%` +
         (topCliente ? ` | Top: ${topCliente.company || topCliente.name} (${formatCompactCurrency(topCliente.value || 0)})` : '')
       );
       setDetailSheetKpis(kpis);
+      setDetailSheetCharts(charts);
       setDetailSheetColumns([
         { key: 'product', label: 'Produto', format: columnFormatters.product },
         { key: 'company', label: 'Empresa' },
@@ -1522,12 +1715,38 @@ export function IndicatorsTab() {
         { icon: '👑', value: topCliente ? (topCliente.company || topCliente.name).substring(0, 10) : '-', label: 'Maior', highlight: 'neutral' },
       ];
       
+      // Charts para MRR
+      // 1. Ranking por Closer
+      const closerTotals = new Map<string, number>();
+      mrrItems.forEach(i => {
+        const closer = i.responsible || i.closer || 'Sem Closer';
+        closerTotals.set(closer, (closerTotals.get(closer) || 0) + (i.mrr || 0));
+      });
+      const closerRankingData = Array.from(closerTotals.entries())
+        .map(([label, value]) => ({ label: label.split(' ')[0], value }))
+        .sort((a, b) => b.value - a.value);
+      
+      // 2. Top 3 clientes vs resto (concentração)
+      const sortedByMrr = [...mrrItems].sort((a, b) => (b.mrr || 0) - (a.mrr || 0));
+      const top3Mrr = sortedByMrr.slice(0, 3).reduce((sum, i) => sum + (i.mrr || 0), 0);
+      const restoMrr = totalMrr - top3Mrr;
+      const concentrationData = [
+        { label: 'Top 3', value: top3Mrr },
+        { label: 'Outros', value: restoMrr },
+      ].filter(d => d.value > 0);
+      
+      const charts: ChartConfig[] = [
+        { type: 'bar', title: 'MRR por Closer', data: closerRankingData, formatValue: formatCompactCurrency },
+        { type: 'pie', title: 'Concentração de Receita', data: concentrationData, formatValue: formatCompactCurrency },
+      ];
+      
       setDetailSheetTitle('MRR - Quanto de Base Recorrente Construímos?');
       setDetailSheetDescription(
         `${mrrItems.length} contratos com MRR | Total: ${formatCompactCurrency(totalMrr)}/mês | ARR projetado: ${formatCompactCurrency(arrProjetado)} | Média: ${formatCompactCurrency(avgMrr)}` +
         (topCliente ? ` | Maior: ${topCliente.company || topCliente.name} (${formatCompactCurrency(topCliente.mrr || 0)}/mês)` : '')
       );
       setDetailSheetKpis(kpis);
+      setDetailSheetCharts(charts);
       setDetailSheetColumns([
         { key: 'product', label: 'Produto', format: columnFormatters.product },
         { key: 'company', label: 'Empresa' },
@@ -1565,12 +1784,28 @@ export function IndicatorsTab() {
         { icon: '👑', value: topCliente ? (topCliente.company || topCliente.name).substring(0, 10) : '-', label: 'Maior', highlight: 'neutral' },
       ];
       
+      // Charts para Setup
+      // 1. Ranking por Closer
+      const closerTotals = new Map<string, number>();
+      setupItems.forEach(i => {
+        const closer = i.responsible || i.closer || 'Sem Closer';
+        closerTotals.set(closer, (closerTotals.get(closer) || 0) + (i.setup || 0));
+      });
+      const closerRankingData = Array.from(closerTotals.entries())
+        .map(([label, value]) => ({ label: label.split(' ')[0], value }))
+        .sort((a, b) => b.value - a.value);
+      
+      const charts: ChartConfig[] = [
+        { type: 'bar', title: 'Setup por Closer', data: closerRankingData, formatValue: formatCompactCurrency },
+      ];
+      
       setDetailSheetTitle('Setup - Quantas Implantações Vendemos?');
       setDetailSheetDescription(
         `${setupItems.length} projetos com setup | Total: ${formatCompactCurrency(totalSetup)} | Média: ${formatCompactCurrency(avgSetup)} | Setup = ${pctFaturamento}% do faturamento` +
         (topCliente ? ` | Maior: ${topCliente.company || topCliente.name} (${formatCompactCurrency(topCliente.setup || 0)})` : '')
       );
       setDetailSheetKpis(kpis);
+      setDetailSheetCharts(charts);
       setDetailSheetColumns([
         { key: 'product', label: 'Produto', format: columnFormatters.product },
         { key: 'company', label: 'Empresa' },
@@ -1608,6 +1843,20 @@ export function IndicatorsTab() {
         { icon: '👑', value: topCliente ? (topCliente.company || topCliente.name).substring(0, 10) : '-', label: 'Maior', highlight: 'neutral' },
       ];
       
+      // Charts para Pontual
+      const closerTotals = new Map<string, number>();
+      pontualItems.forEach(i => {
+        const closer = i.responsible || i.closer || 'Sem Closer';
+        closerTotals.set(closer, (closerTotals.get(closer) || 0) + (i.pontual || 0));
+      });
+      const closerRankingData = Array.from(closerTotals.entries())
+        .map(([label, value]) => ({ label: label.split(' ')[0], value }))
+        .sort((a, b) => b.value - a.value);
+      
+      const charts: ChartConfig[] = [
+        { type: 'bar', title: 'Pontual por Closer', data: closerRankingData, formatValue: formatCompactCurrency },
+      ];
+      
       setDetailSheetTitle('Pontual - Receitas Extraordinárias');
       setDetailSheetDescription(
         `${pontualItems.length} ocorrências | Total: ${formatCompactCurrency(totalPontual)} | Média: ${formatCompactCurrency(avgPontual)} | Pontual = ${pctFaturamento}% do faturamento` +
@@ -1615,6 +1864,7 @@ export function IndicatorsTab() {
         (topCliente ? ` | Maior: ${topCliente.company || topCliente.name} (${formatCompactCurrency(topCliente.pontual || 0)})` : '')
       );
       setDetailSheetKpis(kpis);
+      setDetailSheetCharts(charts);
       setDetailSheetColumns([
         { key: 'product', label: 'Produto', format: columnFormatters.product },
         { key: 'company', label: 'Empresa' },
@@ -1820,6 +2070,7 @@ export function IndicatorsTab() {
         items={detailSheetItems}
         columns={detailSheetColumns}
         kpis={detailSheetKpis}
+        charts={detailSheetCharts}
       />
     </div>
   );

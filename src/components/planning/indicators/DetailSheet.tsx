@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { KpiCardsRow } from "./KpiCardsRow";
 import { KpiItem } from "./KpiCard";
+import { DrillDownCharts, ChartConfig } from "./DrillDownCharts";
 
 type SortDirection = 'none' | 'desc' | 'asc';
 
@@ -52,12 +53,13 @@ interface DetailSheetProps {
     format?: (value: any) => React.ReactNode;
   }[];
   kpis?: KpiItem[];
+  charts?: ChartConfig[];
 }
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(value);
 
-export function DetailSheet({ open, onOpenChange, title, description, items, columns, kpis }: DetailSheetProps) {
+export function DetailSheet({ open, onOpenChange, title, description, items, columns, kpis, charts }: DetailSheetProps) {
   const [sortState, setSortState] = useState<SortState>({ column: null, direction: 'none' });
 
   const handleSort = (columnKey: keyof DetailItem) => {
@@ -130,6 +132,9 @@ export function DetailSheet({ open, onOpenChange, title, description, items, col
         <div className="flex-1 overflow-hidden flex flex-col mt-4">
           {kpis && kpis.length > 0 && (
             <KpiCardsRow kpis={kpis} />
+          )}
+          {charts && charts.length > 0 && (
+            <DrillDownCharts charts={charts} />
           )}
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm text-muted-foreground">
