@@ -1,31 +1,15 @@
 
 
-## Plano: Corrigir Coluna SDR no Drill-down de MQL
+## Plano: Remover SDR do Drill-down de MQL
 
-### Problema Identificado
+### O Que Será Removido
 
-No drill-down de MQL, a coluna "SDR" está mostrando o **Closer** em vez do **SDR correto**.
-
-**Causa raiz**: Na linha 1144 do `IndicatorsTab.tsx`, a coluna está mapeada para o campo `responsible`:
-```typescript
-{ key: 'responsible', label: 'SDR' },
-```
-
-Porém, no hook `useModeloAtualAnalytics.ts` (linha 246), o campo `responsible` prioriza o **Closer**:
-```typescript
-responsible: card.closer || card.responsavel || undefined, // Prioritize closer for display
-```
-
-Enquanto o campo correto de SDR é `sdr` (linha 253):
-```typescript
-sdr: card.sdr,
-```
-
----
-
-### Solução
-
-Alterar a coluna da tabela no case 'mql' para usar o campo `sdr` em vez de `responsible`.
+| Elemento | Localização | Ação |
+|----------|-------------|------|
+| Cálculo `topSDR` | Linha 1086 | Remover |
+| KPI "Top SDR" | Linha 1092 | Remover |
+| Texto "Top SDR: ..." na descrição | Linha 1114 | Remover |
+| Coluna "SDR" na tabela | Linha 1122 | Remover |
 
 ---
 
@@ -33,22 +17,55 @@ Alterar a coluna da tabela no case 'mql' para usar o campo `sdr` em vez de `resp
 
 **Arquivo:** `src/components/planning/IndicatorsTab.tsx`
 
-**Linha 1144:**
+**1. Remover cálculo do topSDR (linha 1086):**
 ```typescript
-// ANTES
-{ key: 'responsible', label: 'SDR' },
-
-// DEPOIS
-{ key: 'sdr', label: 'SDR' },
+// REMOVER esta linha
+const topSDR = findTopPerformer(items, 'sdr');
 ```
 
-**Também atualizar a linha 1096** que calcula o Top SDR:
+**2. Remover KPI "Top SDR" (linha 1092):**
 ```typescript
 // ANTES
-const topSDR = findTopPerformer(items, 'responsible');
+const kpis: KpiItem[] = [
+  { icon: '📊', value: items.length, label: 'Total MQLs', highlight: 'neutral' },
+  { icon: '💎', value: `${premiumPct}%`, label: 'Premium', highlight: ... },
+  { icon: '🏆', value: topSDR.name.split(' ')[0], label: `Top (${topSDR.count})`, highlight: 'neutral' },
+];
 
 // DEPOIS
-const topSDR = findTopPerformer(items, 'sdr');
+const kpis: KpiItem[] = [
+  { icon: '📊', value: items.length, label: 'Total MQLs', highlight: 'neutral' },
+  { icon: '💎', value: `${premiumPct}%`, label: 'Premium', highlight: ... },
+];
+```
+
+**3. Atualizar descrição (linha 1113-1114):**
+```typescript
+// ANTES
+`${items.length} MQLs captados | ${premiumPct}% faixa premium (>R$50k) | Top SDR: ${topSDR.name} (${topSDR.count})`
+
+// DEPOIS
+`${items.length} MQLs captados | ${premiumPct}% faixa premium (>R$50k)`
+```
+
+**4. Remover coluna SDR da tabela (linha 1122):**
+```typescript
+// ANTES
+setDetailSheetColumns([
+  { key: 'product', label: 'Produto', format: columnFormatters.product },
+  { key: 'company', label: 'Empresa' },
+  { key: 'revenueRange', label: 'Faixa Faturamento', format: columnFormatters.revenueRange },
+  { key: 'sdr', label: 'SDR' },
+  { key: 'date', label: 'Data', format: columnFormatters.date },
+]);
+
+// DEPOIS
+setDetailSheetColumns([
+  { key: 'product', label: 'Produto', format: columnFormatters.product },
+  { key: 'company', label: 'Empresa' },
+  { key: 'revenueRange', label: 'Faixa Faturamento', format: columnFormatters.revenueRange },
+  { key: 'date', label: 'Data', format: columnFormatters.date },
+]);
 ```
 
 ---
@@ -57,18 +74,7 @@ const topSDR = findTopPerformer(items, 'sdr');
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/planning/IndicatorsTab.tsx` | Linhas 1096 e 1144: trocar `'responsible'` por `'sdr'` |
-
----
-
-### Obs: Remoção de "Dias até MQL"
-
-Conforme solicitado anteriormente, também removerei:
-1. O cálculo de `itemsWithCalcs` com `diasAteQualificar`
-2. O KPI "Tempo Médio"
-3. O gráfico "Tempo até Qualificar"
-4. A coluna "Dias até MQL"
-5. O texto "Tempo médio: Xd" da descrição
+| `src/components/planning/IndicatorsTab.tsx` | Remover 4 elementos relacionados ao SDR no case 'mql' (linhas 1086, 1092, 1114, 1122) |
 
 ---
 
@@ -77,16 +83,16 @@ Conforme solicitado anteriormente, também removerei:
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  MQL - De Onde Vêm Nossos Melhores Leads?                       │
-│  45 MQLs captados | 28% faixa premium (>R$50k) | Top SDR: Amanda │
+│  45 MQLs captados | 28% faixa premium (>R$50k)                   │
 ├─────────────────────────────────────────────────────────────────┤
-│  KPIs: 📊 45 Total | 💎 28% Premium | 🏆 Amanda (15)            │
+│  KPIs: 📊 45 Total | 💎 28% Premium                             │
 ├─────────────────────────────────────────────────────────────────┤
 │  [Gráfico]                                                       │
 │  Por Faixa de Faturamento                                        │
 │  ████ 20-50k (18)                                                │
 │  ███ >50k (12)                                                   │
 ├─────────────────────────────────────────────────────────────────┤
-│  Tabela: Produto | Empresa | Faixa | SDR (correto!) | Data      │
+│  Tabela: Produto | Empresa | Faixa | Data                        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
