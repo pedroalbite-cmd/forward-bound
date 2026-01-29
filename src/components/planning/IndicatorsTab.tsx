@@ -27,6 +27,7 @@ import { ClickableFunnelChart } from "./ClickableFunnelChart";
 import { RevenueBreakdownChart } from "./RevenueBreakdownChart";
 import { RevenueChartComparison } from "./RevenueChartComparison";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
+import { KpiItem } from "./indicators/KpiCard";
 import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select";
 
 type ViewMode = 'daily' | 'accumulated';
@@ -307,6 +308,7 @@ export function IndicatorsTab() {
   const [detailSheetDescription, setDetailSheetDescription] = useState('');
   const [detailSheetItems, setDetailSheetItems] = useState<DetailItem[]>([]);
   const [detailSheetColumns, setDetailSheetColumns] = useState<{ key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[]>([]);
+  const [detailSheetKpis, setDetailSheetKpis] = useState<KpiItem[]>([]);
   
 
   const handleSync = () => {
@@ -900,10 +902,19 @@ export function IndicatorsTab() {
           : 0;
         const topSDR = findTopPerformer(items, 'responsible');
         
+        // KPIs para MQL
+        const kpis: KpiItem[] = [
+          { icon: '📊', value: items.length, label: 'Total MQLs', highlight: 'neutral' },
+          { icon: '💎', value: `${premiumPct}%`, label: 'Premium', highlight: premiumPct >= 30 ? 'success' : premiumPct >= 15 ? 'neutral' : 'warning' },
+          { icon: '⏱️', value: `${avgDias}d`, label: 'Tempo Médio', highlight: avgDias <= 3 ? 'success' : avgDias <= 7 ? 'neutral' : 'warning' },
+          { icon: '🏆', value: topSDR.name.split(' ')[0], label: `Top (${topSDR.count})`, highlight: 'neutral' },
+        ];
+        
         setDetailSheetTitle('MQL - De Onde Vêm Nossos Melhores Leads?');
         setDetailSheetDescription(
           `${items.length} MQLs captados | ${premiumPct}% faixa premium (>R$50k) | Top SDR: ${topSDR.name} (${topSDR.count}) | Tempo médio: ${avgDias}d`
         );
+        setDetailSheetKpis(kpis);
         setDetailSheetColumns([
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
@@ -932,10 +943,19 @@ export function IndicatorsTab() {
           : 0;
         const topCloser = findTopPerformer(items, 'closer');
         
+        // KPIs para RM
+        const kpis: KpiItem[] = [
+          { icon: '📅', value: items.length, label: 'Reuniões', highlight: 'neutral' },
+          { icon: '🎯', value: `${taxaMqlRm}%`, label: 'Taxa MQL→RM', highlight: taxaMqlRm >= 50 ? 'success' : taxaMqlRm >= 30 ? 'neutral' : 'warning' },
+          { icon: '⏱️', value: `${avgDias}d`, label: 'Tempo Médio', highlight: avgDias <= 7 ? 'success' : avgDias <= 14 ? 'neutral' : 'warning' },
+          { icon: '🏆', value: topCloser.name.split(' ')[0], label: `Top (${topCloser.count})`, highlight: 'neutral' },
+        ];
+        
         setDetailSheetTitle('RM - Estamos Convertendo MQLs em Reuniões?');
         setDetailSheetDescription(
           `${items.length} reuniões agendadas | Taxa MQL→RM: ${taxaMqlRm}% | Tempo médio: ${avgDias}d | Top: ${topCloser.name} (${topCloser.count})`
         );
+        setDetailSheetKpis(kpis);
         setDetailSheetColumns([
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
@@ -957,10 +977,20 @@ export function IndicatorsTab() {
         const potencial = items.reduce((sum, i) => sum + (i.value || 0), 0);
         const topCloser = findTopPerformer(items, 'closer');
         
+        // KPIs para RR
+        const kpis: KpiItem[] = [
+          { icon: '✅', value: items.length, label: 'Realizadas', highlight: 'neutral' },
+          { icon: '📊', value: `${taxaShow}%`, label: 'Taxa Show', highlight: taxaShow >= 80 ? 'success' : taxaShow >= 60 ? 'neutral' : 'warning' },
+          { icon: '❌', value: noShows > 0 ? noShows : '-', label: 'No-Shows', highlight: noShows > 5 ? 'danger' : noShows > 0 ? 'warning' : 'success' },
+          { icon: '💰', value: formatCompactCurrency(potencial), label: 'Potencial', highlight: 'neutral' },
+          { icon: '🏆', value: topCloser.name.split(' ')[0], label: `Top`, highlight: 'neutral' },
+        ];
+        
         setDetailSheetTitle('RR - Quem Apareceu nas Reuniões?');
         setDetailSheetDescription(
           `${items.length} realizadas | Taxa Show: ${taxaShow}% (${items.length} de ${rmCount}) | ${noShows > 0 ? `${noShows} no-shows | ` : ''}Potencial: ${formatCompactCurrency(potencial)} | Top: ${topCloser.name}`
         );
+        setDetailSheetKpis(kpis);
         setDetailSheetColumns([
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
@@ -987,6 +1017,15 @@ export function IndicatorsTab() {
         const propostasAntigas = itemsWithAging.filter(i => (i.diasEmProposta || 0) > 14);
         const valorEmRisco = propostasAntigas.reduce((sum, i) => sum + (i.value || 0), 0);
         
+        // KPIs para Proposta
+        const kpis: KpiItem[] = [
+          { icon: '📊', value: items.length, label: 'Propostas', highlight: 'neutral' },
+          { icon: '💰', value: formatCompactCurrency(pipeline), label: 'Pipeline', highlight: 'neutral' },
+          { icon: '🎯', value: formatCompactCurrency(ticketMedio), label: 'Ticket Médio', highlight: 'neutral' },
+          { icon: '⚠️', value: propostasAntigas.length, label: 'Envelhecidas', highlight: propostasAntigas.length > 0 ? 'warning' : 'success' },
+          { icon: '🔴', value: formatCompactCurrency(valorEmRisco), label: 'em Risco', highlight: valorEmRisco > 0 ? 'danger' : 'success' },
+        ];
+        
         const descricao = `${items.length} propostas | Pipeline: ${formatCompactCurrency(pipeline)} | Ticket médio: ${formatCompactCurrency(ticketMedio)}` +
           (propostasAntigas.length > 0 
             ? ` | ⚠️ ${propostasAntigas.length} com mais de 14 dias (${formatCompactCurrency(valorEmRisco)} em risco)` 
@@ -994,6 +1033,7 @@ export function IndicatorsTab() {
         
         setDetailSheetTitle('Propostas - Onde o Pipeline Está Travando?');
         setDetailSheetDescription(descricao);
+        setDetailSheetKpis(kpis);
         setDetailSheetColumns([
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
@@ -1033,10 +1073,20 @@ export function IndicatorsTab() {
           return `${medal}${p.name.split(' ')[0]}`;
         }).join(' ');
         
+        // KPIs para Venda
+        const kpis: KpiItem[] = [
+          { icon: '📝', value: items.length, label: 'Contratos', highlight: 'neutral' },
+          { icon: '💰', value: formatCompactCurrency(totalFaturamento), label: 'Total', highlight: 'neutral' },
+          { icon: '🔄', value: `${pctMrr}%`, label: 'MRR', highlight: pctMrr >= 50 ? 'success' : 'neutral' },
+          { icon: '🔧', value: `${pctSetup}%`, label: 'Setup', highlight: 'neutral' },
+          { icon: '🏆', value: podium[0]?.name.split(' ')[0] || '-', label: 'Top Closer', highlight: 'neutral' },
+        ];
+        
         setDetailSheetTitle('Vendas - O Que Fechamos e Como?');
         setDetailSheetDescription(
           `${items.length} contratos | Total: ${formatCompactCurrency(totalFaturamento)} | Composição: MRR ${pctMrr}% + Setup ${pctSetup}% + Pontual ${pctPontual}% | ${podiumStr}`
         );
+        setDetailSheetKpis(kpis);
         setDetailSheetColumns([
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
@@ -1058,6 +1108,7 @@ export function IndicatorsTab() {
         const columns = getColumnsForIndicator(indicator.key);
         setDetailSheetTitle(indicator.label);
         setDetailSheetDescription(`${formatNumber(items.length)} registros no período`);
+        setDetailSheetKpis([]);
         setDetailSheetItems(items);
         setDetailSheetColumns(columns);
         setDetailSheetOpen(true);
@@ -1373,11 +1424,21 @@ export function IndicatorsTab() {
       const medianSla = slaValues.length > 0 ? slaValues[Math.floor(slaValues.length / 2)] : 0;
       const outliers = tentativasCards.filter(c => (c.sla || 0) > 120).length;
       
+      // KPIs para SLA
+      const kpis: KpiItem[] = [
+        { icon: '📊', value: tentativasCards.length, label: 'Leads', highlight: 'neutral' },
+        { icon: '⏱️', value: formatDuration(avgSla), label: 'SLA Médio', highlight: avgSla <= 30 ? 'success' : avgSla <= 60 ? 'warning' : 'danger' },
+        { icon: '🎯', value: `${withinTargetPct}%`, label: '% Meta', highlight: withinTargetPct >= 80 ? 'success' : withinTargetPct >= 50 ? 'warning' : 'danger' },
+        { icon: '📈', value: formatDuration(medianSla), label: 'Mediana', highlight: 'neutral' },
+        { icon: '⚠️', value: outliers > 0 ? outliers : '-', label: 'Outliers', highlight: outliers > 5 ? 'danger' : outliers > 0 ? 'warning' : 'success' },
+      ];
+      
       setDetailSheetTitle('SLA - Estamos Respondendo Rápido?');
       setDetailSheetDescription(
         `${tentativasCards.length} leads | SLA médio: ${formatDuration(avgSla)} | Dentro da meta (<30m): ${withinTargetPct}% | Mediana: ${formatDuration(medianSla)}` +
         (outliers > 0 ? ` | ⚠️ ${outliers} leads com SLA > 2h` : '')
       );
+      setDetailSheetKpis(kpis);
       setDetailSheetColumns([
         { key: 'product', label: 'Produto', format: columnFormatters.product },
         { key: 'company', label: 'Empresa' },
@@ -1408,11 +1469,21 @@ export function IndicatorsTab() {
         ? items.reduce((top, i) => (i.value || 0) > (top.value || 0) ? i : top, items[0])
         : null;
       
+      // KPIs para Faturamento
+      const kpis: KpiItem[] = [
+        { icon: '💰', value: formatCompactCurrency(totalFaturamento), label: 'Total', highlight: 'neutral' },
+        { icon: '🔄', value: `${pctMrr}%`, label: 'MRR', highlight: pctMrr >= 50 ? 'success' : 'neutral' },
+        { icon: '🔧', value: `${pctSetup}%`, label: 'Setup', highlight: 'neutral' },
+        { icon: '💎', value: `${pctPontual}%`, label: 'Pontual', highlight: pctPontual > 30 ? 'warning' : 'neutral' },
+        { icon: '🎯', value: `${pctMeta}%`, label: 'vs Meta', highlight: pctMeta >= 100 ? 'success' : pctMeta >= 70 ? 'neutral' : 'warning' },
+      ];
+      
       setDetailSheetTitle('Faturamento - De Onde Veio o Dinheiro?');
       setDetailSheetDescription(
         `Total: ${formatCompactCurrency(totalFaturamento)} | Composição: MRR ${formatCompactCurrency(totalMrr)} (${pctMrr}%) + Setup ${formatCompactCurrency(totalSetup)} (${pctSetup}%) + Pontual ${formatCompactCurrency(totalPontual)} (${pctPontual}%) | vs Meta: ${pctMeta}%` +
         (topCliente ? ` | Top: ${topCliente.company || topCliente.name} (${formatCompactCurrency(topCliente.value || 0)})` : '')
       );
+      setDetailSheetKpis(kpis);
       setDetailSheetColumns([
         { key: 'product', label: 'Produto', format: columnFormatters.product },
         { key: 'company', label: 'Empresa' },
@@ -1442,11 +1513,21 @@ export function IndicatorsTab() {
         percentualTotal: totalMrr > 0 ? ((item.mrr || 0) / totalMrr) * 100 : 0
       }));
       
+      // KPIs para MRR
+      const kpis: KpiItem[] = [
+        { icon: '📝', value: mrrItems.length, label: 'Contratos', highlight: 'neutral' },
+        { icon: '🔄', value: formatCompactCurrency(totalMrr), label: 'Total/mês', highlight: 'neutral' },
+        { icon: '📈', value: formatCompactCurrency(arrProjetado), label: 'ARR', highlight: 'neutral' },
+        { icon: '📊', value: formatCompactCurrency(avgMrr), label: 'Média', highlight: 'neutral' },
+        { icon: '👑', value: topCliente ? (topCliente.company || topCliente.name).substring(0, 10) : '-', label: 'Maior', highlight: 'neutral' },
+      ];
+      
       setDetailSheetTitle('MRR - Quanto de Base Recorrente Construímos?');
       setDetailSheetDescription(
         `${mrrItems.length} contratos com MRR | Total: ${formatCompactCurrency(totalMrr)}/mês | ARR projetado: ${formatCompactCurrency(arrProjetado)} | Média: ${formatCompactCurrency(avgMrr)}` +
         (topCliente ? ` | Maior: ${topCliente.company || topCliente.name} (${formatCompactCurrency(topCliente.mrr || 0)}/mês)` : '')
       );
+      setDetailSheetKpis(kpis);
       setDetailSheetColumns([
         { key: 'product', label: 'Produto', format: columnFormatters.product },
         { key: 'company', label: 'Empresa' },
@@ -1475,11 +1556,21 @@ export function IndicatorsTab() {
         percentualTotal: totalSetup > 0 ? ((item.setup || 0) / totalSetup) * 100 : 0
       }));
       
+      // KPIs para Setup
+      const kpis: KpiItem[] = [
+        { icon: '🔧', value: setupItems.length, label: 'Projetos', highlight: 'neutral' },
+        { icon: '💰', value: formatCompactCurrency(totalSetup), label: 'Total', highlight: 'neutral' },
+        { icon: '📊', value: formatCompactCurrency(avgSetup), label: 'Média', highlight: 'neutral' },
+        { icon: '📈', value: `${pctFaturamento}%`, label: '% Fat.', highlight: 'neutral' },
+        { icon: '👑', value: topCliente ? (topCliente.company || topCliente.name).substring(0, 10) : '-', label: 'Maior', highlight: 'neutral' },
+      ];
+      
       setDetailSheetTitle('Setup - Quantas Implantações Vendemos?');
       setDetailSheetDescription(
         `${setupItems.length} projetos com setup | Total: ${formatCompactCurrency(totalSetup)} | Média: ${formatCompactCurrency(avgSetup)} | Setup = ${pctFaturamento}% do faturamento` +
         (topCliente ? ` | Maior: ${topCliente.company || topCliente.name} (${formatCompactCurrency(topCliente.setup || 0)})` : '')
       );
+      setDetailSheetKpis(kpis);
       setDetailSheetColumns([
         { key: 'product', label: 'Produto', format: columnFormatters.product },
         { key: 'company', label: 'Empresa' },
@@ -1508,12 +1599,22 @@ export function IndicatorsTab() {
         percentualTotal: totalPontual > 0 ? ((item.pontual || 0) / totalPontual) * 100 : 0
       }));
       
+      // KPIs para Pontual
+      const kpis: KpiItem[] = [
+        { icon: '💎', value: pontualItems.length, label: 'Ocorrências', highlight: 'neutral' },
+        { icon: '💰', value: formatCompactCurrency(totalPontual), label: 'Total', highlight: 'neutral' },
+        { icon: '📊', value: formatCompactCurrency(avgPontual), label: 'Média', highlight: 'neutral' },
+        { icon: '📈', value: `${pctFaturamento}%`, label: '% Fat.', highlight: pctFaturamento > 30 ? 'warning' : 'neutral' },
+        { icon: '👑', value: topCliente ? (topCliente.company || topCliente.name).substring(0, 10) : '-', label: 'Maior', highlight: 'neutral' },
+      ];
+      
       setDetailSheetTitle('Pontual - Receitas Extraordinárias');
       setDetailSheetDescription(
         `${pontualItems.length} ocorrências | Total: ${formatCompactCurrency(totalPontual)} | Média: ${formatCompactCurrency(avgPontual)} | Pontual = ${pctFaturamento}% do faturamento` +
         (pctFaturamento > 30 ? ' ⚠️ Alta dependência' : '') +
         (topCliente ? ` | Maior: ${topCliente.company || topCliente.name} (${formatCompactCurrency(topCliente.pontual || 0)})` : '')
       );
+      setDetailSheetKpis(kpis);
       setDetailSheetColumns([
         { key: 'product', label: 'Produto', format: columnFormatters.product },
         { key: 'company', label: 'Empresa' },
@@ -1718,6 +1819,7 @@ export function IndicatorsTab() {
         description={detailSheetDescription}
         items={detailSheetItems}
         columns={detailSheetColumns}
+        kpis={detailSheetKpis}
       />
     </div>
   );
