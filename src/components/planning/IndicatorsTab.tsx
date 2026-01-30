@@ -1684,12 +1684,12 @@ export function IndicatorsTab() {
         return getFilteredFaturamentoMeta();
       
       case 'mrr':
-        // MRR = ~60% do faturamento
-        return getFilteredFaturamentoMeta() * 0.6;
+        // MRR = ~25% do faturamento
+        return getFilteredFaturamentoMeta() * 0.25;
       
       case 'setup':
-        // Setup = ~25% do faturamento
-        return getFilteredFaturamentoMeta() * 0.25;
+        // Setup = ~60% do faturamento
+        return getFilteredFaturamentoMeta() * 0.6;
       
       case 'pontual':
         // Pontual = ~15% do faturamento

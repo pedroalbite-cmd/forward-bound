@@ -94,15 +94,15 @@ export function MonetaryMetasTab() {
       
       newMetas[key] = {
         faturamento,
-        mrr: Math.round(faturamento * 0.6),
-        setup: Math.round(faturamento * 0.25),
+        mrr: Math.round(faturamento * 0.25),
+        setup: Math.round(faturamento * 0.6),
         pontual: Math.round(faturamento * 0.15),
       };
     });
     
     setLocalMetas(newMetas);
     setHasChanges(true);
-    toast({ title: 'Valores calculados com base nos percentuais padrão (60/25/15)' });
+    toast({ title: 'Valores calculados com base nos percentuais padrão (MRR 25% / Setup 60% / Pontual 15%)' });
   };
 
   // Import from Plan Growth
@@ -138,8 +138,8 @@ export function MonetaryMetasTab() {
         
         newMetas[key] = {
           faturamento: faturamentoEstimado,
-          mrr: Math.round(faturamentoEstimado * 0.6),
-          setup: Math.round(faturamentoEstimado * 0.25),
+          mrr: Math.round(faturamentoEstimado * 0.25),
+          setup: Math.round(faturamentoEstimado * 0.6),
           pontual: Math.round(faturamentoEstimado * 0.15),
         };
       });
@@ -328,7 +328,7 @@ export function MonetaryMetasTab() {
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-2">
           <p>
-            <strong>Percentuais padrão:</strong> MRR = 60%, Setup = 25%, Pontual = 15% do Faturamento
+            <strong>Percentuais padrão:</strong> MRR = 25%, Setup = 60%, Pontual = 15% do Faturamento
           </p>
           <p>
             <strong>Dica:</strong> Preencha o Faturamento primeiro e clique em "Calcular % Padrão" para preencher automaticamente.
