@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -55,9 +56,36 @@ export default function Auth() {
   const [showSignupConfirmPassword, setShowSignupConfirmPassword] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
+  const [isProcessingRecovery, setIsProcessingRecovery] = useState(false);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const { user, signIn, signUp, resetPassword, updatePassword } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Processa tokens de recovery do hash fragment
+  useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+    const type = hashParams.get('type');
+    
+    if (type === 'recovery' && accessToken && refreshToken) {
+      setIsProcessingRecovery(true);
+      setMode('reset');
+      setRecoveryError(null);
+      
+      // Aguarda o SDK processar os tokens automaticamente
+      supabase.auth.getSession().then(({ data: { session }, error }) => {
+        setIsProcessingRecovery(false);
+        if (error || !session) {
+          setRecoveryError('Link de recuperação inválido ou expirado. Solicite um novo link.');
+          setMode('forgot');
+        }
+        // Limpa o hash da URL para evitar reprocessamento
+        window.history.replaceState(null, '', '/auth?mode=reset');
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (user && mode !== 'reset') {
@@ -145,6 +173,18 @@ export default function Auth() {
   };
 
   const handleResetPassword = async (values: ResetPasswordFormValues) => {
+    // Verifica se há sessão ativa (necessário para updateUser)
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      toast({
+        variant: 'destructive',
+        title: 'Sessão expirada',
+        description: 'Solicite um novo link de recuperação de senha.',
+      });
+      setMode('forgot');
+      return;
+    }
+
     setIsSubmitting(true);
     const { error } = await updatePassword(values.password);
     setIsSubmitting(false);
@@ -459,6 +499,20 @@ export default function Auth() {
     }
   };
 
+  // Loading state para processamento de recovery
+  if (isProcessingRecovery) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6 text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">Processando link de recuperação...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
@@ -471,6 +525,11 @@ export default function Auth() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {recoveryError && (
+            <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md text-sm text-destructive">
+              {recoveryError}
+            </div>
+          )}
           {renderForm()}
 
           {(mode === 'login' || mode === 'signup') && (
