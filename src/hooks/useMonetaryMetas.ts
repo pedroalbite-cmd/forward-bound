@@ -40,7 +40,7 @@ export const BU_LABELS: Record<BuType, string> = {
 };
 
 export const METRIC_LABELS: Record<MetricType, string> = {
-  faturamento: 'Faturamento',
+  faturamento: 'Incremento',
   mrr: 'MRR',
   setup: 'Setup',
   pontual: 'Pontual',
