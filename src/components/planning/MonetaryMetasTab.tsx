@@ -66,16 +66,31 @@ export function MonetaryMetasTab() {
     return localMetas[key]?.[metric] ?? 0;
   };
 
-  // Update local value
+  // Update local value - auto-calculates MRR/Setup/Pontual when faturamento changes
   const updateLocalValue = (bu: string, month: string, metric: MetricType, value: number) => {
     const key = `${bu}-${month}`;
-    setLocalMetas(prev => ({
-      ...prev,
-      [key]: {
-        ...prev[key] || { faturamento: 0, mrr: 0, setup: 0, pontual: 0 },
-        [metric]: value,
-      },
-    }));
+    
+    if (metric === 'faturamento') {
+      // Auto-preenche MRR (25%), Setup (60%), Pontual (15%)
+      setLocalMetas(prev => ({
+        ...prev,
+        [key]: {
+          faturamento: value,
+          mrr: Math.round(value * 0.25),
+          setup: Math.round(value * 0.6),
+          pontual: Math.round(value * 0.15),
+        },
+      }));
+    } else {
+      // Para outras métricas, atualiza apenas o campo específico
+      setLocalMetas(prev => ({
+        ...prev,
+        [key]: {
+          ...prev[key] || { faturamento: 0, mrr: 0, setup: 0, pontual: 0 },
+          [metric]: value,
+        },
+      }));
+    }
     setHasChanges(true);
   };
 
@@ -204,7 +219,7 @@ export function MonetaryMetasTab() {
           Metas Monetárias por BU
         </h2>
         <p className="text-muted-foreground">
-          Configure as metas de Faturamento, MRR, Setup e Pontual para cada unidade de negócio
+          Configure as metas de Incremento de Faturamento, MRR, Setup e Pontual para cada unidade de negócio
         </p>
       </div>
 
@@ -322,16 +337,16 @@ export function MonetaryMetasTab() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Como funciona</CardTitle>
-          <CardDescription>
-            Os valores definidos aqui serão usados como metas nos indicadores de Faturamento, MRR, Setup e Pontual.
+        <CardDescription>
+            Os valores definidos aqui serão usados como metas nos indicadores. Ao preencher o Incremento, MRR/Setup/Pontual são calculados automaticamente.
           </CardDescription>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-2">
           <p>
-            <strong>Percentuais padrão:</strong> MRR = 25%, Setup = 60%, Pontual = 15% do Faturamento
+            <strong>Percentuais padrão:</strong> MRR = 25%, Setup = 60%, Pontual = 15% do Incremento
           </p>
           <p>
-            <strong>Dica:</strong> Preencha o Faturamento primeiro e clique em "Calcular % Padrão" para preencher automaticamente.
+            <strong>Dica:</strong> Ao preencher o Incremento, os demais campos são calculados automaticamente. Você pode ajustar manualmente depois.
           </p>
         </CardContent>
       </Card>
