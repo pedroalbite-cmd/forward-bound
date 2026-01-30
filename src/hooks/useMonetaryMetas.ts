@@ -116,8 +116,8 @@ export function useMonetaryMetas(year = 2026) {
       const fat = faturamentoValues[month] || 0;
       acc[month] = {
         faturamento: fat,
-        mrr: Math.round(fat * 0.6),
-        setup: Math.round(fat * 0.25),
+        mrr: Math.round(fat * 0.25),
+        setup: Math.round(fat * 0.6),
         pontual: Math.round(fat * 0.15),
       };
       return acc;
