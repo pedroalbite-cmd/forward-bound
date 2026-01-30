@@ -1,146 +1,108 @@
 
-## Plano: Alterar Contagem de Venda de "Ganho" para "Contrato Assinado"
+## Plano: Corrigir Percentuais Padrão das Metas Monetárias
 
-### Contexto
+### Situação Atual vs. Desejada
 
-Atualmente, todas as BUs (Modelo Atual, O2 TAX, Oxy Hacker, Franquia) contam "venda" como cards que entraram na fase "Ganho" no Pipefy. O usuario deseja mudar para contar "venda" como cards que entraram na fase "Contrato assinado".
-
----
-
-### Analise das Fases Disponiveis
-
-Com base no codigo, as fases mapeadas atualmente sao:
-
-| BU | Fase para Venda (atual) | Fase Desejada |
-|----|-------------------------|---------------|
-| Modelo Atual | 'Ganho' | 'Contrato assinado' |
-| O2 TAX | 'Ganho' | 'Contrato assinado' |
-| Oxy Hacker | 'Ganho' | 'Contrato assinado' |
-| Franquia | 'Ganho' | 'Contrato assinado' |
+| Métrica | Valor Atual | Valor Correto |
+|---------|-------------|---------------|
+| MRR | 60% | **25%** |
+| Setup | 25% | **60%** |
+| Pontual | 15% | 15% (sem mudança) |
 
 ---
 
-### Secao Tecnica
+### Arquivos a Modificar
 
-**Arquivos a Modificar:**
-
-| Arquivo | Alteracao |
-|---------|-----------|
-| `src/hooks/useModeloAtualMetas.ts` | Alterar mapeamento de 'Ganho' para 'Contrato assinado' |
-| `src/hooks/useModeloAtualAnalytics.ts` | Alterar mapeamento de 'Ganho' para 'Contrato assinado' |
-| `src/hooks/useO2TaxMetas.ts` | Alterar mapeamento de 'Ganho' para 'Contrato assinado' |
-| `src/hooks/useO2TaxAnalytics.ts` | Alterar mapeamento de 'Ganho' para 'Contrato assinado' |
-| `src/hooks/useExpansaoMetas.ts` | Alterar mapeamento de 'Ganho' para 'Contrato assinado' |
-| `src/hooks/useExpansaoAnalytics.ts` | Alterar mapeamento de 'Ganho' para 'Contrato assinado' |
-| `src/hooks/useOxyHackerMetas.ts` | Alterar mapeamento de 'Ganho' para 'Contrato assinado' |
+| Arquivo | Linha(s) | Alteração |
+|---------|----------|-----------|
+| `src/hooks/useMonetaryMetas.ts` | 119-120 | Inverter MRR e Setup |
+| `src/components/planning/MonetaryMetasTab.tsx` | 97-98 | Inverter MRR e Setup |
+| `src/components/planning/MonetaryMetasTab.tsx` | 105 | Atualizar texto do toast |
+| `src/components/planning/MonetaryMetasTab.tsx` | 141-142 | Inverter MRR e Setup |
+| `src/components/planning/MonetaryMetasTab.tsx` | 331 | Atualizar texto de ajuda |
+| `src/components/planning/IndicatorsTab.tsx` | 1687-1692 | Inverter percentuais MRR e Setup |
 
 ---
 
-### Alteracoes Detalhadas
+### Seção Técnica
 
-**1. useModeloAtualMetas.ts (linhas 44-46):**
+**1. useMonetaryMetas.ts (linhas 119-120):**
 ```typescript
 // ANTES
-'Ganho': 'venda',
+mrr: Math.round(fat * 0.6),
+setup: Math.round(fat * 0.25),
 
 // DEPOIS
-'Contrato assinado': 'venda',
+mrr: Math.round(fat * 0.25),
+setup: Math.round(fat * 0.6),
 ```
 
-**2. useModeloAtualAnalytics.ts (linhas 50-52):**
+**2. MonetaryMetasTab.tsx - Função calculateFromFaturamento (linhas 97-98):**
 ```typescript
 // ANTES
-'Ganho': 'venda',
+mrr: Math.round(faturamento * 0.6),
+setup: Math.round(faturamento * 0.25),
 
 // DEPOIS
-'Contrato assinado': 'venda',
+mrr: Math.round(faturamento * 0.25),
+setup: Math.round(faturamento * 0.6),
 ```
 
-**3. useO2TaxMetas.ts (linhas 34-35):**
+**3. MonetaryMetasTab.tsx - Toast (linha 105):**
 ```typescript
 // ANTES
-'Ganho': 'venda',
+toast({ title: 'Valores calculados com base nos percentuais padrão (60/25/15)' });
 
 // DEPOIS
-'Contrato assinado': 'venda',
+toast({ title: 'Valores calculados com base nos percentuais padrão (MRR 25% / Setup 60% / Pontual 15%)' });
 ```
 
-Alem disso, atualizar a logica especifica que verifica `movement.fase === 'Ganho'` para `movement.fase === 'Contrato assinado'` em:
-- `getQtyForPeriod` (linha 117)
-- `getValueForPeriod` (linha 157)
-- `getGroupedData` - helper `countUniqueCardsInPeriod` (linha 239)
-
-**4. useO2TaxAnalytics.ts:**
-- Atualizar `PHASE_DISPLAY_MAP` para incluir 'Contrato assinado'
-- Atualizar `PHASE_TO_INDICATOR_MAP` (linha 488)
-- Atualizar `getDealsWon` para verificar 'Contrato assinado' (linhas 263-267)
-- Atualizar `getDetailItemsForIndicator` (linhas 505-509)
-
-**5. useExpansaoMetas.ts (linha 34):**
+**4. MonetaryMetasTab.tsx - Import Plan Growth (linhas 141-142):**
 ```typescript
 // ANTES
-'Ganho': 'venda',
+mrr: Math.round(faturamentoEstimado * 0.6),
+setup: Math.round(faturamentoEstimado * 0.25),
 
 // DEPOIS
-'Contrato assinado': 'venda',
+mrr: Math.round(faturamentoEstimado * 0.25),
+setup: Math.round(faturamentoEstimado * 0.6),
 ```
 
-Atualizar verificacoes explicitas de `movement.fase === 'Ganho'` para `'Contrato assinado'` em:
-- `getQtyForPeriod` (linhas 118-121)
-- `getValueForPeriod` (linhas 158-160)
-- `getGroupedData` - helper (linhas 243-244)
-
-**6. useExpansaoAnalytics.ts (linhas 33-34):**
+**5. MonetaryMetasTab.tsx - Texto de ajuda (linha 331):**
 ```typescript
 // ANTES
-'Ganho': 'venda',
+<strong>Percentuais padrão:</strong> MRR = 60%, Setup = 25%, Pontual = 15% do Faturamento
 
 // DEPOIS
-'Contrato assinado': 'venda',
+<strong>Percentuais padrão:</strong> MRR = 25%, Setup = 60%, Pontual = 15% do Faturamento
 ```
 
-Atualizar `PHASE_DISPLAY_MAP` e a logica em `getCardsForIndicator` (linhas 180-184).
-
-**7. useOxyHackerMetas.ts (linha 34):**
+**6. IndicatorsTab.tsx - Fallback de metas (linhas 1686-1692):**
 ```typescript
 // ANTES
-'Ganho': 'venda',
+case 'mrr':
+  // MRR = ~60% do faturamento
+  return getFilteredFaturamentoMeta() * 0.6;
+
+case 'setup':
+  // Setup = ~25% do faturamento
+  return getFilteredFaturamentoMeta() * 0.25;
 
 // DEPOIS
-'Contrato assinado': 'venda',
+case 'mrr':
+  // MRR = ~25% do faturamento
+  return getFilteredFaturamentoMeta() * 0.25;
+
+case 'setup':
+  // Setup = ~60% do faturamento
+  return getFilteredFaturamentoMeta() * 0.6;
 ```
-
-Atualizar verificacoes explicitas de `movement.fase === 'Ganho'` para `'Contrato assinado'` em:
-- `getQtyForPeriod` (linhas 124-128)
-- `getValueForPeriod` (linhas 164-166)
-- `getGroupedData` - helper (linhas 249-251)
-
----
-
-### Resumo das Alteracoes por Hook
-
-| Hook | Mapeamento PHASE_TO_INDICATOR | Verificacoes Explicitas |
-|------|-------------------------------|------------------------|
-| useModeloAtualMetas | 'Ganho' -> 'Contrato assinado' | N/A (usa mapeamento) |
-| useModeloAtualAnalytics | 'Ganho' -> 'Contrato assinado' | N/A (usa mapeamento) |
-| useO2TaxMetas | 'Ganho' -> 'Contrato assinado' | 3 locais |
-| useO2TaxAnalytics | 'Ganho' -> 'Contrato assinado' | 2 locais + PHASE_DISPLAY_MAP |
-| useExpansaoMetas | 'Ganho' -> 'Contrato assinado' | 3 locais |
-| useExpansaoAnalytics | 'Ganho' -> 'Contrato assinado' | 1 local + PHASE_DISPLAY_MAP |
-| useOxyHackerMetas | 'Ganho' -> 'Contrato assinado' | 3 locais |
 
 ---
 
 ### Impacto
 
-- **Indicadores de Venda**: Passarao a contar cards na fase "Contrato assinado"
-- **Drill-down de Vendas**: Exibira cards que entraram em "Contrato assinado"
-- **Widgets de Deals Won**: Usarao a nova fase
-- **Valores Monetarios**: Serao calculados com base nos cards em "Contrato assinado"
-
----
-
-### Consideracao Importante
-
-Esta mudanca assume que a fase "Contrato assinado" existe nos dados do Pipefy para todas as BUs. Caso a fase tenha um nome ligeiramente diferente (como "Contrato Assinado" com maiuscula diferente), sera necessario ajustar o nome exato.
-
+- **Cálculos automáticos no Admin**: Ao usar "Calcular do Faturamento", os valores serão 25% MRR, 60% Setup
+- **Importação do Plan Growth**: Mesma proporção corrigida
+- **Fallback nos Indicadores**: Quando não há metas customizadas, usa os percentuais corretos
+- **Interface**: Textos de ajuda refletirão os valores corretos
