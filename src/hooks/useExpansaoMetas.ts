@@ -31,7 +31,7 @@ const PHASE_TO_INDICATOR: Record<string, ExpansaoIndicator> = {
   'Reunião Realizada': 'rr',
   'Proposta enviada / Follow Up': 'proposta',
   'Enviar para assinatura': 'proposta',
-  'Ganho': 'venda',
+  'Contrato assinado': 'venda',
 };
 
 // Parse date string to JS Date
@@ -116,8 +116,8 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
         const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
         
         if (indicator === 'venda') {
-          // For "venda", count unique cards that ENTERED "Ganho" phase during the period
-          if (movement.fase === 'Ganho') {
+          // For "venda", count unique cards that ENTERED "Contrato assinado" phase during the period
+          if (movement.fase === 'Contrato assinado') {
             uniqueCards.add(movement.id);
           }
         } else if (indicator === 'proposta') {
@@ -156,7 +156,7 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
         let shouldCount = false;
         
         if (indicator === 'venda') {
-          if (movement.fase === 'Ganho') {
+          if (movement.fase === 'Contrato assinado') {
             shouldCount = true;
           }
         } else if (indicator === 'proposta') {
@@ -241,7 +241,7 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
           const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
           
           if (indicator === 'venda') {
-            if (movement.fase === 'Ganho') {
+            if (movement.fase === 'Contrato assinado') {
               uniqueCards.add(movement.id);
             }
           } else if (indicator === 'proposta') {

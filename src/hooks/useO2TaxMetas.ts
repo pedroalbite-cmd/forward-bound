@@ -31,7 +31,7 @@ const PHASE_TO_INDICATOR: Record<string, O2TaxIndicator> = {
   '1° Reunião Realizada - Apresentação': 'rr',
   'Proposta enviada / Follow Up': 'proposta',
   'Enviar para assinatura': 'proposta',
-  'Ganho': 'venda',
+  'Contrato assinado': 'venda',
 };
 
 // Parse date string to JS Date
@@ -113,8 +113,8 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
             uniqueCards.add(movement.id);
           }
         } else if (indicator === 'venda') {
-          // For "venda", count unique cards that ENTERED "Ganho" phase during the period
-          if (movement.fase === 'Ganho') {
+          // For "venda", count unique cards that ENTERED "Contrato assinado" phase during the period
+          if (movement.fase === 'Contrato assinado') {
             uniqueCards.add(movement.id);
           }
         } else if (indicator === 'proposta') {
@@ -153,8 +153,8 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
         let shouldCount = false;
         
         if (indicator === 'venda') {
-          // For "venda", count unique cards that ENTERED "Ganho" phase
-          if (movement.fase === 'Ganho') {
+          // For "venda", count unique cards that ENTERED "Contrato assinado" phase
+          if (movement.fase === 'Contrato assinado') {
             shouldCount = true;
           }
         } else if (indicator === 'proposta') {
@@ -236,7 +236,7 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
               uniqueCards.add(movement.id);
             }
           } else if (indicator === 'venda') {
-            if (movement.fase === 'Ganho') {
+            if (movement.fase === 'Contrato assinado') {
               uniqueCards.add(movement.id);
             }
           } else if (indicator === 'proposta') {
