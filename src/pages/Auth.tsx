@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, LogIn, UserPlus, KeyRound, ArrowLeft } from 'lucide-react';
+import { Loader2, LogIn, UserPlus, KeyRound, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 
 const loginSchema = z.object({
   email: z.string().trim().email('Email inválido').max(255, 'Email muito longo'),
@@ -50,6 +50,11 @@ export default function Auth() {
   const initialMode = searchParams.get('mode') === 'reset' ? 'reset' : 'login';
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showSignupConfirmPassword, setShowSignupConfirmPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
   const { user, signIn, signUp, resetPassword, updatePassword } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -210,7 +215,22 @@ export default function Auth() {
                   <FormItem>
                     <FormLabel>Nova senha</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••" {...field} />
+                      <div className="relative">
+                        <Input type={showResetPassword ? "text" : "password"} placeholder="••••••" {...field} />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          onClick={() => setShowResetPassword(!showResetPassword)}
+                        >
+                          {showResetPassword ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -223,7 +243,22 @@ export default function Auth() {
                   <FormItem>
                     <FormLabel>Confirmar nova senha</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••" {...field} />
+                      <div className="relative">
+                        <Input type={showResetConfirmPassword ? "text" : "password"} placeholder="••••••" {...field} />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          onClick={() => setShowResetConfirmPassword(!showResetConfirmPassword)}
+                        >
+                          {showResetConfirmPassword ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -278,7 +313,22 @@ export default function Auth() {
                   <FormItem>
                     <FormLabel>Senha</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••" {...field} />
+                      <div className="relative">
+                        <Input type={showSignupPassword ? "text" : "password"} placeholder="••••••" {...field} />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          onClick={() => setShowSignupPassword(!showSignupPassword)}
+                        >
+                          {showSignupPassword ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -291,7 +341,22 @@ export default function Auth() {
                   <FormItem>
                     <FormLabel>Confirmar senha</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••" {...field} />
+                      <div className="relative">
+                        <Input type={showSignupConfirmPassword ? "text" : "password"} placeholder="••••••" {...field} />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          onClick={() => setShowSignupConfirmPassword(!showSignupConfirmPassword)}
+                        >
+                          {showSignupConfirmPassword ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -333,7 +398,22 @@ export default function Auth() {
                   <FormItem>
                     <FormLabel>Senha</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••" {...field} />
+                      <div className="relative">
+                        <Input type={showLoginPassword ? "text" : "password"} placeholder="••••••" {...field} />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          onClick={() => setShowLoginPassword(!showLoginPassword)}
+                        >
+                          {showLoginPassword ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
