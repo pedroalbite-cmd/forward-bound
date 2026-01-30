@@ -20,10 +20,23 @@ const formatCurrency = (value: number): string => {
   return value.toFixed(0);
 };
 
-// Parse currency input
+// Parse currency input with k/m suffix support
 const parseCurrencyInput = (input: string): number => {
-  const cleaned = input.replace(/[^\d.,]/g, '').replace(',', '.');
-  return Math.round(parseFloat(cleaned) || 0);
+  const cleaned = input.trim().toLowerCase();
+  
+  // Suporta sufixos k (mil) e m (milhão)
+  if (cleaned.endsWith('k')) {
+    const num = parseFloat(cleaned.slice(0, -1).replace(',', '.')) || 0;
+    return Math.round(num * 1000);
+  }
+  if (cleaned.endsWith('m')) {
+    const num = parseFloat(cleaned.slice(0, -1).replace(',', '.')) || 0;
+    return Math.round(num * 1000000);
+  }
+  
+  // Remove caracteres não numéricos exceto ponto e vírgula
+  const numericStr = cleaned.replace(/[^\d.,]/g, '').replace(',', '.');
+  return Math.round(parseFloat(numericStr) || 0);
 };
 
 export function MonetaryMetasTab() {
@@ -42,6 +55,8 @@ export function MonetaryMetasTab() {
   const [selectedBu, setSelectedBu] = useState<BuType>('modelo_atual');
   const [localMetas, setLocalMetas] = useState<Record<string, Record<MetricType, number>>>({});
   const [hasChanges, setHasChanges] = useState(false);
+  const [editingCell, setEditingCell] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState<string>('');
 
   // Initialize local metas from fetched data
   useEffect(() => {
@@ -289,28 +304,36 @@ export function MonetaryMetasTab() {
                     <TableCell className="sticky left-0 bg-background z-10 font-medium">
                       {METRIC_LABELS[metric]}
                     </TableCell>
-                    {MONTHS.map(month => (
-                      <TableCell key={`${metric}-${month}`} className="text-center p-1">
-                        <Input
-                          type="text"
-                          value={formatCurrency(getLocalValue(selectedBu, month, metric))}
-                          onChange={(e) => {
-                            const value = parseCurrencyInput(e.target.value);
-                            updateLocalValue(selectedBu, month, metric, value);
-                          }}
-                          onFocus={(e) => {
-                            // Show raw value on focus
-                            e.target.value = getLocalValue(selectedBu, month, metric).toString();
-                          }}
-                          onBlur={(e) => {
-                            // Format on blur
-                            const value = parseCurrencyInput(e.target.value);
-                            updateLocalValue(selectedBu, month, metric, value);
-                          }}
-                          className="w-20 h-8 text-center text-sm"
-                        />
-                      </TableCell>
-                    ))}
+                    {MONTHS.map(month => {
+                      const cellKey = `${metric}-${month}`;
+                      const rawValue = getLocalValue(selectedBu, month, metric);
+                      return (
+                        <TableCell key={cellKey} className="text-center p-1">
+                          <Input
+                            type="text"
+                            value={
+                              editingCell === cellKey
+                                ? editingValue
+                                : formatCurrency(rawValue)
+                            }
+                            onChange={(e) => {
+                              setEditingValue(e.target.value);
+                            }}
+                            onFocus={() => {
+                              setEditingCell(cellKey);
+                              setEditingValue(rawValue > 0 ? rawValue.toString() : '');
+                            }}
+                            onBlur={() => {
+                              const value = parseCurrencyInput(editingValue);
+                              updateLocalValue(selectedBu, month, metric, value);
+                              setEditingCell(null);
+                              setEditingValue('');
+                            }}
+                            className="w-20 h-8 text-center text-sm"
+                          />
+                        </TableCell>
+                      );
+                    })}
                     <TableCell className="text-center font-semibold bg-muted/30">
                       R$ {formatCurrency(getMetricTotal(selectedBu, metric))}
                     </TableCell>
