@@ -1,152 +1,146 @@
 
+## Plano: Alterar Contagem de Venda de "Ganho" para "Contrato Assinado"
 
-## Plano: Corrigir Fluxo de Recuperacao de Senha
+### Contexto
 
-### Problema
-
-Quando o usuario clica no link de recuperacao de senha no email, o Supabase redireciona com tokens no hash fragment:
-```
-/auth?mode=reset#access_token=...&refresh_token=...&type=recovery
-```
-
-O codigo atual:
-- Detecta `mode=reset` nos query params
-- **NAO processa os tokens do hash fragment**
-- Tenta chamar `updatePassword()` sem sessao autenticada
-- Resulta em erro silencioso ou falha na atualizacao
+Atualmente, todas as BUs (Modelo Atual, O2 TAX, Oxy Hacker, Franquia) contam "venda" como cards que entraram na fase "Ganho" no Pipefy. O usuario deseja mudar para contar "venda" como cards que entraram na fase "Contrato assinado".
 
 ---
 
-### Solucao
+### Analise das Fases Disponiveis
 
-Adicionar logica para:
-1. Detectar tokens de recovery no hash fragment da URL
-2. Processar a sessao usando esses tokens antes de mostrar o formulario
-3. Exibir loading enquanto processa
-4. Tratar erros se os tokens forem invalidos ou expirados
+Com base no codigo, as fases mapeadas atualmente sao:
+
+| BU | Fase para Venda (atual) | Fase Desejada |
+|----|-------------------------|---------------|
+| Modelo Atual | 'Ganho' | 'Contrato assinado' |
+| O2 TAX | 'Ganho' | 'Contrato assinado' |
+| Oxy Hacker | 'Ganho' | 'Contrato assinado' |
+| Franquia | 'Ganho' | 'Contrato assinado' |
 
 ---
 
 ### Secao Tecnica
 
-**Arquivo:** `src/pages/Auth.tsx`
-
-**1. Adicionar estado para controlar processamento inicial:**
-```typescript
-const [isProcessingRecovery, setIsProcessingRecovery] = useState(false);
-const [recoveryError, setRecoveryError] = useState<string | null>(null);
-```
-
-**2. Adicionar useEffect para processar tokens de recovery:**
-```typescript
-useEffect(() => {
-  // Verifica se ha tokens de recovery no hash fragment
-  const hashParams = new URLSearchParams(window.location.hash.substring(1));
-  const accessToken = hashParams.get('access_token');
-  const refreshToken = hashParams.get('refresh_token');
-  const type = hashParams.get('type');
-  
-  if (type === 'recovery' && accessToken && refreshToken) {
-    setIsProcessingRecovery(true);
-    setMode('reset');
-    
-    // O Supabase SDK automaticamente processa os tokens do hash
-    // Precisamos aguardar a sessao ser estabelecida
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      setIsProcessingRecovery(false);
-      if (error || !session) {
-        setRecoveryError('Link de recuperacao invalido ou expirado. Solicite um novo link.');
-        setMode('forgot');
-      }
-      // Limpa o hash da URL para evitar reprocessamento
-      window.history.replaceState(null, '', '/auth?mode=reset');
-    });
-  }
-}, []);
-```
-
-**3. Adicionar UI para estado de processamento:**
-```typescript
-if (isProcessingRecovery) {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardContent className="pt-6 text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p>Processando link de recuperacao...</p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-```
-
-**4. Exibir erro de recovery se houver:**
-```typescript
-{recoveryError && (
-  <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md text-sm text-destructive">
-    {recoveryError}
-  </div>
-)}
-```
-
-**5. Verificar sessao antes de permitir reset:**
-No `handleResetPassword`, verificar se ha sessao ativa:
-```typescript
-const handleResetPassword = async (values: ResetPasswordFormValues) => {
-  // Verifica se ha sessao ativa (necessario para updateUser)
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    toast({
-      variant: 'destructive',
-      title: 'Sessao expirada',
-      description: 'Solicite um novo link de recuperacao de senha.',
-    });
-    setMode('forgot');
-    return;
-  }
-  
-  setIsSubmitting(true);
-  const { error } = await updatePassword(values.password);
-  // ... resto do codigo
-};
-```
-
----
-
-### Arquivos a Modificar
+**Arquivos a Modificar:**
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/pages/Auth.tsx` | Adicionar processamento de tokens de recovery do hash, estados de loading e erro, validacao de sessao |
+| `src/hooks/useModeloAtualMetas.ts` | Alterar mapeamento de 'Ganho' para 'Contrato assinado' |
+| `src/hooks/useModeloAtualAnalytics.ts` | Alterar mapeamento de 'Ganho' para 'Contrato assinado' |
+| `src/hooks/useO2TaxMetas.ts` | Alterar mapeamento de 'Ganho' para 'Contrato assinado' |
+| `src/hooks/useO2TaxAnalytics.ts` | Alterar mapeamento de 'Ganho' para 'Contrato assinado' |
+| `src/hooks/useExpansaoMetas.ts` | Alterar mapeamento de 'Ganho' para 'Contrato assinado' |
+| `src/hooks/useExpansaoAnalytics.ts` | Alterar mapeamento de 'Ganho' para 'Contrato assinado' |
+| `src/hooks/useOxyHackerMetas.ts` | Alterar mapeamento de 'Ganho' para 'Contrato assinado' |
 
 ---
 
-### Fluxo Corrigido
+### Alteracoes Detalhadas
 
-```text
-1. Usuario clica "Esqueci minha senha"
-2. Digita email e envia
-3. Recebe email com link (ex: /auth?mode=reset#access_token=...&type=recovery)
-4. Clica no link
-5. [NOVO] App detecta tokens no hash
-6. [NOVO] App processa tokens e estabelece sessao
-7. [NOVO] Exibe loading durante processamento
-8. Exibe formulario de nova senha
-9. Usuario digita nova senha
-10. [NOVO] Valida que ha sessao ativa
-11. Atualiza senha com sucesso
-12. Redireciona para home logado
+**1. useModeloAtualMetas.ts (linhas 44-46):**
+```typescript
+// ANTES
+'Ganho': 'venda',
+
+// DEPOIS
+'Contrato assinado': 'venda',
 ```
 
+**2. useModeloAtualAnalytics.ts (linhas 50-52):**
+```typescript
+// ANTES
+'Ganho': 'venda',
+
+// DEPOIS
+'Contrato assinado': 'venda',
+```
+
+**3. useO2TaxMetas.ts (linhas 34-35):**
+```typescript
+// ANTES
+'Ganho': 'venda',
+
+// DEPOIS
+'Contrato assinado': 'venda',
+```
+
+Alem disso, atualizar a logica especifica que verifica `movement.fase === 'Ganho'` para `movement.fase === 'Contrato assinado'` em:
+- `getQtyForPeriod` (linha 117)
+- `getValueForPeriod` (linha 157)
+- `getGroupedData` - helper `countUniqueCardsInPeriod` (linha 239)
+
+**4. useO2TaxAnalytics.ts:**
+- Atualizar `PHASE_DISPLAY_MAP` para incluir 'Contrato assinado'
+- Atualizar `PHASE_TO_INDICATOR_MAP` (linha 488)
+- Atualizar `getDealsWon` para verificar 'Contrato assinado' (linhas 263-267)
+- Atualizar `getDetailItemsForIndicator` (linhas 505-509)
+
+**5. useExpansaoMetas.ts (linha 34):**
+```typescript
+// ANTES
+'Ganho': 'venda',
+
+// DEPOIS
+'Contrato assinado': 'venda',
+```
+
+Atualizar verificacoes explicitas de `movement.fase === 'Ganho'` para `'Contrato assinado'` em:
+- `getQtyForPeriod` (linhas 118-121)
+- `getValueForPeriod` (linhas 158-160)
+- `getGroupedData` - helper (linhas 243-244)
+
+**6. useExpansaoAnalytics.ts (linhas 33-34):**
+```typescript
+// ANTES
+'Ganho': 'venda',
+
+// DEPOIS
+'Contrato assinado': 'venda',
+```
+
+Atualizar `PHASE_DISPLAY_MAP` e a logica em `getCardsForIndicator` (linhas 180-184).
+
+**7. useOxyHackerMetas.ts (linha 34):**
+```typescript
+// ANTES
+'Ganho': 'venda',
+
+// DEPOIS
+'Contrato assinado': 'venda',
+```
+
+Atualizar verificacoes explicitas de `movement.fase === 'Ganho'` para `'Contrato assinado'` em:
+- `getQtyForPeriod` (linhas 124-128)
+- `getValueForPeriod` (linhas 164-166)
+- `getGroupedData` - helper (linhas 249-251)
+
 ---
 
-### Tratamento de Erros
+### Resumo das Alteracoes por Hook
 
-| Cenario | Comportamento |
-|---------|---------------|
-| Link expirado | Mostra mensagem e redireciona para "Esqueci senha" |
-| Token invalido | Mostra mensagem e redireciona para "Esqueci senha" |
-| Sessao perdida durante digitacao | Toast de erro e redireciona para "Esqueci senha" |
-| Sucesso | Toast de sucesso e redireciona para home |
+| Hook | Mapeamento PHASE_TO_INDICATOR | Verificacoes Explicitas |
+|------|-------------------------------|------------------------|
+| useModeloAtualMetas | 'Ganho' -> 'Contrato assinado' | N/A (usa mapeamento) |
+| useModeloAtualAnalytics | 'Ganho' -> 'Contrato assinado' | N/A (usa mapeamento) |
+| useO2TaxMetas | 'Ganho' -> 'Contrato assinado' | 3 locais |
+| useO2TaxAnalytics | 'Ganho' -> 'Contrato assinado' | 2 locais + PHASE_DISPLAY_MAP |
+| useExpansaoMetas | 'Ganho' -> 'Contrato assinado' | 3 locais |
+| useExpansaoAnalytics | 'Ganho' -> 'Contrato assinado' | 1 local + PHASE_DISPLAY_MAP |
+| useOxyHackerMetas | 'Ganho' -> 'Contrato assinado' | 3 locais |
+
+---
+
+### Impacto
+
+- **Indicadores de Venda**: Passarao a contar cards na fase "Contrato assinado"
+- **Drill-down de Vendas**: Exibira cards que entraram em "Contrato assinado"
+- **Widgets de Deals Won**: Usarao a nova fase
+- **Valores Monetarios**: Serao calculados com base nos cards em "Contrato assinado"
+
+---
+
+### Consideracao Importante
+
+Esta mudanca assume que a fase "Contrato assinado" existe nos dados do Pipefy para todas as BUs. Caso a fase tenha um nome ligeiramente diferente (como "Contrato Assinado" com maiuscula diferente), sera necessario ajustar o nome exato.
 
