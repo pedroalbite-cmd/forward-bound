@@ -30,7 +30,7 @@ const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
   'Reunião Realizada': 'rr',
   'Proposta enviada / Follow Up': 'proposta',
   'Enviar para assinatura': 'proposta',
-  'Ganho': 'venda',
+  'Contrato assinado': 'venda',
 };
 
 // Map indicator to phase display name
@@ -51,6 +51,7 @@ const PHASE_DISPLAY_MAP: Record<string, string> = {
   'Reunião Realizada': 'RR',
   'Proposta enviada / Follow Up': 'Proposta',
   'Enviar para assinatura': 'Assinatura',
+  'Contrato assinado': 'Contrato Assinado',
   'Ganho': 'Ganho',
   'Perdido': 'Perdido',
   'Arquivado': 'Arquivado',
@@ -178,8 +179,8 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
         let matches = false;
         
         if (indicator === 'venda') {
-          // For "venda", count unique cards that ENTERED "Ganho" phase during the period
-          if (movement.fase === 'Ganho') {
+          // For "venda", count unique cards that ENTERED "Contrato assinado" phase during the period
+          if (movement.fase === 'Contrato assinado') {
             matches = true;
           }
         } else if (indicator === 'proposta') {
