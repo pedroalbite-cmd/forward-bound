@@ -30,7 +30,7 @@ export function DrillDownBarChart({
       <div className="space-y-2">
         {displayData.map((item) => (
           <div key={item.label} className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground w-24 truncate" title={item.label}>
+            <span className="text-sm text-muted-foreground w-44 truncate" title={item.label}>
               {item.label}
             </span>
             <div className="flex-1 h-6 bg-muted rounded overflow-hidden">
