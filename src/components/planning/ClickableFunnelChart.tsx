@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
 import { useModeloAtualMetas } from "@/hooks/useModeloAtualMetas";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
-// useLeadsMetas removed - now using useModeloAtualMetas for leads
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
@@ -12,6 +12,8 @@ import { BUType, IndicatorType } from "@/hooks/useFunnelRealized";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
 import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMediaMetas } from "@/contexts/MediaMetasContext";
+import { eachMonthOfInterval, format } from "date-fns";
 
 interface ClickableFunnelChartProps {
   startDate: Date;
@@ -23,6 +25,69 @@ interface ClickableFunnelChartProps {
 
 const formatNumber = (value: number) => new Intl.NumberFormat("pt-BR").format(Math.round(value));
 const formatCurrency = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0 }).format(value);
+
+// Ticket médio por BU para cálculo de meta monetária
+const TICKET_MEDIOS: Record<string, number> = {
+  modelo_atual: 17000,
+  o2_tax: 15000,
+  oxy_hacker: 54000,
+  franquia: 140000,
+};
+
+interface FunnelGaugeCardProps {
+  title: string;
+  value: number;
+  meta: number;
+  onClick?: () => void;
+}
+
+function FunnelGaugeCard({ title, value, meta, onClick }: FunnelGaugeCardProps) {
+  const percentage = meta > 0 ? (value / meta) * 100 : 0;
+  const isOnTrack = percentage >= 100;
+  
+  const chartData = [{ 
+    value: Math.min(percentage, 100), 
+    fill: isOnTrack ? "hsl(var(--chart-2))" : "hsl(var(--destructive))" 
+  }];
+
+  return (
+    <div 
+      className="bg-muted/50 rounded-lg p-3 cursor-pointer hover:bg-muted/70 transition-colors group relative flex flex-col items-center"
+      onClick={onClick}
+    >
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <ExternalLink className="h-3 w-3 text-muted-foreground" />
+      </div>
+      <p className="text-xs text-muted-foreground mb-1">{title}</p>
+      
+      <div className="relative w-20 h-20">
+        <RadialBarChart 
+          width={80} 
+          height={80} 
+          innerRadius="65%" 
+          outerRadius="100%" 
+          data={chartData} 
+          startAngle={90} 
+          endAngle={-270}
+        >
+          <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
+          <RadialBar background={{ fill: "hsl(var(--muted))" }} dataKey="value" cornerRadius={8} />
+        </RadialBarChart>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-sm font-bold text-foreground">{formatCurrency(value)}</span>
+        </div>
+      </div>
+      
+      <span className={cn(
+        "text-xs font-medium",
+        isOnTrack ? "text-chart-2" : "text-destructive"
+      )}>
+        {Math.round(percentage)}%
+      </span>
+      <span className="text-[10px] text-muted-foreground">Meta: {formatCurrency(meta)}</span>
+    </div>
+  );
+}
 
 interface FunnelStage {
   number: number;
@@ -43,6 +108,9 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
   const { getQtyForPeriod: getExpansaoQty, getValueForPeriod: getExpansaoValue } = useExpansaoMetas(startDate, endDate);
   const { getQtyForPeriod: getO2TaxQty, getValueForPeriod: getO2TaxValue } = useO2TaxMetas(startDate, endDate);
   const { getQtyForPeriod: getOxyHackerQty, getValueForPeriod: getOxyHackerValue } = useOxyHackerMetas(startDate, endDate);
+  
+  // Get funnel data for metas
+  const { funnelData } = useMediaMetas();
   
   
   // Analytics hooks for drill-down
@@ -151,6 +219,41 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
     (includesO2Tax ? getO2TaxValue('venda', startDate, endDate) : 0) +
     (includesOxyHacker ? getOxyHackerValue('venda', startDate, endDate) : 0) +
     (includesFranquia ? getExpansaoValue('venda', startDate, endDate) : 0);
+
+  // Calculate metas for propostas and vendas based on funnelData and selected BUs
+  const calculateMonetaryMeta = (indicator: 'propostas' | 'vendas'): number => {
+    if (!funnelData) return 0;
+    
+    const months = eachMonthOfInterval({ start: startDate, end: endDate });
+    let totalMeta = 0;
+    
+    const buDataMap: Record<string, typeof funnelData.modeloAtual> = {
+      modelo_atual: funnelData.modeloAtual,
+      o2_tax: funnelData.o2Tax,
+      oxy_hacker: funnelData.oxyHacker,
+      franquia: funnelData.franquia,
+    };
+    
+    for (const buKey of selectedBUsArray) {
+      const buData = buDataMap[buKey];
+      if (!buData) continue;
+      
+      const ticket = TICKET_MEDIOS[buKey] || 17000;
+      
+      for (const month of months) {
+        const monthKey = format(month, 'yyyy-MM');
+        const monthData = buData.find(d => d.month === monthKey);
+        if (monthData) {
+          totalMeta += monthData[indicator] * ticket;
+        }
+      }
+    }
+    
+    return totalMeta;
+  };
+
+  const propostaMeta = calculateMonetaryMeta('propostas');
+  const vendaMeta = calculateMonetaryMeta('vendas');
 
   // Width percentages for funnel visualization (6 stages now)
   const widthPercentages = [100, 85, 70, 55, 45, 35];
@@ -305,26 +408,18 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
         <CardHeader className="pb-2">
           <CardTitle className="text-base font-semibold text-foreground">Funil do Período</CardTitle>
           <div className="grid grid-cols-2 gap-4 mt-3">
-            <div 
-              className="bg-muted/50 rounded-lg p-3 text-center cursor-pointer hover:bg-muted/70 transition-colors group relative"
+            <FunnelGaugeCard
+              title="Proposta Enviada"
+              value={propostaValue}
+              meta={propostaMeta}
               onClick={() => handleMonetaryClick('proposta', propostaValue)}
-            >
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ExternalLink className="h-3 w-3 text-muted-foreground" />
-              </div>
-              <p className="text-xs text-muted-foreground mb-1">Proposta Enviada</p>
-              <p className="text-lg font-bold text-foreground">{formatCurrency(propostaValue)}</p>
-            </div>
-            <div 
-              className="bg-muted/50 rounded-lg p-3 text-center cursor-pointer hover:bg-muted/70 transition-colors group relative"
+            />
+            <FunnelGaugeCard
+              title="Contratos Assinados"
+              value={vendaValue}
+              meta={vendaMeta}
               onClick={() => handleMonetaryClick('venda', vendaValue)}
-            >
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ExternalLink className="h-3 w-3 text-muted-foreground" />
-              </div>
-              <p className="text-xs text-muted-foreground mb-1">Contratos Assinados</p>
-              <p className="text-lg font-bold text-foreground">{formatCurrency(vendaValue)}</p>
-            </div>
+            />
           </div>
         </CardHeader>
         <CardContent className="pt-4">
