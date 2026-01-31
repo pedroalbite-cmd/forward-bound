@@ -1,188 +1,204 @@
 
 
-## Plano: Adicionar Mini-Dashboard ao Drill-Down de "Proposta Enviada" do Funil
+## Plano: Adicionar TCV (Total Contract Value) ao Drill-Down de Vendas
 
 ### Contexto
 
-Atualmente, o componente `ClickableFunnelChart.tsx` tem dois pontos de clique para "Proposta Enviada":
+O usuário precisa visualizar o **TCV - Total Contract Value** dentro do drill-down do acelerômetro/funil de Vendas (Contratos Assinados). O TCV representa a visão futura de faturamento total dos contratos, considerando que o MRR é sempre multiplicado por 12 meses.
 
-1. **Card monetário no topo** (R$ valor) → `handleMonetaryClick('proposta', propostaValue)` → Abre DetailSheet **SEM** KPIs/gráficos
-2. **Barra do funil** (quantidade) → `handleStageClick(stage)` → Abre DetailSheet **SEM** KPIs/gráficos
+**Fórmula do TCV:**
+```
+TCV = (MRR × 12) + Setup + Pontual
+```
 
-Enquanto isso, o acelerômetro de "Propostas Enviadas" no `IndicatorsTab.tsx` abre um DetailSheet **COM** mini-dashboard (KPIs + gráficos):
-- 📊 Propostas | 💰 Pipeline | 🎯 Ticket Médio | ⚠️ Envelhecidas | 🔴 em Risco
-- Gráficos: Pipeline por Closer + Aging das Propostas
-
-O usuário quer que o clique no funil tenha o **mesmo mini-dashboard**.
+Atualmente, o drill-down de Vendas mostra apenas a lista de contratos sem KPIs ou gráficos analíticos.
 
 ---
 
-### Arquivos a Modificar
+### Arquivo a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/planning/ClickableFunnelChart.tsx` | Adicionar lógica de KPIs/gráficos ao drill-down de proposta |
+| `src/components/planning/ClickableFunnelChart.tsx` | Criar mini-dashboard com TCV e métricas adicionais para o drill-down de Vendas |
+
+---
+
+### Visual Proposta
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│  Contratos Assinados - Análise de Valor                            │
+├─────────────────────────────────────────────────────────────────────┤
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────────────┐│
+│  │ 📋      │ │ 💵      │ │ 🔁      │ │ ⚡      │ │ 📊 TCV          ││
+│  │ 12      │ │ R$240k  │ │ R$85k   │ │ R$45k   │ │ R$ 1.3M         ││
+│  │ Vendas  │ │ Setup   │ │ MRR     │ │ Pontual │ │ (MRR×12+Setup+P)││
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────────────┘│
+│                                                                      │
+│  ┌─ Gráficos ───────────────────────────────────────────────────────┐│
+│  │ [Vendas por Closer]              [Distribuição por Produto]      ││
+│  └──────────────────────────────────────────────────────────────────┘│
+│                                                                      │
+│  ┌─ Tabela de Contratos ────────────────────────────────────────────┐│
+│  │ Produto | Empresa | Data | MRR | Setup | Pontual | TCV | Closer  ││
+│  └──────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ### Seção Técnica
 
-**1. Adicionar imports necessários (linhas 1-15):**
-```typescript
-import { KpiItem } from "./indicators/KpiCard";
-import { ChartConfig } from "./indicators/DrillDownCharts";
-```
+**1. Criar função `buildVendaMiniDashboard` (linhas ~350):**
 
-**2. Adicionar estados para KPIs e Charts (linhas 36-41):**
 ```typescript
-const [sheetKpis, setSheetKpis] = useState<KpiItem[]>([]);
-const [sheetCharts, setSheetCharts] = useState<ChartConfig[]>([]);
-```
-
-**3. Criar helper para formatar currency compacto:**
-```typescript
-const formatCompactCurrency = (value: number): string => {
-  if (value >= 1000000) return `R$ ${(value / 1000000).toFixed(1)}M`;
-  if (value >= 1000) return `R$ ${(value / 1000).toFixed(0)}k`;
-  return `R$ ${Math.round(value)}`;
-};
-```
-
-**4. Modificar `handleMonetaryClick` para adicionar KPIs/gráficos quando é "proposta" (linhas 288-300):**
-```typescript
-const handleMonetaryClick = (type: 'proposta' | 'venda', value: number) => {
-  const indicator = type as IndicatorType;
-  const items = getItemsForIndicator(indicator);
-  const columns = getColumnsForIndicator(indicator);
-  const title = type === 'proposta' ? 'Propostas Enviadas' : 'Contratos Assinados';
+const buildVendaMiniDashboard = () => {
+  const items = getItemsForIndicator('venda');
   
-  if (type === 'proposta') {
-    // Mini-dashboard igual ao acelerômetro do IndicatorsTab
-    const now = new Date();
-    const itemsWithAging = items.map(item => {
-      const entryDate = item.date ? new Date(item.date) : now;
-      const diasEmProposta = Math.floor((now.getTime() - entryDate.getTime()) / 86400000);
-      return { ...item, diasEmProposta };
-    });
-    
-    const pipeline = items.reduce((sum, i) => sum + (i.value || 0), 0);
-    const ticketMedio = items.length > 0 ? pipeline / items.length : 0;
-    const propostasAntigas = itemsWithAging.filter(i => (i.diasEmProposta || 0) > 14);
-    const valorEmRisco = propostasAntigas.reduce((sum, i) => sum + (i.value || 0), 0);
-    
-    // KPIs
-    const kpis: KpiItem[] = [
-      { icon: '📊', value: items.length, label: 'Propostas', highlight: 'neutral' },
-      { icon: '💰', value: formatCompactCurrency(pipeline), label: 'Pipeline', highlight: 'neutral' },
-      { icon: '🎯', value: formatCompactCurrency(ticketMedio), label: 'Ticket Médio', highlight: 'neutral' },
-      { icon: '⚠️', value: propostasAntigas.length, label: 'Envelhecidas', highlight: propostasAntigas.length > 0 ? 'warning' : 'success' },
-      { icon: '🔴', value: formatCompactCurrency(valorEmRisco), label: 'em Risco', highlight: valorEmRisco > 0 ? 'danger' : 'success' },
-    ];
-    
-    // Charts
-    const closerTotals = new Map<string, number>();
-    itemsWithAging.forEach(i => {
-      const closer = i.responsible || i.closer || 'Sem Closer';
-      closerTotals.set(closer, (closerTotals.get(closer) || 0) + (i.value || 0));
-    });
-    const pipelineByCloserData = Array.from(closerTotals.entries())
-      .map(([label, value]) => ({ label: label.split(' ')[0], value }))
-      .sort((a, b) => b.value - a.value);
-    
-    const agingDistribution = [
-      { label: '0-7 dias', value: itemsWithAging.filter(i => (i.diasEmProposta || 0) <= 7).length, highlight: 'success' as const },
-      { label: '8-14 dias', value: itemsWithAging.filter(i => (i.diasEmProposta || 0) > 7 && (i.diasEmProposta || 0) <= 14).length, highlight: 'neutral' as const },
-      { label: '15-30 dias', value: itemsWithAging.filter(i => (i.diasEmProposta || 0) > 14 && (i.diasEmProposta || 0) <= 30).length, highlight: 'warning' as const },
-      { label: '30+ dias', value: itemsWithAging.filter(i => (i.diasEmProposta || 0) > 30).length, highlight: 'danger' as const },
-    ];
-    
-    const charts: ChartConfig[] = [
-      { type: 'bar', title: 'Pipeline por Closer', data: pipelineByCloserData, formatValue: formatCompactCurrency },
-      { type: 'distribution', title: 'Aging das Propostas', data: agingDistribution },
-    ];
-    
-    setSheetKpis(kpis);
-    setSheetCharts(charts);
-    setSheetTitle('Propostas - Onde o Pipeline Está Travando?');
-    setSheetDescription(
-      `${items.length} propostas | Pipeline: ${formatCompactCurrency(pipeline)} | Ticket médio: ${formatCompactCurrency(ticketMedio)}` +
-      (propostasAntigas.length > 0 
-        ? ` | ⚠️ ${propostasAntigas.length} com mais de 14 dias (${formatCompactCurrency(valorEmRisco)} em risco)` 
-        : ' | ✅ Nenhuma envelhecida')
-    );
-    setSheetColumns([
-      { key: 'product', label: 'Produto', format: columnFormatters.product },
-      { key: 'company', label: 'Empresa' },
-      { key: 'value', label: 'Valor Total', format: columnFormatters.currency },
-      { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
-      { key: 'responsible', label: 'Closer' },
-      { key: 'diasEmProposta', label: 'Dias em Proposta', format: columnFormatters.agingWithAlert },
-      { key: 'date', label: 'Data Envio', format: columnFormatters.date },
-    ]);
-    setSheetItems(itemsWithAging.sort((a, b) => (b.diasEmProposta || 0) - (a.diasEmProposta || 0)));
-    setSheetOpen(true);
-    return;
-  }
+  // Calcular métricas totais
+  const totalMRR = items.reduce((sum, i) => sum + (i.mrr || 0), 0);
+  const totalSetup = items.reduce((sum, i) => sum + (i.setup || 0), 0);
+  const totalPontual = items.reduce((sum, i) => sum + (i.pontual || 0), 0);
   
-  // Para venda, manter comportamento atual (sem mini-dashboard por enquanto)
-  setSheetKpis([]);
-  setSheetCharts([]);
-  setSheetTitle(title);
-  setSheetDescription(`Valor total: ${formatCurrency(value)}`);
-  setSheetItems(items);
-  setSheetColumns(columns);
+  // TCV = (MRR × 12) + Setup + Pontual
+  const tcv = (totalMRR * 12) + totalSetup + totalPontual;
+  
+  const ticketMedio = items.length > 0 ? tcv / items.length : 0;
+  
+  // KPIs
+  const kpis: KpiItem[] = [
+    { icon: '📋', value: items.length, label: 'Vendas', highlight: 'neutral' },
+    { icon: '💵', value: formatCompactCurrency(totalSetup), label: 'Setup', highlight: 'neutral' },
+    { icon: '🔁', value: formatCompactCurrency(totalMRR), label: 'MRR', highlight: 'neutral' },
+    { icon: '⚡', value: formatCompactCurrency(totalPontual), label: 'Pontual', highlight: 'neutral' },
+    { icon: '📊', value: formatCompactCurrency(tcv), label: 'TCV', highlight: 'success' },
+  ];
+  
+  // Charts - Vendas por Closer
+  const closerTotals = new Map<string, number>();
+  items.forEach(i => {
+    const closer = i.responsible || i.closer || 'Sem Closer';
+    const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
+    closerTotals.set(closer, (closerTotals.get(closer) || 0) + itemTCV);
+  });
+  const vendasByCloserData = Array.from(closerTotals.entries())
+    .map(([label, value]) => ({ label: label.split(' ')[0], value }))
+    .sort((a, b) => b.value - a.value);
+  
+  // Charts - Distribuição por Produto
+  const productTotals = new Map<string, number>();
+  items.forEach(i => {
+    const product = i.product || 'Outros';
+    const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
+    productTotals.set(product, (productTotals.get(product) || 0) + itemTCV);
+  });
+  const vendasByProductData = Array.from(productTotals.entries())
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+  
+  const charts: ChartConfig[] = [
+    { type: 'bar', title: 'TCV por Closer', data: vendasByCloserData, formatValue: formatCompactCurrency },
+    { type: 'pie', title: 'TCV por Produto', data: vendasByProductData, formatValue: formatCompactCurrency },
+  ];
+  
+  // Adicionar TCV calculado a cada item para exibição na tabela
+  const itemsWithTCV = items.map(item => ({
+    ...item,
+    // Usamos o campo 'value' para armazenar o TCV do item
+    value: ((item.mrr || 0) * 12) + (item.setup || 0) + (item.pontual || 0),
+  }));
+  
+  setSheetKpis(kpis);
+  setSheetCharts(charts);
+  setSheetTitle('Contratos Assinados - Análise de Valor');
+  setSheetDescription(
+    `${items.length} contratos | TCV: ${formatCompactCurrency(tcv)} | ` +
+    `MRR: ${formatCompactCurrency(totalMRR)} | Setup: ${formatCompactCurrency(totalSetup)} | ` +
+    `Pontual: ${formatCompactCurrency(totalPontual)} | Ticket médio TCV: ${formatCompactCurrency(ticketMedio)}`
+  );
+  
+  // Ajustar colunas para incluir TCV
+  setSheetColumns([
+    { key: 'product', label: 'Produto', format: columnFormatters.product },
+    { key: 'company', label: 'Empresa' },
+    { key: 'dataAssinatura', label: 'Data Assinatura', format: columnFormatters.date },
+    { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
+    { key: 'setup', label: 'Setup', format: columnFormatters.currency },
+    { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
+    { key: 'value', label: 'TCV', format: columnFormatters.currency },
+    { key: 'sdr', label: 'SDR' },
+    { key: 'responsible', label: 'Closer' },
+  ]);
+  setSheetItems(itemsWithTCV.sort((a, b) => (b.value || 0) - (a.value || 0)));
   setSheetOpen(true);
 };
 ```
 
-**5. Atualizar `handleStageClick` para usar mesma lógica quando stage é "proposta" (linhas 271-285):**
+**2. Modificar `handleMonetaryClick` para usar o mini-dashboard de vendas (linhas 374-393):**
+
+```typescript
+const handleMonetaryClick = (type: 'proposta' | 'venda', value: number) => {
+  // Se for proposta, usar mini-dashboard de proposta
+  if (type === 'proposta') {
+    buildPropostaMiniDashboard();
+    return;
+  }
+  
+  // Se for venda, usar mini-dashboard de venda com TCV
+  if (type === 'venda') {
+    buildVendaMiniDashboard();
+    return;
+  }
+};
+```
+
+**3. Modificar `handleStageClick` para usar mini-dashboard quando stage é 'venda' (linhas 350-372):**
+
 ```typescript
 const handleStageClick = (stage: FunnelStage) => {
   if (stage.value === 0) return;
   
-  // Se for proposta, usar a mesma lógica do handleMonetaryClick
+  // Se for proposta, usar mini-dashboard de proposta
   if (stage.indicator === 'proposta') {
-    const propostaValueCalc = // calcular valor atual
-    handleMonetaryClick('proposta', propostaValueCalc);
+    buildPropostaMiniDashboard();
+    return;
+  }
+  
+  // Se for venda, usar mini-dashboard de venda com TCV
+  if (stage.indicator === 'venda') {
+    buildVendaMiniDashboard();
     return;
   }
   
   // Para outros indicadores, manter comportamento atual
-  const items = getItemsForIndicator(stage.indicator);
-  const columns = getColumnsForIndicator(stage.indicator);
-  
-  setSheetKpis([]);
-  setSheetCharts([]);
-  setSheetTitle(`${stage.name}`);
-  setSheetDescription(`${formatNumber(stage.value)} registros no período selecionado`);
-  setSheetItems(items);
-  setSheetColumns(columns);
-  setSheetOpen(true);
+  // ...
 };
-```
-
-**6. Atualizar o componente DetailSheet para receber e exibir kpis/charts (linha ~360-375):**
-```typescript
-<DetailSheet
-  open={sheetOpen}
-  onOpenChange={setSheetOpen}
-  title={sheetTitle}
-  description={sheetDescription}
-  items={sheetItems}
-  columns={sheetColumns}
-  kpis={sheetKpis}       // NOVO
-  charts={sheetCharts}   // NOVO
-/>
 ```
 
 ---
 
-### Resultado Final
+### Fórmula do TCV Explicada
 
-Ao clicar em "Proposta Enviada" no funil (seja no card monetário ou na barra):
-1. Abre o DetailSheet com:
-   - **Título**: "Propostas - Onde o Pipeline Está Travando?"
-   - **KPIs**: 📊 Propostas | 💰 Pipeline | 🎯 Ticket Médio | ⚠️ Envelhecidas | 🔴 em Risco
-   - **Gráficos**: Pipeline por Closer + Aging das Propostas
-   - **Tabela**: Ordenada por dias em proposta (mais antigas primeiro)
+| Componente | Descrição | Cálculo |
+|------------|-----------|---------|
+| MRR | Receita Recorrente Mensal | Valor × 12 meses |
+| Setup | Taxa única de implementação | Valor integral |
+| Pontual | Receitas pontuais | Valor integral |
+| **TCV** | **Total Contract Value** | **(MRR × 12) + Setup + Pontual** |
+
+**Exemplo:**
+- MRR: R$ 5.000/mês → R$ 60.000 (anualizado)
+- Setup: R$ 15.000
+- Pontual: R$ 2.000
+- **TCV = R$ 77.000**
+
+---
+
+### Impacto
+
+1. **Novo KPI de TCV**: Visão clara do valor total de contratos considerando 12 meses de MRR
+2. **Análise por Closer**: Gráfico de barras mostrando TCV por vendedor
+3. **Análise por Produto**: Gráfico de pizza mostrando TCV por BU (CaaS, O2 TAX, etc.)
+4. **Tabela enriquecida**: Coluna TCV por contrato, ordenada por maior valor
+5. **Consistência**: Mesma experiência do mini-dashboard de Propostas, agora em Vendas
 
