@@ -10,8 +10,16 @@ import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { BUType, IndicatorType } from "@/hooks/useFunnelRealized";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
+import { KpiItem } from "./indicators/KpiCard";
+import { ChartConfig } from "./indicators/DrillDownCharts";
 import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const formatCompactCurrency = (value: number): string => {
+  if (value >= 1000000) return `R$ ${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `R$ ${(value / 1000).toFixed(0)}k`;
+  return `R$ ${Math.round(value)}`;
+};
 
 interface ClickableFunnelChartProps {
   startDate: Date;
@@ -38,6 +46,8 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
   const [sheetDescription, setSheetDescription] = useState('');
   const [sheetItems, setSheetItems] = useState<DetailItem[]>([]);
   const [sheetColumns, setSheetColumns] = useState<{ key: keyof DetailItem; label: string; format?: (value: any) => React.ReactNode }[]>([]);
+  const [sheetKpis, setSheetKpis] = useState<KpiItem[]>([]);
+  const [sheetCharts, setSheetCharts] = useState<ChartConfig[]>([]);
 
   const { getQtyForPeriod: getModeloAtualQty, getValueForPeriod: getModeloAtualValue } = useModeloAtualMetas(startDate, endDate);
   const { getQtyForPeriod: getExpansaoQty, getValueForPeriod: getExpansaoValue } = useExpansaoMetas(startDate, endDate);
@@ -267,16 +277,93 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
     return [];
   };
 
+  // Helper to build proposta mini-dashboard
+  const buildPropostaMiniDashboard = () => {
+    const items = getItemsForIndicator('proposta');
+    const now = new Date();
+    
+    const itemsWithAging = items.map(item => {
+      const entryDate = item.date ? new Date(item.date) : now;
+      const diasEmProposta = Math.floor((now.getTime() - entryDate.getTime()) / 86400000);
+      return { ...item, diasEmProposta };
+    });
+    
+    const pipeline = items.reduce((sum, i) => sum + (i.value || 0), 0);
+    const ticketMedio = items.length > 0 ? pipeline / items.length : 0;
+    const propostasAntigas = itemsWithAging.filter(i => (i.diasEmProposta || 0) > 14);
+    const valorEmRisco = propostasAntigas.reduce((sum, i) => sum + (i.value || 0), 0);
+    
+    // KPIs
+    const kpis: KpiItem[] = [
+      { icon: '📊', value: items.length, label: 'Propostas', highlight: 'neutral' },
+      { icon: '💰', value: formatCompactCurrency(pipeline), label: 'Pipeline', highlight: 'neutral' },
+      { icon: '🎯', value: formatCompactCurrency(ticketMedio), label: 'Ticket Médio', highlight: 'neutral' },
+      { icon: '⚠️', value: propostasAntigas.length, label: 'Envelhecidas', highlight: propostasAntigas.length > 0 ? 'warning' : 'success' },
+      { icon: '🔴', value: formatCompactCurrency(valorEmRisco), label: 'em Risco', highlight: valorEmRisco > 0 ? 'danger' : 'success' },
+    ];
+    
+    // Charts - Pipeline por Closer
+    const closerTotals = new Map<string, number>();
+    itemsWithAging.forEach(i => {
+      const closer = i.responsible || i.closer || 'Sem Closer';
+      closerTotals.set(closer, (closerTotals.get(closer) || 0) + (i.value || 0));
+    });
+    const pipelineByCloserData = Array.from(closerTotals.entries())
+      .map(([label, value]) => ({ label: label.split(' ')[0], value }))
+      .sort((a, b) => b.value - a.value);
+    
+    // Charts - Aging das Propostas
+    const agingDistribution = [
+      { label: '0-7 dias', value: itemsWithAging.filter(i => (i.diasEmProposta || 0) <= 7).length, highlight: 'success' as const },
+      { label: '8-14 dias', value: itemsWithAging.filter(i => (i.diasEmProposta || 0) > 7 && (i.diasEmProposta || 0) <= 14).length, highlight: 'neutral' as const },
+      { label: '15-30 dias', value: itemsWithAging.filter(i => (i.diasEmProposta || 0) > 14 && (i.diasEmProposta || 0) <= 30).length, highlight: 'warning' as const },
+      { label: '30+ dias', value: itemsWithAging.filter(i => (i.diasEmProposta || 0) > 30).length, highlight: 'danger' as const },
+    ];
+    
+    const charts: ChartConfig[] = [
+      { type: 'bar', title: 'Pipeline por Closer', data: pipelineByCloserData, formatValue: formatCompactCurrency },
+      { type: 'distribution', title: 'Aging das Propostas', data: agingDistribution },
+    ];
+    
+    setSheetKpis(kpis);
+    setSheetCharts(charts);
+    setSheetTitle('Propostas - Onde o Pipeline Está Travando?');
+    setSheetDescription(
+      `${items.length} propostas | Pipeline: ${formatCompactCurrency(pipeline)} | Ticket médio: ${formatCompactCurrency(ticketMedio)}` +
+      (propostasAntigas.length > 0 
+        ? ` | ⚠️ ${propostasAntigas.length} com mais de 14 dias (${formatCompactCurrency(valorEmRisco)} em risco)` 
+        : ' | ✅ Nenhuma envelhecida')
+    );
+    setSheetColumns([
+      { key: 'product', label: 'Produto', format: columnFormatters.product },
+      { key: 'company', label: 'Empresa' },
+      { key: 'value', label: 'Valor Total', format: columnFormatters.currency },
+      { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
+      { key: 'responsible', label: 'Closer' },
+      { key: 'diasEmProposta', label: 'Dias em Proposta', format: columnFormatters.agingWithAlert },
+      { key: 'date', label: 'Data Envio', format: columnFormatters.date },
+    ]);
+    setSheetItems(itemsWithAging.sort((a, b) => (b.diasEmProposta || 0) - (a.diasEmProposta || 0)));
+    setSheetOpen(true);
+  };
+
   // Handle stage click
   const handleStageClick = (stage: FunnelStage) => {
     if (stage.value === 0) {
-      // No drill-down for any indicator without data
+      return;
+    }
+    
+    // Se for proposta, usar mini-dashboard
+    if (stage.indicator === 'proposta') {
+      buildPropostaMiniDashboard();
       return;
     }
     
     const items = getItemsForIndicator(stage.indicator);
     const columns = getColumnsForIndicator(stage.indicator);
     
+    setSheetKpis([]);
+    setSheetCharts([]);
     setSheetTitle(`${stage.name}`);
     setSheetDescription(`${formatNumber(stage.value)} registros no período selecionado`);
     setSheetItems(items);
@@ -286,13 +373,19 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
 
   // Handle monetary value click
   const handleMonetaryClick = (type: 'proposta' | 'venda', value: number) => {
-    const indicator = type as IndicatorType;
-    const items = getItemsForIndicator(indicator);
-    const columns = getColumnsForIndicator(indicator);
+    // Se for proposta, usar mini-dashboard
+    if (type === 'proposta') {
+      buildPropostaMiniDashboard();
+      return;
+    }
     
-    const title = type === 'proposta' ? 'Propostas Enviadas' : 'Contratos Assinados';
+    // Para venda, manter comportamento atual
+    const items = getItemsForIndicator('venda');
+    const columns = getColumnsForIndicator('venda');
     
-    setSheetTitle(title);
+    setSheetKpis([]);
+    setSheetCharts([]);
+    setSheetTitle('Contratos Assinados');
     setSheetDescription(`Valor total: ${formatCurrency(value)}`);
     setSheetItems(items);
     setSheetColumns(columns);
@@ -369,6 +462,8 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
         description={sheetDescription}
         items={sheetItems}
         columns={sheetColumns}
+        kpis={sheetKpis}
+        charts={sheetCharts}
       />
     </>
   );
