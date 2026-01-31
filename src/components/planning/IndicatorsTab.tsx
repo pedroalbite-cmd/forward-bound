@@ -1325,21 +1325,25 @@ export function IndicatorsTab() {
       }
       
       case 'venda': {
-        // Venda: "O Que Fechamos e Como?"
-        const totalFaturamento = items.reduce((sum, i) => sum + (i.value || 0), 0);
+        // Venda: "O Que Fechamos e Como?" - com TCV (Total Contract Value)
         const totalMrr = items.reduce((sum, i) => sum + (i.mrr || 0), 0);
         const totalSetup = items.reduce((sum, i) => sum + (i.setup || 0), 0);
         const totalPontual = items.reduce((sum, i) => sum + (i.pontual || 0), 0);
+        const totalFaturamento = items.reduce((sum, i) => sum + (i.value || 0), 0);
+        
+        // TCV = (MRR × 12) + Setup + Pontual
+        const tcv = (totalMrr * 12) + totalSetup + totalPontual;
+        const ticketMedioTCV = items.length > 0 ? tcv / items.length : 0;
         
         const pctMrr = totalFaturamento > 0 ? Math.round((totalMrr / totalFaturamento) * 100) : 0;
         const pctSetup = totalFaturamento > 0 ? Math.round((totalSetup / totalFaturamento) * 100) : 0;
         const pctPontual = totalFaturamento > 0 ? Math.round((totalPontual / totalFaturamento) * 100) : 0;
         
-        // Calculate cycle for each item and podium
-        const itemsWithCycle = items.map(item => {
+        // Calculate TCV for each item and cycle
+        const itemsWithTCV = items.map(item => {
           const cicloVenda = item.duration ? Math.floor(item.duration / 86400) : 0;
-          const percentualTotal = totalFaturamento > 0 ? ((item.value || 0) / totalFaturamento) * 100 : 0;
-          return { ...item, cicloVenda, percentualTotal };
+          const itemTCV = ((item.mrr || 0) * 12) + (item.setup || 0) + (item.pontual || 0);
+          return { ...item, cicloVenda, value: itemTCV };
         });
         
         const podium = findTopPerformerByRevenue(items);
@@ -1348,31 +1352,33 @@ export function IndicatorsTab() {
           return `${medal}${p.name.split(' ')[0]}`;
         }).join(' ');
         
-        // KPIs para Venda
+        // KPIs para Venda com TCV
         const kpis: KpiItem[] = [
           { icon: '📝', value: items.length, label: 'Contratos', highlight: 'neutral' },
-          { icon: '💰', value: formatCompactCurrency(totalFaturamento), label: 'Total', highlight: 'neutral' },
-          { icon: '🔄', value: `${pctMrr}%`, label: 'MRR', highlight: pctMrr >= 50 ? 'success' : 'neutral' },
-          { icon: '🔧', value: `${pctSetup}%`, label: 'Setup', highlight: 'neutral' },
-          { icon: '🏆', value: podium[0]?.name.split(' ')[0] || '-', label: 'Top Closer', highlight: 'neutral' },
+          { icon: '💵', value: formatCompactCurrency(totalSetup), label: 'Setup', highlight: 'neutral' },
+          { icon: '🔁', value: formatCompactCurrency(totalMrr), label: 'MRR', highlight: 'neutral' },
+          { icon: '⚡', value: formatCompactCurrency(totalPontual), label: 'Pontual', highlight: 'neutral' },
+          { icon: '📊', value: formatCompactCurrency(tcv), label: 'TCV', highlight: 'success' },
         ];
         
         // Charts para Venda
-        // 1. Ranking de Closers por valor
+        // 1. TCV por Closer
         const closerTotals = new Map<string, number>();
         items.forEach(i => {
           const closer = i.responsible || i.closer || 'Sem Closer';
-          closerTotals.set(closer, (closerTotals.get(closer) || 0) + (i.value || 0));
+          const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
+          closerTotals.set(closer, (closerTotals.get(closer) || 0) + itemTCV);
         });
         const closerRankingData = Array.from(closerTotals.entries())
           .map(([label, value]) => ({ label: label.split(' ')[0], value }))
           .sort((a, b) => b.value - a.value);
         
-        // 2. Ranking de SDRs por valor originado
+        // 2. TCV por SDR originado
         const sdrTotals = new Map<string, number>();
         items.forEach(i => {
           const sdrName = i.sdr || i.responsible || 'Sem SDR';
-          sdrTotals.set(sdrName, (sdrTotals.get(sdrName) || 0) + (i.value || 0));
+          const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
+          sdrTotals.set(sdrName, (sdrTotals.get(sdrName) || 0) + itemTCV);
         });
         const sdrRankingData = Array.from(sdrTotals.entries())
           .map(([label, value]) => ({ label: label.split(' ')[0], value }))
@@ -1386,14 +1392,14 @@ export function IndicatorsTab() {
         ].filter(d => d.value > 0);
         
         const charts: ChartConfig[] = [
-          { type: 'bar', title: 'Ranking por Closer', data: closerRankingData, formatValue: formatCompactCurrency },
-          { type: 'bar', title: 'Vendas por SDR', data: sdrRankingData, formatValue: formatCompactCurrency },
+          { type: 'bar', title: 'TCV por Closer', data: closerRankingData, formatValue: formatCompactCurrency },
+          { type: 'bar', title: 'TCV por SDR', data: sdrRankingData, formatValue: formatCompactCurrency },
           { type: 'pie', title: 'Composição do Faturamento', data: compositionData, formatValue: formatCompactCurrency },
         ];
         
-        setDetailSheetTitle('Vendas - O Que Fechamos e Como?');
+        setDetailSheetTitle('Vendas - Análise de Valor (TCV)');
         setDetailSheetDescription(
-          `${items.length} contratos | Total: ${formatCompactCurrency(totalFaturamento)} | Composição: MRR ${pctMrr}% + Setup ${pctSetup}% + Pontual ${pctPontual}% | ${podiumStr}`
+          `${items.length} contratos | TCV: ${formatCompactCurrency(tcv)} | MRR: ${formatCompactCurrency(totalMrr)} | Setup: ${formatCompactCurrency(totalSetup)} | Pontual: ${formatCompactCurrency(totalPontual)} | Ticket médio TCV: ${formatCompactCurrency(ticketMedioTCV)}`
         );
         setDetailSheetKpis(kpis);
         setDetailSheetCharts(charts);
@@ -1404,13 +1410,13 @@ export function IndicatorsTab() {
           { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
           { key: 'setup', label: 'Setup', format: columnFormatters.currency },
           { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
-          { key: 'value', label: 'Total', format: columnFormatters.currency },
+          { key: 'value', label: 'TCV', format: columnFormatters.currency },
           { key: 'sdr', label: 'SDR' },
           { key: 'responsible', label: 'Closer' },
           { key: 'cicloVenda', label: 'Ciclo', format: columnFormatters.cicloVenda },
         ]);
-        // Sort by value descending
-        setDetailSheetItems(itemsWithCycle.sort((a, b) => (b.value || 0) - (a.value || 0)));
+        // Sort by TCV descending
+        setDetailSheetItems(itemsWithTCV.sort((a, b) => (b.value || 0) - (a.value || 0)));
         setDetailSheetOpen(true);
         return;
       }
