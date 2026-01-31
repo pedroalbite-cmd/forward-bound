@@ -347,6 +347,85 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
     setSheetOpen(true);
   };
 
+  // Helper to build venda mini-dashboard with TCV
+  const buildVendaMiniDashboard = () => {
+    const items = getItemsForIndicator('venda');
+    
+    // Calcular métricas totais
+    const totalMRR = items.reduce((sum, i) => sum + (i.mrr || 0), 0);
+    const totalSetup = items.reduce((sum, i) => sum + (i.setup || 0), 0);
+    const totalPontual = items.reduce((sum, i) => sum + (i.pontual || 0), 0);
+    
+    // TCV = (MRR × 12) + Setup + Pontual
+    const tcv = (totalMRR * 12) + totalSetup + totalPontual;
+    const ticketMedioTCV = items.length > 0 ? tcv / items.length : 0;
+    
+    // KPIs
+    const kpis: KpiItem[] = [
+      { icon: '📋', value: items.length, label: 'Vendas', highlight: 'neutral' },
+      { icon: '💵', value: formatCompactCurrency(totalSetup), label: 'Setup', highlight: 'neutral' },
+      { icon: '🔁', value: formatCompactCurrency(totalMRR), label: 'MRR', highlight: 'neutral' },
+      { icon: '⚡', value: formatCompactCurrency(totalPontual), label: 'Pontual', highlight: 'neutral' },
+      { icon: '📊', value: formatCompactCurrency(tcv), label: 'TCV', highlight: 'success' },
+    ];
+    
+    // Charts - TCV por Closer
+    const closerTotals = new Map<string, number>();
+    items.forEach(i => {
+      const closer = i.responsible || i.closer || 'Sem Closer';
+      const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
+      closerTotals.set(closer, (closerTotals.get(closer) || 0) + itemTCV);
+    });
+    const tcvByCloserData = Array.from(closerTotals.entries())
+      .map(([label, value]) => ({ label: label.split(' ')[0], value }))
+      .sort((a, b) => b.value - a.value);
+    
+    // Charts - TCV por Produto
+    const productTotals = new Map<string, number>();
+    items.forEach(i => {
+      const product = i.product || 'Outros';
+      const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
+      productTotals.set(product, (productTotals.get(product) || 0) + itemTCV);
+    });
+    const tcvByProductData = Array.from(productTotals.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+    
+    const charts: ChartConfig[] = [
+      { type: 'bar', title: 'TCV por Closer', data: tcvByCloserData, formatValue: formatCompactCurrency },
+      { type: 'pie', title: 'TCV por Produto', data: tcvByProductData, formatValue: formatCompactCurrency },
+    ];
+    
+    // Adicionar TCV calculado a cada item para exibição na tabela
+    const itemsWithTCV = items.map(item => ({
+      ...item,
+      value: ((item.mrr || 0) * 12) + (item.setup || 0) + (item.pontual || 0),
+    }));
+    
+    setSheetKpis(kpis);
+    setSheetCharts(charts);
+    setSheetTitle('Contratos Assinados - Análise de Valor');
+    setSheetDescription(
+      `${items.length} contratos | TCV: ${formatCompactCurrency(tcv)} | ` +
+      `MRR: ${formatCompactCurrency(totalMRR)} | Setup: ${formatCompactCurrency(totalSetup)} | ` +
+      `Pontual: ${formatCompactCurrency(totalPontual)} | Ticket médio TCV: ${formatCompactCurrency(ticketMedioTCV)}`
+    );
+    
+    setSheetColumns([
+      { key: 'product', label: 'Produto', format: columnFormatters.product },
+      { key: 'company', label: 'Empresa' },
+      { key: 'dataAssinatura', label: 'Data Assinatura', format: columnFormatters.date },
+      { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
+      { key: 'setup', label: 'Setup', format: columnFormatters.currency },
+      { key: 'pontual', label: 'Pontual', format: columnFormatters.currency },
+      { key: 'value', label: 'TCV', format: columnFormatters.currency },
+      { key: 'sdr', label: 'SDR' },
+      { key: 'responsible', label: 'Closer' },
+    ]);
+    setSheetItems(itemsWithTCV.sort((a, b) => (b.value || 0) - (a.value || 0)));
+    setSheetOpen(true);
+  };
+
   // Handle stage click
   const handleStageClick = (stage: FunnelStage) => {
     if (stage.value === 0) {
@@ -356,6 +435,12 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
     // Se for proposta, usar mini-dashboard
     if (stage.indicator === 'proposta') {
       buildPropostaMiniDashboard();
+      return;
+    }
+    
+    // Se for venda, usar mini-dashboard com TCV
+    if (stage.indicator === 'venda') {
+      buildVendaMiniDashboard();
       return;
     }
     
@@ -379,17 +464,11 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
       return;
     }
     
-    // Para venda, manter comportamento atual
-    const items = getItemsForIndicator('venda');
-    const columns = getColumnsForIndicator('venda');
-    
-    setSheetKpis([]);
-    setSheetCharts([]);
-    setSheetTitle('Contratos Assinados');
-    setSheetDescription(`Valor total: ${formatCurrency(value)}`);
-    setSheetItems(items);
-    setSheetColumns(columns);
-    setSheetOpen(true);
+    // Se for venda, usar mini-dashboard com TCV
+    if (type === 'venda') {
+      buildVendaMiniDashboard();
+      return;
+    }
   };
 
   return (
