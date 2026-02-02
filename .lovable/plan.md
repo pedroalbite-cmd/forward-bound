@@ -1,175 +1,158 @@
 
 
-## Ajuste de Metas Monetárias para Oxy Hacker e Franquia
+## Remover Linha "Incremento" de Oxy Hacker e Franquia
 
-### Problema Identificado
+### Situação Atual
 
-Na tela de **Metas Monetárias** (MonetaryMetasTab), quando se edita as BUs **Oxy Hacker** e **Franquia**, o sistema exibe e calcula campos de **MRR** e **Setup** que não fazem sentido para essas BUs.
+Para as BUs **Oxy Hacker** e **Franquia**, a tabela mostra:
 
-**Modelo de negócio dessas BUs:**
-- **Oxy Hacker**: Ticket único de R$ 54.000 (valor pontual)
-- **Franquia**: Ticket único de R$ 140.000 ("Taxa de Franquia" - valor pontual)
+```
+┌──────────────┬──────┬──────┬──────┬─────────┐
+│ Métrica      │ Jan  │ Fev  │ Mar  │ Total   │
+├──────────────┼──────┼──────┼──────┼─────────┤
+│ Incremento   │ 54k  │ 108k │ 108k │ 270k    │  ← Redundante
+│ Pontual      │ 54k  │ 108k │ 108k │ 270k    │
+└──────────────┴──────┴──────┴──────┴─────────┘
+```
 
-Não há componente de receita recorrente (MRR) ou implementação (Setup) - todo o faturamento é **pontual**.
-
----
-
-### Solução Proposta
-
-Ajustar a lógica e UI do `MonetaryMetasTab.tsx` para:
-
-1. **Ocultar linhas de MRR e Setup** quando a BU selecionada for `oxy_hacker` ou `franquia`
-2. **Ajustar o cálculo automático** para que o Incremento (faturamento) seja 100% atribuído ao Pontual
-3. **Simplificar a validação** para essas BUs (não há soma MRR+Setup+Pontual a validar)
+Os valores são sempre idênticos porque 100% do faturamento vai para Pontual.
 
 ---
 
-### Arquivos a Modificar
+### Solução
+
+Exibir **apenas a linha Pontual** para essas BUs:
+
+```
+┌──────────────┬──────┬──────┬──────┬─────────┐
+│ Métrica      │ Jan  │ Fev  │ Mar  │ Total   │
+├──────────────┼──────┼──────┼──────┼─────────┤
+│ Pontual      │ 54k  │ 108k │ 108k │ 270k    │
+└──────────────┴──────┴──────┴──────┴─────────┘
+```
+
+---
+
+### Arquivo a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/planning/MonetaryMetasTab.tsx` | Lógica condicional para BUs de expansão |
-| `src/hooks/useMonetaryMetas.ts` | Adicionar helper para identificar BUs "pontual only" |
+| `src/components/planning/MonetaryMetasTab.tsx` | Ajustar `visibleMetrics` e lógica de update |
 
 ---
 
-### Detalhes Técnicos
+### Alterações
 
-#### 1. Hook `useMonetaryMetas.ts` - Adicionar constante de BUs
+#### 1. Alterar `visibleMetrics` (linha 223-228)
 
+De:
 ```typescript
-// BUs that only have "pontual" revenue (no MRR or Setup)
-export const PONTUAL_ONLY_BUS: BuType[] = ['oxy_hacker', 'franquia'];
-
-// Helper function
-export const isPontualOnlyBU = (bu: BuType): boolean => {
-  return PONTUAL_ONLY_BUS.includes(bu);
-};
+const visibleMetrics = useMemo(() => {
+  if (isPontualOnlyBU(selectedBu)) {
+    return ['faturamento', 'pontual'] as MetricType[];
+  }
+  return METRICS;
+}, [selectedBu, METRICS]);
 ```
 
-#### 2. MonetaryMetasTab - Ajustar cálculo automático
+Para:
+```typescript
+const visibleMetrics = useMemo(() => {
+  if (isPontualOnlyBU(selectedBu)) {
+    return ['pontual'] as MetricType[];  // Apenas Pontual
+  }
+  return METRICS;
+}, [selectedBu, METRICS]);
+```
 
-Quando `faturamento` é alterado para Oxy Hacker ou Franquia:
+#### 2. Ajustar `updateLocalValue` para edição de Pontual (linha 85-125)
+
+Quando o usuário editar o campo **Pontual** em uma BU de expansão, deve atualizar também o **faturamento** internamente (para manter consistência no banco):
 
 ```typescript
 const updateLocalValue = (bu: string, month: string, metric: MetricType, value: number) => {
   const key = `${bu}-${month}`;
+  const isPontualOnly = isPontualOnlyBU(bu as BuType);
   
-  if (metric === 'faturamento') {
-    const isPontualOnly = bu === 'oxy_hacker' || bu === 'franquia';
-    
-    if (isPontualOnly) {
-      // Para BUs de expansão: 100% vai para Pontual
-      setLocalMetas(prev => ({
-        ...prev,
-        [key]: {
-          faturamento: value,
-          mrr: 0,
-          setup: 0,
-          pontual: value,  // 100% do valor
-        },
-      }));
-    } else {
-      // Para Modelo Atual e O2 TAX: split padrão 25/60/15
-      setLocalMetas(prev => ({
-        ...prev,
-        [key]: {
-          faturamento: value,
-          mrr: Math.round(value * 0.25),
-          setup: Math.round(value * 0.6),
-          pontual: Math.round(value * 0.15),
-        },
-      }));
-    }
-  } else {
-    // ...existing logic
+  // Para BUs pontual-only, editar Pontual atualiza faturamento também
+  if (isPontualOnly && metric === 'pontual') {
+    setLocalMetas(prev => ({
+      ...prev,
+      [key]: {
+        faturamento: value,  // Sincroniza faturamento
+        mrr: 0,
+        setup: 0,
+        pontual: value,
+      },
+    }));
+    setHasChanges(true);
+    return;
   }
+  
+  // ... resto da lógica existente para faturamento e outras métricas
 };
 ```
 
-#### 3. MonetaryMetasTab - Filtrar métricas exibidas
+#### 3. Remover validação de Pontual = Faturamento (linha 231-255)
 
-```typescript
-// Métricas a exibir baseado na BU selecionada
-const visibleMetrics = useMemo(() => {
-  if (selectedBu === 'oxy_hacker' || selectedBu === 'franquia') {
-    return ['faturamento', 'pontual'] as MetricType[];
-  }
-  return METRICS; // ['faturamento', 'mrr', 'setup', 'pontual']
-}, [selectedBu]);
-
-// No JSX, usar visibleMetrics ao invés de METRICS
-{visibleMetrics.map(metric => (
-  <TableRow key={metric}>
-    ...
-  </TableRow>
-))}
-```
-
-#### 4. Ajustar validação
+Como agora só existe uma linha para editar, a validação de "Pontual deve ser igual ao Incremento" não faz mais sentido. Simplificar:
 
 ```typescript
 const validationIssues = useMemo(() => {
   const issues: string[] = [];
-  const isPontualOnly = selectedBu === 'oxy_hacker' || selectedBu === 'franquia';
   
-  MONTHS.forEach(month => {
-    const fat = getLocalValue(selectedBu, month, 'faturamento');
-    
-    if (isPontualOnly) {
-      // Para BUs pontual-only, validar que Pontual = Faturamento
-      const pontual = getLocalValue(selectedBu, month, 'pontual');
-      if (fat > 0 && pontual !== fat) {
-        issues.push(`${month}: Pontual deve ser igual ao Incremento para ${BU_LABELS[selectedBu]}`);
-      }
-    } else {
-      // Validação padrão: soma não excede faturamento
+  // Validação só para BUs com MRR/Setup/Pontual
+  if (!isPontualOnlyBU(selectedBu)) {
+    MONTHS.forEach(month => {
+      const fat = getLocalValue(selectedBu, month, 'faturamento');
       const sum = getLocalValue(selectedBu, month, 'mrr') +
                   getLocalValue(selectedBu, month, 'setup') +
                   getLocalValue(selectedBu, month, 'pontual');
       if (fat > 0 && sum > fat) {
-        issues.push(`${month}: MRR + Setup + Pontual excede Incremento`);
+        issues.push(`${month}: MRR + Setup + Pontual (${formatCurrency(sum)}) excede Faturamento (${formatCurrency(fat)})`);
       }
-    }
-  });
+    });
+  }
+  // BUs pontual-only não precisam de validação (só tem 1 campo)
+  
   return issues;
 }, [localMetas, selectedBu]);
 ```
 
-#### 5. Ajustar texto de ajuda
+#### 4. Atualizar texto de ajuda (linha 402-424)
 
 ```tsx
-<CardContent className="text-sm text-muted-foreground space-y-2">
-  {selectedBu === 'oxy_hacker' || selectedBu === 'franquia' ? (
-    <>
-      <p>
-        <strong>{BU_LABELS[selectedBu]}</strong> opera com ticket único (valor pontual).
-      </p>
-      <p>
-        O valor de <strong>Incremento</strong> é automaticamente replicado para <strong>Pontual</strong>.
-      </p>
-      <p>
-        Ticket padrão: <strong>{selectedBu === 'oxy_hacker' ? 'R$ 54.000' : 'R$ 140.000'}</strong>
-      </p>
-    </>
-  ) : (
-    <>
-      <p>
-        <strong>Percentuais padrão:</strong> MRR = 25%, Setup = 60%, Pontual = 15% do Incremento
-      </p>
-      <p>
-        <strong>Dica:</strong> Ao preencher o Incremento, os demais campos são calculados automaticamente.
-      </p>
-    </>
-  )}
-</CardContent>
+{isPontualOnlyBU(selectedBu) ? (
+  <>
+    <p>
+      <strong>{BU_LABELS[selectedBu]}</strong> opera com ticket único (valor pontual).
+    </p>
+    <p>
+      Preencha o valor de <strong>Pontual</strong> esperado para cada mês.
+    </p>
+    <p>
+      Ticket padrão: <strong>{selectedBu === 'oxy_hacker' ? 'R$ 54.000' : 'R$ 140.000'}</strong>
+    </p>
+  </>
+) : (
+  // ... texto existente para Modelo Atual / O2 TAX
+)}
 ```
 
 ---
 
-### Resultado Visual Esperado
+### Resultado Final
 
-**Para Modelo Atual / O2 TAX:**
+**Para Oxy Hacker / Franquia:**
+```
+┌──────────────┬──────┬──────┬──────┬─────────┐
+│ Métrica      │ Jan  │ Fev  │ Mar  │ Total   │
+├──────────────┼──────┼──────┼──────┼─────────┤
+│ Pontual      │ 54k  │ 108k │ 108k │ 270k    │
+└──────────────┴──────┴──────┴──────┴─────────┘
+```
+
+**Para Modelo Atual / O2 TAX** (sem mudança):
 ```
 ┌──────────────┬──────┬──────┬──────┬─────────┐
 │ Métrica      │ Jan  │ Fev  │ Mar  │ Total   │
@@ -180,24 +163,4 @@ const validationIssues = useMemo(() => {
 │ Pontual      │  60k │  63k │  68k │ 191k    │
 └──────────────┴──────┴──────┴──────┴─────────┘
 ```
-
-**Para Oxy Hacker / Franquia:**
-```
-┌──────────────┬──────┬──────┬──────┬─────────┐
-│ Métrica      │ Jan  │ Fev  │ Mar  │ Total   │
-├──────────────┼──────┼──────┼──────┼─────────┤
-│ Incremento   │ 54k  │ 108k │ 108k │ 270k    │
-│ Pontual      │ 54k  │ 108k │ 108k │ 270k    │
-└──────────────┴──────┴──────┴──────┴─────────┘
-
-(MRR e Setup não são exibidos)
-```
-
----
-
-### Impacto
-
-1. **Clareza de modelo de negócio**: Interface reflete a realidade de cada BU
-2. **Simplicidade**: Usuário não precisa entender por que MRR/Setup existem para BUs de ticket único
-3. **Consistência**: Alinhado com a lógica já existente em `RevenueBreakdownChart` que trata taxaFranquia como pontual
 
