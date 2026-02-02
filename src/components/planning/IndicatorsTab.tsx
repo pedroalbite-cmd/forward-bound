@@ -17,7 +17,7 @@ import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { useCloserMetas, BU_CLOSERS, BuType, CloserType } from "@/hooks/useCloserMetas";
-import { format, startOfYear, endOfYear, endOfDay, differenceInDays, eachMonthOfInterval, addDays, eachDayOfInterval, getMonth, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfYear, endOfYear, endOfDay, differenceInDays, eachMonthOfInterval, addDays, eachDayOfInterval, getMonth, startOfMonth, endOfMonth, subMonths, startOfQuarter, endOfQuarter, subQuarters } from "date-fns";
 import { FunnelDataItem } from "@/contexts/MediaMetasContext";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -319,6 +319,36 @@ export function IndicatorsTab() {
   const [startDate, setStartDate] = useState<Date>(startOfMonth(new Date()));
   const [endDate, setEndDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('daily');
+  
+  // Quick date presets for common periods
+  const setDatePreset = (preset: 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'lastQuarter' | 'thisYear') => {
+    const today = new Date();
+    
+    switch (preset) {
+      case 'thisMonth':
+        setStartDate(startOfMonth(today));
+        setEndDate(endOfDay(today));
+        break;
+      case 'lastMonth':
+        const lastMonth = subMonths(today, 1);
+        setStartDate(startOfMonth(lastMonth));
+        setEndDate(endOfMonth(lastMonth));
+        break;
+      case 'thisQuarter':
+        setStartDate(startOfQuarter(today));
+        setEndDate(endOfDay(today));
+        break;
+      case 'lastQuarter':
+        const lastQuarter = subQuarters(today, 1);
+        setStartDate(startOfQuarter(lastQuarter));
+        setEndDate(endOfQuarter(lastQuarter));
+        break;
+      case 'thisYear':
+        setStartDate(startOfYear(today));
+        setEndDate(endOfDay(today));
+        break;
+    }
+  };
   
   // Detail sheet state for radial cards drill-down
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
@@ -2104,6 +2134,50 @@ export function IndicatorsTab() {
                 className="w-40"
               />
             )}
+
+            {/* Quick date presets */}
+            <div className="flex gap-1 flex-wrap">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setDatePreset('thisMonth')}
+                className="text-xs"
+              >
+                Este Mês
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setDatePreset('lastMonth')}
+                className="text-xs"
+              >
+                Mês Anterior
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setDatePreset('thisQuarter')}
+                className="text-xs"
+              >
+                Q Atual
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setDatePreset('lastQuarter')}
+                className="text-xs"
+              >
+                Q Anterior
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setDatePreset('thisYear')}
+                className="text-xs"
+              >
+                2026
+              </Button>
+            </div>
 
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">De:</span>
