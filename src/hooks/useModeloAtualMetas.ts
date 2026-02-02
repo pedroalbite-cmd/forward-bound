@@ -420,6 +420,34 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
     return total;
   };
 
+  // Get Educação value for a specific period (sum of valorEducacao from 'Contrato assinado' phase cards)
+  const getEducacaoForPeriod = (start?: Date, end?: Date): number => {
+    if (movements.length === 0) return 0;
+
+    const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
+    const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
+
+    const cardValues = new Map<string, number>();
+    for (const movement of movements) {
+      const moveTime = movement.dataEntrada.getTime();
+      if (moveTime >= startTime && moveTime <= endTime) {
+        const moveIndicator = PHASE_TO_INDICATOR[movement.fase];
+        if (moveIndicator === 'venda') {
+          const existing = cardValues.get(movement.id);
+          if (!existing || movement.valorEducacao > existing) {
+            cardValues.set(movement.id, movement.valorEducacao);
+          }
+        }
+      }
+    }
+
+    let total = 0;
+    cardValues.forEach((value) => {
+      total += value;
+    });
+    return total;
+  };
+
   return {
     movements,
     isLoading,
@@ -431,6 +459,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
     getMrrForPeriod,
     getSetupForPeriod,
     getPontualForPeriod,
+    getEducacaoForPeriod,
   };
 }
 

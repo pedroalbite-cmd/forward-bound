@@ -9,6 +9,7 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useMarketingIndicators } from "@/hooks/useMarketingIndicators";
+import { useModeloAtualMetas } from "@/hooks/useModeloAtualMetas";
 import { PerformanceGauges } from "./marketing-indicators/PerformanceGauges";
 import { InvestmentByChannelChart } from "./marketing-indicators/InvestmentByChannelChart";
 import { AcquisitionFunnelChart } from "./marketing-indicators/AcquisitionFunnelChart";
@@ -48,13 +49,38 @@ export function MarketingIndicatorsTab() {
     costKey: keyof CostPerStage | null;
   }>({ isOpen: false, costKey: null });
 
-  // Fetch data
+  // Fetch marketing data from Google Sheets
   const { data, goals, costGoals, costByChannel, isLoading, error, refetch } = useMarketingIndicators({
     startDate: dateRange.from,
     endDate: dateRange.to,
     selectedBUs,
     selectedChannels,
   });
+
+  // Fetch Modelo Atual revenue data from Pipefy
+  const { 
+    getMrrForPeriod, 
+    getSetupForPeriod, 
+    getPontualForPeriod,
+    getEducacaoForPeriod,
+    isLoading: isLoadingModeloAtual 
+  } = useModeloAtualMetas(dateRange.from, dateRange.to);
+
+  // Calculate real revenue based on selected BU and period
+  const realRevenue = useMemo(() => {
+    // Only use Modelo Atual data when "Modelo Atual" is selected
+    if (!selectedBUs.includes('Modelo Atual')) {
+      return data.revenue; // Fallback to sheet data
+    }
+    
+    return {
+      mrr: getMrrForPeriod(dateRange.from, dateRange.to),
+      setup: getSetupForPeriod(dateRange.from, dateRange.to),
+      pontual: getPontualForPeriod(dateRange.from, dateRange.to),
+      educacao: getEducacaoForPeriod(dateRange.from, dateRange.to),
+      gmv: data.revenue.gmv, // GMV still comes from the sheet (not available in Pipefy)
+    };
+  }, [dateRange, selectedBUs, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod, data.revenue]);
 
   // Format date range for display
   const dateRangeDisplay = useMemo(() => {
@@ -171,9 +197,9 @@ export function MarketingIndicatorsTab() {
         totalLeads={data.totalLeads}
       />
 
-      {/* Revenue Metrics Cards - NEW */}
+      {/* Revenue Metrics Cards - Integrated with Modelo Atual data */}
       <RevenueMetricsCards
-        revenue={data.revenue}
+        revenue={realRevenue}
         goals={goals.revenue}
       />
 
