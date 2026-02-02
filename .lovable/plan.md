@@ -1,87 +1,78 @@
 
 
-## Correção: Sincronizar Admin Metas Monetárias com Controle Metas
+## Correção: Scroll Bloqueado no Modal de Drill-Down dos Acelerômetros
 
 ### Problema Identificado
 
-O "Controle Metas" (SalesGoalsTab) usa valores do `MediaMetasContext` que são calculados uma única vez na inicialização. Quando você edita valores no "Admin Metas Monetárias", o banco `monetary_metas` é atualizado, mas:
+Quando você clica em um acelerômetro de custo (CPL, CPMQL, etc.), o modal de drill-down abre mas **não permite rolagem** para ver o restante dos cards e tabela.
 
-1. O hook `usePlanGrowthData` verifica `if (isLoaded) return;` e não reprocessa os dados
-2. O contexto mantém os valores antigos até recarregar a página
+### Causa Raiz
 
-| Fluxo Atual | Problema |
-|-------------|----------|
-| Usuário edita Admin Metas | Banco atualiza corretamente |
-| `usePlanGrowthData` verifica `isLoaded` | Retorna sem atualizar o contexto |
-| Controle Metas mostra valores antigos | Não reflete a edição |
+O problema está em duas áreas:
 
----
+1. **Tabela com `overflow-hidden`** (linha 243 do MarketingIndicatorsTab.tsx):
+   ```tsx
+   <div className="border rounded-lg overflow-hidden">
+   ```
+   Isso pode causar conflito com o scroll do modal.
+
+2. **Estrutura do DialogContent**: O componente base usa `grid` layout que pode não propagar corretamente a altura para o scroll funcionar.
 
 ### Solução
 
-Remover a condição `if (isLoaded) return;` do hook `usePlanGrowthData` para que os dados do contexto sejam **sempre recalculados** quando os dados do banco mudarem.
+Modificar o componente de drill-down para garantir scroll correto:
 
-Também preciso garantir que o `useMonetaryMetas` force atualização quando dados mudam no Admin.
-
----
-
-### Arquivos a Modificar
-
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/hooks/usePlanGrowthData.ts` | MODIFICAR | Remover condição `isLoaded` que impede atualização |
+| Arquivo | Ação |
+|---------|------|
+| `src/components/planning/MarketingIndicatorsTab.tsx` | Ajustar estrutura de scroll do modal |
 
 ---
 
-### Mudança no Código
+### Mudanças Propostas
 
-**Arquivo: `src/hooks/usePlanGrowthData.ts`**
+**Arquivo: `src/components/planning/MarketingIndicatorsTab.tsx`**
 
-**Antes (linhas 422-423):**
-```typescript
-useEffect(() => {
-  if (isLoaded) return; // Skip if MediaInvestmentTab already loaded the data
+```tsx
+// ANTES (linha 180)
+<DialogContent className="max-w-[90vw] max-h-[90vh] overflow-auto">
+
+// DEPOIS
+<DialogContent className="max-w-[90vw] max-h-[90vh] flex flex-col">
+  <DialogHeader>...</DialogHeader>
+  
+  {/* Área scrollável separada do header */}
+  <div className="flex-1 overflow-y-auto pr-2">
+    {/* Conteúdo do drill-down aqui */}
+  </div>
+</DialogContent>
 ```
 
-**Depois:**
-```typescript
-useEffect(() => {
-  // Sempre atualizar o contexto quando os dados mudam
-  // (permite que edições no Admin reflitam no Controle Metas)
-```
+A mudança:
+1. Remove `overflow-auto` do DialogContent
+2. Adiciona `flex flex-col` para layout flexível
+3. Cria um `div` interno com `overflow-y-auto` que contém todo o conteúdo scrollável
+4. Isso separa o header fixo da área de conteúdo scrollável
 
-A remoção do `if (isLoaded) return;` permitirá que o `useEffect` rode sempre que os dados do funil mudarem (que acontece quando `useMonetaryMetas` retorna novos dados após invalidação do cache).
+---
+
+### Também Corrigir
+
+**Tabela (linha 243):**
+```tsx
+// ANTES
+<div className="border rounded-lg overflow-hidden">
+
+// DEPOIS (manter overflow-x para scroll horizontal se necessário)
+<div className="border rounded-lg overflow-x-auto">
+```
 
 ---
 
 ### Resultado Esperado
 
-1. Editar um valor no Admin Metas Monetárias
-2. O `useMonetaryMetas` invalida o cache e refetch os dados
-3. O `usePlanGrowthData` recalcula os funnels com os novos dados
-4. O `useEffect` atualiza o `MediaMetasContext`
-5. O `SalesGoalsTab` recebe os novos valores e re-renderiza
-
----
-
-### Fluxo de Dados Corrigido
-
-```text
-Admin Metas Monetárias
-        |
-        v
-monetary_metas (banco)
-        |
-        v
-useMonetaryMetas (invalidateQueries)
-        |
-        v
-usePlanGrowthData (recalcula funnels)
-        |
-        v
-MediaMetasContext (setMetasPorBU)
-        |
-        v
-SalesGoalsTab (metasPorBU atualizado)
-```
+Após a correção:
+1. O modal abrirá corretamente ao clicar em qualquer acelerômetro
+2. O conteúdo será scrollável verticalmente
+3. O header do modal ficará fixo no topo
+4. A tabela de canais será visível com scroll
 
