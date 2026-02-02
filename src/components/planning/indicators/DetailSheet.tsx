@@ -3,7 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Button } from "@/components/ui/button";
+import { ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
 import { KpiCardsRow } from "./KpiCardsRow";
 import { KpiItem } from "./KpiCard";
 import { DrillDownCharts, ChartConfig } from "./DrillDownCharts";
@@ -63,6 +65,9 @@ const formatCurrency = (value: number) =>
 
 export function DetailSheet({ open, onOpenChange, title, description, items, columns, kpis, charts }: DetailSheetProps) {
   const [sortState, setSortState] = useState<SortState>({ column: null, direction: 'none' });
+  const [analyticsExpanded, setAnalyticsExpanded] = useState(true);
+  
+  const hasAnalytics = (kpis && kpis.length > 0) || (charts && charts.length > 0);
 
   const handleSort = (columnKey: keyof DetailItem) => {
     setSortState(prev => {
@@ -108,6 +113,7 @@ export function DetailSheet({ open, onOpenChange, title, description, items, col
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) {
       setSortState({ column: null, direction: 'none' });
+      setAnalyticsExpanded(true);
     }
     onOpenChange(isOpen);
   };
@@ -132,18 +138,36 @@ export function DetailSheet({ open, onOpenChange, title, description, items, col
           )}
         </DialogHeader>
         <div className="flex-1 overflow-hidden flex flex-col mt-4">
-          {kpis && kpis.length > 0 && (
-            <KpiCardsRow kpis={kpis} />
+          {hasAnalytics && (
+            <Collapsible open={analyticsExpanded} onOpenChange={setAnalyticsExpanded} className="flex-shrink-0">
+              <div className="flex items-center justify-between mb-2">
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-1 text-sm font-medium -ml-2">
+                    {analyticsExpanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                    Análise Visual
+                  </Button>
+                </CollapsibleTrigger>
+                <span className="text-xs text-muted-foreground">
+                  {analyticsExpanded ? 'Clique para recolher' : 'Clique para expandir'}
+                </span>
+              </div>
+              <CollapsibleContent>
+                {kpis && kpis.length > 0 && <KpiCardsRow kpis={kpis} />}
+                {charts && charts.length > 0 && <DrillDownCharts charts={charts} />}
+              </CollapsibleContent>
+            </Collapsible>
           )}
-          {charts && charts.length > 0 && (
-            <DrillDownCharts charts={charts} />
-          )}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-2 mt-2">
             <span className="text-sm text-muted-foreground">
               {sortedItems.length} {sortedItems.length === 1 ? 'registro' : 'registros'}
             </span>
           </div>
-          <ScrollArea className="h-[calc(90vh-220px)]">
+          <div className="flex-1 min-h-0">
+            <ScrollArea className="h-full">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -196,7 +220,8 @@ export function DetailSheet({ open, onOpenChange, title, description, items, col
                 )}
               </TableBody>
             </Table>
-          </ScrollArea>
+            </ScrollArea>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
