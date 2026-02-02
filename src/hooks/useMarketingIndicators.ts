@@ -26,117 +26,30 @@ interface UseMarketingIndicatorsResult {
   costGoals: CostPerStageGoals;
   costByChannel: CostPerChannelStage[];
   isLoading: boolean;
+  error: Error | null;
   refetch: () => void;
 }
 
-// Mock data fallback when sheet data is unavailable
-function getMockData(selectedChannels: string[]): MarketingMetrics {
-  const channels: MarketingChannel[] = [
-    {
-      id: 'meta_ads',
-      name: 'Meta Ads',
-      investment: 85000,
-      leads: 520,
-      mqls: 364,
-      rms: 218,
-      rrs: 175,
-      cpl: 163.46,
-      cpmql: 233.52,
-      conversionRate: 70,
-      propostas: 140,
-      vendas: 9,
-      cprm: 390,
-      cprr: 486,
-      cpp: 607,
-      cpv: 9444,
-    },
-    {
-      id: 'google_ads',
-      name: 'Google Ads',
-      investment: 62000,
-      leads: 380,
-      mqls: 266,
-      rms: 160,
-      rrs: 128,
-      cpl: 163.16,
-      cpmql: 233.08,
-      conversionRate: 70,
-      propostas: 102,
-      vendas: 7,
-      cprm: 388,
-      cprr: 484,
-      cpp: 608,
-      cpv: 8857,
-    },
-  ];
-
-  const campaigns: CampaignData[] = [
-    {
-      id: '1',
-      name: 'Black Friday 2026',
-      channel: 'Meta Ads',
-      status: 'active',
-      investment: 18500,
-      leads: 145,
-      mqls: 102,
-      roas: 3.2,
-      startDate: '2026-11-15',
-    },
-  ];
-
-  const instagram: InstagramMetrics = {
-    instagramO2: 8000,
-    instagramPedro: 5000,
-    instagramTotal: 13000,
-  };
-
-  const revenue: RevenueMetrics = {
-    mrr: 125000,
-    setup: 45000,
-    pontual: 22000,
-    educacao: 18000,
-    gmv: 210000,
-  };
-
-  const totalInvestment = 175000;
-  const totalLeads = 995;
-  const totalMqls = 711;
-  const totalRms = 435;
-  const totalRrs = 352;
-  const totalPropostas = 280;
-  const totalVendas = 19;
-
-  const costPerStage: CostPerStage = {
-    cpl: Math.round(totalInvestment / totalLeads),
-    cpmql: Math.round(totalInvestment / totalMqls),
-    cprm: Math.round(totalInvestment / totalRms),
-    cprr: Math.round(totalInvestment / totalRrs),
-    cpp: Math.round(totalInvestment / totalPropostas),
-    cpv: Math.round(totalInvestment / totalVendas),
-  };
-
-  const filteredChannels = selectedChannels.length > 0 
-    ? channels.filter(c => selectedChannels.includes(c.id))
-    : channels;
-
+// Empty data when sheet data is unavailable
+function getEmptyData(): MarketingMetrics {
   return {
-    roas: 2.8,
-    roasLtv: 3.6,
-    roiLtv: 4.5,
-    cac: 9200,
-    ltv: 38500,
-    totalInvestment,
-    totalLeads,
-    totalMqls,
-    totalRms,
-    totalRrs,
-    totalPropostas,
-    totalVendas,
-    channels: filteredChannels,
-    campaigns,
-    instagram,
-    revenue,
-    costPerStage,
+    roas: 0,
+    roasLtv: 0,
+    roiLtv: 0,
+    cac: 0,
+    ltv: 0,
+    totalInvestment: 0,
+    totalLeads: 0,
+    totalMqls: 0,
+    totalRms: 0,
+    totalRrs: 0,
+    totalPropostas: 0,
+    totalVendas: 0,
+    channels: [],
+    campaigns: [],
+    instagram: { instagramO2: 0, instagramPedro: 0, instagramTotal: 0 },
+    revenue: { mrr: 0, setup: 0, pontual: 0, educacao: 0, gmv: 0 },
+    costPerStage: { cpl: 0, cpmql: 0, cprm: 0, cprr: 0, cpp: 0, cpv: 0 },
   };
 }
 
@@ -162,10 +75,10 @@ export function useMarketingIndicators({
   
   // Transform sheet data into MarketingMetrics
   const data = useMemo<MarketingMetrics>(() => {
-    // Fallback to mock data if no sheet data available
+    // Return empty data if no sheet data available
     if (!sheetData || sheetError) {
-      console.log('Using mock data - sheet data unavailable:', { sheetError });
-      return getMockData(selectedChannels);
+      console.log('No sheet data available:', { sheetError });
+      return getEmptyData();
     }
     
     console.log('Using real sheet data:', sheetData);
@@ -341,6 +254,7 @@ export function useMarketingIndicators({
     costGoals,
     costByChannel,
     isLoading: sheetLoading,
+    error: sheetError || null,
     refetch,
   };
 }
