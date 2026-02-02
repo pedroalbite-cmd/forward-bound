@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface FunnelStage {
   stage: string;
@@ -16,15 +17,19 @@ interface SalesFunnelVisualProps {
   color: string;
 }
 
-// Cores gradientes para cada etapa do funil
 const stageColors = [
-  'from-orange-400 to-orange-500',   // Leads
-  'from-emerald-400 to-cyan-500',    // MQL
-  'from-cyan-500 to-blue-500',       // RM
-  'from-blue-500 to-blue-600',       // RR
-  'from-blue-600 to-slate-500',      // Proposta
-  'from-slate-500 to-slate-600',     // Venda
+  'from-orange-400 to-orange-500',
+  'from-emerald-400 to-cyan-500',
+  'from-cyan-500 to-blue-500',
+  'from-blue-500 to-blue-600',
+  'from-blue-600 to-slate-500',
+  'from-slate-500 to-slate-600',
 ];
+
+const widthPercentages = [100, 85, 70, 55, 45, 35];
+
+const formatNumber = (value: number) => 
+  new Intl.NumberFormat("pt-BR").format(Math.round(value));
 
 export function SalesFunnelVisual({ 
   title, 
@@ -43,55 +48,59 @@ export function SalesFunnelVisual({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col gap-1">
           {stages.map((item, index) => {
-            const widthPercent = 100 - (index * 10);
-            const isFirst = index === 0;
             const colorClass = stageColors[index] || stageColors[stageColors.length - 1];
+            const widthPercent = widthPercentages[index] || 35;
+            const isLast = index === stages.length - 1;
+            const isFirst = index === 0;
             
             return (
-              <div key={item.stage} className="flex items-center w-full max-w-2xl">
-                {/* Conversion percentage on the left */}
-                <div className="w-16 text-right pr-3">
-                  {!isFirst && (
-                    <Badge variant="outline" className="text-xs">
-                      {item.percent !== "-" ? item.percent : "-"}
-                    </Badge>
+              <div key={item.stage} className="relative flex items-center justify-center">
+                <div
+                  className={cn(
+                    `relative h-14 bg-gradient-to-r ${colorClass} rounded-sm transition-all duration-300`,
+                    `flex items-center justify-center px-3 min-w-[180px]`,
+                    isLast && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
                   )}
-                </div>
-                
-                {/* Funnel bar with gradient */}
-                <div 
-                  className={`relative h-10 bg-gradient-to-r ${colorClass} rounded-sm transition-all duration-300 flex items-center justify-center`}
-                  style={{ 
-                    width: `${widthPercent}%`,
-                    marginLeft: 'auto',
-                    marginRight: 'auto'
-                  }}
+                  style={{ width: `${widthPercent}%` }}
                 >
-                  <p className="font-display font-bold text-white text-sm">
-                    {item.stage}
-                  </p>
-                </div>
-                
-                {/* Absolute value on the right */}
-                <div className="w-20 text-left pl-3">
-                  <Badge className="bg-primary/20 text-primary border-primary/30 font-mono text-xs">
-                    {item.value.toLocaleString('pt-BR')}
-                  </Badge>
+                  <div className="flex items-center gap-2 text-white text-sm font-medium whitespace-nowrap overflow-hidden">
+                    {/* Número da etapa */}
+                    <span className="bg-white/20 rounded-full w-6 h-6 flex-shrink-0 flex items-center justify-center text-xs font-bold">
+                      {index + 1}
+                    </span>
+                    
+                    {/* Nome da etapa */}
+                    <span className="hidden sm:inline truncate font-semibold">
+                      {item.stage}
+                    </span>
+                    
+                    {/* Valor absoluto */}
+                    <span className="font-bold flex-shrink-0">
+                      {formatNumber(item.value)}
+                    </span>
+                    
+                    {/* Porcentagem de conversão */}
+                    {!isFirst && item.percent !== "-" && (
+                      <span className="text-xs text-white/70 flex-shrink-0">
+                        ({item.percent})
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
         
-        {/* Overall conversion badges */}
+        {/* Badges de conversão total */}
         <div className="flex justify-center gap-3 mt-6 flex-wrap">
           <Badge className="bg-primary/20 text-primary border-primary/30">
-            Conversão MQL → Venda: {(mqlToVenda * 100).toFixed(1)}%
+            MQL → Venda: {(mqlToVenda * 100).toFixed(1)}%
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30">
-            Conversão Lead → Venda: {(leadToVenda * 100).toFixed(1)}%
+            Lead → Venda: {(leadToVenda * 100).toFixed(1)}%
           </Badge>
         </div>
       </CardContent>
