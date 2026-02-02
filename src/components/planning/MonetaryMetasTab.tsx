@@ -84,10 +84,24 @@ export function MonetaryMetasTab() {
   // Update local value - auto-calculates MRR/Setup/Pontual when faturamento changes
   const updateLocalValue = (bu: string, month: string, metric: MetricType, value: number) => {
     const key = `${bu}-${month}`;
+    const isPontualOnly = isPontualOnlyBU(bu as BuType);
+    
+    // Para BUs pontual-only, editar Pontual atualiza faturamento também
+    if (isPontualOnly && metric === 'pontual') {
+      setLocalMetas(prev => ({
+        ...prev,
+        [key]: {
+          faturamento: value,
+          mrr: 0,
+          setup: 0,
+          pontual: value,
+        },
+      }));
+      setHasChanges(true);
+      return;
+    }
     
     if (metric === 'faturamento') {
-      const isPontualOnly = isPontualOnlyBU(bu as BuType);
-      
       if (isPontualOnly) {
         // Para BUs de expansão: 100% vai para Pontual
         setLocalMetas(prev => ({
@@ -222,7 +236,7 @@ export function MonetaryMetasTab() {
   // Métricas a exibir baseado na BU selecionada
   const visibleMetrics = useMemo(() => {
     if (isPontualOnlyBU(selectedBu)) {
-      return ['faturamento', 'pontual'] as MetricType[];
+      return ['pontual'] as MetricType[];
     }
     return METRICS;
   }, [selectedBu, METRICS]);
@@ -230,25 +244,20 @@ export function MonetaryMetasTab() {
   // Validation: MRR + Setup + Pontual should not exceed Faturamento
   const validationIssues = useMemo(() => {
     const issues: string[] = [];
-    const isPontualOnly = isPontualOnlyBU(selectedBu);
     
+    // BUs pontual-only não precisam de validação (só tem 1 campo)
+    if (isPontualOnlyBU(selectedBu)) {
+      return issues;
+    }
+    
+    // Validação padrão: soma não excede faturamento
     MONTHS.forEach(month => {
       const fat = getLocalValue(selectedBu, month, 'faturamento');
-      
-      if (isPontualOnly) {
-        // Para BUs pontual-only, validar que Pontual = Faturamento
-        const pontual = getLocalValue(selectedBu, month, 'pontual');
-        if (fat > 0 && pontual !== fat) {
-          issues.push(`${month}: Pontual deve ser igual ao Incremento para ${BU_LABELS[selectedBu]}`);
-        }
-      } else {
-        // Validação padrão: soma não excede faturamento
-        const sum = getLocalValue(selectedBu, month, 'mrr') +
-                    getLocalValue(selectedBu, month, 'setup') +
-                    getLocalValue(selectedBu, month, 'pontual');
-        if (fat > 0 && sum > fat) {
-          issues.push(`${month}: MRR + Setup + Pontual (${formatCurrency(sum)}) excede Faturamento (${formatCurrency(fat)})`);
-        }
+      const sum = getLocalValue(selectedBu, month, 'mrr') +
+                  getLocalValue(selectedBu, month, 'setup') +
+                  getLocalValue(selectedBu, month, 'pontual');
+      if (fat > 0 && sum > fat) {
+        issues.push(`${month}: MRR + Setup + Pontual (${formatCurrency(sum)}) excede Faturamento (${formatCurrency(fat)})`);
       }
     });
     return issues;
@@ -406,7 +415,7 @@ export function MonetaryMetasTab() {
                 <strong>{BU_LABELS[selectedBu]}</strong> opera com ticket único (valor pontual).
               </p>
               <p>
-                O valor de <strong>Incremento</strong> é automaticamente replicado para <strong>Pontual</strong>.
+                Preencha o valor de <strong>Pontual</strong> esperado para cada mês.
               </p>
               <p>
                 Ticket padrão: <strong>{selectedBu === 'oxy_hacker' ? 'R$ 54.000' : 'R$ 140.000'}</strong>
