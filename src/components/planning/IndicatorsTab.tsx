@@ -369,7 +369,7 @@ export function IndicatorsTab() {
   const { getTotal, syncWithPipefy, isSyncing, isLoading } = useFunnelRealized(startDate, endDate);
   const { getQtyForPeriod: getModeloAtualQty, getValueForPeriod: getModeloAtualValue, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getGroupedData: getModeloAtualGroupedData, isLoading: isLoadingModeloAtual } = useModeloAtualMetas(startDate, endDate);
   const { getQtyForPeriod: getExpansaoQty, getGroupedData: getExpansaoGroupedData, isLoading: isLoadingExpansao, refetch: refetchExpansao } = useExpansaoMetas(startDate, endDate);
-  const { getQtyForPeriod: getO2TaxQty, getGroupedData: getO2TaxGroupedData, isLoading: isLoadingO2Tax } = useO2TaxMetas(startDate, endDate);
+  const { getQtyForPeriod: getO2TaxQty, getValueForPeriod: getO2TaxValue, getGroupedData: getO2TaxGroupedData, isLoading: isLoadingO2Tax } = useO2TaxMetas(startDate, endDate);
   const { getQtyForPeriod: getOxyHackerQty, getGroupedData: getOxyHackerGroupedData, isLoading: isLoadingOxyHacker } = useOxyHackerMetas(startDate, endDate);
   
   // Analytics hooks for drill-down
@@ -1588,7 +1588,7 @@ export function IndicatorsTab() {
         
         // Other BUs don't have closer filter
         if (includesO2Tax) {
-          total += getO2TaxQty('venda' as O2TaxIndicator, startDate, endDate) * 15000;
+          total += getO2TaxValue('venda' as O2TaxIndicator, startDate, endDate);
         }
         if (includesOxyHacker) {
           total += getOxyHackerQty('venda' as OxyHackerIndicator, startDate, endDate) * 54000;
