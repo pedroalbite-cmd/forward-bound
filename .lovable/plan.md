@@ -1,16 +1,10 @@
 
 
-## Remover Mock Data da Aba Marketing Indicadores
+## Remover Card do Instagram da Aba Mkt Indicadores
 
-### Problema Atual
+### Resumo
 
-Quando a aba "Mkt Indicadores" não consegue buscar os dados da planilha Google (erro ou loading), ela exibe **dados fictícios** (mock data) que podem confundir o usuário.
-
-### Solução
-
-Remover o fallback para mock data e:
-1. Retornar valores zerados quando não há dados
-2. Expor o estado de erro para a UI poder exibir uma mensagem apropriada
+Vou remover o card do Instagram da seção "Mídia e Leads por Canal" na aba Marketing Indicadores. Com a remoção, o grid passará de 4 para 3 cards: Meta Ads, Google Ads e Totais.
 
 ---
 
@@ -18,111 +12,44 @@ Remover o fallback para mock data e:
 
 | Arquivo | Ação |
 |---------|------|
-| `src/hooks/useMarketingIndicators.ts` | Remover `getMockData()` e retornar dados zerados + erro |
-| `src/components/planning/MarketingIndicatorsTab.tsx` | Mostrar mensagem de erro quando dados não carregam |
+| `src/components/planning/marketing-indicators/ChannelMetricsCards.tsx` | Remover card Instagram e prop |
+| `src/components/planning/MarketingIndicatorsTab.tsx` | Remover prop `instagram` do componente |
 
 ---
 
-### Mudanças no Hook
+### Detalhes Técnicos
 
-**Arquivo: `src/hooks/useMarketingIndicators.ts`**
+**1. ChannelMetricsCards.tsx**
 
-1. **Remover a função `getMockData`** (linhas 33-141)
+- Remover import do `Instagram` do lucide-react
+- Remover import de `InstagramMetrics` do types
+- Remover prop `instagram` da interface `ChannelMetricsCardsProps`
+- Remover o bloco do card Instagram (linhas 84-106)
+- Atualizar grid de `lg:grid-cols-4` para `lg:grid-cols-3`
 
-2. **Adicionar `error` no retorno do hook**:
-```typescript
-interface UseMarketingIndicatorsResult {
-  data: MarketingMetrics;
-  goals: MarketingGoals;
-  costGoals: CostPerStageGoals;
-  costByChannel: CostPerChannelStage[];
-  isLoading: boolean;
-  error: Error | null;  // NOVO
-  refetch: () => void;
-}
+**2. MarketingIndicatorsTab.tsx**
+
+- Remover a prop `instagram={data.instagram}` do componente ChannelMetricsCards
+
+---
+
+### Resultado Visual
+
 ```
+Antes (4 cards):
+┌─────────────┬─────────────┬─────────────┬─────────────┐
+│  Meta Ads   │ Google Ads  │  Instagram  │   TOTAIS    │
+└─────────────┴─────────────┴─────────────┴─────────────┘
 
-3. **Criar função para dados zerados** (substituir getMockData):
-```typescript
-function getEmptyData(): MarketingMetrics {
-  return {
-    roas: 0,
-    roasLtv: 0,
-    roiLtv: 0,
-    cac: 0,
-    ltv: 0,
-    totalInvestment: 0,
-    totalLeads: 0,
-    totalMqls: 0,
-    totalRms: 0,
-    totalRrs: 0,
-    totalPropostas: 0,
-    totalVendas: 0,
-    channels: [],
-    campaigns: [],
-    instagram: { instagramO2: 0, instagramPedro: 0, instagramTotal: 0 },
-    revenue: { mrr: 0, setup: 0, pontual: 0, educacao: 0, gmv: 0 },
-    costPerStage: { cpl: 0, cpmql: 0, cprm: 0, cprr: 0, cpp: 0, cpv: 0 },
-  };
-}
-```
-
-4. **Atualizar o useMemo** para usar dados zerados:
-```typescript
-const data = useMemo<MarketingMetrics>(() => {
-  if (!sheetData || sheetError) {
-    console.log('No sheet data available:', { sheetError });
-    return getEmptyData();  // Retorna zerado, não mock
-  }
-  // ... resto do código de transformação
-}, [sheetData, sheetError, selectedChannels]);
-```
-
-5. **Retornar error no hook**:
-```typescript
-return {
-  data,
-  goals,
-  costGoals,
-  costByChannel,
-  isLoading: sheetLoading,
-  error: sheetError,  // NOVO
-  refetch,
-};
+Depois (3 cards):
+┌─────────────┬─────────────┬─────────────┐
+│  Meta Ads   │ Google Ads  │   TOTAIS    │
+└─────────────┴─────────────┴─────────────┘
 ```
 
 ---
 
-### Mudanças na UI
+### Nota
 
-**Arquivo: `src/components/planning/MarketingIndicatorsTab.tsx`**
-
-Adicionar estado de erro:
-
-```tsx
-const { data, goals, costGoals, costByChannel, isLoading, error, refetch } = useMarketingIndicators({...});
-
-// No início do conteúdo, após os filtros:
-{error && (
-  <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-center">
-    <p className="text-destructive font-medium">Erro ao carregar dados de marketing</p>
-    <p className="text-sm text-muted-foreground mt-1">
-      Não foi possível conectar à planilha. Verifique a conexão e tente novamente.
-    </p>
-    <Button variant="outline" size="sm" className="mt-3" onClick={refetch}>
-      Tentar novamente
-    </Button>
-  </div>
-)}
-```
-
----
-
-### Resultado Esperado
-
-| Cenário | Antes | Depois |
-|---------|-------|--------|
-| Erro ao buscar dados | Mostra dados fictícios | Mostra mensagem de erro |
-| Loading | Mostra dados fictícios | Mostra skeleton/loading |
-| Sucesso | Mostra dados reais | Mostra dados reais |
+Os tipos e dados do Instagram no hook (`useMarketingIndicators.ts`) e em `types.ts` serão mantidos, pois podem ser utilizados futuramente ou por outras funcionalidades. Apenas a visualização será removida.
 
