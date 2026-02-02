@@ -1,241 +1,195 @@
 
-## Design Premium para Funis do Plan Growth
 
-### Problema Identificado
+## Integrar Receita do Mkt Indicadores com Dados do Modelo Atual
 
-O design atual do `SalesFunnelVisual` está básico comparado ao funil da aba "Indicadores" (`ClickableFunnelChart`). O funil de Indicadores tem:
-- Números circulares identificando cada etapa
-- Barras mais altas e mais visíveis
-- Conversão exibida dentro da barra
-- Largura mínima garantindo legibilidade
-- Destaque visual na última etapa
-- Centralização perfeita
+### Resumo
 
-### Solução
-
-Aplicar o mesmo design premium do `ClickableFunnelChart` ao `SalesFunnelVisual`, mantendo a consistência visual em toda a aplicação.
+A seção de "Receita" na aba **Mkt Indicadores** atualmente usa dados da planilha Google Sheets. O usuário quer que os valores de MRR, Setup, Pontual e Educação venham dos dados reais de vendas do **Modelo Atual** (tabela `pipefy_moviment_cfos`), respeitando os filtros de período e BU selecionados.
 
 ---
 
-### Arquivo a Modificar
+### Arquitetura Atual
+
+```text
+MarketingIndicatorsTab
+    │
+    ├── useMarketingIndicators (dados da planilha)
+    │       └── data.revenue: { mrr, setup, pontual, educacao, gmv }
+    │
+    └── RevenueMetricsCards
+            └── Exibe cards com valores da planilha
+```
+
+### Arquitetura Proposta
+
+```text
+MarketingIndicatorsTab
+    │
+    ├── useMarketingIndicators (dados de mídia da planilha)
+    │
+    ├── useModeloAtualMetas (dados de vendas do Pipefy) ← NOVO
+    │       └── getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod
+    │
+    └── RevenueMetricsCards
+            └── Exibe cards com valores do Modelo Atual
+```
+
+---
+
+### Arquivos a Modificar
 
 | Arquivo | Ação |
 |---------|------|
-| `src/components/planning/SalesFunnelVisual.tsx` | Redesign completo para igualar ao ClickableFunnelChart |
+| `src/hooks/useModeloAtualMetas.ts` | Adicionar `getEducacaoForPeriod` |
+| `src/components/planning/MarketingIndicatorsTab.tsx` | Integrar `useModeloAtualMetas` e passar dados reais |
 
 ---
 
-### Mudanças no Componente
+### Detalhes Técnicos
 
-**1. Aumentar altura das barras:**
-- De `h-10` para `h-14` (igual ao ClickableFunnelChart)
+**1. useModeloAtualMetas.ts - Adicionar função getEducacaoForPeriod**
 
-**2. Adicionar número circular em cada etapa:**
-```tsx
-<span className="bg-white/20 rounded-full w-6 h-6 flex-shrink-0 flex items-center justify-center text-xs font-bold">
-  {index + 1}
-</span>
-```
-
-**3. Colocar porcentagem de conversão dentro da barra:**
-- Remover os badges externos à esquerda
-- Exibir porcentagem após o valor dentro da barra
-
-**4. Adicionar largura mínima (`min-w-[180px]`):**
-- Garantir legibilidade mesmo nas etapas menores
-
-**5. Destacar a última etapa (Venda):**
-```tsx
-className={cn(
-  'ring-2 ring-primary ring-offset-2 ring-offset-background'
-)}
-```
-
-**6. Ajustar larguras do funil:**
 ```typescript
-const widthPercentages = [100, 85, 70, 55, 45, 35];
+// Get Educação value for a specific period (sum of valorEducacao from 'Contrato assinado' phase cards)
+const getEducacaoForPeriod = (start?: Date, end?: Date): number => {
+  if (movements.length === 0) return 0;
+
+  const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
+  const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
+
+  const cardValues = new Map<string, number>();
+  for (const movement of movements) {
+    const moveTime = movement.dataEntrada.getTime();
+    if (moveTime >= startTime && moveTime <= endTime) {
+      const moveIndicator = PHASE_TO_INDICATOR[movement.fase];
+      if (moveIndicator === 'venda') {
+        const existing = cardValues.get(movement.id);
+        if (!existing || movement.valorEducacao > existing) {
+          cardValues.set(movement.id, movement.valorEducacao);
+        }
+      }
+    }
+  }
+
+  let total = 0;
+  cardValues.forEach((value) => {
+    total += value;
+  });
+  return total;
+};
 ```
 
-**7. Simplificar layout:**
-- Remover colunas laterais de badge
-- Centralizar completamente as barras
+E adicionar ao retorno do hook:
+```typescript
+return {
+  // ... existing exports
+  getEducacaoForPeriod,
+};
+```
 
 ---
 
-### Código do Novo Design
+**2. MarketingIndicatorsTab.tsx - Integrar dados do Modelo Atual**
+
+Adicionar import e uso do hook:
+
+```typescript
+import { useModeloAtualMetas } from "@/hooks/useModeloAtualMetas";
+
+// Dentro do componente:
+const { 
+  getMrrForPeriod, 
+  getSetupForPeriod, 
+  getPontualForPeriod,
+  getEducacaoForPeriod,
+  isLoading: isLoadingModeloAtual 
+} = useModeloAtualMetas(dateRange.from, dateRange.to);
+
+// Calcular receita real com base no período selecionado
+const realRevenue = useMemo(() => {
+  // Só calcula quando "Modelo Atual" está selecionado
+  if (!selectedBUs.includes('Modelo Atual')) {
+    return data.revenue; // Fallback para dados da planilha
+  }
+  
+  return {
+    mrr: getMrrForPeriod(dateRange.from, dateRange.to),
+    setup: getSetupForPeriod(dateRange.from, dateRange.to),
+    pontual: getPontualForPeriod(dateRange.from, dateRange.to),
+    educacao: getEducacaoForPeriod(dateRange.from, dateRange.to),
+    gmv: data.revenue.gmv, // GMV continua vindo da planilha (não é do Pipefy)
+  };
+}, [dateRange, selectedBUs, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod, data.revenue]);
+```
+
+Atualizar o componente RevenueMetricsCards para usar `realRevenue`:
 
 ```tsx
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-
-interface FunnelStage {
-  stage: string;
-  value: number;
-  percent: string;
-}
-
-interface SalesFunnelVisualProps {
-  title: string;
-  icon: React.ReactNode;
-  stages: FunnelStage[];
-  mqlToVenda: number;
-  leadToVenda: number;
-  color: string;
-}
-
-const stageColors = [
-  'from-orange-400 to-orange-500',
-  'from-emerald-400 to-cyan-500',
-  'from-cyan-500 to-blue-500',
-  'from-blue-500 to-blue-600',
-  'from-blue-600 to-slate-500',
-  'from-slate-500 to-slate-600',
-];
-
-const widthPercentages = [100, 85, 70, 55, 45, 35];
-
-const formatNumber = (value: number) => 
-  new Intl.NumberFormat("pt-BR").format(Math.round(value));
-
-export function SalesFunnelVisual({ 
-  title, 
-  icon, 
-  stages, 
-  mqlToVenda, 
-  leadToVenda, 
-  color 
-}: SalesFunnelVisualProps) {
-  return (
-    <Card className="glass-card">
-      <CardHeader>
-        <CardTitle className="font-display flex items-center gap-2">
-          {icon}
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col gap-1">
-          {stages.map((item, index) => {
-            const colorClass = stageColors[index] || stageColors[stageColors.length - 1];
-            const widthPercent = widthPercentages[index] || 35;
-            const isLast = index === stages.length - 1;
-            const isFirst = index === 0;
-            
-            return (
-              <div key={item.stage} className="relative flex items-center justify-center">
-                <div
-                  className={cn(
-                    `relative h-14 bg-gradient-to-r ${colorClass} rounded-sm transition-all duration-300`,
-                    `flex items-center justify-center px-3 min-w-[180px]`,
-                    isLast && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
-                  )}
-                  style={{ width: `${widthPercent}%` }}
-                >
-                  <div className="flex items-center gap-2 text-white text-sm font-medium whitespace-nowrap overflow-hidden">
-                    {/* Número da etapa */}
-                    <span className="bg-white/20 rounded-full w-6 h-6 flex-shrink-0 flex items-center justify-center text-xs font-bold">
-                      {index + 1}
-                    </span>
-                    
-                    {/* Nome da etapa */}
-                    <span className="hidden sm:inline truncate font-semibold">
-                      {item.stage}
-                    </span>
-                    
-                    {/* Valor absoluto */}
-                    <span className="font-bold flex-shrink-0">
-                      {formatNumber(item.value)}
-                    </span>
-                    
-                    {/* Porcentagem de conversão */}
-                    {!isFirst && item.percent !== "-" && (
-                      <span className="text-xs text-white/70 flex-shrink-0">
-                        ({item.percent})
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        
-        {/* Badges de conversão total */}
-        <div className="flex justify-center gap-3 mt-6 flex-wrap">
-          <Badge className="bg-primary/20 text-primary border-primary/30">
-            MQL → Venda: {(mqlToVenda * 100).toFixed(1)}%
-          </Badge>
-          <Badge className="bg-primary/20 text-primary border-primary/30">
-            Lead → Venda: {(leadToVenda * 100).toFixed(1)}%
-          </Badge>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+<RevenueMetricsCards
+  revenue={realRevenue}
+  goals={goals.revenue}
+/>
 ```
 
 ---
 
-### Comparação Visual
+### Fluxo de Dados
 
 ```text
-ANTES (básico):
-┌──────────────────────────────────────────────────────────────┐
-│                                                              │
-│  [43%]  ┌══════════════════════════════════════┐ [12.318]   │
-│         │      Leads                           │             │
-│         └══════════════════════════════════════┘             │
-│                                                              │
-│  [49%]  ┌═══════════════════════════════════┐   [5.299]     │
-│         │      MQL                          │                │
-│         └═══════════════════════════════════┘                │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-
-DEPOIS (premium - igual Indicadores):
-┌──────────────────────────────────────────────────────────────┐
-│                                                              │
-│     ┌════════════════════════════════════════════════════┐   │
-│     │  ① Leads         12.318                            │   │
-│     └════════════════════════════════════════════════════┘   │
-│                                                              │
-│        ┌══════════════════════════════════════════════┐      │
-│        │  ② MQL          5.299    (43%)               │      │
-│        └══════════════════════════════════════════════┘      │
-│                                                              │
-│           ┌═════════════════════════════════════════┐        │
-│           │  ③ RM           2.599    (49%)          │        │
-│           └═════════════════════════════════════════┘        │
-│                                                              │
-│              ┌══════════════════════════════════┐            │
-│              │  ④ RR          1.874    (72%)    │            │
-│              └══════════════════════════════════┘            │
-│                                                              │
-│                 ┌═══════════════════════════════┐            │
-│                 │  ⑤ Proposta   1.651    (88%)  │            │
-│                 └═══════════════════════════════┘            │
-│                                                              │
-│                    ╔═══════════════════════════╗  ← ring     │
-│                    ║  ⑥ Venda      400   (24%) ║             │
-│                    ╚═══════════════════════════╝             │
-│                                                              │
-│         [MQL → Venda: 7.5%]   [Lead → Venda: 3.2%]          │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    MarketingIndicatorsTab                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Filtros: [Período] [BU: Modelo Atual]                          │
+│                                                                  │
+│           ┌───────────────────────────────────────┐              │
+│           │     useModeloAtualMetas               │              │
+│           │  (pipefy_moviment_cfos)               │              │
+│           │                                       │              │
+│           │  getMrrForPeriod(from, to) → 85.000   │              │
+│           │  getSetupForPeriod(from, to) → 12.000 │              │
+│           │  getPontualForPeriod(from, to) → 8.500│              │
+│           │  getEducacaoForPeriod(from, to) → 3.200│             │
+│           └───────────────────────────────────────┘              │
+│                           │                                      │
+│                           ▼                                      │
+│           ┌───────────────────────────────────────┐              │
+│           │       RevenueMetricsCards             │              │
+│           │                                       │              │
+│           │  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐     │              │
+│           │  │ MRR │ │Setup│ │Pont.│ │Educ.│ ... │              │
+│           │  │ 85k │ │ 12k │ │8.5k │ │3.2k │     │              │
+│           │  └─────┘ └─────┘ └─────┘ └─────┘     │              │
+│           └───────────────────────────────────────┘              │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Melhorias Incluídas
+### Comportamento por Filtro de BU
 
-| Aspecto | Antes | Depois |
-|---------|-------|--------|
-| Altura das barras | `h-10` (40px) | `h-14` (56px) |
-| Números de etapa | Nenhum | Círculo com número |
-| Posição da conversão | Badge externo à esquerda | Dentro da barra |
-| Largura mínima | Nenhuma | `min-w-[180px]` |
-| Destaque na Venda | Nenhum | Ring verde |
-| Larguras | 100, 90, 80... | 100, 85, 70, 55, 45, 35 |
-| Layout | 3 colunas | Centralizado |
+| BU Selecionada | Fonte de Dados |
+|----------------|----------------|
+| Modelo Atual | `pipefy_moviment_cfos` (dados reais) |
+| O2 TAX | Planilha (dados de mídia) |
+| Oxy Hacker | Planilha (dados de mídia) |
+| Franquia | Planilha (dados de mídia) |
+| Múltiplas BUs | Soma ponderada (Modelo Atual real + outras da planilha) |
+
+---
+
+### Nota sobre GMV
+
+O **GMV** (Gross Merchandise Value) não está disponível na tabela `pipefy_moviment_cfos` — é um indicador de e-commerce que continua sendo lido da planilha de marketing.
+
+---
+
+### Resultado Esperado
+
+Após a implementação:
+1. Os cards de receita (MRR, Setup, Pontual, Educação) exibirão valores reais do Pipefy quando "Modelo Atual" estiver selecionado
+2. Os valores respeitarão o filtro de período (data inicial e final)
+3. O loading state combinará os dois hooks
+4. GMV continua vindo da planilha de marketing
+
