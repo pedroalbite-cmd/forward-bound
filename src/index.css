@@ -61,56 +61,67 @@
   }
 
   .dark {
-    --background: 0 0% 8%;
-    --foreground: 0 0% 100%;
+    /* Fundo principal - preto puro premium */
+    --background: 0 0% 4%;
+    --foreground: 0 0% 98%;
 
-    --card: 0 0% 12%;
-    --card-foreground: 0 0% 100%;
+    /* Cards - grafite profundo */
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 12%;
-    --popover-foreground: 0 0% 100%;
+    /* Popover */
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 140 100% 28%;
-    --primary-foreground: 0 0% 8%;
+    /* Verde vibrante - mais brilhante */
+    --primary: 145 100% 42%;
+    --primary-foreground: 0 0% 4%;
 
-    --secondary: 0 0% 18%;
-    --secondary-foreground: 0 0% 100%;
+    /* Secondary */
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 0 0% 20%;
-    --muted-foreground: 0 0% 60%;
+    /* Muted - mais contrastante */
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 55%;
 
-    --accent: 140 100% 35%;
-    --accent-foreground: 0 0% 8%;
+    /* Accent - verde neon */
+    --accent: 145 100% 50%;
+    --accent-foreground: 0 0% 4%;
 
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 0 0% 100%;
+    /* Destructive - vermelho vibrante */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
-    --ring: 140 100% 28%;
+    /* Borders - sutis */
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 145 100% 42%;
 
-    /* OxyHacker chart colors - green palette */
-    --chart-1: 140 100% 28%;
-    --chart-2: 140 100% 35%;
-    --chart-3: 140 80% 25%;
-    --chart-4: 140 60% 40%;
-    --chart-5: 0 0% 50%;
+    /* Chart colors - paleta verde mais vibrante */
+    --chart-1: 145 100% 42%;
+    --chart-2: 145 100% 50%;
+    --chart-3: 145 80% 35%;
+    --chart-4: 145 60% 55%;
+    --chart-5: 0 0% 45%;
 
-    --success: 140 100% 28%;
-    --success-foreground: 0 0% 8%;
+    /* Success/Warning */
+    --success: 145 100% 42%;
+    --success-foreground: 0 0% 4%;
     --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
-    --franquia: 250 60% 60%;
-    --franquia-foreground: 0 0% 100%;
+    --warning-foreground: 0 0% 4%;
+    --franquia: 250 60% 65%;
+    --franquia-foreground: 0 0% 98%;
 
-    --sidebar-background: 0 0% 6%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 140 100% 28%;
-    --sidebar-primary-foreground: 0 0% 8%;
-    --sidebar-accent: 0 0% 15%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 0 0% 18%;
-    --sidebar-ring: 140 100% 28%;
+    /* Sidebar - ainda mais escuro */
+    --sidebar-background: 0 0% 3%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 145 100% 42%;
+    --sidebar-primary-foreground: 0 0% 4%;
+    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 14%;
+    --sidebar-ring: 145 100% 42%;
   }
 }
 
