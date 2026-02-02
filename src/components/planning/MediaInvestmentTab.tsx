@@ -13,6 +13,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
+import { useMonetaryMetas, BuType, isPontualOnlyBU } from "@/hooks/useMonetaryMetas";
 
 // Indicadores de 2025 (base para projeção)
 const indicators2025 = {
@@ -648,6 +649,26 @@ function BUIndicatorEditor({ indicators, onChange, buName, buIcon }: BUIndicator
 }
 
 export function MediaInvestmentTab() {
+  // Fetch monetary metas from database
+  const { metas, isLoading: isLoadingMetas } = useMonetaryMetas();
+  
+  // Helper: Get metas from database for a BU
+  const getDbMetasForBU = (bu: BuType): Record<string, number> | null => {
+    const buMetas = metas.filter(m => m.bu === bu);
+    const hasValues = buMetas.some(m => Number(m.faturamento) > 0 || Number(m.pontual) > 0);
+    if (!hasValues) return null;
+    
+    const result: Record<string, number> = {};
+    const isPontualOnly = isPontualOnlyBU(bu);
+    buMetas.forEach(m => {
+      // For pontual-only BUs, use pontual field; otherwise use faturamento
+      result[m.month] = isPontualOnly 
+        ? (Number(m.pontual) || 0)
+        : (Number(m.faturamento) || 0);
+    });
+    return result;
+  };
+
   // Estados editáveis - Taxas gerais (Modelo Atual)
   const [mrrInicial, setMrrInicial] = useState(700000);
   const [valorVenderInicial, setValorVenderInicial] = useState(400000);
@@ -659,7 +680,7 @@ export function MediaInvestmentTab() {
   const [churnMensalO2Tax, setChurnMensalO2Tax] = useState(0.04);
   const [retencaoVendasO2Tax, setRetencaoVendasO2Tax] = useState(0.30);
   
-  // Estados editáveis - Metas trimestrais
+  // Estados editáveis - Metas trimestrais (fallback when DB is empty)
   const [metasTrimestrais, setMetasTrimestrais] = useState({
     Q1: 3750000,
     Q2: 4500000,
@@ -715,7 +736,7 @@ export function MediaInvestmentTab() {
   const [configOpen, setConfigOpen] = useState(false);
   const [selectedBUTab, setSelectedBUTab] = useState("modeloAtual");
 
-  // Quarterly totals para outras BUs
+  // Quarterly totals para outras BUs (fallback when DB is empty)
   const quarterlyTotalsOutrasBUs = useMemo(() => ({
     o2Tax: { Q1: 412224, Q2: 587220.48, Q3: 781590.46, Q4: 1040296.90 },
     oxyHacker: { Q1: 5 * 54000, Q2: 15 * 54000, Q3: 30 * 54000, Q4: 50 * 54000 },
@@ -786,11 +807,14 @@ export function MediaInvestmentTab() {
     },
   }), [indicadoresPorBU]);
 
-  // Metas mensais distribuídas (fonte da verdade: meta trimestral)
-  const metasMensaisModeloAtual = useMemo(() => 
-    distributeQuarterlyToMonthly(metasTrimestrais), 
-    [metasTrimestrais]
-  );
+  // Metas mensais distribuídas - prioritize DB, fallback to quarterly distribution
+  const metasMensaisModeloAtual = useMemo(() => {
+    const dbMetas = getDbMetasForBU('modelo_atual');
+    if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
+      return dbMetas;
+    }
+    return distributeQuarterlyToMonthly(metasTrimestrais);
+  }, [metasTrimestrais, metas]);
 
   // Calcula MRR dinâmico e "A Vender" a partir das metas fixas
   const mrrDynamic = useMemo(() => 
@@ -805,19 +829,30 @@ export function MediaInvestmentTab() {
     [mrrInicial, churnMensal, retencaoVendas, metasMensaisModeloAtual, indicadoresPorBU.modeloAtual.ticketMedio, valorVenderInicial]
   );
 
-  // Receitas outras BUs
-  const o2TaxMonthly = useMemo(() => 
-    calculateMonthlyValuesSmooth(quarterlyTotalsOutrasBUs.o2Tax, 120000), 
-    [quarterlyTotalsOutrasBUs]
-  );
-  const oxyHackerMonthly = useMemo(() => 
-    calculateFromUnits(oxyHackerUnits, 54000), 
-    []
-  );
-  const franquiaMonthly = useMemo(() => 
-    calculateFromUnits(franquiaUnits, 140000), 
-    []
-  );
+  // Receitas outras BUs - prioritize DB, fallback to calculated values
+  const o2TaxMonthly = useMemo(() => {
+    const dbMetas = getDbMetasForBU('o2_tax');
+    if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
+      return dbMetas;
+    }
+    return calculateMonthlyValuesSmooth(quarterlyTotalsOutrasBUs.o2Tax, 120000);
+  }, [quarterlyTotalsOutrasBUs, metas]);
+  
+  const oxyHackerMonthly = useMemo(() => {
+    const dbMetas = getDbMetasForBU('oxy_hacker');
+    if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
+      return dbMetas;
+    }
+    return calculateFromUnits(oxyHackerUnits, 54000);
+  }, [metas]);
+  
+  const franquiaMonthly = useMemo(() => {
+    const dbMetas = getDbMetasForBU('franquia');
+    if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
+      return dbMetas;
+    }
+    return calculateFromUnits(franquiaUnits, 140000);
+  }, [metas]);
 
   // Calculate funnel data for each BU
   const modeloAtualFunnel = useMemo(() => 
