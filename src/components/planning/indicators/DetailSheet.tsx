@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
@@ -137,7 +137,7 @@ export function DetailSheet({ open, onOpenChange, title, description, items, col
             <DialogDescription>{description}</DialogDescription>
           )}
         </DialogHeader>
-        <div className="flex-1 overflow-hidden flex flex-col mt-4">
+        <div className="flex-1 overflow-y-auto mt-4 pr-2">
           {hasAnalytics && (
             <Collapsible open={analyticsExpanded} onOpenChange={setAnalyticsExpanded} className="flex-shrink-0">
               <div className="flex items-center justify-between mb-2">
@@ -166,8 +166,7 @@ export function DetailSheet({ open, onOpenChange, title, description, items, col
               {sortedItems.length} {sortedItems.length === 1 ? 'registro' : 'registros'}
             </span>
           </div>
-          <div className="flex-1 min-h-0">
-            <ScrollArea className="h-full">
+          <div className="border rounded-lg overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -220,7 +219,6 @@ export function DetailSheet({ open, onOpenChange, title, description, items, col
                 )}
               </TableBody>
             </Table>
-            </ScrollArea>
           </div>
         </div>
       </DialogContent>
