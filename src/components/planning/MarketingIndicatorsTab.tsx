@@ -177,8 +177,8 @@ export function MarketingIndicatorsTab() {
         open={costDrillDown.isOpen} 
         onOpenChange={(open) => setCostDrillDown({ isOpen: open, costKey: open ? costDrillDown.costKey : null })}
       >
-        <DialogContent className="max-w-[90vw] max-h-[90vh] overflow-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>
               {costDrillDown.costKey?.toUpperCase()} - Custo por {
                 costDrillDown.costKey === 'cpl' ? 'Lead' :
@@ -192,7 +192,7 @@ export function MarketingIndicatorsTab() {
           </DialogHeader>
           
           {costDrillDown.costKey && (
-            <div className="space-y-6">
+            <div className="flex-1 overflow-y-auto pr-2 space-y-6">
               {/* KPI Summary */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-muted/50 p-4 rounded-lg text-center">
@@ -218,8 +218,8 @@ export function MarketingIndicatorsTab() {
                   <p className={cn(
                     "text-xl font-bold",
                     data.costPerStage[costDrillDown.costKey] <= costGoals[costDrillDown.costKey] 
-                      ? "text-green-500" 
-                      : "text-red-500"
+                      ? "text-chart-2" 
+                      : "text-destructive"
                   )}>
                     {((data.costPerStage[costDrillDown.costKey] / costGoals[costDrillDown.costKey]) * 100).toFixed(0)}%
                   </p>
@@ -240,7 +240,7 @@ export function MarketingIndicatorsTab() {
               />
 
               {/* Table: Channel Details */}
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border rounded-lg overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr>
@@ -269,7 +269,7 @@ export function MarketingIndicatorsTab() {
                           <td className="text-right p-3">{channel[volumeKey as keyof typeof channel]}</td>
                           <td className={cn(
                             "text-right p-3 font-medium",
-                            isGood ? "text-green-600" : "text-red-600"
+                            isGood ? "text-chart-2" : "text-destructive"
                           )}>
                             R$ {costValue.toLocaleString('pt-BR')}
                           </td>
