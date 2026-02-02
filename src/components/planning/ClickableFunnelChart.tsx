@@ -391,9 +391,49 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
       .map(([label, value]) => ({ label, value }))
       .sort((a, b) => b.value - a.value);
     
+    // TCV por Closer + Tier de Faturamento
+    const closerTierTotals = new Map<string, number>();
+    items.forEach(i => {
+      const closer = (i.responsible || i.closer || 'Sem Closer').split(' ')[0];
+      const tier = i.revenueRange || 'Não informado';
+      if (tier === 'Não informado') return;
+      const key = `${closer} - ${tier}`;
+      const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
+      closerTierTotals.set(key, (closerTierTotals.get(key) || 0) + itemTCV);
+    });
+    const closerTierData = Array.from(closerTierTotals.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+    
+    // TCV por SDR + Tier de Faturamento
+    const sdrTierTotals = new Map<string, number>();
+    items.forEach(i => {
+      const sdr = (i.sdr || 'Sem SDR').split(' ')[0];
+      const tier = i.revenueRange || 'Não informado';
+      if (tier === 'Não informado') return;
+      const key = `${sdr} - ${tier}`;
+      const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
+      sdrTierTotals.set(key, (sdrTierTotals.get(key) || 0) + itemTCV);
+    });
+    const sdrTierData = Array.from(sdrTierTotals.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+    
     const charts: ChartConfig[] = [
       { type: 'bar', title: 'TCV por Closer', data: tcvByCloserData, formatValue: formatCompactCurrency },
       { type: 'pie', title: 'TCV por Produto', data: tcvByProductData, formatValue: formatCompactCurrency },
+      ...(closerTierData.length > 0 ? [{ 
+        type: 'bar' as const, 
+        title: 'TCV por Tier - Closer', 
+        data: closerTierData, 
+        formatValue: formatCompactCurrency 
+      }] : []),
+      ...(sdrTierData.length > 0 ? [{ 
+        type: 'bar' as const, 
+        title: 'TCV por Tier - SDR', 
+        data: sdrTierData, 
+        formatValue: formatCompactCurrency 
+      }] : []),
     ];
     
     // Adicionar TCV calculado a cada item para exibição na tabela
