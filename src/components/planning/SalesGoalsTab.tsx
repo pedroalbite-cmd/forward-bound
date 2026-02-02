@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Target, TrendingUp, TrendingDown, Building2, DollarSign, Expand, BarChart3, LineChart, Rocket, Users } from "lucide-react";
-import { useSalesRealized } from "@/hooks/useSalesRealized";
+import { useIndicatorsRealized } from "@/hooks/useIndicatorsRealized";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { 
   dashboardBuConfigs, 
@@ -27,7 +27,7 @@ const buIcons: Record<DashboardBUKey, React.ReactNode> = {
 
 export function SalesGoalsTab() {
   const [selectedBU, setSelectedBU] = useState<DashboardBUKey | 'all'>('all');
-  const { realizedByBU, totalRealized, isLoading, error } = useSalesRealized(2026);
+  const { realizedByBU, totalRealized, isLoading, error } = useIndicatorsRealized(2026);
   const { metasPorBU, isLoaded: metasLoaded } = useMediaMetas();
   
   // Aggregate realized data for dashboard (combines oxy_hacker + franquia into expansao_o2)
