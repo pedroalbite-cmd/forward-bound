@@ -1,21 +1,42 @@
 
 
-## Correção: Interpretar "25" como 2026 na Planilha
+## Correção: Métricas Faltando nos Indicadores de Marketing
 
-### Problema
+### Problema Identificado
 
-A planilha **"Indicadores 26"** contém dados de **2026**, mas as colunas estão rotuladas incorretamente como "January/25", "February/25", etc.
+A Edge Function está retornando 27 métricas, mas algumas estão zeradas porque os nomes na planilha **"Indicadores 26"** não correspondem exatamente aos mapeamentos configurados.
 
-| Coluna na Planilha | Rótulo Errado | Interpretação Correta |
-|--------------------|---------------|----------------------|
-| B | January/25 | Janeiro 2026 |
-| C | February/25 | Fevereiro 2026 |
-| ... | ... | ... |
-| M | December/25 | Dezembro 2026 |
+### Dados Atuais vs Esperados
+
+| Métrica | Valor Atual | Valor Esperado | Problema |
+|---------|-------------|----------------|----------|
+| Meta Ads Leads | **0** | **668** | Nome na planilha diferente |
+| GMV | **R$ 0** | **R$ 289.262** | Nome na planilha diferente |
+| Educação | **R$ 0** | **?** | Nome na planilha diferente ou vazio |
+| TCV | **R$ 0** | **R$ 1.216.654** | Nome na planilha diferente |
+| CPP | **R$ 0** | **?** | Nome na planilha diferente |
+
+### Diagnóstico
+
+O mapeamento atual da Edge Function usa:
+```typescript
+'leadsMeta': ['Leads - Meta Ads', 'Meta Ads - Leads', 'Leads Meta Ads'],
+'gmv': ['GMV', 'Gmv'],
+'educacao': ['Educação', 'EDUCAÇÃO', 'Educacao'],
+'tcv': ['TCV', 'Tcv'],
+'cpp': ['CPP', 'Custo por Proposta'],
+```
+
+Mas a planilha provavelmente usa nomes diferentes, como por exemplo:
+- "Leads Meta" em vez de "Leads - Meta Ads"
+- "Receita Total" em vez de "GMV"
+- "Custo Proposta" em vez de "CPP"
+
+---
 
 ### Solução
 
-Alterar a função `getMonthIndicesForPeriod` na Edge Function para tratar as colunas B-M como dados de 2026.
+Adicionar mais variações de nomes no mapeamento `METRIC_MAPPINGS` da Edge Function para cobrir os possíveis nomes usados na planilha.
 
 ---
 
@@ -23,54 +44,152 @@ Alterar a função `getMonthIndicesForPeriod` na Edge Function para tratar as co
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/read-marketing-sheet/index.ts` | Corrigir mapeamento de ano nas colunas |
+| `supabase/functions/read-marketing-sheet/index.ts` | Expandir METRIC_MAPPINGS com mais variações de nomes |
 
 ---
 
-### Código Corrigido
+### Mapeamentos a Expandir
 
 ```typescript
-function getMonthIndicesForPeriod(startDate: string, endDate: string): number[] {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const indices: number[] = [];
+const METRIC_MAPPINGS: Record<string, string[]> = {
+  // Leads Meta - adicionar variações
+  'leadsMeta': [
+    'Leads - Meta Ads', 
+    'Meta Ads - Leads', 
+    'Leads Meta Ads',
+    'Leads Meta',           // ADICIONAR
+    'Leads - Meta',         // ADICIONAR
+    'Lead Meta Ads',        // ADICIONAR
+    'Lead - Meta Ads',      // ADICIONAR
+  ],
   
-  // IMPORTANTE: A planilha "Indicadores 26" tem rótulos errados (25 = 2025)
-  // mas os dados são de 2026. Colunas B-M = Jan-Dec 2026
-  const startMonth = start.getMonth(); // 0-11
-  const endMonth = end.getMonth(); // 0-11
-  const startYear = start.getFullYear();
-  const endYear = end.getFullYear();
+  // GMV - adicionar variações
+  'gmv': [
+    'GMV', 
+    'Gmv',
+    'Receita Total',        // ADICIONAR
+    'Receita Bruta',        // ADICIONAR
+    'Gross Merchandise Value',  // ADICIONAR
+    'Total GMV',            // ADICIONAR
+  ],
   
-  for (let year = startYear; year <= endYear; year++) {
-    const fromMonth = year === startYear ? startMonth : 0;
-    const toMonth = year === endYear ? endMonth : 11;
-    
-    for (let month = fromMonth; month <= toMonth; month++) {
-      // Colunas B-M (índices 1-12) = dados de 2026
-      // Ignorar anos diferentes de 2026 por enquanto
-      if (year === 2026) {
-        indices.push(month + 1); // +1 porque coluna A é o label
-      }
-    }
+  // TCV - adicionar variações
+  'tcv': [
+    'TCV', 
+    'Tcv',
+    'Total Contract Value', // ADICIONAR
+    'Valor Total Contrato', // ADICIONAR
+    'Ticket Total',         // ADICIONAR
+  ],
+  
+  // CPP - adicionar variações
+  'cpp': [
+    'CPP', 
+    'Custo por Proposta',
+    'CP Proposta',          // ADICIONAR
+    'Custo Proposta',       // ADICIONAR
+    'Cost per Proposal',    // ADICIONAR
+  ],
+  
+  // Educação - adicionar variações
+  'educacao': [
+    'Educação', 
+    'EDUCAÇÃO', 
+    'Educacao',
+    'Educ',                 // ADICIONAR
+    'Education',            // ADICIONAR
+    'Receita Educação',     // ADICIONAR
+  ],
+};
+```
+
+---
+
+### Implementação Adicional: Logging de Debug
+
+Para identificar exatamente os nomes das métricas na planilha que não estão sendo reconhecidos, vou adicionar um log temporário na Edge Function:
+
+```typescript
+// Após parsear os dados, logar linhas não mapeadas
+const unmappedLabels: string[] = [];
+for (const row of rows) {
+  if (!row.c || !row.c[0]) continue;
+  const label = row.c[0].v;
+  if (typeof label !== 'string') continue;
+  
+  const metricKey = findMetricKey(label);
+  if (!metricKey && label.trim() !== '') {
+    unmappedLabels.push(label);
   }
-  
-  return indices;
 }
+
+if (unmappedLabels.length > 0) {
+  console.log('Unmapped labels found:', unmappedLabels.slice(0, 20));
+}
+```
+
+---
+
+### Seção Técnica
+
+**Código Completo a Alterar:**
+
+```typescript
+// Metric name mappings (normalized → original variations)
+const METRIC_MAPPINGS: Record<string, string[]> = {
+  'midiaGoogle': ['Mídia Google Ads', 'Mídia - Google Ads', 'Google Ads - Mídia', 'Mídia Google', 'Google Ads Mídia'],
+  'leadsGoogle': ['Leads - Google Ads', 'Google Ads - Leads', 'Leads Google Ads', 'Leads Google'],
+  'cplGoogle': ['CPL - Google Ads', 'Google Ads - CPL', 'CPL Google Ads', 'CPL Google'],
+  'midiaMeta': ['Mídia Meta Ads', 'Mídia - Meta Ads', 'Meta Ads - Mídia', 'Mídia Meta', 'Meta Ads Mídia'],
+  'leadsMeta': ['Leads - Meta Ads', 'Meta Ads - Leads', 'Leads Meta Ads', 'Leads Meta', 'Leads - Meta', 'Lead Meta Ads'],
+  'cplMeta': ['CPL - Meta Ads', 'Meta Ads - CPL', 'CPL Meta Ads', 'CPL Meta'],
+  'midiaTotal': ['Mídia total', 'Mídia Total', 'Total Mídia', 'Mídia Totais', 'Total Mídia Ads'],
+  'leadsTotais': ['Leads totais', 'Leads Totais', 'Total Leads', 'Total de Leads'],
+  'cplTotal': ['CPL total', 'CPL Total', 'Total CPL', 'CPL Totais'],
+  'mqlPorFaturamento': ['MQL por Faturamento', 'MQL - Faturamento', 'MQLs', 'MQL Faturamento', 'MQLs por Faturamento'],
+  'cpmqlPorFaturamento': ['CPMQL por Faturamento', 'CPMQL', 'CPMql', 'CPMQL Faturamento', 'CP MQL'],
+  'reuniaoMarcada': ['Reunião marcada', 'Reunião Marcada', 'RM', 'Reuniões Marcadas', 'Reuniao Marcada'],
+  'cprm': ['CPRM', 'CPRm', 'Custo por RM', 'CP RM', 'Custo RM'],
+  'reuniaoRealizada': ['Reunião realizada', 'Reunião Realizada', 'RR', 'Reuniões Realizadas', 'Reuniao Realizada'],
+  'cprr': ['CPRR', 'CPRr', 'Custo por RR', 'CP RR', 'Custo RR'],
+  'propostaEnviada': ['Proposta enviada', 'Proposta Enviada', 'Propostas', 'Propostas Enviadas', 'Proposta'],
+  'cpp': ['CPP', 'Custo por Proposta', 'CP Proposta', 'Custo Proposta', 'CP P'],
+  'vendas': ['Vendas', 'Venda', 'Total Vendas', 'Vendas Totais'],
+  'cpv': ['CPV', 'Custo por Venda', 'CP Venda', 'Custo Venda'],
+  'mrr': ['MRR', 'Mrr', 'Monthly Recurring Revenue', 'Receita Recorrente'],
+  'setup': ['Setup', 'SETUP', 'Valor Setup', 'Taxa Setup'],
+  'pontual': ['Pontual', 'PONTUAL', 'Receita Pontual', 'Valor Pontual'],
+  'educacao': ['Educação', 'EDUCAÇÃO', 'Educacao', 'Educ', 'Receita Educação', 'Education'],
+  'gmv': ['GMV', 'Gmv', 'Receita Total', 'Receita Bruta', 'Gross Merchandise Value', 'Total GMV', 'Total Receita'],
+  'cac': ['CAC', 'Cac', 'Custo Aquisição Cliente', 'Customer Acquisition Cost'],
+  'ltv': ['LTV', 'Ltv', 'Lifetime Value', 'Valor Vitalício'],
+  'tcv': ['TCV', 'Tcv', 'Total Contract Value', 'Valor Total Contrato', 'Ticket Total'],
+  'roas': ['ROAS', 'Roas', 'Return on Ad Spend'],
+  'roasLtv': ['ROAS LTV', 'ROAS Ltv', 'Roas LTV', 'ROAS x LTV'],
+  'roiLtv': ['ROI LTV', 'ROI Ltv', 'Roi LTV', 'ROI x LTV'],
+  'ltvCac': ['LTV/CAC', 'LTV / CAC', 'Ltv/Cac', 'LTV:CAC', 'LTV CAC'],
+};
 ```
 
 ---
 
 ### Resultado Esperado
 
-| Antes | Depois |
-|-------|--------|
-| Janeiro 2026 → índice 13 → R$ 0 | Janeiro 2026 → índice 1 → R$ 142.683,76 |
-| Fevereiro 2026 → índice 14 → R$ 0 | Fevereiro 2026 → índice 2 → dados reais |
+Após a correção:
+
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Meta Ads Leads | 0 | 668 |
+| GMV | R$ 0 | R$ 289.262 |
+| Educação | R$ 0 | Valor real |
+| TCV | R$ 0 | R$ 1.216.654 |
+| CPP | R$ 0 | Valor real |
 
 ---
 
 ### Impacto
 
-A aba "Mkt Indicadores" passará a exibir corretamente os dados da planilha quando o período selecionado for 2026.
+1. **Todas as métricas de marketing serão exibidas corretamente** no dashboard
+2. **O log de debug** ajudará a identificar futuras métricas não mapeadas
+3. **Maior resiliência** a pequenas variações de nomenclatura na planilha
 
