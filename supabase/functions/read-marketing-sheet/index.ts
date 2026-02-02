@@ -97,23 +97,23 @@ function getMonthIndicesForPeriod(startDate: string, endDate: string): number[] 
   const end = new Date(endDate);
   const indices: number[] = [];
   
-  // For 2025 data, columns B-M are Jan-Dec (indices 1-12)
-  // For 2026 data, it would be different columns
+  // IMPORTANTE: A planilha "Indicadores 26" tem rótulos errados (25 = 2025)
+  // mas os dados são de 2026. Colunas B-M = Jan-Dec 2026
   const startMonth = start.getMonth(); // 0-11
   const endMonth = end.getMonth(); // 0-11
   const startYear = start.getFullYear();
   const endYear = end.getFullYear();
   
-  // Assuming the sheet has 2025 data starting from column B (index 1)
-  // and 2026 data would start from column N (index 13)
   for (let year = startYear; year <= endYear; year++) {
     const fromMonth = year === startYear ? startMonth : 0;
     const toMonth = year === endYear ? endMonth : 11;
     
     for (let month = fromMonth; month <= toMonth; month++) {
-      // Column index: year 2025 = month + 1, year 2026 = month + 13
-      const yearOffset = year === 2025 ? 0 : 12;
-      indices.push(month + 1 + yearOffset);
+      // Colunas B-M (índices 1-12) = dados de 2026
+      // Ignorar anos diferentes de 2026 por enquanto
+      if (year === 2026) {
+        indices.push(month + 1); // +1 porque coluna A é o label
+      }
     }
   }
   
