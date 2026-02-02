@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useMonetaryMetas, BuType, MonthType, MetricType, BU_LABELS, METRIC_LABELS } from '@/hooks/useMonetaryMetas';
+import { useMonetaryMetas, BuType, MonthType, MetricType, BU_LABELS, METRIC_LABELS, isPontualOnlyBU } from '@/hooks/useMonetaryMetas';
 import { useMediaMetas } from '@/contexts/MediaMetasContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -86,16 +86,31 @@ export function MonetaryMetasTab() {
     const key = `${bu}-${month}`;
     
     if (metric === 'faturamento') {
-      // Auto-preenche MRR (25%), Setup (60%), Pontual (15%)
-      setLocalMetas(prev => ({
-        ...prev,
-        [key]: {
-          faturamento: value,
-          mrr: Math.round(value * 0.25),
-          setup: Math.round(value * 0.6),
-          pontual: Math.round(value * 0.15),
-        },
-      }));
+      const isPontualOnly = isPontualOnlyBU(bu as BuType);
+      
+      if (isPontualOnly) {
+        // Para BUs de expansão: 100% vai para Pontual
+        setLocalMetas(prev => ({
+          ...prev,
+          [key]: {
+            faturamento: value,
+            mrr: 0,
+            setup: 0,
+            pontual: value,
+          },
+        }));
+      } else {
+        // Para Modelo Atual e O2 TAX: split padrão 25/60/15
+        setLocalMetas(prev => ({
+          ...prev,
+          [key]: {
+            faturamento: value,
+            mrr: Math.round(value * 0.25),
+            setup: Math.round(value * 0.6),
+            pontual: Math.round(value * 0.15),
+          },
+        }));
+      }
     } else {
       // Para outras métricas, atualiza apenas o campo específico
       setLocalMetas(prev => ({
@@ -204,16 +219,36 @@ export function MonetaryMetasTab() {
     }
   };
 
+  // Métricas a exibir baseado na BU selecionada
+  const visibleMetrics = useMemo(() => {
+    if (isPontualOnlyBU(selectedBu)) {
+      return ['faturamento', 'pontual'] as MetricType[];
+    }
+    return METRICS;
+  }, [selectedBu, METRICS]);
+
   // Validation: MRR + Setup + Pontual should not exceed Faturamento
   const validationIssues = useMemo(() => {
     const issues: string[] = [];
+    const isPontualOnly = isPontualOnlyBU(selectedBu);
+    
     MONTHS.forEach(month => {
       const fat = getLocalValue(selectedBu, month, 'faturamento');
-      const sum = getLocalValue(selectedBu, month, 'mrr') +
-                  getLocalValue(selectedBu, month, 'setup') +
-                  getLocalValue(selectedBu, month, 'pontual');
-      if (fat > 0 && sum > fat) {
-        issues.push(`${month}: MRR + Setup + Pontual (${formatCurrency(sum)}) excede Faturamento (${formatCurrency(fat)})`);
+      
+      if (isPontualOnly) {
+        // Para BUs pontual-only, validar que Pontual = Faturamento
+        const pontual = getLocalValue(selectedBu, month, 'pontual');
+        if (fat > 0 && pontual !== fat) {
+          issues.push(`${month}: Pontual deve ser igual ao Incremento para ${BU_LABELS[selectedBu]}`);
+        }
+      } else {
+        // Validação padrão: soma não excede faturamento
+        const sum = getLocalValue(selectedBu, month, 'mrr') +
+                    getLocalValue(selectedBu, month, 'setup') +
+                    getLocalValue(selectedBu, month, 'pontual');
+        if (fat > 0 && sum > fat) {
+          issues.push(`${month}: MRR + Setup + Pontual (${formatCurrency(sum)}) excede Faturamento (${formatCurrency(fat)})`);
+        }
       }
     });
     return issues;
@@ -299,7 +334,7 @@ export function MonetaryMetasTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {METRICS.map(metric => (
+                {visibleMetrics.map(metric => (
                   <TableRow key={metric}>
                     <TableCell className="sticky left-0 bg-background z-10 font-medium">
                       {METRIC_LABELS[metric]}
@@ -365,12 +400,28 @@ export function MonetaryMetasTab() {
           </CardDescription>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground space-y-2">
-          <p>
-            <strong>Percentuais padrão:</strong> MRR = 25%, Setup = 60%, Pontual = 15% do Incremento
-          </p>
-          <p>
-            <strong>Dica:</strong> Ao preencher o Incremento, os demais campos são calculados automaticamente. Você pode ajustar manualmente depois.
-          </p>
+          {isPontualOnlyBU(selectedBu) ? (
+            <>
+              <p>
+                <strong>{BU_LABELS[selectedBu]}</strong> opera com ticket único (valor pontual).
+              </p>
+              <p>
+                O valor de <strong>Incremento</strong> é automaticamente replicado para <strong>Pontual</strong>.
+              </p>
+              <p>
+                Ticket padrão: <strong>{selectedBu === 'oxy_hacker' ? 'R$ 54.000' : 'R$ 140.000'}</strong>
+              </p>
+            </>
+          ) : (
+            <>
+              <p>
+                <strong>Percentuais padrão:</strong> MRR = 25%, Setup = 60%, Pontual = 15% do Incremento
+              </p>
+              <p>
+                <strong>Dica:</strong> Ao preencher o Incremento, os demais campos são calculados automaticamente. Você pode ajustar manualmente depois.
+              </p>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>
