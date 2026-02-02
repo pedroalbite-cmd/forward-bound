@@ -1,13 +1,19 @@
 
-## Adicionar Visualização de Funil aos Cards do Plan Growth
+## Design Premium para Funis do Plan Growth
 
-### Problema Atual
+### Problema Identificado
 
-Os cards de funil na aba "Plan Growth" (Consolidado 2026, Modelo Atual, O2 TAX, Oxy Hacker, Franquia) exibem apenas texto e badges sem uma representação visual clara do funil. O fundo das barras aparece "vazio" ou muito sutil.
+O design atual do `SalesFunnelVisual` está básico comparado ao funil da aba "Indicadores" (`ClickableFunnelChart`). O funil de Indicadores tem:
+- Números circulares identificando cada etapa
+- Barras mais altas e mais visíveis
+- Conversão exibida dentro da barra
+- Largura mínima garantindo legibilidade
+- Destaque visual na última etapa
+- Centralização perfeita
 
 ### Solução
 
-Adicionar barras coloridas com gradiente ao componente `SalesFunnelVisual` para criar uma visualização de funil mais impactante, similar ao usado na aba "Indicadores" (`ClickableFunnelChart`).
+Aplicar o mesmo design premium do `ClickableFunnelChart` ao `SalesFunnelVisual`, mantendo a consistência visual em toda a aplicação.
 
 ---
 
@@ -15,97 +21,53 @@ Adicionar barras coloridas com gradiente ao componente `SalesFunnelVisual` para 
 
 | Arquivo | Ação |
 |---------|------|
-| `src/components/planning/SalesFunnelVisual.tsx` | Adicionar barras coloridas com gradiente para cada etapa |
+| `src/components/planning/SalesFunnelVisual.tsx` | Redesign completo para igualar ao ClickableFunnelChart |
 
 ---
 
 ### Mudanças no Componente
 
-**Arquivo: `src/components/planning/SalesFunnelVisual.tsx`**
+**1. Aumentar altura das barras:**
+- De `h-10` para `h-14` (igual ao ClickableFunnelChart)
 
-**1. Adicionar cores para cada etapa do funil:**
-
-```typescript
-// Cores gradientes para cada etapa do funil (6 etapas)
-const stageColors = [
-  'from-orange-400 to-orange-500',   // Leads - laranja
-  'from-emerald-400 to-cyan-500',    // MQL - verde/cyan
-  'from-cyan-500 to-blue-500',       // RM - cyan/azul
-  'from-blue-500 to-blue-600',       // RR - azul
-  'from-blue-600 to-slate-500',      // Proposta - azul/slate
-  'from-slate-500 to-slate-600',     // Venda - slate
-];
-```
-
-**2. Atualizar o layout da barra do funil:**
-
-Substituir a renderização atual que usa `background: linear-gradient(135deg, ${color}, ${color}99)` por uma barra com gradiente Tailwind:
-
+**2. Adicionar número circular em cada etapa:**
 ```tsx
-<div 
-  className={`relative h-12 bg-gradient-to-r ${stageColors[index]} rounded-sm transition-all duration-300`}
-  style={{ 
-    width: `${widthPercent}%`,
-    marginLeft: 'auto',
-    marginRight: 'auto'
-  }}
->
-  <p className="absolute inset-0 flex items-center justify-center font-display font-bold text-white text-sm">
-    {item.stage}
-  </p>
-</div>
+<span className="bg-white/20 rounded-full w-6 h-6 flex-shrink-0 flex items-center justify-center text-xs font-bold">
+  {index + 1}
+</span>
 ```
 
-**3. Ajustar larguras do funil:**
+**3. Colocar porcentagem de conversão dentro da barra:**
+- Remover os badges externos à esquerda
+- Exibir porcentagem após o valor dentro da barra
 
-Usar percentuais progressivos para criar a forma afunilada:
+**4. Adicionar largura mínima (`min-w-[180px]`):**
+- Garantir legibilidade mesmo nas etapas menores
 
+**5. Destacar a última etapa (Venda):**
+```tsx
+className={cn(
+  'ring-2 ring-primary ring-offset-2 ring-offset-background'
+)}
+```
+
+**6. Ajustar larguras do funil:**
 ```typescript
-const widthPercent = 100 - (index * 12); // 100%, 88%, 76%, 64%, 52%, 40%
+const widthPercentages = [100, 85, 70, 55, 45, 35];
 ```
+
+**7. Simplificar layout:**
+- Remover colunas laterais de badge
+- Centralizar completamente as barras
 
 ---
 
-### Resultado Visual Esperado
-
-```text
-Antes (fundo vazio):
-┌────────────────────────────────────┐
-│   Leads                      12.318│
-├────────────────────────────────────┤
-│   MQL                         5.299│
-├────────────────────────────────────┤
-│   RM                          2.599│
-└────────────────────────────────────┘
-
-Depois (barras coloridas em forma de funil):
-┌════════════════════════════════════┐  ← Laranja (100%)
-│           L E A D S          12.318│
-└════════════════════════════════════┘
-   ┌═══════════════════════════════┐    ← Verde (88%)
-   │          M Q L          5.299 │
-   └═══════════════════════════════┘
-      ┌════════════════════════════┐    ← Cyan (76%)
-      │         R M         2.599  │
-      └════════════════════════════┘
-         ┌═════════════════════════┐    ← Azul (64%)
-         │       R R        1.874  │
-         └═════════════════════════┘
-            ┌══════════════════════┐    ← Azul/Slate (52%)
-            │   Proposta     1.651 │
-            └══════════════════════┘
-               ┌═══════════════════┐    ← Slate (40%)
-               │   Venda     400   │
-               └═══════════════════┘
-```
-
----
-
-### Código Completo Proposto
+### Código do Novo Design
 
 ```tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface FunnelStage {
   stage: string;
@@ -122,15 +84,19 @@ interface SalesFunnelVisualProps {
   color: string;
 }
 
-// Cores gradientes para cada etapa do funil
 const stageColors = [
-  'from-orange-400 to-orange-500',   // Leads
-  'from-emerald-400 to-cyan-500',    // MQL
-  'from-cyan-500 to-blue-500',       // RM
-  'from-blue-500 to-blue-600',       // RR
-  'from-blue-600 to-slate-500',      // Proposta
-  'from-slate-500 to-slate-600',     // Venda
+  'from-orange-400 to-orange-500',
+  'from-emerald-400 to-cyan-500',
+  'from-cyan-500 to-blue-500',
+  'from-blue-500 to-blue-600',
+  'from-blue-600 to-slate-500',
+  'from-slate-500 to-slate-600',
 ];
+
+const widthPercentages = [100, 85, 70, 55, 45, 35];
+
+const formatNumber = (value: number) => 
+  new Intl.NumberFormat("pt-BR").format(Math.round(value));
 
 export function SalesFunnelVisual({ 
   title, 
@@ -149,55 +115,59 @@ export function SalesFunnelVisual({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col gap-1">
           {stages.map((item, index) => {
-            const widthPercent = 100 - (index * 10);
-            const isFirst = index === 0;
             const colorClass = stageColors[index] || stageColors[stageColors.length - 1];
+            const widthPercent = widthPercentages[index] || 35;
+            const isLast = index === stages.length - 1;
+            const isFirst = index === 0;
             
             return (
-              <div key={item.stage} className="flex items-center w-full max-w-2xl">
-                {/* Conversion percentage on the left */}
-                <div className="w-16 text-right pr-3">
-                  {!isFirst && (
-                    <Badge variant="outline" className="text-xs">
-                      {item.percent !== "-" ? item.percent : "-"}
-                    </Badge>
+              <div key={item.stage} className="relative flex items-center justify-center">
+                <div
+                  className={cn(
+                    `relative h-14 bg-gradient-to-r ${colorClass} rounded-sm transition-all duration-300`,
+                    `flex items-center justify-center px-3 min-w-[180px]`,
+                    isLast && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
                   )}
-                </div>
-                
-                {/* Funnel bar with gradient */}
-                <div 
-                  className={`relative h-10 bg-gradient-to-r ${colorClass} rounded-sm transition-all duration-300 flex items-center justify-center`}
-                  style={{ 
-                    width: `${widthPercent}%`,
-                    marginLeft: 'auto',
-                    marginRight: 'auto'
-                  }}
+                  style={{ width: `${widthPercent}%` }}
                 >
-                  <p className="font-display font-bold text-white text-sm">
-                    {item.stage}
-                  </p>
-                </div>
-                
-                {/* Absolute value on the right */}
-                <div className="w-20 text-left pl-3">
-                  <Badge className="bg-primary/20 text-primary border-primary/30 font-mono text-xs">
-                    {item.value.toLocaleString('pt-BR')}
-                  </Badge>
+                  <div className="flex items-center gap-2 text-white text-sm font-medium whitespace-nowrap overflow-hidden">
+                    {/* Número da etapa */}
+                    <span className="bg-white/20 rounded-full w-6 h-6 flex-shrink-0 flex items-center justify-center text-xs font-bold">
+                      {index + 1}
+                    </span>
+                    
+                    {/* Nome da etapa */}
+                    <span className="hidden sm:inline truncate font-semibold">
+                      {item.stage}
+                    </span>
+                    
+                    {/* Valor absoluto */}
+                    <span className="font-bold flex-shrink-0">
+                      {formatNumber(item.value)}
+                    </span>
+                    
+                    {/* Porcentagem de conversão */}
+                    {!isFirst && item.percent !== "-" && (
+                      <span className="text-xs text-white/70 flex-shrink-0">
+                        ({item.percent})
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
         
-        {/* Overall conversion badges */}
+        {/* Badges de conversão total */}
         <div className="flex justify-center gap-3 mt-6 flex-wrap">
           <Badge className="bg-primary/20 text-primary border-primary/30">
-            Conversão MQL → Venda: {(mqlToVenda * 100).toFixed(1)}%
+            MQL → Venda: {(mqlToVenda * 100).toFixed(1)}%
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30">
-            Conversão Lead → Venda: {(leadToVenda * 100).toFixed(1)}%
+            Lead → Venda: {(leadToVenda * 100).toFixed(1)}%
           </Badge>
         </div>
       </CardContent>
@@ -208,18 +178,64 @@ export function SalesFunnelVisual({
 
 ---
 
-### Principais Diferenças
+### Comparação Visual
 
-| Aspecto | Antes | Depois |
-|---------|-------|--------|
-| Cores das barras | Uma cor única (transparente/sutil) | Gradientes coloridos por etapa |
-| Altura das barras | `py-3` (padding) | `h-10` (altura fixa) |
-| Gap entre barras | `mb-2` | `gap-1` |
-| Texto | `text-primary-foreground` | `text-white` (contraste) |
-| Largura mínima | 100% - (index * 12%) | 100% - (index * 10%) |
+```text
+ANTES (básico):
+┌──────────────────────────────────────────────────────────────┐
+│                                                              │
+│  [43%]  ┌══════════════════════════════════════┐ [12.318]   │
+│         │      Leads                           │             │
+│         └══════════════════════════════════════┘             │
+│                                                              │
+│  [49%]  ┌═══════════════════════════════════┐   [5.299]     │
+│         │      MQL                          │                │
+│         └═══════════════════════════════════┘                │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+
+DEPOIS (premium - igual Indicadores):
+┌──────────────────────────────────────────────────────────────┐
+│                                                              │
+│     ┌════════════════════════════════════════════════════┐   │
+│     │  ① Leads         12.318                            │   │
+│     └════════════════════════════════════════════════════┘   │
+│                                                              │
+│        ┌══════════════════════════════════════════════┐      │
+│        │  ② MQL          5.299    (43%)               │      │
+│        └══════════════════════════════════════════════┘      │
+│                                                              │
+│           ┌═════════════════════════════════════════┐        │
+│           │  ③ RM           2.599    (49%)          │        │
+│           └═════════════════════════════════════════┘        │
+│                                                              │
+│              ┌══════════════════════════════════┐            │
+│              │  ④ RR          1.874    (72%)    │            │
+│              └══════════════════════════════════┘            │
+│                                                              │
+│                 ┌═══════════════════════════════┐            │
+│                 │  ⑤ Proposta   1.651    (88%)  │            │
+│                 └═══════════════════════════════┘            │
+│                                                              │
+│                    ╔═══════════════════════════╗  ← ring     │
+│                    ║  ⑥ Venda      400   (24%) ║             │
+│                    ╚═══════════════════════════╝             │
+│                                                              │
+│         [MQL → Venda: 7.5%]   [Lead → Venda: 3.2%]          │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-### Nota
+### Melhorias Incluídas
 
-A prop `color` será mantida na interface para compatibilidade, mas as cores do funil agora usarão o array `stageColors` fixo para manter consistência visual com a aba "Indicadores".
+| Aspecto | Antes | Depois |
+|---------|-------|--------|
+| Altura das barras | `h-10` (40px) | `h-14` (56px) |
+| Números de etapa | Nenhum | Círculo com número |
+| Posição da conversão | Badge externo à esquerda | Dentro da barra |
+| Largura mínima | Nenhuma | `min-w-[180px]` |
+| Destaque na Venda | Nenhum | Ring verde |
+| Larguras | 100, 90, 80... | 100, 85, 70, 55, 45, 35 |
+| Layout | 3 colunas | Centralizado |
