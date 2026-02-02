@@ -1425,10 +1425,60 @@ export function IndicatorsTab() {
           { label: 'Pontual', value: totalPontual },
         ].filter(d => d.value > 0);
         
+        // 4. Conversão MQL→Venda por Tier de Faturamento
+        const mqlItems = getItemsForIndicator('mql');
+        
+        // Agrupar MQLs por faixa de faturamento
+        const mqlsByTier = new Map<string, number>();
+        mqlItems.forEach(i => {
+          const tier = i.revenueRange || 'Não informado';
+          mqlsByTier.set(tier, (mqlsByTier.get(tier) || 0) + 1);
+        });
+        
+        // Agrupar Vendas por faixa de faturamento
+        const vendasByTier = new Map<string, number>();
+        items.forEach(i => {
+          const tier = i.revenueRange || 'Não informado';
+          vendasByTier.set(tier, (vendasByTier.get(tier) || 0) + 1);
+        });
+        
+        // Calcular taxa de conversão por tier
+        const allTiers = new Set([...mqlsByTier.keys(), ...vendasByTier.keys()]);
+        const conversionByTierData = Array.from(allTiers)
+          .filter(tier => tier !== 'Não informado')
+          .map(tier => {
+            const mqls = mqlsByTier.get(tier) || 0;
+            const vendas = vendasByTier.get(tier) || 0;
+            const conversionRate = mqls > 0 ? (vendas / mqls) * 100 : 0;
+            
+            // Ordenar por faturamento (do menor para o maior)
+            const tierOrder = 
+              tier.includes('Até') ? 1 :
+              tier.includes('50k - 200k') || tier.includes('50k-200k') ? 2 :
+              tier.includes('200k - 1M') || tier.includes('200k-1M') ? 3 :
+              tier.includes('Acima') || tier.includes('1M') || tier.includes('5M') ? 4 : 5;
+            
+            return {
+              label: tier,
+              value: conversionRate,
+              highlight: conversionRate >= 10 ? 'success' as const : 
+                         conversionRate >= 5 ? 'neutral' as const : 
+                         'warning' as const,
+              order: tierOrder,
+            };
+          })
+          .sort((a, b) => a.order - b.order);
+        
         const charts: ChartConfig[] = [
           { type: 'bar', title: 'TCV por Closer', data: closerRankingData, formatValue: formatCompactCurrency },
           { type: 'bar', title: 'TCV por SDR', data: sdrRankingData, formatValue: formatCompactCurrency },
           { type: 'pie', title: 'Composição do Faturamento', data: compositionData, formatValue: formatCompactCurrency },
+          ...(conversionByTierData.length > 0 ? [{ 
+            type: 'bar' as const, 
+            title: 'Conversão MQL→Venda por Tier', 
+            data: conversionByTierData, 
+            formatValue: (v: number) => `${v.toFixed(1)}%` 
+          }] : []),
         ];
         
         setDetailSheetTitle('Vendas - Análise de Valor (TCV)');
