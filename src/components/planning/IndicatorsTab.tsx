@@ -369,7 +369,7 @@ export function IndicatorsTab() {
   const { getTotal, syncWithPipefy, isSyncing, isLoading } = useFunnelRealized(startDate, endDate);
   const { getQtyForPeriod: getModeloAtualQty, getValueForPeriod: getModeloAtualValue, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getGroupedData: getModeloAtualGroupedData, isLoading: isLoadingModeloAtual } = useModeloAtualMetas(startDate, endDate);
   const { getQtyForPeriod: getExpansaoQty, getGroupedData: getExpansaoGroupedData, isLoading: isLoadingExpansao, refetch: refetchExpansao } = useExpansaoMetas(startDate, endDate);
-  const { getQtyForPeriod: getO2TaxQty, getValueForPeriod: getO2TaxValue, getGroupedData: getO2TaxGroupedData, isLoading: isLoadingO2Tax } = useO2TaxMetas(startDate, endDate);
+  const { getQtyForPeriod: getO2TaxQty, getValueForPeriod: getO2TaxValue, getMrrForPeriod: getO2TaxMrr, getSetupForPeriod: getO2TaxSetup, getPontualForPeriod: getO2TaxPontual, getGroupedData: getO2TaxGroupedData, isLoading: isLoadingO2Tax } = useO2TaxMetas(startDate, endDate);
   const { getQtyForPeriod: getOxyHackerQty, getGroupedData: getOxyHackerGroupedData, isLoading: isLoadingOxyHacker } = useOxyHackerMetas(startDate, endDate);
   
   // Analytics hooks for drill-down
@@ -1625,8 +1625,10 @@ export function IndicatorsTab() {
           }
         }
         
-        // Other BUs don't have MRR breakdown - their "ticket" is all-inclusive
-        // No additional MRR for O2 TAX, Oxy Hacker, Franquia
+        // O2 TAX MRR from pipefy_cards_movements
+        if (includesO2Tax) {
+          total += getO2TaxMrr(startDate, endDate);
+        }
         
         return total;
       }
@@ -1646,6 +1648,11 @@ export function IndicatorsTab() {
           }
         }
         
+        // O2 TAX Setup from pipefy_cards_movements
+        if (includesO2Tax) {
+          total += getO2TaxSetup(startDate, endDate);
+        }
+        
         return total;
       }
       
@@ -1662,6 +1669,11 @@ export function IndicatorsTab() {
           } else {
             total += getPontualForPeriod(startDate, endDate);
           }
+        }
+        
+        // O2 TAX Pontual from pipefy_cards_movements
+        if (includesO2Tax) {
+          total += getO2TaxPontual(startDate, endDate);
         }
         
         return total;
