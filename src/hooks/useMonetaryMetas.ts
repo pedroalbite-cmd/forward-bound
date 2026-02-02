@@ -39,6 +39,13 @@ export const BU_LABELS: Record<BuType, string> = {
   franquia: 'Franquia',
 };
 
+// BUs that only have "pontual" revenue (no MRR or Setup)
+export const PONTUAL_ONLY_BUS: BuType[] = ['oxy_hacker', 'franquia'];
+
+export const isPontualOnlyBU = (bu: BuType): boolean => {
+  return PONTUAL_ONLY_BUS.includes(bu);
+};
+
 export const METRIC_LABELS: Record<MetricType, string> = {
   faturamento: 'Incremento',
   mrr: 'MRR',
