@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { LeadsMqlsStackedChart } from "./LeadsMqlsStackedChart";
 import { MeetingsScheduledChart } from "./MeetingsScheduledChart";
 import { ClickableFunnelChart } from "./ClickableFunnelChart";
+import { VendasRadialCard, TierBreakdown } from "./VendasRadialCard";
 import { RevenueBreakdownChart } from "./RevenueBreakdownChart";
 import { RevenueChartComparison } from "./RevenueChartComparison";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
@@ -1100,6 +1101,25 @@ export function IndicatorsTab() {
     }
     
     return items;
+  };
+
+  // Get tier breakdown for Vendas indicator
+  const getVendasTierBreakdown = (): TierBreakdown[] => {
+    const vendaItems = getItemsForIndicator('venda');
+    const tierCounts = new Map<string, number>();
+    
+    vendaItems.forEach(item => {
+      const tier = item.revenueRange || 'Não informado';
+      tierCounts.set(tier, (tierCounts.get(tier) || 0) + 1);
+    });
+    
+    const tierOrder = ['Até R$ 50k', 'R$ 50k - 200k', 'R$ 200k - 1M', 'Acima de 1M'];
+    
+    return tierOrder.map((tier, index) => ({
+      label: tier.replace('R$ ', '').replace('Até ', '<'),
+      count: tierCounts.get(tier) || 0,
+      order: index
+    }));
   };
 
   // === STRATEGIC DRILL-DOWN HANDLERS ===
@@ -2245,14 +2265,26 @@ export function IndicatorsTab() {
       {/* Cards - Quantity Indicators */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
         {indicatorConfigs.map((indicator) => (
-          <RadialProgressCard 
-            key={indicator.key} 
-            title={indicator.label} 
-            realized={getRealizedForIndicator(indicator)} 
-            meta={getMetaForIndicator(indicator)} 
-            isClickable={true}
-            onClick={() => handleRadialCardClick(indicator)}
-          />
+          indicator.key === 'venda' ? (
+            <VendasRadialCard 
+              key={indicator.key}
+              title={indicator.label}
+              realized={getRealizedForIndicator(indicator)}
+              meta={getMetaForIndicator(indicator)}
+              tierBreakdown={getVendasTierBreakdown()}
+              isClickable={true}
+              onClick={() => handleRadialCardClick(indicator)}
+            />
+          ) : (
+            <RadialProgressCard 
+              key={indicator.key} 
+              title={indicator.label} 
+              realized={getRealizedForIndicator(indicator)} 
+              meta={getMetaForIndicator(indicator)} 
+              isClickable={true}
+              onClick={() => handleRadialCardClick(indicator)}
+            />
+          )
         ))}
       </div>
 
