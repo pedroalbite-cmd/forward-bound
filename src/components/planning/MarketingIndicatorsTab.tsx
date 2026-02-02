@@ -49,7 +49,7 @@ export function MarketingIndicatorsTab() {
   }>({ isOpen: false, costKey: null });
 
   // Fetch data
-  const { data, goals, costGoals, costByChannel, isLoading, refetch } = useMarketingIndicators({
+  const { data, goals, costGoals, costByChannel, isLoading, error, refetch } = useMarketingIndicators({
     startDate: dateRange.from,
     endDate: dateRange.to,
     selectedBUs,
@@ -151,7 +151,20 @@ export function MarketingIndicatorsTab() {
         </div>
       </div>
 
-      {/* Channel Metrics Cards - NEW */}
+      {/* Error State */}
+      {error && (
+        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-center">
+          <p className="text-destructive font-medium">Erro ao carregar dados de marketing</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Não foi possível conectar à planilha. Verifique a conexão e tente novamente.
+          </p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={refetch}>
+            Tentar novamente
+          </Button>
+        </div>
+      )}
+
+      {/* Channel Metrics Cards */}
       <ChannelMetricsCards
         channels={data.channels}
         instagram={data.instagram}
