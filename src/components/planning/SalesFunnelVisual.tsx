@@ -16,6 +16,16 @@ interface SalesFunnelVisualProps {
   color: string;
 }
 
+// Cores gradientes para cada etapa do funil
+const stageColors = [
+  'from-orange-400 to-orange-500',   // Leads
+  'from-emerald-400 to-cyan-500',    // MQL
+  'from-cyan-500 to-blue-500',       // RM
+  'from-blue-500 to-blue-600',       // RR
+  'from-blue-600 to-slate-500',      // Proposta
+  'from-slate-500 to-slate-600',     // Venda
+];
+
 export function SalesFunnelVisual({ 
   title, 
   icon, 
@@ -33,34 +43,33 @@ export function SalesFunnelVisual({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center gap-1">
           {stages.map((item, index) => {
-            const widthPercent = 100 - (index * 12);
+            const widthPercent = 100 - (index * 10);
             const isFirst = index === 0;
+            const colorClass = stageColors[index] || stageColors[stageColors.length - 1];
             
             return (
-              <div key={item.stage} className="flex items-center w-full max-w-2xl mb-2">
+              <div key={item.stage} className="flex items-center w-full max-w-2xl">
                 {/* Conversion percentage on the left */}
                 <div className="w-16 text-right pr-3">
                   {!isFirst && (
                     <Badge variant="outline" className="text-xs">
-                      {stages[index - 1].percent !== "-" ? item.percent : "-"}
+                      {item.percent !== "-" ? item.percent : "-"}
                     </Badge>
                   )}
                 </div>
                 
-                {/* Funnel bar */}
+                {/* Funnel bar with gradient */}
                 <div 
-                  className="relative py-3 text-center transition-all duration-300 hover:scale-105 cursor-default"
+                  className={`relative h-10 bg-gradient-to-r ${colorClass} rounded-sm transition-all duration-300 flex items-center justify-center`}
                   style={{ 
                     width: `${widthPercent}%`,
-                    background: `linear-gradient(135deg, ${color}, ${color}99)`,
-                    borderRadius: '6px',
                     marginLeft: 'auto',
                     marginRight: 'auto'
                   }}
                 >
-                  <p className="font-display font-bold text-primary-foreground text-sm">
+                  <p className="font-display font-bold text-white text-sm">
                     {item.stage}
                   </p>
                 </div>
