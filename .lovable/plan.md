@@ -1,51 +1,80 @@
 
 
-## ✅ Integrar Receita do Mkt Indicadores com Dados do Modelo Atual
+## Corrigir Discrepância de Faturamento O2 TAX
 
-**Status: CONCLUÍDO**
+### Problema Identificado
 
-### Resumo
+O acelerômetro de faturamento para **O2 TAX** exibe **R$ 60.000**, mas o drill-down mostra **R$ 54.000**. A causa é:
 
-A seção de "Receita" na aba **Mkt Indicadores** agora usa dados reais de vendas do **Modelo Atual** (tabela `pipefy_moviment_cfos`), respeitando os filtros de período e BU selecionados.
+| Componente | Fonte de Dados | Cálculo | Resultado |
+|------------|----------------|---------|-----------|
+| **Acelerômetro** | `IndicatorsTab.tsx` linha 1591 | `getO2TaxQty('venda') * 15000` | 4 vendas × 15k = **60k** |
+| **Drill-down** | `useO2TaxAnalytics.ts` linha 540 | `card.valor` (MRR + Setup + Pontual reais) | Soma real = **~54k** |
+
+O valor correto é **R$ 54k** (soma dos valores reais do banco).
 
 ---
 
-### Arquitetura Implementada
+### Solução
 
-```text
-MarketingIndicatorsTab
-    │
-    ├── useMarketingIndicators (dados de mídia da planilha)
-    │
-    ├── useModeloAtualMetas (dados de vendas do Pipefy) ✅
-    │       └── getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod
-    │
-    └── RevenueMetricsCards
-            └── Exibe cards com valores do Modelo Atual (quando selecionado)
+Substituir o cálculo fixo de **quantidade × R$ 15.000** pelo valor real retornado pela função `getValueForPeriod` do hook `useO2TaxMetas`.
+
+---
+
+### Arquivo a Modificar
+
+| Arquivo | Ação |
+|---------|------|
+| `src/components/planning/IndicatorsTab.tsx` | Usar `getO2TaxValue` em vez de `getO2TaxQty * 15000` |
+
+---
+
+### Mudança no Código
+
+**Linha 1591 - Antes:**
+```typescript
+if (includesO2Tax) {
+  total += getO2TaxQty('venda' as O2TaxIndicator, startDate, endDate) * 15000;
+}
+```
+
+**Depois:**
+```typescript
+if (includesO2Tax) {
+  total += getO2TaxValue('venda' as O2TaxIndicator, startDate, endDate);
+}
 ```
 
 ---
 
-### Arquivos Modificados
+### Verificações Adicionais
 
-| Arquivo | Ação |
-|---------|------|
-| `src/hooks/useModeloAtualMetas.ts` | ✅ Adicionada função `getEducacaoForPeriod` |
-| `src/components/planning/MarketingIndicatorsTab.tsx` | ✅ Integrado `useModeloAtualMetas` e passando dados reais |
+Preciso verificar se `getO2TaxValue` já está disponível no componente. Se não estiver, será necessário:
 
----
-
-### Comportamento por Filtro de BU
-
-| BU Selecionada | Fonte de Dados |
-|----------------|----------------|
-| Modelo Atual | `pipefy_moviment_cfos` (dados reais) ✅ |
-| O2 TAX | Planilha (dados de mídia) |
-| Oxy Hacker | Planilha (dados de mídia) |
-| Franquia | Planilha (dados de mídia) |
+1. Adicionar a desestruturação do hook:
+```typescript
+const { 
+  getQtyForPeriod: getO2TaxQty, 
+  getValueForPeriod: getO2TaxValue,  // ← ADICIONAR
+  getGroupedData: getO2TaxGroupedData 
+} = useO2TaxMetas(startDate, endDate);
+```
 
 ---
 
-### Nota sobre GMV
+### Impacto
 
-O **GMV** (Gross Merchandise Value) continua vindo da planilha de marketing — não está disponível na tabela `pipefy_moviment_cfos`.
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Faturamento O2 TAX (Jan) | R$ 60.000 | R$ 53.888 (~54k) |
+| Consistência Gauge ↔ Drill-down | ❌ Inconsistente | ✅ Consistente |
+
+---
+
+### Nota Técnica
+
+A função `getValueForPeriod` em `useO2TaxMetas.ts` (linhas 140-185) já implementa a lógica correta:
+- Filtra cards únicos que entraram na fase "Contrato assinado" no período
+- Soma `valorPontual + valorSetup + valorMRR` de cada card
+- Retorna o total real
+
