@@ -418,9 +418,9 @@ export function usePlanGrowthData() {
     [franquiaMonthly]
   );
 
-  // Publish data to context on mount (only if not already loaded)
+  // Publish data to context whenever funnel data changes
+  // (allows Admin Metas edits to propagate to Controle Metas)
   useEffect(() => {
-    if (isLoaded) return; // Skip if MediaInvestmentTab already loaded the data
     
     setMetasPorBU({
       modelo_atual: Object.fromEntries(
