@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.query-external-db]
 verify_jwt = false
+
+[functions.read-marketing-sheet]
+verify_jwt = false
