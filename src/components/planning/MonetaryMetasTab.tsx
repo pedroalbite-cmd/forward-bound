@@ -1,13 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useMonetaryMetas, BuType, MonthType, MetricType, BU_LABELS, METRIC_LABELS, isPontualOnlyBU } from '@/hooks/useMonetaryMetas';
-import { useMediaMetas } from '@/contexts/MediaMetasContext';
+import { useMediaMetas, FunnelDataItem } from '@/contexts/MediaMetasContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Calculator, Save, Download } from 'lucide-react';
+import { Loader2, Calculator, Save, Download, Database, TrendingUp } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
 // Format currency for display
@@ -164,6 +165,14 @@ export function MonetaryMetasTab() {
     toast({ title: 'Valores calculados com base nos percentuais padrão (MRR 25% / Setup 60% / Pontual 15%)' });
   };
 
+  // Tickets médios por BU para cálculo de faturamento
+  const BU_TICKETS: Record<BuType, number> = {
+    modelo_atual: 17000,
+    o2_tax: 15000,
+    oxy_hacker: 54000,
+    franquia: 140000,
+  };
+
   // Import from Plan Growth
   const handleImportFromPlanGrowth = () => {
     if (!funnelData) {
@@ -186,28 +195,69 @@ export function MonetaryMetasTab() {
     };
     
     const funnelKey = buToFunnelKey[selectedBu];
-    const buFunnelData = funnelData[funnelKey];
+    const buFunnelData = funnelData[funnelKey] as FunnelDataItem[];
+    const ticket = BU_TICKETS[selectedBu];
+    const isPontualOnly = isPontualOnlyBU(selectedBu);
     
-    if (buFunnelData) {
-      buFunnelData.forEach(item => {
+    if (buFunnelData && buFunnelData.length > 0) {
+      buFunnelData.forEach((item: FunnelDataItem) => {
         const key = `${selectedBu}-${item.month}`;
-        // Calculate faturamento from vendas * ticket médio (approximation)
-        // For now, we'll use the investimento as a placeholder or skip if no direct mapping
-        const faturamentoEstimado = (item.vendas || 0) * 17000; // Default ticket for Modelo Atual
+        const faturamento = (item.vendas || 0) * ticket;
         
-        newMetas[key] = {
-          faturamento: faturamentoEstimado,
-          mrr: Math.round(faturamentoEstimado * 0.25),
-          setup: Math.round(faturamentoEstimado * 0.6),
-          pontual: Math.round(faturamentoEstimado * 0.15),
-        };
+        if (isPontualOnly) {
+          // BUs de expansão: 100% vai para pontual
+          newMetas[key] = {
+            faturamento,
+            mrr: 0,
+            setup: 0,
+            pontual: faturamento,
+          };
+        } else {
+          // Modelo Atual / O2 TAX: split padrão
+          newMetas[key] = {
+            faturamento,
+            mrr: Math.round(faturamento * 0.25),
+            setup: Math.round(faturamento * 0.6),
+            pontual: Math.round(faturamento * 0.15),
+          };
+        }
       });
       
       setLocalMetas(newMetas);
       setHasChanges(true);
-      toast({ title: 'Valores importados do Plan Growth' });
+      toast({ 
+        title: 'Valores importados do Plan Growth!',
+        description: `${buFunnelData.length} meses importados para ${BU_LABELS[selectedBu]}`
+      });
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Sem dados para esta BU',
+        description: 'O Plan Growth não possui dados calculados para esta unidade de negócio.'
+      });
     }
   };
+
+  // Check if current BU has data in Plan Growth
+  const hasPlanGrowthData = useMemo(() => {
+    if (!funnelData) return false;
+    const buToFunnelKey: Record<BuType, keyof typeof funnelData> = {
+      modelo_atual: 'modeloAtual',
+      o2_tax: 'o2Tax',
+      oxy_hacker: 'oxyHacker',
+      franquia: 'franquia',
+    };
+    const buData = funnelData[buToFunnelKey[selectedBu]] as FunnelDataItem[] | undefined;
+    return buData && buData.length > 0 && buData.some((item: FunnelDataItem) => item.vendas > 0);
+  }, [funnelData, selectedBu]);
+
+  // Check if current BU has data in database
+  const hasDbData = useMemo(() => {
+    return metas.some(m => 
+      m.bu === selectedBu && 
+      (Number(m.faturamento) > 0 || Number(m.mrr) > 0 || Number(m.setup) > 0 || Number(m.pontual) > 0)
+    );
+  }, [metas, selectedBu]);
 
   // Save changes
   const handleSave = async () => {
@@ -301,9 +351,38 @@ export function MonetaryMetasTab() {
                   </SelectContent>
                 </Select>
               </div>
+              
+              {/* Indicador de fonte de dados */}
+              <div className="flex items-center gap-2">
+                {hasDbData ? (
+                  <Badge variant="secondary" className="gap-1">
+                    <Database className="h-3 w-3" />
+                    Banco
+                  </Badge>
+                ) : hasPlanGrowthData ? (
+                  <Badge variant="outline" className="gap-1">
+                    <TrendingUp className="h-3 w-3" />
+                    Plan Growth
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-muted-foreground">
+                    Sem dados
+                  </Badge>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleImportFromPlanGrowth}
+                disabled={!hasPlanGrowthData}
+                title={hasPlanGrowthData ? 'Importar metas calculadas do Plan Growth' : 'Visite a aba Plan Growth para gerar dados'}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Importar Plan Growth
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm"
