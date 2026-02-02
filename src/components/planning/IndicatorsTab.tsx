@@ -13,6 +13,7 @@ import { useExpansaoMetas, ExpansaoIndicator } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas, O2TaxIndicator } from "@/hooks/useO2TaxMetas";
 import { useOxyHackerMetas, OxyHackerIndicator } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
+import { useConsolidatedMetas, ConsolidatedMetricType } from "@/hooks/useConsolidatedMetas";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
@@ -379,6 +380,9 @@ export function IndicatorsTab() {
   
   // Get funnelData from MediaMetasContext for dynamic metas
   const { funnelData } = useMediaMetas();
+  
+  // Get consolidated metas (database overrides + Plan Growth fallback)
+  const { getMetaMonetaryForPeriod } = useConsolidatedMetas();
   
   // Get closer metas for filtering goals by closer percentage
   const { getFilteredMeta } = useCloserMetas(currentYear);
@@ -1668,72 +1672,19 @@ export function IndicatorsTab() {
     }
   };
 
-  // Get meta for monetary indicators (respecting closer filter for Modelo Atual)
+  // Get meta for monetary indicators using consolidated metas (database > Plan Growth)
   const getMetaMonetaryForIndicator = (indicator: MonetaryIndicatorConfig): number => {
-    // Helper to calculate faturamento meta with closer filter applied
-    const getFilteredFaturamentoMeta = (): number => {
-      if (!funnelData) return 0;
-      
-      let total = 0;
-      const monthsInPeriod = eachMonthOfInterval({ start: startDate, end: endDate });
-      const closerFilter = selectedClosers.length > 0 ? selectedClosers : undefined;
-      
-      for (const monthDate of monthsInPeriod) {
-        const monthName = monthNames[getMonth(monthDate)];
-        
-        if (includesModeloAtual && funnelData.modeloAtual) {
-          const item = funnelData.modeloAtual.find(f => f.month === monthName);
-          if (item) {
-            let vendas = item.vendas || 0;
-            // Apply closer percentage if filter is active
-            if (closerFilter && closerFilter.length > 0) {
-              const totalPercentage = closerFilter.reduce((sum, closer) => {
-                return sum + getFilteredMeta(vendas, 'modelo_atual', monthName, [closer]) / vendas * 100;
-              }, 0);
-              vendas = vendas * (totalPercentage / 100);
-            }
-            total += vendas * 17000;
-          }
-        }
-        if (includesO2Tax && funnelData.o2Tax) {
-          const item = funnelData.o2Tax.find(f => f.month === monthName);
-          if (item) total += (item.vendas || 0) * 15000;
-        }
-        if (includesOxyHacker && funnelData.oxyHacker) {
-          const item = funnelData.oxyHacker.find(f => f.month === monthName);
-          if (item) total += (item.vendas || 0) * 54000;
-        }
-        if (includesFranquia && funnelData.franquia) {
-          const item = funnelData.franquia.find(f => f.month === monthName);
-          if (item) total += (item.vendas || 0) * 140000;
-        }
-      }
-      
-      return total;
-    };
+    const closerFilter = selectedClosers.length > 0 ? selectedClosers : undefined;
     
-    switch (indicator.key) {
-      case 'sla':
-        return 30; // Meta de 30 minutos para primeira tentativa de contato
-      
-      case 'faturamento':
-        return getFilteredFaturamentoMeta();
-      
-      case 'mrr':
-        // MRR = ~25% do faturamento
-        return getFilteredFaturamentoMeta() * 0.25;
-      
-      case 'setup':
-        // Setup = ~60% do faturamento
-        return getFilteredFaturamentoMeta() * 0.6;
-      
-      case 'pontual':
-        // Pontual = ~15% do faturamento
-        return getFilteredFaturamentoMeta() * 0.15;
-      
-      default:
-        return 0;
-    }
+    // Use hook consolidado que mescla banco + Plan Growth
+    return getMetaMonetaryForPeriod(
+      indicator.key as ConsolidatedMetricType | 'sla',
+      selectedBUs as BuType[],
+      startDate,
+      endDate,
+      closerFilter,
+      getFilteredMeta
+    );
   };
 
   // Handle monetary card click with strategic narratives
