@@ -1,261 +1,191 @@
 
-## Vincular Metas Monetárias (Admin) com Plan Growth
 
-### Problema Atual
+## Integração Automática: Admin Metas Monetárias ↔ Plan Growth
 
-Existem **duas fontes de metas desconectadas**:
+### Problema
 
-1. **Plan Growth** (`MediaInvestmentTab`/`usePlanGrowthData`)
-   - Calcula metas mensais via funil reverso
-   - Publica no `MediaMetasContext`
-   - Usado pelos Indicadores
+Atualmente existem duas fontes de dados **desconectadas**:
 
-2. **Admin > Metas Monetárias** (`MonetaryMetasTab`)
-   - Armazena overrides no banco `monetary_metas`
-   - **NÃO é consumido por nenhum dashboard**
+1. **Plan Growth** - Usa valores **hardcoded** (metasTrimestrais, oxyHackerUnits, etc.)
+2. **Admin > Metas Monetárias** - Armazena no banco `monetary_metas`, mas **não é usado** pelo Plan Growth
 
-Resultado: O admin pode configurar metas personalizadas, mas elas **nunca aparecem nos Indicadores**.
+O botão "Importar Plan Growth" é manual e vai na direção errada (Plan Growth → Banco).
 
 ---
 
-### Solução Proposta
+### Solução
 
-Criar uma **hierarquia de prioridade**:
+Inverter a hierarquia: **Banco é a fonte da verdade, Plan Growth é fallback**
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│                   FONTE DA VERDADE PARA METAS                   │
-├─────────────────────────────────────────────────────────────────┤
-│  1. monetary_metas (banco)  → Se tiver valor > 0, usa           │
-│                                                                 │
-│  2. Plan Growth (funnelData) → Fallback se banco vazio          │
-├─────────────────────────────────────────────────────────────────┤
-│           IndicatorsTab & SalesGoalsTab consomem via            │
-│                   hook centralizado                              │
-└─────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                    FLUXO DE DADOS                                 │
+├───────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  monetary_metas (Banco)  ───────────────────────────────────────► │
+│         ↓                                                         │
+│  [Se valor > 0] ─────► Plan Growth EXIBE esses valores           │
+│         ↓               (tabelas, gráficos, funnelData)          │
+│  [Se vazio] ─────────► Fallback para cálculos hardcoded          │
+│                                                                   │
+├───────────────────────────────────────────────────────────────────┤
+│  Admin edita Metas Monetárias → Salva no banco                   │
+│                                 ↓                                │
+│  React Query invalida cache → Plan Growth re-renderiza           │
+│                                 ↓                                │
+│  Indicadores usam useConsolidatedMetas (já implementado)         │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Arquivos a Criar/Modificar
+### Arquivos a Modificar
 
 | Arquivo | Ação | Descrição |
 |---------|------|-----------|
-| `src/hooks/useConsolidatedMetas.ts` | **CRIAR** | Hook que mescla banco + context |
-| `src/components/planning/IndicatorsTab.tsx` | Modificar | Usar novo hook para metas monetárias |
-| `src/components/planning/MonetaryMetasTab.tsx` | Modificar | Adicionar botão "Importar do Plan Growth" |
-| `src/hooks/usePlanGrowthData.ts` | Modificar | Expor dados de faturamento por mês |
+| `src/hooks/usePlanGrowthData.ts` | **Modificar** | Ler metas do banco via `useMonetaryMetas` |
+| `src/components/planning/MediaInvestmentTab.tsx` | **Modificar** | Usar metas do banco para cálculos de faturamento |
+| `src/components/planning/MonetaryMetasTab.tsx` | **Modificar** | Remover botão "Importar Plan Growth" |
 
 ---
 
 ### Implementação Detalhada
 
-#### 1. Criar `useConsolidatedMetas` Hook
+#### 1. Modificar `usePlanGrowthData.ts` - Ler do Banco
+
+Adicionar `useMonetaryMetas` e priorizar valores do banco:
 
 ```typescript
-// src/hooks/useConsolidatedMetas.ts
-
 import { useMonetaryMetas, BuType, MonthType } from './useMonetaryMetas';
-import { useMediaMetas } from '@/contexts/MediaMetasContext';
 
-export interface ConsolidatedMetaResult {
-  faturamento: number;
-  mrr: number;
-  setup: number;
-  pontual: number;
-  source: 'database' | 'plan_growth' | 'calculated';
-}
+export function usePlanGrowthData() {
+  const { setMetasPorBU, setFunnelData, isLoaded } = useMediaMetas();
+  const { metas, isLoading: isLoadingMetas } = useMonetaryMetas();
 
-export function useConsolidatedMetas() {
-  const { metas, getMeta } = useMonetaryMetas();
-  const { metasPorBU, funnelData } = useMediaMetas();
-
-  // Get consolidated meta for a specific BU/Month/Metric
-  // Priority: 1) Database value > 0, 2) Plan Growth value
-  const getConsolidatedMeta = (
-    bu: BuType,
-    month: MonthType,
-    metric: 'faturamento' | 'mrr' | 'setup' | 'pontual'
-  ): { value: number; source: 'database' | 'plan_growth' | 'calculated' } => {
-    // Check database first
-    const dbValue = getMeta(bu, month, metric);
-    if (dbValue > 0) {
-      return { value: dbValue, source: 'database' };
-    }
-
-    // Fallback to Plan Growth
-    const planGrowthValue = getPlanGrowthMeta(bu, month, metric);
-    if (planGrowthValue > 0) {
-      return { value: planGrowthValue, source: 'plan_growth' };
-    }
-
-    return { value: 0, source: 'calculated' };
-  };
-
-  // Get meta from Plan Growth (funnelData + ticket médio)
-  const getPlanGrowthMeta = (
-    bu: BuType,
-    month: string,
-    metric: 'faturamento' | 'mrr' | 'setup' | 'pontual'
-  ): number => {
-    if (!funnelData) return 0;
-
-    // Map BU to funnelData key
-    const buToFunnel: Record<BuType, keyof typeof funnelData> = {
-      modelo_atual: 'modeloAtual',
-      o2_tax: 'o2Tax',
-      oxy_hacker: 'oxyHacker',
-      franquia: 'franquia',
-    };
-
-    const tickets: Record<BuType, number> = {
-      modelo_atual: 17000,
-      o2_tax: 15000,
-      oxy_hacker: 54000,
-      franquia: 140000,
-    };
-
-    const buData = funnelData[buToFunnel[bu]];
-    const monthData = buData?.find(d => d.month === month);
-    if (!monthData) return 0;
-
-    const faturamento = (monthData.vendas || 0) * tickets[bu];
+  // Verificar se há metas no banco para uma BU
+  const getMetasFromDb = (bu: BuType): Record<string, number> | null => {
+    const buMetas = metas.filter(m => m.bu === bu);
+    if (buMetas.length === 0) return null;
     
-    // Para BUs pontual-only, 100% vai para pontual
-    const isPontualOnly = bu === 'oxy_hacker' || bu === 'franquia';
-
-    switch (metric) {
-      case 'faturamento': return faturamento;
-      case 'mrr': return isPontualOnly ? 0 : Math.round(faturamento * 0.25);
-      case 'setup': return isPontualOnly ? 0 : Math.round(faturamento * 0.6);
-      case 'pontual': return isPontualOnly ? faturamento : Math.round(faturamento * 0.15);
-      default: return 0;
-    }
-  };
-
-  // Get aggregated meta for a period (start to end dates)
-  const getMetaForPeriod = (
-    bus: BuType[],
-    startDate: Date,
-    endDate: Date,
-    metric: 'faturamento' | 'mrr' | 'setup' | 'pontual'
-  ): number => {
-    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    let total = 0;
-
-    bus.forEach(bu => {
-      months.forEach(month => {
-        const { value } = getConsolidatedMeta(bu, month as MonthType, metric);
-        total += value;
-      });
+    // Verificar se tem algum valor > 0
+    const hasValues = buMetas.some(m => 
+      Number(m.faturamento) > 0 || Number(m.pontual) > 0
+    );
+    if (!hasValues) return null;
+    
+    // Retornar metas mensais do banco
+    const result: Record<string, number> = {};
+    buMetas.forEach(m => {
+      result[m.month] = Number(m.faturamento) || Number(m.pontual) || 0;
     });
-
-    // Apply period fraction (pro-rata)
-    const daysInPeriod = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    const periodFraction = daysInPeriod / 365;
-
-    return Math.round(total * periodFraction);
+    return result;
   };
 
-  return {
-    getConsolidatedMeta,
-    getMetaForPeriod,
-    getPlanGrowthMeta,
-    hasOverrides: metas.some(m => m.faturamento > 0 || m.mrr > 0 || m.setup > 0 || m.pontual > 0),
-  };
+  // Para Modelo Atual: prioriza banco, fallback para metasTrimestrais
+  const metasMensaisModeloAtual = useMemo(() => {
+    const dbMetas = getMetasFromDb('modelo_atual');
+    if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
+      return dbMetas;
+    }
+    // Fallback para cálculo hardcoded
+    return distributeQuarterlyToMonthly(metasTrimestrais);
+  }, [metas]);
+
+  // Para outras BUs: similar
+  const oxyHackerMonthly = useMemo(() => {
+    const dbMetas = getMetasFromDb('oxy_hacker');
+    if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
+      return dbMetas;
+    }
+    // Fallback
+    return calculateFromUnits(oxyHackerUnits, 54000);
+  }, [metas]);
+
+  // ... similar para o2_tax e franquia
 }
 ```
 
-#### 2. Modificar `IndicatorsTab` - Usar Hook Consolidado
+#### 2. Modificar `MediaInvestmentTab.tsx` - Sincronizar com Banco
 
-Substituir a função `getMetaMonetaryForIndicator` para usar o novo hook:
-
-```typescript
-// Em IndicatorsTab.tsx
-
-import { useConsolidatedMetas } from '@/hooks/useConsolidatedMetas';
-
-// ... dentro do componente ...
-const { getMetaForPeriod } = useConsolidatedMetas();
-
-const getMetaMonetaryForIndicator = (indicator: MonetaryIndicatorConfig): number => {
-  if (indicator.key === 'sla') return 30; // Mantém fixo
-
-  const metric = indicator.key as 'faturamento' | 'mrr' | 'setup' | 'pontual';
-  return getMetaForPeriod(selectedBUs, startDate, endDate, metric);
-};
-```
-
-#### 3. Modificar `MonetaryMetasTab` - Importar do Plan Growth
-
-Adicionar botão para preencher automaticamente com valores do Plan Growth:
+Adicionar leitura do banco para os valores de faturamento mensal:
 
 ```typescript
-// Função de importação
-const handleImportFromPlanGrowth = () => {
-  if (!funnelData) {
-    toast({ 
-      variant: 'destructive', 
-      title: 'Visite Plan Growth primeiro' 
-    });
-    return;
-  }
+import { useMonetaryMetas, BuType } from '@/hooks/useMonetaryMetas';
 
-  const newMetas = { ...localMetas };
-  const buToFunnel = { modelo_atual: 'modeloAtual', o2_tax: 'o2Tax', oxy_hacker: 'oxyHacker', franquia: 'franquia' };
-  const tickets = { modelo_atual: 17000, o2_tax: 15000, oxy_hacker: 54000, franquia: 140000 };
+// Dentro do componente
+const { metas, isLoading: isLoadingMetas } = useMonetaryMetas();
 
-  const buFunnelData = funnelData[buToFunnel[selectedBu]];
-  if (!buFunnelData) return;
-
-  const isPontualOnly = selectedBu === 'oxy_hacker' || selectedBu === 'franquia';
-
-  buFunnelData.forEach(item => {
-    const key = `${selectedBu}-${item.month}`;
-    const faturamento = (item.vendas || 0) * tickets[selectedBu];
-
-    newMetas[key] = {
-      faturamento,
-      mrr: isPontualOnly ? 0 : Math.round(faturamento * 0.25),
-      setup: isPontualOnly ? 0 : Math.round(faturamento * 0.6),
-      pontual: isPontualOnly ? faturamento : Math.round(faturamento * 0.15),
-    };
+// Helper para obter metas do banco
+const getDbMetasForBU = (bu: BuType): Record<string, number> | null => {
+  const buMetas = metas.filter(m => m.bu === bu);
+  const hasValues = buMetas.some(m => Number(m.faturamento) > 0 || Number(m.pontual) > 0);
+  if (!hasValues) return null;
+  
+  const result: Record<string, number> = {};
+  buMetas.forEach(m => {
+    // Para BUs pontual-only, usar pontual
+    const value = (bu === 'oxy_hacker' || bu === 'franquia')
+      ? Number(m.pontual) || 0
+      : Number(m.faturamento) || 0;
+    result[m.month] = value;
   });
-
-  setLocalMetas(newMetas);
-  setHasChanges(true);
-  toast({ title: 'Valores importados do Plan Growth!' });
+  return result;
 };
+
+// Metas mensais: banco > cálculo hardcoded
+const metasMensaisModeloAtual = useMemo(() => {
+  const dbMetas = getDbMetasForBU('modelo_atual');
+  if (dbMetas) return dbMetas;
+  return distributeQuarterlyToMonthly(metasTrimestrais);
+}, [metas, metasTrimestrais]);
+
+const oxyHackerMonthly = useMemo(() => {
+  const dbMetas = getDbMetasForBU('oxy_hacker');
+  if (dbMetas) return dbMetas;
+  return calculateFromUnits(oxyHackerUnits, 54000);
+}, [metas]);
+
+// Similar para o2Tax e franquia...
 ```
 
-```tsx
-{/* Botão na UI */}
-<Button 
-  variant="outline" 
-  size="sm"
-  onClick={handleImportFromPlanGrowth}
->
-  <Download className="h-4 w-4 mr-2" />
-  Importar do Plan Growth
-</Button>
+#### 3. Remover Botão "Importar Plan Growth"
+
+```diff
+// MonetaryMetasTab.tsx
+
+- <Button 
+-   variant="outline" 
+-   size="sm"
+-   onClick={handleImportFromPlanGrowth}
+-   disabled={!hasPlanGrowthData}
+- >
+-   <Download className="h-4 w-4 mr-2" />
+-   Importar Plan Growth
+- </Button>
 ```
+
+Também remover:
+- Função `handleImportFromPlanGrowth`
+- State `hasPlanGrowthData`
+- Badges de "Plan Growth" / "Banco" (opcional, pode manter para referência)
 
 ---
 
-### Fluxo de Uso
+### Fluxo de Uso Após Implementação
 
 ```text
-1. Usuário visita "Plan Growth" → Define metas trimestrais
-                                   (publicadas no contexto)
+1. Admin acessa "Metas Monetárias"
+   ├── Edita valores de Pontual para Oxy Hacker (ex: R$ 162.000 em Mar)
+   └── Clica "Salvar" → Grava no banco
 
-2. Usuário acessa "Admin > Metas Monetárias"
-   ├── Pode IMPORTAR valores do Plan Growth (1 clique)
-   ├── Pode EDITAR valores manualmente (override)
-   └── Salva no banco de dados
+2. Automaticamente:
+   ├── React Query invalida cache de 'monetary-metas'
+   ├── MediaInvestmentTab re-renderiza
+   ├── usePlanGrowthData re-calcula funnelData
+   └── Indicadores atualizam via useConsolidatedMetas
 
-3. Indicadores leem via useConsolidatedMetas
-   ├── Tenta banco primeiro (override)
-   └── Fallback para Plan Growth
+3. Usuário abre Plan Growth
+   └── VÊ os valores que ele editou no Admin (sem precisar importar nada)
 ```
 
 ---
@@ -264,16 +194,24 @@ const handleImportFromPlanGrowth = () => {
 
 | Área | Antes | Depois |
 |------|-------|--------|
-| **Metas Monetárias (Admin)** | Dados isolados no banco | Sincroniza com Plan Growth |
-| **Indicadores** | Usa % hardcoded (25/60/15) | Usa banco ou Plan Growth |
-| **Consistência** | Valores podem divergir | Fonte única de verdade |
+| **Plan Growth** | Valores hardcoded | Lê do banco (com fallback) |
+| **Admin Metas** | Botão manual de importação | Sincronização automática |
+| **Indicadores** | Já usa hook consolidado | Sem mudança |
+| **UX** | 2 etapas (editar + importar) | 1 etapa (editar) |
 
 ---
 
-### Resumo Técnico
+### Detalhes Técnicos
 
-1. **Novo hook `useConsolidatedMetas`**: Mescla `monetary_metas` (banco) com `funnelData` (contexto)
-2. **Prioridade**: Banco > Plan Growth > Cálculo default
-3. **BUs Pontual-Only**: Oxy Hacker e Franquia automaticamente têm MRR=0, Setup=0
-4. **Botão de Importação**: Preenche admin com valores do Plan Growth
-5. **IndicatorsTab**: Consome via hook consolidado
+**Dependências do hook usePlanGrowthData:**
+- Adicionar dependência de `metas` do `useMonetaryMetas`
+- Recalcular funnelData quando `metas` mudar
+
+**Recálculo do funil:**
+- Quando banco tiver valores, usar `faturamento / ticketMedio` para obter vendas
+- Manter lógica de funil reverso para calcular leads, mqls, etc.
+
+**BUs Pontual-Only (Oxy Hacker, Franquia):**
+- Usar campo `pontual` do banco (já é 100% do faturamento)
+- Não há MRR/Setup
+
