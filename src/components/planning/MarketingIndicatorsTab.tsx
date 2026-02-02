@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { cn } from "@/lib/utils";
 import { useMarketingIndicators } from "@/hooks/useMarketingIndicators";
 import { useModeloAtualMetas } from "@/hooks/useModeloAtualMetas";
+import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { PerformanceGauges } from "./marketing-indicators/PerformanceGauges";
 import { InvestmentByChannelChart } from "./marketing-indicators/InvestmentByChannelChart";
 import { AcquisitionFunnelChart } from "./marketing-indicators/AcquisitionFunnelChart";
@@ -66,21 +67,50 @@ export function MarketingIndicatorsTab() {
     isLoading: isLoadingModeloAtual 
   } = useModeloAtualMetas(dateRange.from, dateRange.to);
 
-  // Calculate real revenue based on selected BU and period
+  // Fetch O2 TAX revenue data from Pipefy
+  const { 
+    getMrrForPeriod: getO2TaxMrr, 
+    getSetupForPeriod: getO2TaxSetup, 
+    getPontualForPeriod: getO2TaxPontual,
+    isLoading: isLoadingO2Tax 
+  } = useO2TaxMetas(dateRange.from, dateRange.to);
+
+  // Calculate real revenue combining data from selected BUs
   const realRevenue = useMemo(() => {
-    // Only use Modelo Atual data when "Modelo Atual" is selected
-    if (!selectedBUs.includes('Modelo Atual')) {
-      return data.revenue; // Fallback to sheet data
+    const includesModeloAtual = selectedBUs.includes('Modelo Atual');
+    const includesO2Tax = selectedBUs.includes('O2 TAX');
+    
+    // If no BU with real data is selected, fallback to sheet data
+    if (!includesModeloAtual && !includesO2Tax) {
+      return data.revenue;
+    }
+    
+    let mrr = 0, setup = 0, pontual = 0, educacao = 0;
+    
+    // Add Modelo Atual values
+    if (includesModeloAtual) {
+      mrr += getMrrForPeriod(dateRange.from, dateRange.to);
+      setup += getSetupForPeriod(dateRange.from, dateRange.to);
+      pontual += getPontualForPeriod(dateRange.from, dateRange.to);
+      educacao += getEducacaoForPeriod(dateRange.from, dateRange.to);
+    }
+    
+    // Add O2 TAX values
+    if (includesO2Tax) {
+      mrr += getO2TaxMrr(dateRange.from, dateRange.to);
+      setup += getO2TaxSetup(dateRange.from, dateRange.to);
+      pontual += getO2TaxPontual(dateRange.from, dateRange.to);
+      // O2 TAX doesn't have Educação
     }
     
     return {
-      mrr: getMrrForPeriod(dateRange.from, dateRange.to),
-      setup: getSetupForPeriod(dateRange.from, dateRange.to),
-      pontual: getPontualForPeriod(dateRange.from, dateRange.to),
-      educacao: getEducacaoForPeriod(dateRange.from, dateRange.to),
+      mrr,
+      setup,
+      pontual,
+      educacao,
       gmv: data.revenue.gmv, // GMV still comes from the sheet (not available in Pipefy)
     };
-  }, [dateRange, selectedBUs, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod, data.revenue]);
+  }, [dateRange, selectedBUs, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod, getO2TaxMrr, getO2TaxSetup, getO2TaxPontual, data.revenue]);
 
   // Format date range for display
   const dateRangeDisplay = useMemo(() => {

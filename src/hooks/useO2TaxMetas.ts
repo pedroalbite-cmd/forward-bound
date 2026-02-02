@@ -184,6 +184,66 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
     return totalValue;
   };
 
+  // Get MRR value for cards that entered "Contrato assinado" in period
+  const getMrrForPeriod = (start?: Date, end?: Date): number => {
+    if (!data?.movements || data.movements.length === 0) return 0;
+    
+    const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
+    const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
+    
+    const cardValues = new Map<string, number>();
+    for (const movement of data.movements) {
+      const entryTime = movement.dataEntrada.getTime();
+      if (entryTime >= startTime && entryTime <= endTime) {
+        if (movement.fase === 'Contrato assinado' && !cardValues.has(movement.id)) {
+          cardValues.set(movement.id, movement.valorMRR || 0);
+        }
+      }
+    }
+    
+    return Array.from(cardValues.values()).reduce((sum, val) => sum + val, 0);
+  };
+
+  // Get Setup value for cards that entered "Contrato assinado" in period
+  const getSetupForPeriod = (start?: Date, end?: Date): number => {
+    if (!data?.movements || data.movements.length === 0) return 0;
+    
+    const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
+    const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
+    
+    const cardValues = new Map<string, number>();
+    for (const movement of data.movements) {
+      const entryTime = movement.dataEntrada.getTime();
+      if (entryTime >= startTime && entryTime <= endTime) {
+        if (movement.fase === 'Contrato assinado' && !cardValues.has(movement.id)) {
+          cardValues.set(movement.id, movement.valorSetup || 0);
+        }
+      }
+    }
+    
+    return Array.from(cardValues.values()).reduce((sum, val) => sum + val, 0);
+  };
+
+  // Get Pontual value for cards that entered "Contrato assinado" in period
+  const getPontualForPeriod = (start?: Date, end?: Date): number => {
+    if (!data?.movements || data.movements.length === 0) return 0;
+    
+    const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
+    const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
+    
+    const cardValues = new Map<string, number>();
+    for (const movement of data.movements) {
+      const entryTime = movement.dataEntrada.getTime();
+      if (entryTime >= startTime && entryTime <= endTime) {
+        if (movement.fase === 'Contrato assinado' && !cardValues.has(movement.id)) {
+          cardValues.set(movement.id, movement.valorPontual || 0);
+        }
+      }
+    }
+    
+    return Array.from(cardValues.values()).reduce((sum, val) => sum + val, 0);
+  };
+
   // Get total meta for a specific indicator and date range
   const getMetaForPeriod = (indicator: O2TaxIndicator, start?: Date, end?: Date): number => {
     if (!start || !end) return 0;
@@ -304,5 +364,8 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
     getValueForPeriod,
     getMetaForPeriod,
     getGroupedData,
+    getMrrForPeriod,
+    getSetupForPeriod,
+    getPontualForPeriod,
   };
 }
