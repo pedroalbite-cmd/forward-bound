@@ -1,55 +1,26 @@
 
-## Solução: Área Colapsável de KPIs e Gráficos no Drill-Down
 
-### Problema
+## Ajuste de Metas Monetárias para Oxy Hacker e Franquia
 
-O modal de drill-down (DetailSheet) exibe:
-- KPIs (5 cards) → ~100px
-- Gráficos (3 charts) → ~200px
-- Contador de registros → ~40px
-- Header do modal → ~60px
+### Problema Identificado
 
-**Total ocupado: ~400px** de um modal de 90vh (~700px em tela típica)
+Na tela de **Metas Monetárias** (MonetaryMetasTab), quando se edita as BUs **Oxy Hacker** e **Franquia**, o sistema exibe e calcula campos de **MRR** e **Setup** que não fazem sentido para essas BUs.
 
-Resultado: **Sobram apenas ~300px para a tabela** (3-4 linhas visíveis), e o cálculo `h-[calc(90vh-220px)]` não considera o conteúdo dinâmico.
+**Modelo de negócio dessas BUs:**
+- **Oxy Hacker**: Ticket único de R$ 54.000 (valor pontual)
+- **Franquia**: Ticket único de R$ 140.000 ("Taxa de Franquia" - valor pontual)
+
+Não há componente de receita recorrente (MRR) ou implementação (Setup) - todo o faturamento é **pontual**.
 
 ---
 
-### Solução Recomendada: Collapsible Analytics Section
+### Solução Proposta
 
-Implementar um **Collapsible** (acordeão) que agrupa KPIs + Charts e permite ao usuário:
-- Ver a análise completa quando quiser (expandido por padrão)
-- Minimizar para ver mais registros da tabela (1 clique)
+Ajustar a lógica e UI do `MonetaryMetasTab.tsx` para:
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│  Vendas - Análise de Valor (TCV)                            [X] │
-│  19 contratos | TCV: R$ 1.6M | MRR: R$ 106k...                  │
-├─────────────────────────────────────────────────────────────────┤
-│  ▼ Análise Visual                                    [Recolher] │
-│  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐                        │
-│  │ 19  │ │262k │ │106k │ │ 36k │ │1.6M │  ← KPIs                │
-│  └─────┘ └─────┘ └─────┘ └─────┘ └─────┘                        │
-│  [Chart: TCV por Closer] [Chart: TCV por SDR] [Pie: Composição] │
-├─────────────────────────────────────────────────────────────────┤
-│  19 registros                                                   │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ Produto │ Empresa       │ Data │ MRR   │ Setup  │ TCV  │...││
-│  ├─────────────────────────────────────────────────────────────┤│
-│  │ CaaS    │ KV TRANSPORT. │ -    │ -     │ 12.000 │ 12k  │...││
-│  │ CaaS    │ MV ATACADO    │ 29/1 │10.000 │ -      │ 10k  │...││
-│  │ ...     │ ...           │ ...  │ ...   │ ...    │ ...  │...││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-```
-
-Quando recolhido:
-```text
-│  ▶ Análise Visual                                    [Expandir] │
-├─────────────────────────────────────────────────────────────────┤
-│  19 registros                                                   │
-│  [... TABELA COM MUITO MAIS ESPAÇO ...]                         │
-```
+1. **Ocultar linhas de MRR e Setup** quando a BU selecionada for `oxy_hacker` ou `franquia`
+2. **Ajustar o cálculo automático** para que o Incremento (faturamento) seja 100% atribuído ao Pontual
+3. **Simplificar a validação** para essas BUs (não há soma MRR+Setup+Pontual a validar)
 
 ---
 
@@ -57,108 +28,176 @@ Quando recolhido:
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/planning/indicators/DetailSheet.tsx` | Adicionar Collapsible ao redor de KPIs + Charts |
+| `src/components/planning/MonetaryMetasTab.tsx` | Lógica condicional para BUs de expansão |
+| `src/hooks/useMonetaryMetas.ts` | Adicionar helper para identificar BUs "pontual only" |
 
 ---
 
-### Implementação
+### Detalhes Técnicos
 
-#### 1. Adicionar import do Collapsible
-
-```typescript
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronRight } from "lucide-react";
-```
-
-#### 2. Adicionar estado para controlar expansão
+#### 1. Hook `useMonetaryMetas.ts` - Adicionar constante de BUs
 
 ```typescript
-const [analyticsExpanded, setAnalyticsExpanded] = useState(true);
-```
+// BUs that only have "pontual" revenue (no MRR or Setup)
+export const PONTUAL_ONLY_BUS: BuType[] = ['oxy_hacker', 'franquia'];
 
-#### 3. Envolver KPIs + Charts em Collapsible
-
-Substituir a seção atual por:
-
-```tsx
-{(kpis && kpis.length > 0) || (charts && charts.length > 0) ? (
-  <Collapsible open={analyticsExpanded} onOpenChange={setAnalyticsExpanded}>
-    <div className="flex items-center justify-between mb-2">
-      <CollapsibleTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-1 text-sm font-medium">
-          {analyticsExpanded ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
-          Análise Visual
-        </Button>
-      </CollapsibleTrigger>
-      <span className="text-xs text-muted-foreground">
-        {analyticsExpanded ? 'Clique para recolher' : 'Clique para expandir'}
-      </span>
-    </div>
-    <CollapsibleContent>
-      {kpis && kpis.length > 0 && <KpiCardsRow kpis={kpis} />}
-      {charts && charts.length > 0 && <DrillDownCharts charts={charts} />}
-    </CollapsibleContent>
-  </Collapsible>
-) : null}
-```
-
-#### 4. Resetar estado ao fechar modal
-
-Na função `handleOpenChange`:
-
-```typescript
-const handleOpenChange = (isOpen: boolean) => {
-  if (!isOpen) {
-    setSortState({ column: null, direction: 'none' });
-    setAnalyticsExpanded(true); // Reset para próxima abertura
-  }
-  onOpenChange(isOpen);
+// Helper function
+export const isPontualOnlyBU = (bu: BuType): boolean => {
+  return PONTUAL_ONLY_BUS.includes(bu);
 };
 ```
 
----
+#### 2. MonetaryMetasTab - Ajustar cálculo automático
 
-### Alternativa: Ajustar altura dinâmica (mais complexa)
+Quando `faturamento` é alterado para Oxy Hacker ou Franquia:
 
-Se preferir não usar collapsible, outra opção é usar `flex-1` para a tabela ocupar todo o espaço restante:
-
-```tsx
-<div className="flex-1 overflow-hidden flex flex-col mt-4">
-  {/* KPIs e Charts - altura fixa ou auto */}
-  <div className="flex-shrink-0">
-    {kpis && <KpiCardsRow kpis={kpis} />}
-    {charts && <DrillDownCharts charts={charts} />}
-  </div>
+```typescript
+const updateLocalValue = (bu: string, month: string, metric: MetricType, value: number) => {
+  const key = `${bu}-${month}`;
   
-  {/* Tabela - ocupa o resto */}
-  <div className="flex-1 min-h-0 overflow-hidden">
-    <ScrollArea className="h-full">
-      <Table>...</Table>
-    </ScrollArea>
-  </div>
-</div>
+  if (metric === 'faturamento') {
+    const isPontualOnly = bu === 'oxy_hacker' || bu === 'franquia';
+    
+    if (isPontualOnly) {
+      // Para BUs de expansão: 100% vai para Pontual
+      setLocalMetas(prev => ({
+        ...prev,
+        [key]: {
+          faturamento: value,
+          mrr: 0,
+          setup: 0,
+          pontual: value,  // 100% do valor
+        },
+      }));
+    } else {
+      // Para Modelo Atual e O2 TAX: split padrão 25/60/15
+      setLocalMetas(prev => ({
+        ...prev,
+        [key]: {
+          faturamento: value,
+          mrr: Math.round(value * 0.25),
+          setup: Math.round(value * 0.6),
+          pontual: Math.round(value * 0.15),
+        },
+      }));
+    }
+  } else {
+    // ...existing logic
+  }
+};
 ```
 
-Esta opção garante que a tabela use todo o espaço restante automaticamente, mas pode resultar em tabela muito pequena quando há muitos charts.
+#### 3. MonetaryMetasTab - Filtrar métricas exibidas
+
+```typescript
+// Métricas a exibir baseado na BU selecionada
+const visibleMetrics = useMemo(() => {
+  if (selectedBu === 'oxy_hacker' || selectedBu === 'franquia') {
+    return ['faturamento', 'pontual'] as MetricType[];
+  }
+  return METRICS; // ['faturamento', 'mrr', 'setup', 'pontual']
+}, [selectedBu]);
+
+// No JSX, usar visibleMetrics ao invés de METRICS
+{visibleMetrics.map(metric => (
+  <TableRow key={metric}>
+    ...
+  </TableRow>
+))}
+```
+
+#### 4. Ajustar validação
+
+```typescript
+const validationIssues = useMemo(() => {
+  const issues: string[] = [];
+  const isPontualOnly = selectedBu === 'oxy_hacker' || selectedBu === 'franquia';
+  
+  MONTHS.forEach(month => {
+    const fat = getLocalValue(selectedBu, month, 'faturamento');
+    
+    if (isPontualOnly) {
+      // Para BUs pontual-only, validar que Pontual = Faturamento
+      const pontual = getLocalValue(selectedBu, month, 'pontual');
+      if (fat > 0 && pontual !== fat) {
+        issues.push(`${month}: Pontual deve ser igual ao Incremento para ${BU_LABELS[selectedBu]}`);
+      }
+    } else {
+      // Validação padrão: soma não excede faturamento
+      const sum = getLocalValue(selectedBu, month, 'mrr') +
+                  getLocalValue(selectedBu, month, 'setup') +
+                  getLocalValue(selectedBu, month, 'pontual');
+      if (fat > 0 && sum > fat) {
+        issues.push(`${month}: MRR + Setup + Pontual excede Incremento`);
+      }
+    }
+  });
+  return issues;
+}, [localMetas, selectedBu]);
+```
+
+#### 5. Ajustar texto de ajuda
+
+```tsx
+<CardContent className="text-sm text-muted-foreground space-y-2">
+  {selectedBu === 'oxy_hacker' || selectedBu === 'franquia' ? (
+    <>
+      <p>
+        <strong>{BU_LABELS[selectedBu]}</strong> opera com ticket único (valor pontual).
+      </p>
+      <p>
+        O valor de <strong>Incremento</strong> é automaticamente replicado para <strong>Pontual</strong>.
+      </p>
+      <p>
+        Ticket padrão: <strong>{selectedBu === 'oxy_hacker' ? 'R$ 54.000' : 'R$ 140.000'}</strong>
+      </p>
+    </>
+  ) : (
+    <>
+      <p>
+        <strong>Percentuais padrão:</strong> MRR = 25%, Setup = 60%, Pontual = 15% do Incremento
+      </p>
+      <p>
+        <strong>Dica:</strong> Ao preencher o Incremento, os demais campos são calculados automaticamente.
+      </p>
+    </>
+  )}
+</CardContent>
+```
 
 ---
 
-### Recomendação Final
+### Resultado Visual Esperado
 
-A **solução Collapsible** é a mais flexível porque:
+**Para Modelo Atual / O2 TAX:**
+```
+┌──────────────┬──────┬──────┬──────┬─────────┐
+│ Métrica      │ Jan  │ Fev  │ Mar  │ Total   │
+├──────────────┼──────┼──────┼──────┼─────────┤
+│ Incremento   │ 400k │ 420k │ 450k │ 1.27M   │
+│ MRR          │ 100k │ 105k │ 112k │ 317k    │
+│ Setup        │ 240k │ 252k │ 270k │ 762k    │
+│ Pontual      │  60k │  63k │  68k │ 191k    │
+└──────────────┴──────┴──────┴──────┴─────────┘
+```
 
-1. Usuário tem controle sobre o que ver
-2. Mantém ambas as informações acessíveis
-3. Padrão UX comum em dashboards
-4. Simples de implementar
+**Para Oxy Hacker / Franquia:**
+```
+┌──────────────┬──────┬──────┬──────┬─────────┐
+│ Métrica      │ Jan  │ Fev  │ Mar  │ Total   │
+├──────────────┼──────┼──────┼──────┼─────────┤
+│ Incremento   │ 54k  │ 108k │ 108k │ 270k    │
+│ Pontual      │ 54k  │ 108k │ 108k │ 270k    │
+└──────────────┴──────┴──────┴──────┴─────────┘
+
+(MRR e Setup não são exibidos)
+```
 
 ---
 
-### Resultado Esperado
+### Impacto
 
-- **Modo expandido** (padrão): Dashboard analítico completo como está hoje
-- **Modo recolhido** (1 clique): Tabela ocupa ~80% do modal, mostrando 10+ registros
+1. **Clareza de modelo de negócio**: Interface reflete a realidade de cada BU
+2. **Simplicidade**: Usuário não precisa entender por que MRR/Setup existem para BUs de ticket único
+3. **Consistência**: Alinhado com a lógica já existente em `RevenueBreakdownChart` que trata taxaFranquia como pontual
+
