@@ -1,5 +1,6 @@
 import { useMemo, useEffect } from "react";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
+import { useMonetaryMetas, BuType, isPontualOnlyBU } from "./useMonetaryMetas";
 
 // Indicadores de 2025 (base para projeção)
 const indicators2025 = {
@@ -312,6 +313,7 @@ function calculateReverseFunnel(
  */
 export function usePlanGrowthData() {
   const { setMetasPorBU, setFunnelData, isLoaded } = useMediaMetas();
+  const { metas, isLoading: isLoadingMetas } = useMonetaryMetas();
   
   // Default values (same as MediaInvestmentTab)
   const mrrInicial = 700000;
@@ -319,11 +321,37 @@ export function usePlanGrowthData() {
   const churnMensal = 0.06;
   const retencaoVendas = 0.25;
 
-  // Calculate Modelo Atual monthly targets
-  const metasMensaisModeloAtual = useMemo(() => 
-    distributeQuarterlyToMonthly(metasTrimestrais), 
-    []
-  );
+  // Helper: Get metas from database for a BU
+  const getMetasFromDb = (bu: BuType): Record<string, number> | null => {
+    const buMetas = metas.filter(m => m.bu === bu);
+    if (buMetas.length === 0) return null;
+    
+    // Check if there are any values > 0
+    const hasValues = buMetas.some(m => 
+      Number(m.faturamento) > 0 || Number(m.pontual) > 0
+    );
+    if (!hasValues) return null;
+    
+    // Return monthly metas from database
+    const result: Record<string, number> = {};
+    const isPontualOnly = isPontualOnlyBU(bu);
+    buMetas.forEach(m => {
+      // For pontual-only BUs, use pontual field; otherwise use faturamento
+      result[m.month] = isPontualOnly 
+        ? (Number(m.pontual) || 0)
+        : (Number(m.faturamento) || 0);
+    });
+    return result;
+  };
+
+  // Calculate Modelo Atual monthly targets - prioritize DB
+  const metasMensaisModeloAtual = useMemo(() => {
+    const dbMetas = getMetasFromDb('modelo_atual');
+    if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
+      return dbMetas;
+    }
+    return distributeQuarterlyToMonthly(metasTrimestrais);
+  }, [metas]);
 
   // Calculate MRR dynamics for Modelo Atual
   const mrrDynamic = useMemo(() => 
@@ -338,19 +366,30 @@ export function usePlanGrowthData() {
     [metasMensaisModeloAtual]
   );
 
-  // Calculate monthly values for other BUs
-  const o2TaxMonthly = useMemo(() => 
-    calculateMonthlyValuesSmooth(quarterlyTotalsOutrasBUs.o2Tax, 120000), 
-    []
-  );
-  const oxyHackerMonthly = useMemo(() => 
-    calculateFromUnits(oxyHackerUnits, 54000), 
-    []
-  );
-  const franquiaMonthly = useMemo(() => 
-    calculateFromUnits(franquiaUnits, 140000), 
-    []
-  );
+  // Calculate monthly values for other BUs - prioritize DB
+  const o2TaxMonthly = useMemo(() => {
+    const dbMetas = getMetasFromDb('o2_tax');
+    if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
+      return dbMetas;
+    }
+    return calculateMonthlyValuesSmooth(quarterlyTotalsOutrasBUs.o2Tax, 120000);
+  }, [metas]);
+  
+  const oxyHackerMonthly = useMemo(() => {
+    const dbMetas = getMetasFromDb('oxy_hacker');
+    if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
+      return dbMetas;
+    }
+    return calculateFromUnits(oxyHackerUnits, 54000);
+  }, [metas]);
+  
+  const franquiaMonthly = useMemo(() => {
+    const dbMetas = getMetasFromDb('franquia');
+    if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
+      return dbMetas;
+    }
+    return calculateFromUnits(franquiaUnits, 140000);
+  }, [metas]);
 
   // Calculate funnel data for each BU
   const modeloAtualFunnel = useMemo(() => 

@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useMonetaryMetas, BuType, MonthType, MetricType, BU_LABELS, METRIC_LABELS, isPontualOnlyBU } from '@/hooks/useMonetaryMetas';
-import { useMediaMetas, FunnelDataItem } from '@/contexts/MediaMetasContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -8,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Calculator, Save, Download, Database, TrendingUp } from 'lucide-react';
+import { Loader2, Calculator, Save, Database } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 
 // Format currency for display
@@ -50,8 +49,6 @@ export function MonetaryMetasTab() {
     MONTHS,
     METRICS,
   } = useMonetaryMetas();
-  
-  const { funnelData } = useMediaMetas();
 
   const [selectedBu, setSelectedBu] = useState<BuType>('modelo_atual');
   const [localMetas, setLocalMetas] = useState<Record<string, Record<MetricType, number>>>({});
@@ -144,7 +141,7 @@ export function MonetaryMetasTab() {
     return MONTHS.reduce((sum, month) => sum + getLocalValue(bu, month, metric), 0);
   };
 
-  // Calculate from default percentages (60/25/15)
+  // Calculate from default percentages (25/60/15)
   const handleCalculateFromPercentages = () => {
     const newMetas = { ...localMetas };
     
@@ -164,92 +161,6 @@ export function MonetaryMetasTab() {
     setHasChanges(true);
     toast({ title: 'Valores calculados com base nos percentuais padrão (MRR 25% / Setup 60% / Pontual 15%)' });
   };
-
-  // Tickets médios por BU para cálculo de faturamento
-  const BU_TICKETS: Record<BuType, number> = {
-    modelo_atual: 17000,
-    o2_tax: 15000,
-    oxy_hacker: 54000,
-    franquia: 140000,
-  };
-
-  // Import from Plan Growth
-  const handleImportFromPlanGrowth = () => {
-    if (!funnelData) {
-      toast({ 
-        variant: 'destructive', 
-        title: 'Dados não disponíveis', 
-        description: 'Visite a aba Plan Growth primeiro para carregar os dados.' 
-      });
-      return;
-    }
-
-    const newMetas = { ...localMetas };
-    
-    // Map BU to funnel data key
-    const buToFunnelKey: Record<BuType, keyof typeof funnelData> = {
-      modelo_atual: 'modeloAtual',
-      o2_tax: 'o2Tax',
-      oxy_hacker: 'oxyHacker',
-      franquia: 'franquia',
-    };
-    
-    const funnelKey = buToFunnelKey[selectedBu];
-    const buFunnelData = funnelData[funnelKey] as FunnelDataItem[];
-    const ticket = BU_TICKETS[selectedBu];
-    const isPontualOnly = isPontualOnlyBU(selectedBu);
-    
-    if (buFunnelData && buFunnelData.length > 0) {
-      buFunnelData.forEach((item: FunnelDataItem) => {
-        const key = `${selectedBu}-${item.month}`;
-        const faturamento = (item.vendas || 0) * ticket;
-        
-        if (isPontualOnly) {
-          // BUs de expansão: 100% vai para pontual
-          newMetas[key] = {
-            faturamento,
-            mrr: 0,
-            setup: 0,
-            pontual: faturamento,
-          };
-        } else {
-          // Modelo Atual / O2 TAX: split padrão
-          newMetas[key] = {
-            faturamento,
-            mrr: Math.round(faturamento * 0.25),
-            setup: Math.round(faturamento * 0.6),
-            pontual: Math.round(faturamento * 0.15),
-          };
-        }
-      });
-      
-      setLocalMetas(newMetas);
-      setHasChanges(true);
-      toast({ 
-        title: 'Valores importados do Plan Growth!',
-        description: `${buFunnelData.length} meses importados para ${BU_LABELS[selectedBu]}`
-      });
-    } else {
-      toast({
-        variant: 'destructive',
-        title: 'Sem dados para esta BU',
-        description: 'O Plan Growth não possui dados calculados para esta unidade de negócio.'
-      });
-    }
-  };
-
-  // Check if current BU has data in Plan Growth
-  const hasPlanGrowthData = useMemo(() => {
-    if (!funnelData) return false;
-    const buToFunnelKey: Record<BuType, keyof typeof funnelData> = {
-      modelo_atual: 'modeloAtual',
-      o2_tax: 'o2Tax',
-      oxy_hacker: 'oxyHacker',
-      franquia: 'franquia',
-    };
-    const buData = funnelData[buToFunnelKey[selectedBu]] as FunnelDataItem[] | undefined;
-    return buData && buData.length > 0 && buData.some((item: FunnelDataItem) => item.vendas > 0);
-  }, [funnelData, selectedBu]);
 
   // Check if current BU has data in database
   const hasDbData = useMemo(() => {
@@ -357,32 +268,17 @@ export function MonetaryMetasTab() {
                 {hasDbData ? (
                   <Badge variant="secondary" className="gap-1">
                     <Database className="h-3 w-3" />
-                    Banco
-                  </Badge>
-                ) : hasPlanGrowthData ? (
-                  <Badge variant="outline" className="gap-1">
-                    <TrendingUp className="h-3 w-3" />
-                    Plan Growth
+                    Configurado
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-muted-foreground">
-                    Sem dados
+                    Sem dados (usando fallback)
                   </Badge>
                 )}
               </div>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={handleImportFromPlanGrowth}
-                disabled={!hasPlanGrowthData}
-                title={hasPlanGrowthData ? 'Importar metas calculadas do Plan Growth' : 'Visite a aba Plan Growth para gerar dados'}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Importar Plan Growth
-              </Button>
               <Button 
                 variant="outline" 
                 size="sm"
