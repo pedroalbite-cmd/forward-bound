@@ -18,37 +18,37 @@ const MONTH_COLUMNS: Record<string, number> = {
 
 // Metric name mappings (normalized → original variations)
 const METRIC_MAPPINGS: Record<string, string[]> = {
-  'midiaGoogle': ['Mídia Google Ads', 'Mídia - Google Ads', 'Google Ads - Mídia'],
-  'leadsGoogle': ['Leads - Google Ads', 'Google Ads - Leads', 'Leads Google Ads'],
-  'cplGoogle': ['CPL - Google Ads', 'Google Ads - CPL', 'CPL Google Ads'],
-  'midiaMeta': ['Mídia Meta Ads', 'Mídia - Meta Ads', 'Meta Ads - Mídia'],
-  'leadsMeta': ['Leads - Meta Ads', 'Meta Ads - Leads', 'Leads Meta Ads'],
-  'cplMeta': ['CPL - Meta Ads', 'Meta Ads - CPL', 'CPL Meta Ads'],
-  'midiaTotal': ['Mídia total', 'Mídia Total', 'Total Mídia'],
-  'leadsTotais': ['Leads totais', 'Leads Totais', 'Total Leads'],
-  'cplTotal': ['CPL total', 'CPL Total', 'Total CPL'],
-  'mqlPorFaturamento': ['MQL por Faturamento', 'MQL - Faturamento', 'MQLs'],
-  'cpmqlPorFaturamento': ['CPMQL por Faturamento', 'CPMQL', 'CPMql'],
-  'reuniaoMarcada': ['Reunião marcada', 'Reunião Marcada', 'RM', 'Reuniões Marcadas'],
-  'cprm': ['CPRM', 'CPRm', 'Custo por RM'],
-  'reuniaoRealizada': ['Reunião realizada', 'Reunião Realizada', 'RR', 'Reuniões Realizadas'],
-  'cprr': ['CPRR', 'CPRr', 'Custo por RR'],
-  'propostaEnviada': ['Proposta enviada', 'Proposta Enviada', 'Propostas'],
-  'cpp': ['CPP', 'Custo por Proposta'],
-  'vendas': ['Vendas', 'Venda', 'Total Vendas'],
-  'cpv': ['CPV', 'Custo por Venda'],
-  'mrr': ['MRR', 'Mrr'],
-  'setup': ['Setup', 'SETUP'],
-  'pontual': ['Pontual', 'PONTUAL'],
-  'educacao': ['Educação', 'EDUCAÇÃO', 'Educacao'],
-  'gmv': ['GMV', 'Gmv'],
-  'cac': ['CAC', 'Cac'],
-  'ltv': ['LTV', 'Ltv'],
-  'tcv': ['TCV', 'Tcv'],
-  'roas': ['ROAS', 'Roas'],
-  'roasLtv': ['ROAS LTV', 'ROAS Ltv', 'Roas LTV'],
-  'roiLtv': ['ROI LTV', 'ROI Ltv', 'Roi LTV'],
-  'ltvCac': ['LTV/CAC', 'LTV / CAC', 'Ltv/Cac'],
+  'midiaGoogle': ['Mídia Google Ads', 'Mídia - Google Ads', 'Google Ads - Mídia', 'Mídia Google', 'Google Ads Mídia'],
+  'leadsGoogle': ['Leads - Google Ads', 'Google Ads - Leads', 'Leads Google Ads', 'Leads Google'],
+  'cplGoogle': ['CPL - Google Ads', 'Google Ads - CPL', 'CPL Google Ads', 'CPL Google'],
+  'midiaMeta': ['Mídia Meta Ads', 'Mídia - Meta Ads', 'Meta Ads - Mídia', 'Mídia Meta', 'Meta Ads Mídia'],
+  'leadsMeta': ['Leads - Meta Ads', 'Meta Ads - Leads', 'Leads Meta Ads', 'Leads Meta', 'Leads - Meta', 'Lead Meta Ads', 'Leads -  Meta Ads'],
+  'cplMeta': ['CPL - Meta Ads', 'Meta Ads - CPL', 'CPL Meta Ads', 'CPL Meta'],
+  'midiaTotal': ['Mídia total', 'Mídia Total', 'Total Mídia', 'Mídia Totais', 'Total Mídia Ads'],
+  'leadsTotais': ['Leads totais', 'Leads Totais', 'Total Leads', 'Total de Leads'],
+  'cplTotal': ['CPL total', 'CPL Total', 'Total CPL', 'CPL Totais'],
+  'mqlPorFaturamento': ['MQL por Faturamento', 'MQL - Faturamento', 'MQLs', 'MQL Faturamento', 'MQLs por Faturamento'],
+  'cpmqlPorFaturamento': ['CPMQL por Faturamento', 'CPMQL', 'CPMql', 'CPMQL Faturamento', 'CP MQL'],
+  'reuniaoMarcada': ['Reunião marcada', 'Reunião Marcada', 'RM', 'Reuniões Marcadas', 'Reuniao Marcada'],
+  'cprm': ['CPRM', 'CPRm', 'Custo por RM', 'CP RM', 'Custo RM'],
+  'reuniaoRealizada': ['Reunião realizada', 'Reunião Realizada', 'RR', 'Reuniões Realizadas', 'Reuniao Realizada'],
+  'cprr': ['CPRR', 'CPRr', 'Custo por RR', 'CP RR', 'Custo RR'],
+  'propostaEnviada': ['Proposta enviada', 'Proposta Enviada', 'Propostas', 'Propostas Enviadas', 'Proposta'],
+  'cpp': ['CPP', 'Custo por Proposta', 'CP Proposta', 'Custo Proposta', 'CP P'],
+  'vendas': ['Vendas', 'Venda', 'Total Vendas', 'Vendas Totais'],
+  'cpv': ['CPV', 'Custo por Venda', 'CP Venda', 'Custo Venda'],
+  'mrr': ['MRR', 'Mrr', 'Monthly Recurring Revenue', 'Receita Recorrente'],
+  'setup': ['Setup', 'SETUP', 'Valor Setup', 'Taxa Setup'],
+  'pontual': ['Pontual', 'PONTUAL', 'Receita Pontual', 'Valor Pontual'],
+  'educacao': ['Educação', 'EDUCAÇÃO', 'Educacao', 'Educ', 'Receita Educação', 'Education'],
+  'gmv': ['GMV', 'Gmv', 'Receita Total', 'Receita Bruta', 'Gross Merchandise Value', 'Total GMV', 'Total Receita', 'GMV (Gross Merchandise Value)'],
+  'cac': ['CAC', 'Cac', 'Custo Aquisição Cliente', 'Customer Acquisition Cost'],
+  'ltv': ['LTV', 'Ltv', 'Lifetime Value', 'Valor Vitalício'],
+  'tcv': ['TCV', 'Tcv', 'Total Contract Value', 'Valor Total Contrato', 'Ticket Total', 'TCV (Total Contract Value)'],
+  'roas': ['ROAS', 'Roas', 'Return on Ad Spend'],
+  'roasLtv': ['ROAS LTV', 'ROAS Ltv', 'Roas LTV', 'ROAS x LTV'],
+  'roiLtv': ['ROI LTV', 'ROI Ltv', 'Roi LTV', 'ROI x LTV'],
+  'ltvCac': ['LTV/CAC', 'LTV / CAC', 'Ltv/Cac', 'LTV:CAC', 'LTV CAC'],
 };
 
 function normalizeText(text: string): string {
@@ -165,6 +165,7 @@ serve(async (req) => {
     
     // Parse rows and aggregate values
     const metrics: Record<string, number> = {};
+    const unmappedLabels: string[] = [];
     
     for (const row of rows) {
       if (!row.c || !row.c[0]) continue;
@@ -173,6 +174,13 @@ serve(async (req) => {
       if (typeof label !== 'string') continue;
       
       const metricKey = findMetricKey(label);
+      
+      // Track unmapped labels for debugging
+      if (!metricKey && label.trim() !== '') {
+        unmappedLabels.push(label);
+        continue;
+      }
+      
       if (!metricKey) continue;
       
       // Sum values for selected months
@@ -187,12 +195,15 @@ serve(async (req) => {
       const isRatio = ['cplGoogle', 'cplMeta', 'cplTotal', 'cpmqlPorFaturamento', 'cprm', 'cprr', 'cpp', 'cpv', 'cac', 'ltv', 'tcv', 'roas', 'roasLtv', 'roiLtv', 'ltvCac'].includes(metricKey);
       
       if (isRatio && monthIndices.length > 1) {
-        // For cost metrics, we should recalculate from totals, not average
-        // But for now, use the sum (will be recalculated in the hook if needed)
         metrics[metricKey] = sum;
       } else {
         metrics[metricKey] = sum;
       }
+    }
+    
+    // Log unmapped labels for debugging
+    if (unmappedLabels.length > 0) {
+      console.log('Unmapped labels found:', unmappedLabels.slice(0, 20));
     }
     
     console.log('Parsed metrics:', Object.keys(metrics).length, 'metrics found');
