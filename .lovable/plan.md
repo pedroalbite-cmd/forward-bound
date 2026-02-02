@@ -1,198 +1,243 @@
 
 
-## Adicionar Breakdown por Tier de Faturamento no Card de Contratos Assinados
+## Adicionar TCV por Tier de Faturamento (Closer/SDR) nos Drill-Downs de Vendas
 
 ### Objetivo
 
-Enriquecer o card "Vendas" (Contratos Assinados) na aba Indicadores para mostrar, além do total e percentual de meta, uma distribuição visual por tier de faturamento do cliente. Isso permitirá ver rapidamente a composição das vendas sem precisar abrir o drill-down.
+Adicionar dois novos gráficos que mostrem a distribuição de TCV por tier de faturamento, separados por Closer e por SDR, em **dois lugares**:
+1. **Funil do Período** (ClickableFunnelChart) - ao clicar em "Contrato Assinado"
+2. **Radial Cards** (IndicatorsTab) - ao clicar no acelerador de "Vendas"
+
+Isso permitirá analisar em quais faixas de cliente cada closer/SDR está performando melhor.
+
+---
+
+### Localização das Mudanças
+
+| Arquivo | Função/Seção | Linhas |
+|---------|--------------|--------|
+| `src/components/planning/ClickableFunnelChart.tsx` | `buildVendaMiniDashboard()` | 351-427 |
+| `src/components/planning/IndicatorsTab.tsx` | `case 'venda':` | 1472-1482 |
 
 ---
 
 ### Visual Proposto
 
-O card de Vendas será expandido para incluir mini-barras horizontais mostrando a quantidade de vendas por tier:
+Após os gráficos existentes (TCV por Closer, TCV por SDR/Produto, etc.), adicionar:
 
 ```text
-┌──────────────────────────────┐
-│           Vendas             │
-│     ┌─────────────────┐      │
-│     │       12        │      │
-│     │      75%        │      │
-│     │   (Meta: 16)    │      │
-│     └─────────────────┘      │
-│ ─────────────────────────────│
-│  Até R$ 50k      ██░░░░  2   │
-│  R$ 50k - 200k   ████░░  4   │
-│  R$ 200k - 1M    ██████  6   │
-│  Acima de 1M     ░░░░░░  0   │
-└──────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Contratos Assinados - Análise de Valor                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ┌────────────────────┐  ┌────────────────────┐  ┌──────────────────────┐   │
+│  │   TCV por Closer   │  │  TCV por Produto   │  │  Conversão por Tier  │   │
+│  └────────────────────┘  └────────────────────┘  └──────────────────────┘   │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                    TCV por Tier - Closer (NOVO)                       │  │
+│  │                                                                       │  │
+│  │  Pedro - Até R$ 50k      ▓▓░░░░░░░░░░  R$ 80k                        │  │
+│  │  Pedro - R$ 50k-200k     ▓▓▓▓▓░░░░░░░  R$ 150k                       │  │
+│  │  Daniel - Até R$ 50k     ▓▓▓░░░░░░░░░  R$ 95k                        │  │
+│  │  Daniel - R$ 200k-1M     ▓▓▓▓▓▓▓▓░░░░  R$ 320k                       │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                     TCV por Tier - SDR (NOVO)                         │  │
+│  │                                                                       │  │
+│  │  João - R$ 50k-200k      ▓▓▓▓░░░░░░░░  R$ 180k                       │  │
+│  │  João - R$ 200k-1M       ▓▓▓▓▓▓░░░░░░  R$ 280k                       │  │
+│  │  Maria - Até R$ 50k      ▓▓░░░░░░░░░░  R$ 65k                        │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Abordagem Técnica
-
-**1. Criar um novo componente especializado:**
-
-Criar `VendasRadialCard` que estende o `RadialProgressCard` atual para incluir a seção de breakdown por tier.
-
-**2. Passar dados de tier para o card:**
-
-- Usar o hook `getItemsForIndicator('venda')` para obter os items de vendas
-- Agrupar por `revenueRange` e calcular quantidade por tier
-- Passar esses dados como prop adicional
-
-**3. Renderizar mini-barras horizontais:**
-
-Dentro do card, abaixo da meta, adicionar mini-barras compactas mostrando a distribuição.
-
----
-
-### Arquivos a Modificar
-
-| Arquivo | Ação |
-|---------|------|
-| `src/components/planning/IndicatorsTab.tsx` | Adicionar componente `VendasRadialCard` e lógica de agrupamento por tier |
-
----
-
-### Implementação Detalhada
-
-**1. Definir interface para breakdown por tier:**
+### Lógica de Cálculo (igual para ambos os arquivos)
 
 ```typescript
-interface TierBreakdown {
-  label: string;
-  count: number;
-  order: number;
-}
-```
-
-**2. Criar o componente VendasRadialCard:**
-
-```typescript
-interface VendasRadialCardProps {
-  title: string;
-  realized: number;
-  meta: number;
-  tierBreakdown: TierBreakdown[];
-  onClick?: () => void;
-  isClickable?: boolean;
-}
-
-const VendasRadialCard = ({ 
-  title, 
-  realized, 
-  meta, 
-  tierBreakdown,
-  onClick, 
-  isClickable = false 
-}: VendasRadialCardProps) => {
-  const percentage = meta > 0 ? (realized / meta) * 100 : 0;
-  const isAboveMeta = percentage >= 100;
-  const maxCount = Math.max(...tierBreakdown.map(t => t.count), 1);
-
-  return (
-    <Card 
-      className={cn(
-        "bg-card border-border relative group transition-all duration-200",
-        isClickable && "cursor-pointer hover:border-primary/50 hover:shadow-md"
-      )}
-      onClick={onClick}
-    >
-      {/* Header e gráfico radial existente */}
-      ...
-      
-      {/* Novo: Breakdown por Tier */}
-      {tierBreakdown.length > 0 && (
-        <div className="px-4 pb-3 pt-2 border-t border-border/50 space-y-1.5">
-          {tierBreakdown.map(tier => (
-            <div key={tier.label} className="flex items-center gap-2 text-xs">
-              <span className="w-20 truncate text-muted-foreground">{tier.label}</span>
-              <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-primary rounded-full transition-all"
-                  style={{ width: `${(tier.count / maxCount) * 100}%` }}
-                />
-              </div>
-              <span className="w-6 text-right font-medium text-foreground">{tier.count}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
-  );
-};
-```
-
-**3. Calcular breakdown no render:**
-
-Na seção onde os cards são renderizados, calcular o breakdown para o indicador de vendas:
-
-```typescript
-const getVendasTierBreakdown = (): TierBreakdown[] => {
-  const vendaItems = getItemsForIndicator('venda');
-  const tierCounts = new Map<string, number>();
+// TCV por Closer + Tier de Faturamento
+const closerTierTotals = new Map<string, number>();
+items.forEach(i => {
+  const closer = (i.responsible || i.closer || 'Sem Closer').split(' ')[0];
+  const tier = i.revenueRange || 'Não informado';
+  if (tier === 'Não informado') return;
   
-  vendaItems.forEach(item => {
-    const tier = item.revenueRange || 'Não informado';
-    tierCounts.set(tier, (tierCounts.get(tier) || 0) + 1);
-  });
+  const key = `${closer} - ${tier}`;
+  const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
+  closerTierTotals.set(key, (closerTierTotals.get(key) || 0) + itemTCV);
+});
+
+const closerTierData = Array.from(closerTierTotals.entries())
+  .map(([label, value]) => ({ label, value }))
+  .sort((a, b) => b.value - a.value);
+
+// TCV por SDR + Tier de Faturamento
+const sdrTierTotals = new Map<string, number>();
+items.forEach(i => {
+  const sdr = (i.sdr || 'Sem SDR').split(' ')[0];
+  const tier = i.revenueRange || 'Não informado';
+  if (tier === 'Não informado') return;
   
-  const tierOrder = ['Até R$ 50k', 'R$ 50k - 200k', 'R$ 200k - 1M', 'Acima de 1M'];
-  
-  return tierOrder
-    .filter(tier => tierCounts.has(tier))
-    .map((tier, index) => ({
-      label: tier.replace('R$ ', '').replace('Até ', '<'),
-      count: tierCounts.get(tier) || 0,
-      order: index
-    }));
-};
+  const key = `${sdr} - ${tier}`;
+  const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
+  sdrTierTotals.set(key, (sdrTierTotals.get(key) || 0) + itemTCV);
+});
+
+const sdrTierData = Array.from(sdrTierTotals.entries())
+  .map(([label, value]) => ({ label, value }))
+  .sort((a, b) => b.value - a.value);
 ```
 
-**4. Usar o componente especializado para Vendas:**
+---
+
+### Implementação - Arquivo 1: ClickableFunnelChart
+
+**Modificar `buildVendaMiniDashboard()` (linhas 372-397):**
+
+Adicionar cálculo de tier por closer/SDR e novos gráficos ao array `charts`:
 
 ```typescript
-{indicatorConfigs.map((indicator) => (
-  indicator.key === 'venda' ? (
-    <VendasRadialCard 
-      key={indicator.key}
-      title={indicator.label}
-      realized={getRealizedForIndicator(indicator)}
-      meta={getMetaForIndicator(indicator)}
-      tierBreakdown={getVendasTierBreakdown()}
-      isClickable={true}
-      onClick={() => handleRadialCardClick(indicator)}
-    />
-  ) : (
-    <RadialProgressCard 
-      key={indicator.key}
-      title={indicator.label}
-      realized={getRealizedForIndicator(indicator)}
-      meta={getMetaForIndicator(indicator)}
-      isClickable={true}
-      onClick={() => handleRadialCardClick(indicator)}
-    />
-  )
-))}
+// Charts - TCV por Closer (existente)
+const closerTotals = new Map<string, number>();
+...
+
+// Charts - TCV por Produto (existente)
+const productTotals = new Map<string, number>();
+...
+
+// NOVO: TCV por Closer + Tier
+const closerTierTotals = new Map<string, number>();
+items.forEach(i => {
+  const closer = (i.responsible || i.closer || 'Sem Closer').split(' ')[0];
+  const tier = i.revenueRange || 'Não informado';
+  if (tier === 'Não informado') return;
+  const key = `${closer} - ${tier}`;
+  const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
+  closerTierTotals.set(key, (closerTierTotals.get(key) || 0) + itemTCV);
+});
+const closerTierData = Array.from(closerTierTotals.entries())
+  .map(([label, value]) => ({ label, value }))
+  .sort((a, b) => b.value - a.value);
+
+// NOVO: TCV por SDR + Tier
+const sdrTierTotals = new Map<string, number>();
+items.forEach(i => {
+  const sdr = (i.sdr || 'Sem SDR').split(' ')[0];
+  const tier = i.revenueRange || 'Não informado';
+  if (tier === 'Não informado') return;
+  const key = `${sdr} - ${tier}`;
+  const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
+  sdrTierTotals.set(key, (sdrTierTotals.get(key) || 0) + itemTCV);
+});
+const sdrTierData = Array.from(sdrTierTotals.entries())
+  .map(([label, value]) => ({ label, value }))
+  .sort((a, b) => b.value - a.value);
+
+const charts: ChartConfig[] = [
+  { type: 'bar', title: 'TCV por Closer', data: tcvByCloserData, formatValue: formatCompactCurrency },
+  { type: 'pie', title: 'TCV por Produto', data: tcvByProductData, formatValue: formatCompactCurrency },
+  // NOVOS:
+  ...(closerTierData.length > 0 ? [{ 
+    type: 'bar' as const, 
+    title: 'TCV por Tier - Closer', 
+    data: closerTierData, 
+    formatValue: formatCompactCurrency 
+  }] : []),
+  ...(sdrTierData.length > 0 ? [{ 
+    type: 'bar' as const, 
+    title: 'TCV por Tier - SDR', 
+    data: sdrTierData, 
+    formatValue: formatCompactCurrency 
+  }] : []),
+];
 ```
 
 ---
 
-### Resultado Esperado
+### Implementação - Arquivo 2: IndicatorsTab
 
-O card de Vendas será visualmente distinto dos demais, mostrando:
-- O total de contratos assinados e percentual da meta (como hoje)
-- Uma seção compacta abaixo com mini-barras horizontais por tier de faturamento
-- Labels abreviados para economizar espaço (ex: "<50k", "50k-200k", etc.)
+**Modificar `case 'venda':` (após linha 1470, antes de `const charts`):**
+
+Adicionar os mesmos cálculos e gráficos:
+
+```typescript
+// 5. TCV por Closer + Tier de Faturamento (NOVO)
+const closerTierTotals = new Map<string, number>();
+items.forEach(i => {
+  const closer = (i.responsible || i.closer || 'Sem Closer').split(' ')[0];
+  const tier = i.revenueRange || 'Não informado';
+  if (tier === 'Não informado') return;
+  const key = `${closer} - ${tier}`;
+  const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
+  closerTierTotals.set(key, (closerTierTotals.get(key) || 0) + itemTCV);
+});
+const closerTierData = Array.from(closerTierTotals.entries())
+  .map(([label, value]) => ({ label, value }))
+  .sort((a, b) => b.value - a.value);
+
+// 6. TCV por SDR + Tier de Faturamento (NOVO)
+const sdrTierTotals = new Map<string, number>();
+items.forEach(i => {
+  const sdr = (i.sdr || 'Sem SDR').split(' ')[0];
+  const tier = i.revenueRange || 'Não informado';
+  if (tier === 'Não informado') return;
+  const key = `${sdr} - ${tier}`;
+  const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
+  sdrTierTotals.set(key, (sdrTierTotals.get(key) || 0) + itemTCV);
+});
+const sdrTierData = Array.from(sdrTierTotals.entries())
+  .map(([label, value]) => ({ label, value }))
+  .sort((a, b) => b.value - a.value);
+
+const charts: ChartConfig[] = [
+  { type: 'bar', title: 'TCV por Closer', data: closerRankingData, formatValue: formatCompactCurrency },
+  { type: 'bar', title: 'TCV por SDR', data: sdrRankingData, formatValue: formatCompactCurrency },
+  { type: 'pie', title: 'Composição do Faturamento', data: compositionData, formatValue: formatCompactCurrency },
+  ...(conversionByTierData.length > 0 ? [{ ... }] : []),
+  // NOVOS:
+  ...(closerTierData.length > 0 ? [{ 
+    type: 'bar' as const, 
+    title: 'TCV por Tier - Closer', 
+    data: closerTierData, 
+    formatValue: formatCompactCurrency 
+  }] : []),
+  ...(sdrTierData.length > 0 ? [{ 
+    type: 'bar' as const, 
+    title: 'TCV por Tier - SDR', 
+    data: sdrTierData, 
+    formatValue: formatCompactCurrency 
+  }] : []),
+];
+```
 
 ---
 
-### Benefícios
+### Resumo das Mudanças
 
-1. **Visão rápida** - Ver distribuição sem precisar abrir drill-down
-2. **Insight estratégico** - Identificar se as vendas estão concentradas em clientes maiores ou menores
-3. **Consistência** - Mantém o visual dos outros cards, apenas expandindo o de Vendas
-4. **Performance** - Usa os mesmos dados já carregados para o drill-down
+| Arquivo | Mudança |
+|---------|---------|
+| `ClickableFunnelChart.tsx` | Adicionar 2 gráficos em `buildVendaMiniDashboard()` |
+| `IndicatorsTab.tsx` | Adicionar 2 gráficos no `case 'venda':` |
+
+---
+
+### Insights de Negócio
+
+Os novos gráficos permitirão:
+- Ver em quais faixas de faturamento cada closer está performando melhor
+- Identificar especialização natural do time (closers focados em enterprise vs SMB)
+- Comparar SDRs por qualidade de leads gerados em cada tier
+- Validar estratégias de segmentação comercial
+
+---
+
+### Riscos
+
+Nenhum risco identificado:
+- Os gráficos só aparecem se houver dados válidos (`revenueRange` preenchido)
+- Usa os mesmos dados já carregados
+- Não afeta a lógica existente, apenas adiciona novos gráficos ao final
 
