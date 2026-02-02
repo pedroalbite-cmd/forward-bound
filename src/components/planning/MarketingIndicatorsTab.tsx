@@ -167,7 +167,6 @@ export function MarketingIndicatorsTab() {
       {/* Channel Metrics Cards */}
       <ChannelMetricsCards
         channels={data.channels}
-        instagram={data.instagram}
         totalInvestment={data.totalInvestment}
         totalLeads={data.totalLeads}
       />
