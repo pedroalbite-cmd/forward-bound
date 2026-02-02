@@ -1,158 +1,143 @@
 
 
-## Corrigir MRR/Setup/Pontual Zerados para O2 TAX na Aba Indicadores
+## Adicionar Opção de Dark Mode
 
-### Problema Identificado
+### Contexto
 
-Na aba **Indicadores**, quando o usuário seleciona "O2 TAX" como BU, os acelerômetros de **MRR**, **Setup** e **Pontual** mostram **R$ 0**, apesar de existirem valores reais no banco de dados.
+O projeto já possui toda a infraestrutura para dark mode:
+- Variáveis CSS para tema claro e escuro em `src/index.css`
+- Tailwind configurado com `darkMode: ["class"]`
+- Pacote `next-themes` já instalado
 
-| Componente | Código | Problema |
-|------------|--------|----------|
-| Desestruturação do hook | Linha 372 | Não extrai `getMrrForPeriod`, `getSetupForPeriod`, `getPontualForPeriod` do `useO2TaxMetas` |
-| Case `mrr` | Linhas 1612-1631 | Só soma Modelo Atual, ignora O2 TAX (comentário diz "Other BUs don't have MRR breakdown") |
-| Case `setup` | Linhas 1634-1649 | Só soma Modelo Atual |
-| Case `pontual` | Linhas 1652-1667 | Só soma Modelo Atual |
+Só falta ativar o provider e adicionar um botão de toggle.
 
 ---
 
-### Solução
+### Arquivos a Modificar/Criar
 
-Extrair as funções de MRR/Setup/Pontual do hook `useO2TaxMetas` e somar esses valores quando O2 TAX estiver selecionado.
-
----
-
-### Arquivo a Modificar
-
-| Arquivo | Linhas | Ação |
-|---------|--------|------|
-| `src/components/planning/IndicatorsTab.tsx` | 372 | Adicionar `getMrrForPeriod: getO2TaxMrr`, etc. à desestruturação |
-| `src/components/planning/IndicatorsTab.tsx` | 1612-1631 | Somar O2 TAX MRR no case `mrr` |
-| `src/components/planning/IndicatorsTab.tsx` | 1634-1649 | Somar O2 TAX Setup no case `setup` |
-| `src/components/planning/IndicatorsTab.tsx` | 1652-1667 | Somar O2 TAX Pontual no case `pontual` |
+| Arquivo | Ação |
+|---------|------|
+| `src/components/ThemeProvider.tsx` | Criar componente wrapper do ThemeProvider |
+| `src/components/ThemeToggle.tsx` | Criar botão de toggle dark/light mode |
+| `src/App.tsx` | Adicionar ThemeProvider envolvendo a aplicação |
+| `src/pages/Planning2026.tsx` | Adicionar botão de toggle no header |
 
 ---
 
-### Mudanças no Código
-
-**1. Linha 372 - Atualizar desestruturação do useO2TaxMetas:**
+### Etapa 1: Criar ThemeProvider
 
 ```typescript
-// Antes:
-const { getQtyForPeriod: getO2TaxQty, getValueForPeriod: getO2TaxValue, getGroupedData: getO2TaxGroupedData, isLoading: isLoadingO2Tax } = useO2TaxMetas(startDate, endDate);
+// src/components/ThemeProvider.tsx
+import { ThemeProvider as NextThemesProvider } from "next-themes";
+import { type ThemeProviderProps } from "next-themes";
 
-// Depois:
-const { 
-  getQtyForPeriod: getO2TaxQty, 
-  getValueForPeriod: getO2TaxValue, 
-  getMrrForPeriod: getO2TaxMrr, 
-  getSetupForPeriod: getO2TaxSetup, 
-  getPontualForPeriod: getO2TaxPontual,
-  getGroupedData: getO2TaxGroupedData, 
-  isLoading: isLoadingO2Tax 
-} = useO2TaxMetas(startDate, endDate);
-```
-
----
-
-**2. Case `mrr` (linhas 1612-1631) - Adicionar soma de O2 TAX:**
-
-```typescript
-case 'mrr': {
-  let total = 0;
-  
-  if (includesModeloAtual) {
-    if (selectedClosers.length > 0) {
-      const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
-      const filteredCards = salesCards.filter(card => 
-        matchesCloserFilter((card.closer || '').trim())
-      );
-      total += filteredCards.reduce((acc, card) => acc + (card.valorMRR || 0), 0);
-    } else {
-      total += getMrrForPeriod(startDate, endDate);
-    }
-  }
-  
-  // ADICIONAR: O2 TAX MRR
-  if (includesO2Tax) {
-    total += getO2TaxMrr(startDate, endDate);
-  }
-  
-  return total;
+export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
+  return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
 }
 ```
 
 ---
 
-**3. Case `setup` (linhas 1634-1649) - Adicionar soma de O2 TAX:**
+### Etapa 2: Criar ThemeToggle
 
 ```typescript
-case 'setup': {
-  let total = 0;
-  
-  if (includesModeloAtual) {
-    if (selectedClosers.length > 0) {
-      const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
-      const filteredCards = salesCards.filter(card => 
-        matchesCloserFilter((card.closer || '').trim())
-      );
-      total += filteredCards.reduce((acc, card) => acc + (card.valorSetup || 0), 0);
-    } else {
-      total += getSetupForPeriod(startDate, endDate);
-    }
-  }
-  
-  // ADICIONAR: O2 TAX Setup
-  if (includesO2Tax) {
-    total += getO2TaxSetup(startDate, endDate);
-  }
-  
-  return total;
+// src/components/ThemeToggle.tsx
+import { Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+export function ThemeToggle() {
+  const { setTheme, theme } = useTheme();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon">
+          <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+          <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+          <span className="sr-only">Alternar tema</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => setTheme("light")}>
+          <Sun className="h-4 w-4 mr-2" />
+          Claro
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("dark")}>
+          <Moon className="h-4 w-4 mr-2" />
+          Escuro
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("system")}>
+          Sistema
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 ```
 
 ---
 
-**4. Case `pontual` (linhas 1652-1667) - Adicionar soma de O2 TAX:**
+### Etapa 3: Envolver App com ThemeProvider
 
 ```typescript
-case 'pontual': {
-  let total = 0;
-  
-  if (includesModeloAtual) {
-    if (selectedClosers.length > 0) {
-      const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
-      const filteredCards = salesCards.filter(card => 
-        matchesCloserFilter((card.closer || '').trim())
-      );
-      total += filteredCards.reduce((acc, card) => acc + (card.valorPontual || 0), 0);
-    } else {
-      total += getPontualForPeriod(startDate, endDate);
-    }
-  }
-  
-  // ADICIONAR: O2 TAX Pontual
-  if (includesO2Tax) {
-    total += getO2TaxPontual(startDate, endDate);
-  }
-  
-  return total;
-}
+// src/App.tsx
+import { ThemeProvider } from "@/components/ThemeProvider";
+
+const App = () => (
+  <ThemeProvider 
+    attribute="class" 
+    defaultTheme="system" 
+    enableSystem
+  >
+    <QueryClientProvider client={queryClient}>
+      {/* ... resto do código */}
+    </QueryClientProvider>
+  </ThemeProvider>
+);
 ```
 
 ---
 
-### Resultado Esperado
+### Etapa 4: Adicionar Toggle no Header
 
-| Métrica | Antes (O2 TAX, Jan) | Depois |
-|---------|---------------------|--------|
-| MRR | R$ 0 | Valor real do banco (pipefy_cards_movements) |
-| Setup | R$ 0 | Valor real do banco |
-| Pontual | R$ 0 | Valor real do banco |
-| Soma Total | R$ 0 | ~R$ 54k (consistente com o acelerômetro de Faturamento) |
+No arquivo `src/pages/Planning2026.tsx`, adicionar o botão de toggle no header, ao lado do dropdown do usuario:
+
+```tsx
+import { ThemeToggle } from "@/components/ThemeToggle";
+
+// No header, antes do dropdown do usuario:
+<div className="flex items-center gap-2">
+  <ThemeToggle />
+  {/* ... botão de abas ocultas ... */}
+  {/* ... dropdown do usuario ... */}
+</div>
+```
 
 ---
 
-### Nota sobre Oxy Hacker e Franquia
+### Resultado Visual
 
-Essas BUs usam a tabela `pipefy_cards_movements_expansao`. Se elas também tiverem valores de MRR/Setup/Pontual no banco, a mesma lógica pode ser aplicada. Por enquanto, elas continuam usando tickets fixos (Oxy Hacker: R$ 54k, Franquia: R$ 140k).
+| Tema | Aparencia |
+|------|-----------|
+| **Claro** | Background claro (#f7f7f7), texto escuro, cards brancos |
+| **Escuro** | Background escuro (#141414), texto claro, cards grafite (#1f1f1f) |
+| **Sistema** | Segue preferencia do SO do usuario |
+
+O toggle ficara visivel no header com icone de sol/lua, permitindo alternar entre os modos a qualquer momento.
+
+---
+
+### Detalhes Tecnicos
+
+- O `next-themes` persiste a preferencia do usuario em localStorage
+- A transicao entre temas e suave, sem recarregar a pagina
+- Todos os componentes UI ja usam variaveis CSS, entao funcionarao automaticamente
+- Os graficos Recharts usam cores via variaveis CSS e se adaptarao ao tema
 
