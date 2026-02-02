@@ -17,6 +17,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUserPermissions, TabKey } from "@/hooks/useUserPermissions";
 import { MediaMetasProvider } from "@/contexts/MediaMetasContext";
 import { Calendar, BarChart3, LineChart, Megaphone, Lightbulb, Users, Target, Settings, LogOut, User, Loader2, EyeOff, Eye, Activity, TrendingUp } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const TAB_CONFIG: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: 'context', label: 'Macro 2025', icon: BarChart3 },
@@ -70,6 +71,8 @@ export default function Planning2026() {
             </h1>
 
             <div className="flex items-center gap-2">
+              <ThemeToggle />
+              
               {/* Hidden tabs toggle */}
               <Button
                 variant="ghost"
