@@ -1,159 +1,164 @@
 
-## Filtros Rápidos de Data para Indicadores
+## Solução: Área Colapsável de KPIs e Gráficos no Drill-Down
 
-### Objetivo
+### Problema
 
-Adicionar botões de atalho de período na aba **Indicadores** (IndicatorsTab), similar ao que já existe na aba **Mkt Indicadores**. Os botões permitirão selecionar rapidamente:
+O modal de drill-down (DetailSheet) exibe:
+- KPIs (5 cards) → ~100px
+- Gráficos (3 charts) → ~200px
+- Contador de registros → ~40px
+- Header do modal → ~60px
 
-- Este Mês
-- Mês Anterior
-- Trimestre Atual
-- Trimestre Anterior
-- Ano Atual
+**Total ocupado: ~400px** de um modal de 90vh (~700px em tela típica)
+
+Resultado: **Sobram apenas ~300px para a tabela** (3-4 linhas visíveis), e o cálculo `h-[calc(90vh-220px)]` não considera o conteúdo dinâmico.
 
 ---
 
-### Design da Solução
+### Solução Recomendada: Collapsible Analytics Section
 
-Os botões serão posicionados **antes dos seletores de data** (calendários), agrupados em uma linha compacta. Ao clicar, eles atualizam automaticamente `startDate` e `endDate`.
+Implementar um **Collapsible** (acordeão) que agrupa KPIs + Charts e permite ao usuário:
+- Ver a análise completa quando quiser (expandido por padrão)
+- Minimizar para ver mais registros da tabela (1 clique)
 
 ```text
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│  [Consolidado ▼]  [Closers ▼]  [SDRs ▼]                                                │
-│                                                                                         │
-│  [ Este Mês ] [ Mês Anterior ] [ Q Atual ] [ Q Anterior ] [ Ano ]   De: [__] Até: [__] │
-└────────────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  Vendas - Análise de Valor (TCV)                            [X] │
+│  19 contratos | TCV: R$ 1.6M | MRR: R$ 106k...                  │
+├─────────────────────────────────────────────────────────────────┤
+│  ▼ Análise Visual                                    [Recolher] │
+│  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐                        │
+│  │ 19  │ │262k │ │106k │ │ 36k │ │1.6M │  ← KPIs                │
+│  └─────┘ └─────┘ └─────┘ └─────┘ └─────┘                        │
+│  [Chart: TCV por Closer] [Chart: TCV por SDR] [Pie: Composição] │
+├─────────────────────────────────────────────────────────────────┤
+│  19 registros                                                   │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ Produto │ Empresa       │ Data │ MRR   │ Setup  │ TCV  │...││
+│  ├─────────────────────────────────────────────────────────────┤│
+│  │ CaaS    │ KV TRANSPORT. │ -    │ -     │ 12.000 │ 12k  │...││
+│  │ CaaS    │ MV ATACADO    │ 29/1 │10.000 │ -      │ 10k  │...││
+│  │ ...     │ ...           │ ...  │ ...   │ ...    │ ...  │...││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+Quando recolhido:
+```text
+│  ▶ Análise Visual                                    [Expandir] │
+├─────────────────────────────────────────────────────────────────┤
+│  19 registros                                                   │
+│  [... TABELA COM MUITO MAIS ESPAÇO ...]                         │
 ```
 
 ---
 
-### Arquivo a Modificar
+### Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/planning/IndicatorsTab.tsx` | Adicionar importações, função de presets e botões no UI |
+| `src/components/planning/indicators/DetailSheet.tsx` | Adicionar Collapsible ao redor de KPIs + Charts |
 
 ---
 
 ### Implementação
 
-#### 1. Adicionar importações do date-fns
+#### 1. Adicionar import do Collapsible
 
 ```typescript
-import { 
-  format, startOfYear, endOfYear, endOfDay, differenceInDays, 
-  eachMonthOfInterval, addDays, eachDayOfInterval, getMonth, 
-  startOfMonth, endOfMonth,
-  subMonths,            // ADICIONAR
-  startOfQuarter,       // ADICIONAR
-  endOfQuarter,         // ADICIONAR
-  subQuarters           // ADICIONAR
-} from "date-fns";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronDown, ChevronRight } from "lucide-react";
 ```
 
-#### 2. Criar função de atalhos de data
-
-Adicionar após a declaração dos estados (`setViewMode`, etc.):
+#### 2. Adicionar estado para controlar expansão
 
 ```typescript
-// Quick date presets for common periods
-const setDatePreset = (preset: 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'lastQuarter' | 'thisYear') => {
-  const today = new Date();
-  
-  switch (preset) {
-    case 'thisMonth':
-      setStartDate(startOfMonth(today));
-      setEndDate(endOfDay(today));
-      break;
-    case 'lastMonth':
-      const lastMonth = subMonths(today, 1);
-      setStartDate(startOfMonth(lastMonth));
-      setEndDate(endOfMonth(lastMonth));
-      break;
-    case 'thisQuarter':
-      setStartDate(startOfQuarter(today));
-      setEndDate(endOfDay(today));
-      break;
-    case 'lastQuarter':
-      const lastQuarter = subQuarters(today, 1);
-      setStartDate(startOfQuarter(lastQuarter));
-      setEndDate(endOfQuarter(lastQuarter));
-      break;
-    case 'thisYear':
-      setStartDate(startOfYear(today));
-      setEndDate(endOfDay(today));
-      break;
+const [analyticsExpanded, setAnalyticsExpanded] = useState(true);
+```
+
+#### 3. Envolver KPIs + Charts em Collapsible
+
+Substituir a seção atual por:
+
+```tsx
+{(kpis && kpis.length > 0) || (charts && charts.length > 0) ? (
+  <Collapsible open={analyticsExpanded} onOpenChange={setAnalyticsExpanded}>
+    <div className="flex items-center justify-between mb-2">
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" size="sm" className="gap-1 text-sm font-medium">
+          {analyticsExpanded ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+          Análise Visual
+        </Button>
+      </CollapsibleTrigger>
+      <span className="text-xs text-muted-foreground">
+        {analyticsExpanded ? 'Clique para recolher' : 'Clique para expandir'}
+      </span>
+    </div>
+    <CollapsibleContent>
+      {kpis && kpis.length > 0 && <KpiCardsRow kpis={kpis} />}
+      {charts && charts.length > 0 && <DrillDownCharts charts={charts} />}
+    </CollapsibleContent>
+  </Collapsible>
+) : null}
+```
+
+#### 4. Resetar estado ao fechar modal
+
+Na função `handleOpenChange`:
+
+```typescript
+const handleOpenChange = (isOpen: boolean) => {
+  if (!isOpen) {
+    setSortState({ column: null, direction: 'none' });
+    setAnalyticsExpanded(true); // Reset para próxima abertura
   }
+  onOpenChange(isOpen);
 };
 ```
 
-#### 3. Adicionar botões no UI (antes dos calendários)
+---
 
-Na seção de filtros (aproximadamente linha 2107), antes do `<div className="flex items-center gap-2">` com "De:":
+### Alternativa: Ajustar altura dinâmica (mais complexa)
+
+Se preferir não usar collapsible, outra opção é usar `flex-1` para a tabela ocupar todo o espaço restante:
 
 ```tsx
-{/* Quick date presets */}
-<div className="flex gap-1 flex-wrap">
-  <Button 
-    variant="outline" 
-    size="sm" 
-    onClick={() => setDatePreset('thisMonth')}
-    className="text-xs"
-  >
-    Este Mês
-  </Button>
-  <Button 
-    variant="outline" 
-    size="sm" 
-    onClick={() => setDatePreset('lastMonth')}
-    className="text-xs"
-  >
-    Mês Anterior
-  </Button>
-  <Button 
-    variant="outline" 
-    size="sm" 
-    onClick={() => setDatePreset('thisQuarter')}
-    className="text-xs"
-  >
-    Q Atual
-  </Button>
-  <Button 
-    variant="outline" 
-    size="sm" 
-    onClick={() => setDatePreset('lastQuarter')}
-    className="text-xs"
-  >
-    Q Anterior
-  </Button>
-  <Button 
-    variant="outline" 
-    size="sm" 
-    onClick={() => setDatePreset('thisYear')}
-    className="text-xs"
-  >
-    2026
-  </Button>
+<div className="flex-1 overflow-hidden flex flex-col mt-4">
+  {/* KPIs e Charts - altura fixa ou auto */}
+  <div className="flex-shrink-0">
+    {kpis && <KpiCardsRow kpis={kpis} />}
+    {charts && <DrillDownCharts charts={charts} />}
+  </div>
+  
+  {/* Tabela - ocupa o resto */}
+  <div className="flex-1 min-h-0 overflow-hidden">
+    <ScrollArea className="h-full">
+      <Table>...</Table>
+    </ScrollArea>
+  </div>
 </div>
 ```
 
----
-
-### Resultado Visual Esperado
-
-| Botão | Período Resultante (se hoje = 02/02/2026) |
-|-------|------------------------------------------|
-| Este Mês | 01/02/2026 - 02/02/2026 |
-| Mês Anterior | 01/01/2026 - 31/01/2026 |
-| Q Atual | 01/01/2026 - 02/02/2026 |
-| Q Anterior | 01/10/2025 - 31/12/2025 |
-| 2026 | 01/01/2026 - 02/02/2026 |
+Esta opção garante que a tabela use todo o espaço restante automaticamente, mas pode resultar em tabela muito pequena quando há muitos charts.
 
 ---
 
-### Impacto
+### Recomendação Final
 
-1. **Navegação mais rápida** entre períodos comuns
-2. **Consistência** com a aba Mkt Indicadores (que já tem botões similares)
-3. **Melhor UX** para análises comparativas (ex: mês anterior vs atual)
+A **solução Collapsible** é a mais flexível porque:
 
+1. Usuário tem controle sobre o que ver
+2. Mantém ambas as informações acessíveis
+3. Padrão UX comum em dashboards
+4. Simples de implementar
+
+---
+
+### Resultado Esperado
+
+- **Modo expandido** (padrão): Dashboard analítico completo como está hoje
+- **Modo recolhido** (1 clique): Tabela ocupa ~80% do modal, mostrando 10+ registros
