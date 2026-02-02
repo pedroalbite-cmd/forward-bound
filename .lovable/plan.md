@@ -1,162 +1,157 @@
 
-
-## Adicionar Análise de Conversão por Tier de Faturamento na Aba Vendas
+## Atualizar Dark Mode com Visual Premium da Marca O2
 
 ### Objetivo
 
-Adicionar um gráfico comparativo no drill-down de "Vendas" que mostre a taxa de conversão do funil (MQL → Venda) segmentada por faixa de faturamento do cliente. Isso permitirá validar a hipótese de que clientes maiores convertem mais.
+Atualizar as cores do dark mode para ficar mais alinhado com o visual da imagem de referência - um design moderno e premium com:
+- Fundo mais escuro/preto puro
+- Cards com grafite profundo
+- Verde mais vibrante e brilhante para destaques
+- Bordas sutis nos cards
+- Contraste alto e visual "tech premium"
 
 ---
 
-### Localização da Mudança
+### Análise da Imagem de Referência
 
-O drill-down de Vendas fica em `src/components/planning/IndicatorsTab.tsx`, no `case 'venda':` (linhas 1361-1456). Atualmente ele exibe:
-- TCV por Closer
-- TCV por SDR
-- Composição do Faturamento (Pie)
-
-Vamos adicionar um quarto gráfico: **"Conversão por Tier"**
-
----
-
-### Lógica de Cálculo
-
-Para cada faixa de faturamento, calcular:
-
-```text
-Taxa de Conversão = (Vendas na Faixa / MQLs na Faixa) × 100
-```
-
-**Faixas de faturamento disponíveis no sistema:**
-- Até R$ 50k
-- R$ 50k - 200k
-- R$ 200k - 1M
-- Acima de 1M
-
----
-
-### Implementação Técnica
-
-**1. Obter MQLs e Vendas com faixa de faturamento:**
-
-```typescript
-// Dentro do case 'venda':
-
-// Obter MQLs do período para comparação
-const mqlItems = getItemsForIndicator('mql');
-
-// Agrupar MQLs por faixa de faturamento
-const mqlsByTier = new Map<string, number>();
-mqlItems.forEach(i => {
-  const tier = i.revenueRange || 'Não informado';
-  mqlsByTier.set(tier, (mqlsByTier.get(tier) || 0) + 1);
-});
-
-// Agrupar Vendas por faixa de faturamento
-const vendasByTier = new Map<string, number>();
-items.forEach(i => {
-  const tier = i.revenueRange || 'Não informado';
-  vendasByTier.set(tier, (vendasByTier.get(tier) || 0) + 1);
-});
-
-// Calcular taxa de conversão por tier
-const allTiers = new Set([...mqlsByTier.keys(), ...vendasByTier.keys()]);
-const conversionByTierData = Array.from(allTiers)
-  .filter(tier => tier !== 'Não informado') // Excluir não informados
-  .map(tier => {
-    const mqls = mqlsByTier.get(tier) || 0;
-    const vendas = vendasByTier.get(tier) || 0;
-    const conversionRate = mqls > 0 ? (vendas / mqls) * 100 : 0;
-    
-    // Ordenar por faturamento (do menor para o maior)
-    const tierOrder = 
-      tier.includes('Até') ? 1 :
-      tier.includes('50k - 200k') ? 2 :
-      tier.includes('200k') ? 3 :
-      tier.includes('Acima') || tier.includes('1M') ? 4 : 5;
-    
-    return {
-      label: tier,
-      value: conversionRate,
-      highlight: conversionRate >= 10 ? 'success' as const : 
-                 conversionRate >= 5 ? 'neutral' as const : 
-                 'warning' as const,
-      order: tierOrder,
-    };
-  })
-  .sort((a, b) => a.order - b.order);
-```
-
-**2. Adicionar o gráfico aos charts existentes:**
-
-```typescript
-const charts: ChartConfig[] = [
-  { type: 'bar', title: 'TCV por Closer', data: closerRankingData, formatValue: formatCompactCurrency },
-  { type: 'bar', title: 'TCV por SDR', data: sdrRankingData, formatValue: formatCompactCurrency },
-  { type: 'pie', title: 'Composição do Faturamento', data: compositionData, formatValue: formatCompactCurrency },
-  // NOVO GRÁFICO:
-  { 
-    type: 'bar', 
-    title: 'Conversão MQL→Venda por Tier', 
-    data: conversionByTierData, 
-    formatValue: (v: number) => `${v.toFixed(1)}%` 
-  },
-];
-```
+| Elemento | Cor Atual (Dark) | Cor da Referência |
+|----------|------------------|-------------------|
+| Background | hsl(0 0% 8%) = #141414 | #0A0A0A (preto puro) |
+| Cards | hsl(0 0% 12%) = #1F1F1F | #151515 / #1A1A1A (grafite mais escuro) |
+| Borders | hsl(0 0% 18%) = #2E2E2E | #2A2A2A ou verde sutil |
+| Verde Primary | hsl(140 100% 28%) = #008F47 | #00FF66 (mais vibrante) |
+| Verde Accent | hsl(140 100% 35%) = #00B24A | #00CC52 (brilhante) |
+| Muted Text | hsl(0 0% 60%) = #999 | #888888 (mais sutil) |
 
 ---
 
 ### Arquivo a Modificar
 
-| Arquivo | Linhas | Ação |
-|---------|--------|------|
-| `src/components/planning/IndicatorsTab.tsx` | 1361-1432 | Adicionar cálculo de conversão por tier e novo gráfico no case 'venda' |
+| Arquivo | Seção | Ação |
+|---------|-------|------|
+| `src/index.css` | `.dark { ... }` (linhas 63-114) | Atualizar variáveis de cor para visual premium |
 
 ---
 
-### Resultado Visual
+### Novas Cores para Dark Mode
 
-O drill-down de Vendas passará a exibir 4 gráficos:
+```css
+.dark {
+  /* Fundo principal - preto puro premium */
+  --background: 0 0% 4%;     /* #0A0A0A */
+  --foreground: 0 0% 98%;    /* #FAFAFA branco suave */
 
-```text
-┌────────────────────────────────────────────────────────────────┐
-│                    Vendas - Análise de Valor (TCV)             │
-├────────────────────────────────────────────────────────────────┤
-│  KPIs: 📝 12 Contratos | 💵 R$ 45k Setup | 🔁 R$ 38k MRR | ... │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌────────────────┐  │
-│  │ TCV por Closer  │  │  TCV por SDR    │  │  Composição    │  │
-│  │ ▓▓▓▓▓▓ R$ 120k  │  │ ▓▓▓▓ R$ 80k     │  │   (Pie Chart)  │  │
-│  │ ▓▓▓▓ R$ 85k     │  │ ▓▓▓ R$ 65k      │  │  MRR 45%       │  │
-│  └─────────────────┘  └─────────────────┘  └────────────────┘  │
-│                                                                │
-│  ┌────────────────────────────────────────────────────────────┐│
-│  │           Conversão MQL→Venda por Tier (NOVO)              ││
-│  │                                                            ││
-│  │  Até R$ 50k      ▓▓▓░░░░░░░░░░░░  3.2%                    ││
-│  │  R$ 50k - 200k   ▓▓▓▓▓▓░░░░░░░░  6.5%                     ││
-│  │  R$ 200k - 1M    ▓▓▓▓▓▓▓▓▓░░░░░  9.8%                     ││
-│  │  Acima de 1M     ▓▓▓▓▓▓▓▓▓▓▓▓░  15.2%   ← Maior conversão ││
-│  └────────────────────────────────────────────────────────────┘│
-│                                                                │
-└────────────────────────────────────────────────────────────────┘
+  /* Cards - grafite profundo */
+  --card: 0 0% 8%;           /* #141414 */
+  --card-foreground: 0 0% 98%;
+
+  /* Popover */
+  --popover: 0 0% 8%;
+  --popover-foreground: 0 0% 98%;
+
+  /* Verde vibrante - mais brilhante */
+  --primary: 145 100% 42%;   /* #00D65B - verde vibrante */
+  --primary-foreground: 0 0% 4%;
+
+  /* Secondary */
+  --secondary: 0 0% 12%;     /* #1F1F1F */
+  --secondary-foreground: 0 0% 98%;
+
+  /* Muted - mais contrastante */
+  --muted: 0 0% 14%;         /* #242424 */
+  --muted-foreground: 0 0% 55%; /* #8C8C8C */
+
+  /* Accent - verde neon */
+  --accent: 145 100% 50%;    /* #00FF66 - verde neon */
+  --accent-foreground: 0 0% 4%;
+
+  /* Destructive - vermelho vibrante */
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+
+  /* Borders - sutis */
+  --border: 0 0% 16%;        /* #292929 */
+  --input: 0 0% 16%;
+  --ring: 145 100% 42%;
+
+  /* Chart colors - paleta verde mais vibrante */
+  --chart-1: 145 100% 42%;   /* Verde vibrante */
+  --chart-2: 145 100% 50%;   /* Verde neon */
+  --chart-3: 145 80% 35%;    /* Verde médio */
+  --chart-4: 145 60% 55%;    /* Verde claro */
+  --chart-5: 0 0% 45%;       /* Cinza */
+
+  /* Success/Warning */
+  --success: 145 100% 42%;
+  --success-foreground: 0 0% 4%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 4%;
+  --franquia: 250 60% 65%;
+  --franquia-foreground: 0 0% 98%;
+
+  /* Sidebar - ainda mais escuro */
+  --sidebar-background: 0 0% 3%;  /* #080808 */
+  --sidebar-foreground: 0 0% 98%;
+  --sidebar-primary: 145 100% 42%;
+  --sidebar-primary-foreground: 0 0% 4%;
+  --sidebar-accent: 0 0% 10%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-border: 0 0% 14%;
+  --sidebar-ring: 145 100% 42%;
+}
 ```
 
 ---
 
-### Insight de Negócio
+### Comparativo Visual
 
-O gráfico permitirá visualizar claramente:
-- **Clientes maiores (Acima de 1M)** tendem a ter maior taxa de conversão
-- Isso valida a estratégia de focar em leads de maior faturamento
-- Permite comparar eficiência do funil entre segmentos
+| Aspecto | Antes | Depois |
+|---------|-------|--------|
+| **Background** | Cinza escuro (#141414) | Preto puro (#0A0A0A) |
+| **Cards** | Cinza médio (#1F1F1F) | Grafite premium (#141414) |
+| **Verde** | Verde escuro (#008F47) | Verde vibrante (#00D65B) |
+| **Accent** | Verde médio (#00B24A) | Verde neon (#00FF66) |
+| **Contraste** | Moderado | Alto - premium |
+| **Bordas** | Visíveis (#2E2E2E) | Sutis (#292929) |
 
 ---
 
-### Alternativas Consideradas
+### Melhorias Adicionais para Dark Mode
 
-1. **Gráfico separado em outro widget**: Rejeitado pois fragmenta a análise de vendas
-2. **Tabela em vez de gráfico de barras**: Rejeitado pois o gráfico visual é mais impactante
-3. **Adicionar na aba Segmentação**: O usuário pediu especificamente no campo Vendas
+Além das cores, vou adicionar classes utilitárias específicas para dark mode:
 
+```css
+@layer utilities {
+  /* Gradientes atualizados para dark mode */
+  .dark .gradient-primary {
+    background: linear-gradient(135deg, hsl(145 100% 50%) 0%, hsl(145 100% 35%) 100%);
+  }
+
+  /* Card com borda verde sutil no hover (estilo da referência) */
+  .dark .glass-card {
+    @apply bg-card/90 backdrop-blur-sm border border-border/60;
+  }
+  
+  .dark .glass-card:hover {
+    @apply border-primary/30;
+  }
+}
+```
+
+---
+
+### Impacto Visual
+
+Com essas mudanças, o dark mode terá:
+
+1. **Fundo mais profundo** - Visual "abyss" premium como na referência
+2. **Verde mais vibrante** - Destaque maior nos elementos de ação e indicadores
+3. **Contraste alto** - Melhor legibilidade e visual moderno
+4. **Cards integrados** - Fundos que se fundem suavemente com o background
+5. **Bordas sutis** - Cards com definição sem ser pesado
+
+---
+
+### Nota Importante
+
+Essas mudanças afetam **APENAS** o dark mode (classe `.dark`). O light mode permanece exatamente como está, garantindo que nada do que já foi construído seja afetado.
