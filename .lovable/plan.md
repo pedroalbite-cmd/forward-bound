@@ -1,143 +1,162 @@
 
 
-## Adicionar Opção de Dark Mode
+## Adicionar Análise de Conversão por Tier de Faturamento na Aba Vendas
 
-### Contexto
+### Objetivo
 
-O projeto já possui toda a infraestrutura para dark mode:
-- Variáveis CSS para tema claro e escuro em `src/index.css`
-- Tailwind configurado com `darkMode: ["class"]`
-- Pacote `next-themes` já instalado
-
-Só falta ativar o provider e adicionar um botão de toggle.
+Adicionar um gráfico comparativo no drill-down de "Vendas" que mostre a taxa de conversão do funil (MQL → Venda) segmentada por faixa de faturamento do cliente. Isso permitirá validar a hipótese de que clientes maiores convertem mais.
 
 ---
 
-### Arquivos a Modificar/Criar
+### Localização da Mudança
 
-| Arquivo | Ação |
-|---------|------|
-| `src/components/ThemeProvider.tsx` | Criar componente wrapper do ThemeProvider |
-| `src/components/ThemeToggle.tsx` | Criar botão de toggle dark/light mode |
-| `src/App.tsx` | Adicionar ThemeProvider envolvendo a aplicação |
-| `src/pages/Planning2026.tsx` | Adicionar botão de toggle no header |
+O drill-down de Vendas fica em `src/components/planning/IndicatorsTab.tsx`, no `case 'venda':` (linhas 1361-1456). Atualmente ele exibe:
+- TCV por Closer
+- TCV por SDR
+- Composição do Faturamento (Pie)
+
+Vamos adicionar um quarto gráfico: **"Conversão por Tier"**
 
 ---
 
-### Etapa 1: Criar ThemeProvider
+### Lógica de Cálculo
+
+Para cada faixa de faturamento, calcular:
+
+```text
+Taxa de Conversão = (Vendas na Faixa / MQLs na Faixa) × 100
+```
+
+**Faixas de faturamento disponíveis no sistema:**
+- Até R$ 50k
+- R$ 50k - 200k
+- R$ 200k - 1M
+- Acima de 1M
+
+---
+
+### Implementação Técnica
+
+**1. Obter MQLs e Vendas com faixa de faturamento:**
 
 ```typescript
-// src/components/ThemeProvider.tsx
-import { ThemeProvider as NextThemesProvider } from "next-themes";
-import { type ThemeProviderProps } from "next-themes";
+// Dentro do case 'venda':
 
-export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
-}
+// Obter MQLs do período para comparação
+const mqlItems = getItemsForIndicator('mql');
+
+// Agrupar MQLs por faixa de faturamento
+const mqlsByTier = new Map<string, number>();
+mqlItems.forEach(i => {
+  const tier = i.revenueRange || 'Não informado';
+  mqlsByTier.set(tier, (mqlsByTier.get(tier) || 0) + 1);
+});
+
+// Agrupar Vendas por faixa de faturamento
+const vendasByTier = new Map<string, number>();
+items.forEach(i => {
+  const tier = i.revenueRange || 'Não informado';
+  vendasByTier.set(tier, (vendasByTier.get(tier) || 0) + 1);
+});
+
+// Calcular taxa de conversão por tier
+const allTiers = new Set([...mqlsByTier.keys(), ...vendasByTier.keys()]);
+const conversionByTierData = Array.from(allTiers)
+  .filter(tier => tier !== 'Não informado') // Excluir não informados
+  .map(tier => {
+    const mqls = mqlsByTier.get(tier) || 0;
+    const vendas = vendasByTier.get(tier) || 0;
+    const conversionRate = mqls > 0 ? (vendas / mqls) * 100 : 0;
+    
+    // Ordenar por faturamento (do menor para o maior)
+    const tierOrder = 
+      tier.includes('Até') ? 1 :
+      tier.includes('50k - 200k') ? 2 :
+      tier.includes('200k') ? 3 :
+      tier.includes('Acima') || tier.includes('1M') ? 4 : 5;
+    
+    return {
+      label: tier,
+      value: conversionRate,
+      highlight: conversionRate >= 10 ? 'success' as const : 
+                 conversionRate >= 5 ? 'neutral' as const : 
+                 'warning' as const,
+      order: tierOrder,
+    };
+  })
+  .sort((a, b) => a.order - b.order);
 ```
 
----
-
-### Etapa 2: Criar ThemeToggle
+**2. Adicionar o gráfico aos charts existentes:**
 
 ```typescript
-// src/components/ThemeToggle.tsx
-import { Moon, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-
-export function ThemeToggle() {
-  const { setTheme, theme } = useTheme();
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">Alternar tema</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("light")}>
-          <Sun className="h-4 w-4 mr-2" />
-          Claro
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>
-          <Moon className="h-4 w-4 mr-2" />
-          Escuro
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")}>
-          Sistema
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
+const charts: ChartConfig[] = [
+  { type: 'bar', title: 'TCV por Closer', data: closerRankingData, formatValue: formatCompactCurrency },
+  { type: 'bar', title: 'TCV por SDR', data: sdrRankingData, formatValue: formatCompactCurrency },
+  { type: 'pie', title: 'Composição do Faturamento', data: compositionData, formatValue: formatCompactCurrency },
+  // NOVO GRÁFICO:
+  { 
+    type: 'bar', 
+    title: 'Conversão MQL→Venda por Tier', 
+    data: conversionByTierData, 
+    formatValue: (v: number) => `${v.toFixed(1)}%` 
+  },
+];
 ```
 
 ---
 
-### Etapa 3: Envolver App com ThemeProvider
+### Arquivo a Modificar
 
-```typescript
-// src/App.tsx
-import { ThemeProvider } from "@/components/ThemeProvider";
-
-const App = () => (
-  <ThemeProvider 
-    attribute="class" 
-    defaultTheme="system" 
-    enableSystem
-  >
-    <QueryClientProvider client={queryClient}>
-      {/* ... resto do código */}
-    </QueryClientProvider>
-  </ThemeProvider>
-);
-```
-
----
-
-### Etapa 4: Adicionar Toggle no Header
-
-No arquivo `src/pages/Planning2026.tsx`, adicionar o botão de toggle no header, ao lado do dropdown do usuario:
-
-```tsx
-import { ThemeToggle } from "@/components/ThemeToggle";
-
-// No header, antes do dropdown do usuario:
-<div className="flex items-center gap-2">
-  <ThemeToggle />
-  {/* ... botão de abas ocultas ... */}
-  {/* ... dropdown do usuario ... */}
-</div>
-```
+| Arquivo | Linhas | Ação |
+|---------|--------|------|
+| `src/components/planning/IndicatorsTab.tsx` | 1361-1432 | Adicionar cálculo de conversão por tier e novo gráfico no case 'venda' |
 
 ---
 
 ### Resultado Visual
 
-| Tema | Aparencia |
-|------|-----------|
-| **Claro** | Background claro (#f7f7f7), texto escuro, cards brancos |
-| **Escuro** | Background escuro (#141414), texto claro, cards grafite (#1f1f1f) |
-| **Sistema** | Segue preferencia do SO do usuario |
+O drill-down de Vendas passará a exibir 4 gráficos:
 
-O toggle ficara visivel no header com icone de sol/lua, permitindo alternar entre os modos a qualquer momento.
+```text
+┌────────────────────────────────────────────────────────────────┐
+│                    Vendas - Análise de Valor (TCV)             │
+├────────────────────────────────────────────────────────────────┤
+│  KPIs: 📝 12 Contratos | 💵 R$ 45k Setup | 🔁 R$ 38k MRR | ... │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌────────────────┐  │
+│  │ TCV por Closer  │  │  TCV por SDR    │  │  Composição    │  │
+│  │ ▓▓▓▓▓▓ R$ 120k  │  │ ▓▓▓▓ R$ 80k     │  │   (Pie Chart)  │  │
+│  │ ▓▓▓▓ R$ 85k     │  │ ▓▓▓ R$ 65k      │  │  MRR 45%       │  │
+│  └─────────────────┘  └─────────────────┘  └────────────────┘  │
+│                                                                │
+│  ┌────────────────────────────────────────────────────────────┐│
+│  │           Conversão MQL→Venda por Tier (NOVO)              ││
+│  │                                                            ││
+│  │  Até R$ 50k      ▓▓▓░░░░░░░░░░░░  3.2%                    ││
+│  │  R$ 50k - 200k   ▓▓▓▓▓▓░░░░░░░░  6.5%                     ││
+│  │  R$ 200k - 1M    ▓▓▓▓▓▓▓▓▓░░░░░  9.8%                     ││
+│  │  Acima de 1M     ▓▓▓▓▓▓▓▓▓▓▓▓░  15.2%   ← Maior conversão ││
+│  └────────────────────────────────────────────────────────────┘│
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-### Detalhes Tecnicos
+### Insight de Negócio
 
-- O `next-themes` persiste a preferencia do usuario em localStorage
-- A transicao entre temas e suave, sem recarregar a pagina
-- Todos os componentes UI ja usam variaveis CSS, entao funcionarao automaticamente
-- Os graficos Recharts usam cores via variaveis CSS e se adaptarao ao tema
+O gráfico permitirá visualizar claramente:
+- **Clientes maiores (Acima de 1M)** tendem a ter maior taxa de conversão
+- Isso valida a estratégia de focar em leads de maior faturamento
+- Permite comparar eficiência do funil entre segmentos
+
+---
+
+### Alternativas Consideradas
+
+1. **Gráfico separado em outro widget**: Rejeitado pois fragmenta a análise de vendas
+2. **Tabela em vez de gráfico de barras**: Rejeitado pois o gráfico visual é mais impactante
+3. **Adicionar na aba Segmentação**: O usuário pediu especificamente no campo Vendas
 
