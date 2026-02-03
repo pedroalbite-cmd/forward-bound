@@ -174,9 +174,7 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
           const pontual = movement.valorPontual || 0;
           const setup = movement.valorSetup || 0;
           const mrr = movement.valorMRR || 0;
-          const sum = pontual + setup + mrr;
-          // Fallback de R$ 15k para cards sem valor monetário preenchido
-          cardValues.set(movement.id, sum === 0 ? 15000 : sum);
+          cardValues.set(movement.id, pontual + setup + mrr);
         }
       }
     }
