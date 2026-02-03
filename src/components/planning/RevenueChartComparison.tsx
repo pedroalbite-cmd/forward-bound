@@ -115,8 +115,8 @@ export function RevenueChartComparison({
 
   // Generate chart data
   const chartData = useMemo(() => {
-    // Aceitar tanto 'Ganho' quanto 'Contrato assinado' como fases de venda ganhas
-    const isWonPhase = (fase: string) => fase === 'Ganho' || fase === 'Contrato assinado';
+    // Usar APENAS 'Contrato assinado' como fase de venda (conforme definição universal)
+    const isWonPhase = (fase: string) => fase === 'Contrato assinado';
     
     const maSalesCards = maMovements.filter(m => isWonPhase(m.fase));
     const o2SalesMovements = o2TaxMetas.movements.filter(m => isWonPhase(m.fase));
