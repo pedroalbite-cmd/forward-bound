@@ -23,12 +23,6 @@ import { CostPerStageGauges } from "./marketing-indicators/CostPerStageGauges";
 import { DrillDownBarChart } from "./indicators/DrillDownBarChart";
 import { CHANNEL_LABELS, ChannelId, CostPerStage } from "./marketing-indicators/types";
 
-const BU_OPTIONS = [
-  { value: 'Modelo Atual', label: 'Modelo Atual' },
-  { value: 'O2 TAX', label: 'O2 TAX' },
-  { value: 'Oxy Hacker', label: 'Oxy Hacker' },
-  { value: 'Franquia', label: 'Franquia' },
-];
 
 const CHANNEL_OPTIONS = Object.entries(CHANNEL_LABELS)
   .filter(([key]) => ['meta_ads', 'google_ads', 'eventos'].includes(key))
@@ -41,8 +35,8 @@ export function MarketingIndicatorsTab() {
     to: endOfMonth(new Date()),
   });
   
-  // Filter state
-  const [selectedBUs, setSelectedBUs] = useState<string[]>(['Modelo Atual']);
+  // Filter state - always consolidated (all BUs)
+  const selectedBUs = ['Modelo Atual', 'O2 TAX', 'Oxy Hacker', 'Franquia'];
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
 
   // Drill-down state for cost gauges
@@ -191,14 +185,6 @@ export function MarketingIndicatorsTab() {
             </PopoverContent>
           </Popover>
 
-          {/* BU Filter */}
-          <MultiSelect
-            options={BU_OPTIONS}
-            selected={selectedBUs}
-            onSelectionChange={setSelectedBUs}
-            placeholder="Selecionar BU"
-            className="min-w-[160px]"
-          />
 
           {/* Channel Filter */}
           <MultiSelect
