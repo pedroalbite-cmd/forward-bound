@@ -25,7 +25,6 @@ import { cn } from "@/lib/utils";
 import { LeadsMqlsStackedChart } from "./LeadsMqlsStackedChart";
 import { MeetingsScheduledChart } from "./MeetingsScheduledChart";
 import { ClickableFunnelChart } from "./ClickableFunnelChart";
-import { RevenueBreakdownChart } from "./RevenueBreakdownChart";
 import { RevenueChartComparison } from "./RevenueChartComparison";
 import { FunnelConversionByTierWidget } from "./indicators/FunnelConversionByTierWidget";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
@@ -2405,16 +2404,7 @@ export function IndicatorsTab() {
         ))}
       </div>
 
-      {/* Revenue Breakdown Chart */}
-      <RevenueBreakdownChart 
-        startDate={startDate} 
-        endDate={endDate} 
-        selectedBU={selectedBU} 
-        selectedBUs={selectedBUs}
-        selectedClosers={selectedClosers}
-      />
-
-      {/* Chart Comparison Section - Temporary for selection */}
+      {/* Revenue Charts - Barras Agrupadas + Dashboard */}
       <RevenueChartComparison
         startDate={startDate}
         endDate={endDate}
