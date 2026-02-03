@@ -1,113 +1,79 @@
 
+## Corrigir Filtro de Vendas no Gráfico de Faturamento
 
-## Consolidar Gráficos de Faturamento em Um Único Componente
+### Problema
 
-### Objetivo
+O gráfico "Faturamento por Período" está filtrando movimentos por `fase === 'Ganho'`, mas a maioria dos hooks de BUs usam `'Contrato assinado'` como a fase que representa uma venda. Isso faz com que apenas dados da O2 TAX (que aparentemente tem cards com a fase "Ganho" nos dados) apareçam no gráfico.
 
-Criar um único card de faturamento que combine:
-- **Parte Superior**: Cards KPI com sparklines (do RevenueChartDashboard)
-- **Parte Inferior**: Gráfico de barras agrupadas (do RevenueChartGroupedBars)
+### Causa Raiz
 
-### Componente Final
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  Faturamento por Período                                    │
-├─────────────────────────────────────────────────────────────┤
-│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌──────────┐  │
-│  │  MA    │ │  TAX   │ │  OXY   │ │  FRQ   │ │  TOTAL   │  │
-│  │ R$200k │ │ R$50k  │ │ R$80k  │ │ R$70k  │ │  R$400k  │  │
-│  │ ~~~    │ │ ~~~    │ │ ~~~    │ │ ~~~    │ │  ~~~     │  │
-│  │ 95%    │ │ 80%    │ │ 120%   │ │ 60%    │ │  100%    │  │
-│  └────────┘ └────────┘ └────────┘ └────────┘ └──────────┘  │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │    ██ ██ ██ ██                                      │   │
-│  │    ██ ██ ██ ██    ██ ██                             │   │
-│  │    ██ ██ ██ ██    ██ ██    ██ ██                    │   │
-│  │    ─────────────────────────────── Meta média       │   │
-│  │    Jan    Fev    Mar    Abr                         │   │
-│  └─────────────────────────────────────────────────────┘   │
-│  [MA] [TAX] [OXY] [FRQ]                                    │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-### Alterações Técnicas
-
-| Arquivo | Ação |
-|---------|------|
-| `src/components/planning/revenue-charts/RevenueChartGroupedBars.tsx` | Modificar para incluir os KPI cards com sparklines do dashboard |
-| `src/components/planning/revenue-charts/RevenueChartDashboard.tsx` | Deletar (será absorvido pelo GroupedBars) |
-| `src/components/planning/revenue-charts/index.ts` | Remover export do Dashboard |
-| `src/components/planning/RevenueChartComparison.tsx` | Renderizar apenas o RevenueChartGroupedBars |
-
----
-
-### Código do Componente Unificado
-
-O `RevenueChartGroupedBars.tsx` será atualizado para:
-
-1. Receber `metasPorBU` como prop adicional
-2. Adicionar a seção de KPI cards com sparklines antes do gráfico
-3. Manter o gráfico de barras agrupadas existente
-
-**Nova estrutura:**
+No `RevenueChartComparison.tsx`, linha 118-121:
 ```typescript
-export function RevenueChartGroupedBars({ 
-  startDate, endDate, selectedBUs, chartData, totals, metasPorBU
-}) {
-  // Calcular metas por BU
-  const buMetas = useMemo(() => { ... });
-  
-  // Extrair dados de sparkline
-  const sparklineData = useMemo(() => { ... });
-  
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Faturamento por Período</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* KPI Cards Row - do Dashboard */}
-        <div className="flex gap-3 flex-wrap mb-4">
-          {selectedBUs.map(bu => <BUKpiCard ... />)}
-          <TotalCard ... />
-        </div>
-        
-        {/* Gráfico de Barras Agrupadas - existente */}
-        <div className="h-80">
-          <BarChart ... />
-        </div>
-        
-        {/* Legenda */}
-        <Legend ... />
-      </CardContent>
-    </Card>
-  );
-}
+const maSalesCards = maMovements.filter(m => m.fase === 'Ganho');
+const o2SalesMovements = o2TaxMetas.movements.filter(m => m.fase === 'Ganho');
+const franquiaSalesMovements = franquiaMetas.movements.filter(m => m.fase === 'Ganho');
+const oxyHackerSalesMovements = oxyHackerMetas.movements.filter(m => m.fase === 'Ganho');
+```
+
+Mas nos hooks:
+- `useModeloAtualMetas`: Mapeia `'Contrato assinado'` → `'venda'`
+- `useO2TaxMetas`: Mapeia `'Contrato assinado'` → `'venda'`
+- `useExpansaoMetas`: Mapeia `'Contrato assinado'` → `'venda'`
+- `useOxyHackerMetas`: Mapeia `'Contrato assinado'` → `'venda'`
+
+### Solução
+
+Alterar o filtro para usar `'Contrato assinado'` (a fase real nos dados) ou aceitar ambas as fases:
+
+```typescript
+// Aceitar tanto 'Ganho' quanto 'Contrato assinado' para compatibilidade
+const isWonPhase = (fase: string) => fase === 'Ganho' || fase === 'Contrato assinado';
+
+const maSalesCards = maMovements.filter(m => isWonPhase(m.fase));
+const o2SalesMovements = o2TaxMetas.movements.filter(m => isWonPhase(m.fase));
+const franquiaSalesMovements = franquiaMetas.movements.filter(m => isWonPhase(m.fase));
+const oxyHackerSalesMovements = oxyHackerMetas.movements.filter(m => isWonPhase(m.fase));
 ```
 
 ---
 
-### Componentes Internos a Mover
+### Alteração Técnica
 
-Do `RevenueChartDashboard.tsx` para `RevenueChartGroupedBars.tsx`:
-
-1. **BUKpiCard** - Card individual por BU com sparkline
-2. **Total Card** - Card destacado com total geral
-3. Lógica de cálculo de `buMetas` e `sparklineData`
-
-**Remover do Dashboard:**
-- O `ComposedChart` com barras empilhadas (linhas 244-296)
-- A legenda final (linhas 298-309)
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/planning/RevenueChartComparison.tsx` | Atualizar filtro de fases para incluir 'Contrato assinado' além de 'Ganho' |
 
 ---
 
-### Resultado Final
+### Código a Modificar
 
-- **1 único componente** ao invés de 2
-- **Interface mais limpa** sem duplicação de informação
-- **Melhor UX** com KPIs resumidos + detalhamento por período no mesmo card
+**Antes (linhas 117-121):**
+```typescript
+const chartData = useMemo(() => {
+  const maSalesCards = maMovements.filter(m => m.fase === 'Ganho');
+  const o2SalesMovements = o2TaxMetas.movements.filter(m => m.fase === 'Ganho');
+  const franquiaSalesMovements = franquiaMetas.movements.filter(m => m.fase === 'Ganho');
+  const oxyHackerSalesMovements = oxyHackerMetas.movements.filter(m => m.fase === 'Ganho');
+```
 
+**Depois:**
+```typescript
+const chartData = useMemo(() => {
+  // Aceitar tanto 'Ganho' quanto 'Contrato assinado' como fases de venda ganhas
+  const isWonPhase = (fase: string) => fase === 'Ganho' || fase === 'Contrato assinado';
+  
+  const maSalesCards = maMovements.filter(m => isWonPhase(m.fase));
+  const o2SalesMovements = o2TaxMetas.movements.filter(m => isWonPhase(m.fase));
+  const franquiaSalesMovements = franquiaMetas.movements.filter(m => isWonPhase(m.fase));
+  const oxyHackerSalesMovements = oxyHackerMetas.movements.filter(m => isWonPhase(m.fase));
+```
+
+---
+
+### Resultado Esperado
+
+Após a correção, o gráfico "Faturamento por Período" exibirá dados de todas as 4 BUs:
+- **Modelo Atual**: Barras azuis com valores reais de MRR + Setup + Pontual
+- **O2 TAX**: Barras âmbar com valores do banco de dados
+- **Oxy Hacker**: Barras roxas com ticket de R$ 54k
+- **Franquia**: Barras verdes com ticket de R$ 140k
