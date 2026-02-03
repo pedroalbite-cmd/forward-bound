@@ -1,40 +1,35 @@
 
 
-## Remover Coluna Lead→MQL do Widget de Conversão por Tier
+## Adicionar Mapeamento "Menos de R$ 100 mil"
 
-### Alteração
+### Problema
 
-Remover a etapa **Lead→MQL** do array `STAGE_LABELS` no arquivo `FunnelConversionByTierWidget.tsx`.
+O valor `"Menos de R$ 100 mil"` encontrado no banco de dados não está mapeado no `TIER_NORMALIZATION`, causando que esses registros caiam em "Não informado".
 
 ### Arquivo a Modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/planning/indicators/FunnelConversionByTierWidget.tsx` | Remover primeira entrada do `STAGE_LABELS` |
+| `src/components/planning/indicators/FunnelConversionByTierWidget.tsx` | Adicionar mapeamento na linha 35 |
 
 ---
 
-### Código Atual (Linha 78-84)
+### Código a Adicionar
+
+Adicionar no bloco "R$ 50k - 200k variants" (linha 35):
 
 ```typescript
-const STAGE_LABELS = [
-  { key: 'leadToMql', label: 'Lead→MQL', from: 'leads', to: 'mql' },  // REMOVER
-  { key: 'mqlToRm', label: 'MQL→RM', from: 'mql', to: 'rm' },
-  { key: 'rmToRr', label: 'RM→RR', from: 'rm', to: 'rr' },
-  { key: 'rrToProposta', label: 'RR→Prop', from: 'rr', to: 'proposta' },
-  { key: 'propostaToVenda', label: 'Prop→Venda', from: 'proposta', to: 'venda' },
-] as const;
-```
-
-### Código Novo
-
-```typescript
-const STAGE_LABELS = [
-  { key: 'mqlToRm', label: 'MQL→RM', from: 'mql', to: 'rm' },
-  { key: 'rmToRr', label: 'RM→RR', from: 'rm', to: 'rr' },
-  { key: 'rrToProposta', label: 'RR→Prop', from: 'rr', to: 'proposta' },
-  { key: 'propostaToVenda', label: 'Prop→Venda', from: 'proposta', to: 'venda' },
-] as const;
+// R$ 50k - 200k variants
+'Entre R$ 50.000 e R$ 200.000': 'R$ 50k - 200k',
+'Entre R$ 50 mil e R$ 200 mil': 'R$ 50k - 200k',
+'R$ 50k - 200k': 'R$ 50k - 200k',
+'R$ 50k - R$ 200k': 'R$ 50k - 200k',
+'entre r$ 50.000 e r$ 200.000': 'R$ 50k - 200k',
+'Entre R$50k e R$200k': 'R$ 50k - 200k',
+'De R$ 50k a R$ 200k': 'R$ 50k - 200k',
+'R$50k-200k': 'R$ 50k - 200k',
+'Menos de R$ 100 mil': 'R$ 50k - 200k',  // NOVO - Encontrado no banco!
+'Entre R$ 100 mil e R$ 200 mil': 'R$ 50k - 200k',  // NOVO - Possível variante
 ```
 
 ---
@@ -42,8 +37,6 @@ const STAGE_LABELS = [
 ### Resultado
 
 Após a alteração:
-- A tabela mostrará 4 colunas de conversão em vez de 5
-- O gráfico de barras terá 4 grupos em vez de 5
-- A análise de gargalo também ignorará a etapa Lead→MQL
-- O cálculo de "melhor tier" continuará baseado em MQL→Venda (sem mudança)
+- Todos os 8 valores do banco serão corretamente categorizados
+- Nenhum registro cairá em "Não informado" por conta desses valores
 
