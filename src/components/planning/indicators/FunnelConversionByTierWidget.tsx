@@ -8,7 +8,7 @@ import { ChevronDown, ChevronUp, TrendingUp, AlertTriangle } from "lucide-react"
 import { DetailItem, DetailSheet, columnFormatters } from "./DetailSheet";
 import { IndicatorType } from "@/hooks/useFunnelRealized";
 
-// Tier normalization map - maps database values to 8 standardized display labels
+// Tier normalization map - maps database values to 7 standardized display labels
 const TIER_NORMALIZATION: Record<string, string> = {
   // Tier 1: Ainda não fatura
   'Ainda não faturamos': 'Ainda não fatura',
@@ -28,14 +28,11 @@ const TIER_NORMALIZATION: Record<string, string> = {
   // Tier 6: R$ 1M - 5M
   'Entre R$ 1 milhão e R$ 5 milhões': 'R$ 1M - 5M',
   
-  // Tier 7: R$ 5M - 10M
-  'Entre R$ 5 milhões e R$ 10 milhões': 'R$ 5M - 10M',
-  
-  // Tier 8: Acima de R$ 5M
+  // Tier 7: Acima de R$ 5M
   'Acima de R$ 5 milhões': '> R$ 5M',
 };
 
-// Ordered tiers for display (8 distinct categories)
+// Ordered tiers for display (7 distinct categories)
 const TIER_ORDER = [
   'Ainda não fatura',
   '< R$ 100k',
@@ -43,11 +40,10 @@ const TIER_ORDER = [
   'R$ 350k - 500k',
   'R$ 500k - 1M',
   'R$ 1M - 5M',
-  'R$ 5M - 10M',
   '> R$ 5M',
 ];
 
-// Tier colors for charts (8 distinct colors)
+// Tier colors for charts (7 distinct colors)
 const TIER_COLORS: Record<string, string> = {
   'Ainda não fatura': 'hsl(var(--chart-5))',
   '< R$ 100k': 'hsl(var(--chart-4))',
@@ -55,8 +51,7 @@ const TIER_COLORS: Record<string, string> = {
   'R$ 350k - 500k': 'hsl(210, 70%, 50%)',
   'R$ 500k - 1M': 'hsl(var(--chart-2))',
   'R$ 1M - 5M': 'hsl(270, 70%, 50%)',
-  'R$ 5M - 10M': 'hsl(var(--chart-1))',
-  '> R$ 5M': 'hsl(330, 70%, 50%)',
+  '> R$ 5M': 'hsl(var(--chart-1))',
 };
 
 // Conversion stage labels
