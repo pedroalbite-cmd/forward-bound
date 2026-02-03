@@ -18,6 +18,7 @@ interface MetaAdSet {
   daily_budget?: string;
   insights?: MetaInsights | null;
   previewUrl?: string;
+  thumbnailUrl?: string;
 }
 
 interface MetaAdSetsResponse {
@@ -65,6 +66,7 @@ function transformAdSet(adSet: MetaAdSet): AdSetData {
     leads,
     cpl: leads > 0 ? spend / leads : 0,
     previewUrl: adSet.previewUrl,
+    thumbnailUrl: adSet.thumbnailUrl,
   };
 }
 
