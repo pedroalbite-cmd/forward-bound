@@ -1,77 +1,96 @@
 
+## Consolidar Gráficos de Faturamento: Opção 1 + Dashboard Opção 5
 
-## Adicionar Tolerância de "Quase Atingiu" nos Acelerômetros Monetários
+### Objetivo
 
-### Problema
+Simplificar a visualização de faturamento mantendo apenas:
+1. **Opção 1: Barras Agrupadas** - Para comparação lado a lado por período
+2. **Dashboard da Opção 5** - Cards KPI com sparklines + gráfico consolidado
 
-O Faturamento está mostrando amarelo com R$ 399.832,02 / R$ 400.000 (99,96%), mas uma diferença de apenas ~R$ 168 deveria ser considerada como meta atingida para fins visuais.
+### Arquivos a Deletar
+
+| Arquivo | Motivo |
+|---------|--------|
+| `src/components/planning/revenue-charts/RevenueChartMultiLine.tsx` | Opção 2 - será removida |
+| `src/components/planning/revenue-charts/RevenueChartStackedArea.tsx` | Opção 3 - será removida |
+| `src/components/planning/RevenueBreakdownChart.tsx` | "Faturamento por Período" original - substituído pelas novas opções |
+
+### Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/planning/revenue-charts/index.ts` | Remover exports das opções 2 e 3 |
+| `src/components/planning/RevenueChartComparison.tsx` | Remover imports e renderização das opções 2 e 3, atualizar texto do header |
+| `src/components/planning/IndicatorsTab.tsx` | Remover import e uso do `RevenueBreakdownChart` |
 
 ---
 
-### Solução
+### Detalhes Técnicos
 
-Adicionar uma tolerância para métricas monetárias: se a diferença entre realizado e meta for menor que **R$ 500** (ou menos de **0,5% da meta**), considerar como "verde" mesmo que tecnicamente seja < 100%.
+**1. Atualizar `revenue-charts/index.ts`:**
 
----
-
-### Alterações Técnicas
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/planning/IndicatorsTab.tsx` | Adicionar lógica de tolerância no `MonetaryRadialCard` |
-
----
-
-### Código Atualizado
-
+Antes:
 ```typescript
-const MonetaryRadialCard = ({ title, realized, meta, format, onClick, isClickable = false }: MonetaryRadialCardProps) => {
-  const isInverted = format === 'duration';
-  const percentage = meta > 0 ? (realized / meta) * 100 : 0;
-  
-  // Tolerância para valores monetários: considera "atingido" se faltar menos de R$ 500
-  // ou menos de 0.5% da meta (o que for menor)
-  const isCurrencyFormat = format === 'currency';
-  const tolerance = isCurrencyFormat ? Math.min(500, meta * 0.005) : 0;
-  const isWithinTolerance = isCurrencyFormat && (meta - realized) <= tolerance && (meta - realized) >= 0;
-  
-  const getColor = () => {
-    if (isInverted) {
-      return percentage <= 100 ? "hsl(var(--chart-2))" : "hsl(var(--destructive))";
-    }
-    // Considera verde se >= 100% OU dentro da tolerância
-    if (percentage >= 100 || isWithinTolerance) return "hsl(var(--chart-2))"; // Verde
-    if (percentage >= 80) return "hsl(45, 93%, 47%)";    // Amarelo
-    return "hsl(var(--destructive))";                    // Vermelho
-  };
-  
-  const getTextColorClass = () => {
-    if (isInverted) {
-      return percentage <= 100 ? "text-chart-2" : "text-destructive";
-    }
-    if (percentage >= 100 || isWithinTolerance) return "text-chart-2";
-    if (percentage >= 80) return "text-amber-500";
-    return "text-destructive";
-  };
-  // ...
-};
+export { RevenueChartGroupedBars } from './RevenueChartGroupedBars';
+export { RevenueChartMultiLine } from './RevenueChartMultiLine';
+export { RevenueChartStackedArea } from './RevenueChartStackedArea';
+export { RevenueChartDashboard } from './RevenueChartDashboard';
+```
+
+Depois:
+```typescript
+export { RevenueChartGroupedBars } from './RevenueChartGroupedBars';
+export { RevenueChartDashboard } from './RevenueChartDashboard';
 ```
 
 ---
 
-### Lógica da Tolerância
+**2. Atualizar `RevenueChartComparison.tsx`:**
 
-| Meta | Tolerância Calculada | Limite para Verde |
-|------|---------------------|-------------------|
-| R$ 400.000 | min(500, 2000) = R$ 500 | R$ 399.500+ |
-| R$ 100.000 | min(500, 500) = R$ 500 | R$ 99.500+ |
-| R$ 50.000 | min(500, 250) = R$ 250 | R$ 49.750+ |
+- Remover imports de `RevenueChartMultiLine` e `RevenueChartStackedArea`
+- Remover renderização das opções 2 e 3
+- Atualizar título para "Faturamento por Período" (remover texto sobre "comparação")
+- Manter apenas `RevenueChartGroupedBars` e `RevenueChartDashboard`
 
 ---
 
-### Resultado
+**3. Atualizar `IndicatorsTab.tsx`:**
 
-- **Faturamento R$ 399.832 / Meta R$ 400.000**: Diferença de R$ 168 < R$ 500 → **VERDE** ✅
-- **Faturamento R$ 350.000 / Meta R$ 400.000**: Diferença de R$ 50.000 > R$ 500 → Amarelo (87,5%)
-- **SLA**: Mantém lógica invertida sem tolerância
+- Remover import do `RevenueBreakdownChart`
+- Remover a seção `{/* Revenue Breakdown Chart */}` (linhas ~2408-2415)
+- O `RevenueChartComparison` já exibe os gráficos necessários
 
+---
+
+**4. Atualizar títulos dos componentes mantidos:**
+
+- `RevenueChartGroupedBars.tsx`: Atualizar título de "Opção 1: Barras Agrupadas" para "Faturamento por Período (Detalhado)"
+- `RevenueChartDashboard.tsx`: Atualizar título de "Opção 5: Dashboard Compacto (Recomendado)" para "Resumo de Faturamento"
+
+---
+
+### Resultado Final
+
+A aba Indicadores terá apenas dois gráficos de faturamento:
+
+```text
+┌─────────────────────────────────────────────────┐
+│  Faturamento por Período (Detalhado)            │
+│  ┌───┬───┬───┬───┐                              │
+│  │MA │TAX│OXY│FRQ│  ← Barras agrupadas por BU   │
+│  └───┴───┴───┴───┘                              │
+│  Jan  Fev  Mar  Abr                             │
+└─────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────┐
+│  Resumo de Faturamento                          │
+│  ┌────┐ ┌────┐ ┌────┐ ┌────┐ ┌─────┐           │
+│  │ MA │ │TAX │ │OXY │ │FRQ │ │TOTAL│           │
+│  │___ │ │___ │ │___ │ │___ │ │____ │           │
+│  │95% │ │80% │ │120%│ │60% │ │92%  │           │
+│  └────┘ └────┘ └────┘ └────┘ └─────┘           │
+│  ┌─────────────────────────────────────┐       │
+│  │ Gráfico empilhado consolidado       │       │
+│  └─────────────────────────────────────┘       │
+└─────────────────────────────────────────────────┘
+```
