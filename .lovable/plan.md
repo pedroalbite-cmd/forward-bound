@@ -1,74 +1,146 @@
 
 
-## Corrigir Mapeamento de Tiers de Faturamento
+## Permitir Seleção Múltipla de Filtros de Período
 
-### Problema
+### Objetivo
 
-O tier "R$ 5M - 10M" (mapeado de "Entre R$ 5 milhões e R$ 10 milhões") foi incluído no código mas **não existe** no banco de dados. Por isso está aparecendo com 0 leads.
+Transformar os botões de atalho de período (Este Mês, Mês Anterior, Q Atual, etc.) em um sistema de multi-seleção, onde selecionar múltiplos períodos expande automaticamente o range de datas para cobrir todos os períodos selecionados.
 
-### Solução
+### Comportamento Desejado
 
-Remover o tier inexistente e ajustar o mapeamento para refletir apenas os 7 tiers que realmente existem no banco.
-
-### Tiers Reais do Banco (7 categorias)
-
-| # | Valor no Banco | Label para Exibição |
-|---|----------------|---------------------|
-| 1 | Ainda não faturamos | Ainda não fatura |
-| 2 | Menos de R$ 100 mil | < R$ 100k |
-| 3 | Entre R$ 200 mil e R$ 350 mil | R$ 200k - 350k |
-| 4 | Entre R$ 350 mil e R$ 500 mil | R$ 350k - 500k |
-| 5 | Entre R$ 500 mil e R$ 1 milhão | R$ 500k - 1M |
-| 6 | Entre R$ 1 milhão e R$ 5 milhões | R$ 1M - 5M |
-| 7 | Acima de R$ 5 milhões | > R$ 5M |
+| Seleção | Resultado |
+|---------|-----------|
+| Este Mês | 01/02/2026 - 03/02/2026 (hoje) |
+| Mês Anterior | 01/01/2026 - 31/01/2026 |
+| Este Mês + Mês Anterior | 01/01/2026 - 03/02/2026 |
+| Q Atual + Q Anterior | 01/10/2025 - 03/02/2026 |
+| 2026 | 01/01/2026 - 03/02/2026 |
 
 ---
 
-### Arquivo a Modificar
+### Alterações Técnicas
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/planning/indicators/FunnelConversionByTierWidget.tsx` | Remover tier inexistente |
+| `src/components/planning/IndicatorsTab.tsx` | Adicionar estado de multi-seleção de períodos e lógica de merge |
 
 ---
 
-### Alterações
+### 1. Novo Estado para Períodos Selecionados
 
-**1. Remover do `TIER_NORMALIZATION`:**
 ```typescript
-// REMOVER ESTA LINHA:
-'Entre R$ 5 milhões e R$ 10 milhões': 'R$ 5M - 10M',
+type DatePreset = 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'lastQuarter' | 'thisYear';
+
+const [selectedPresets, setSelectedPresets] = useState<DatePreset[]>([]);
 ```
 
-**2. Atualizar `TIER_ORDER` (7 tiers):**
-```typescript
-const TIER_ORDER = [
-  'Ainda não fatura',
-  '< R$ 100k',
-  'R$ 200k - 350k',
-  'R$ 350k - 500k',
-  'R$ 500k - 1M',
-  'R$ 1M - 5M',
-  '> R$ 5M',
-];
-```
+### 2. Função para Calcular Range Combinado
 
-**3. Atualizar `TIER_COLORS` (7 cores):**
 ```typescript
-const TIER_COLORS: Record<string, string> = {
-  'Ainda não fatura': 'hsl(var(--chart-5))',
-  '< R$ 100k': 'hsl(var(--chart-4))',
-  'R$ 200k - 350k': 'hsl(var(--chart-3))',
-  'R$ 350k - 500k': 'hsl(210, 70%, 50%)',
-  'R$ 500k - 1M': 'hsl(var(--chart-2))',
-  'R$ 1M - 5M': 'hsl(270, 70%, 50%)',
-  '> R$ 5M': 'hsl(var(--chart-1))',
+const getDateRangeFromPresets = (presets: DatePreset[]): { start: Date; end: Date } => {
+  const today = new Date();
+  let minStart: Date | null = null;
+  let maxEnd: Date | null = null;
+
+  for (const preset of presets) {
+    let start: Date, end: Date;
+    
+    switch (preset) {
+      case 'thisMonth':
+        start = startOfMonth(today);
+        end = endOfDay(today);
+        break;
+      case 'lastMonth':
+        const lastMonth = subMonths(today, 1);
+        start = startOfMonth(lastMonth);
+        end = endOfMonth(lastMonth);
+        break;
+      case 'thisQuarter':
+        start = startOfQuarter(today);
+        end = endOfDay(today);
+        break;
+      case 'lastQuarter':
+        const lastQuarter = subQuarters(today, 1);
+        start = startOfQuarter(lastQuarter);
+        end = endOfQuarter(lastQuarter);
+        break;
+      case 'thisYear':
+        start = startOfYear(today);
+        end = endOfDay(today);
+        break;
+    }
+
+    if (!minStart || start < minStart) minStart = start;
+    if (!maxEnd || end > maxEnd) maxEnd = end;
+  }
+
+  return {
+    start: minStart || startOfMonth(today),
+    end: maxEnd || endOfDay(today)
+  };
 };
 ```
 
+### 3. Toggle de Seleção de Preset
+
+```typescript
+const togglePreset = (preset: DatePreset) => {
+  setSelectedPresets(prev => {
+    const newPresets = prev.includes(preset)
+      ? prev.filter(p => p !== preset)
+      : [...prev, preset];
+    
+    // Atualiza as datas baseado nos presets selecionados
+    if (newPresets.length > 0) {
+      const { start, end } = getDateRangeFromPresets(newPresets);
+      setStartDate(start);
+      setEndDate(end);
+    }
+    
+    return newPresets;
+  });
+};
+```
+
+### 4. UI com Botões Toggle (Multi-Select Visual)
+
+```tsx
+<div className="flex gap-1 flex-wrap">
+  {[
+    { key: 'thisMonth', label: 'Este Mês' },
+    { key: 'lastMonth', label: 'Mês Anterior' },
+    { key: 'thisQuarter', label: 'Q Atual' },
+    { key: 'lastQuarter', label: 'Q Anterior' },
+    { key: 'thisYear', label: '2026' },
+  ].map(({ key, label }) => (
+    <Button 
+      key={key}
+      variant={selectedPresets.includes(key as DatePreset) ? "default" : "outline"}
+      size="sm" 
+      onClick={() => togglePreset(key as DatePreset)}
+      className="text-xs"
+    >
+      {label}
+    </Button>
+  ))}
+</div>
+```
+
 ---
 
-### Nota
+### Comportamento Adicional
 
-Se houver outros valores no banco que não estão mapeados (ex: "Entre R$ 100 mil e R$ 200 mil"), precisarei adicioná-los. Por favor, confirme os valores exatos que existem no Pipefy.
+- Quando o usuário altera manualmente a data via calendário, os presets selecionados são limpos (`setSelectedPresets([])`)
+- Botões selecionados terão visual destacado (variant="default" ao invés de "outline")
+- Selecionar "2026" sozinho cobre todo o ano, então combinar com outros presets não altera o range (2026 já é o maior)
+
+---
+
+### Resultado Visual
+
+Os botões de período funcionarão como chips toggle:
+- **Não selecionado**: borda outline, fundo transparente
+- **Selecionado**: fundo primário, texto branco
+
+O usuário poderá clicar em múltiplos botões e o range de datas se expandirá automaticamente para cobrir todos os períodos.
 
