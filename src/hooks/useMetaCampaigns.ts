@@ -17,6 +17,7 @@ interface MetaAdSet {
   status: string;
   daily_budget?: string;
   insights?: MetaInsights | null;
+  previewUrl?: string;
 }
 
 interface MetaCampaign {
@@ -28,6 +29,8 @@ interface MetaCampaign {
   lifetime_budget?: string;
   insights?: MetaInsights | null;
   adSets?: MetaAdSet[];
+  thumbnailUrl?: string;
+  previewUrl?: string;
 }
 
 interface MetaApiResponse {
@@ -76,6 +79,7 @@ function transformAdSet(adSet: MetaAdSet): AdSetData {
     clicks: parseInt(adSet.insights?.clicks || '0', 10),
     leads,
     cpl: leads > 0 ? spend / leads : 0,
+    previewUrl: adSet.previewUrl,
   };
 }
 
@@ -99,6 +103,8 @@ function transformCampaign(campaign: MetaCampaign): CampaignData {
     clicks: parseInt(campaign.insights?.clicks || '0', 10),
     cpl: leads > 0 ? spend / leads : 0,
     adSets,
+    thumbnailUrl: campaign.thumbnailUrl,
+    previewUrl: campaign.previewUrl,
   };
 }
 
