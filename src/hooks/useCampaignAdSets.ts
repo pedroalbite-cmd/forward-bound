@@ -97,8 +97,15 @@ export function useCampaignAdSets(
       }
       
       if (!data?.success) {
-        console.error('API returned error:', data?.error);
-        throw new Error(data?.error || 'Erro ao buscar ad sets');
+        const errorMsg = data?.error || 'Erro ao buscar ad sets';
+        console.error('API returned error:', errorMsg);
+        
+        // Check if it's a rate limit error
+        if (errorMsg.includes('request limit') || errorMsg.includes('rate limit')) {
+          throw new Error('RATE_LIMIT');
+        }
+        
+        throw new Error(errorMsg);
       }
       
       console.log(`Received ${data.adSets.length} ad sets for campaign ${campaignId}`);
@@ -107,6 +114,13 @@ export function useCampaignAdSets(
     },
     enabled: enabled && !!campaignId,
     staleTime: 10 * 60 * 1000, // 10 minutes
-    retry: 1,
+    retry: (failureCount, error) => {
+      // Retry rate limit errors with exponential backoff
+      if (error instanceof Error && error.message === 'RATE_LIMIT') {
+        return failureCount < 3;
+      }
+      return failureCount < 1;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 }
