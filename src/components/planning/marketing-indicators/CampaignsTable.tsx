@@ -133,7 +133,19 @@ function CampaignRow({
           className="bg-muted/30"
         >
           <TableCell className="p-2"></TableCell>
-          <TableCell className="w-14 p-2"></TableCell>
+          <TableCell className="w-14 p-2">
+            {adSet.thumbnailUrl ? (
+              <img 
+                src={adSet.thumbnailUrl} 
+                alt={adSet.name}
+                className="w-8 h-8 object-cover rounded"
+              />
+            ) : (
+              <div className="w-8 h-8 bg-muted/50 rounded flex items-center justify-center">
+                <Image className="h-3 w-3 text-muted-foreground" />
+              </div>
+            )}
+          </TableCell>
           <TableCell className="pl-4 font-normal text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <span>├─ {adSet.name}</span>

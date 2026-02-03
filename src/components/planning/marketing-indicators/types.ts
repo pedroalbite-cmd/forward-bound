@@ -28,6 +28,7 @@ export interface AdSetData {
   leads: number;
   cpl: number;
   previewUrl?: string;
+  thumbnailUrl?: string;
 }
 
 export interface CampaignData {

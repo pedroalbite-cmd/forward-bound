@@ -60,18 +60,30 @@ serve(async (req) => {
     const adSetsWithInsights = await Promise.all(
       (adSetsData.data || []).map(async (adSet: MetaAdSet) => {
         try {
+          // Fetch insights
           const adSetInsightsUrl = `${META_BASE_URL}/${adSet.id}/insights?fields=${insightsFields}&time_range=${encodeURIComponent(timeRange)}&access_token=${accessToken}`;
           const adSetInsightsResponse = await fetch(adSetInsightsUrl);
           const adSetInsightsData = await adSetInsightsResponse.json();
           
+          // Fetch first ad to get thumbnail
+          const adsUrl = `${META_BASE_URL}/${adSet.id}/ads?fields=creative{thumbnail_url,image_url}&limit=1&access_token=${accessToken}`;
+          const adsResponse = await fetch(adsUrl);
+          const adsData = await adsResponse.json();
+          
+          const firstAd = adsData.data?.[0];
+          const thumbnailUrl = firstAd?.creative?.thumbnail_url || 
+                               firstAd?.creative?.image_url || 
+                               null;
+          
           return {
             ...adSet,
             insights: adSetInsightsData.data?.[0] || null,
+            thumbnailUrl,
             previewUrl: `https://www.facebook.com/adsmanager/manage/adsets?act=${formattedAccountId.replace('act_', '')}&selected_adset_ids=${adSet.id}`,
           };
         } catch (err) {
           console.error(`Error fetching insights for ad set ${adSet.id}:`, err);
-          return { ...adSet, insights: null, previewUrl: null };
+          return { ...adSet, insights: null, thumbnailUrl: null, previewUrl: null };
         }
       })
     );
