@@ -243,6 +243,68 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
     };
   }, [getCardsForIndicator]);
 
+  // COHORT MODE: Get cards with full history for tier conversion analysis
+  // Step 1: Identify all card IDs that had ANY movement in the selected period
+  // Step 2: For those cards, include ALL their movements regardless of date
+  const getCardsWithFullHistory = useMemo(() => {
+    // Find all card IDs with movement in period
+    const activeCardIds = new Set<string>();
+    for (const movement of movements) {
+      const entryTime = movement.dataEntrada.getTime();
+      if (entryTime >= startTime && entryTime <= endTime) {
+        activeCardIds.add(movement.id);
+      }
+    }
+    
+    // Return all movements for active cards (regardless of date)
+    const cardHistories = new Map<string, ExpansaoCard[]>();
+    for (const movement of movements) {
+      if (activeCardIds.has(movement.id)) {
+        if (!cardHistories.has(movement.id)) {
+          cardHistories.set(movement.id, []);
+        }
+        cardHistories.get(movement.id)!.push(movement);
+      }
+    }
+    
+    console.log(`[Expansão Analytics] Cohort mode: ${activeCardIds.size} unique cards with full history`);
+    return cardHistories;
+  }, [movements, startTime, endTime]);
+
+  // Get detail items for indicator using FULL history (for cohort mode tier conversion)
+  const getDetailItemsWithFullHistory = useMemo(() => {
+    return (indicator: IndicatorType): DetailItem[] => {
+      const result: DetailItem[] = [];
+      const seenIds = new Set<string>();
+      
+      const cardHistories = getCardsWithFullHistory;
+      
+      for (const [cardId, cardMovements] of cardHistories.entries()) {
+        if (seenIds.has(cardId)) continue;
+        
+        // Find movement matching the indicator
+        const matchingMovement = cardMovements.find(m => {
+          const movementIndicator = PHASE_TO_INDICATOR[m.fase];
+          
+          if (indicator === 'venda') {
+            return m.fase === 'Contrato assinado';
+          } else if (indicator === 'proposta') {
+            return movementIndicator === 'proposta';
+          }
+          return movementIndicator === indicator;
+        });
+        
+        if (matchingMovement) {
+          seenIds.add(cardId);
+          result.push(toDetailItem(matchingMovement));
+        }
+      }
+      
+      console.log(`[Expansão Analytics] getDetailItemsWithFullHistory(${indicator}): ${result.length} unique cards`);
+      return result;
+    };
+  }, [getCardsWithFullHistory, toDetailItem]);
+
   return {
     isLoading,
     error,
@@ -250,6 +312,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
     getCardsForIndicator,
     toDetailItem,
     getDetailItemsForIndicator,
+    getDetailItemsWithFullHistory,
     getDealsWon,
   };
 }

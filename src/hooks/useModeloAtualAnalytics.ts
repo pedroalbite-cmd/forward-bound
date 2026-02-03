@@ -279,6 +279,65 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     return totalMinutes / tentativasCards.length;
   }, [cardsInPeriod]);
 
+  // COHORT MODE: Get cards with full history for tier conversion analysis
+  // Step 1: Identify all card IDs that had ANY movement in the selected period
+  // Step 2: For those cards, include ALL their movements regardless of date
+  const getCardsWithFullHistory = useMemo(() => {
+    // Find all card IDs with movement in period
+    const activeCardIds = new Set<string>();
+    for (const card of cards) {
+      const entryTime = card.dataEntrada.getTime();
+      if (entryTime >= startTime && entryTime <= endTime) {
+        activeCardIds.add(card.id);
+      }
+    }
+    
+    // Return all movements for active cards (regardless of date)
+    const cardHistories = new Map<string, ModeloAtualCard[]>();
+    for (const card of cards) {
+      if (activeCardIds.has(card.id)) {
+        if (!cardHistories.has(card.id)) {
+          cardHistories.set(card.id, []);
+        }
+        cardHistories.get(card.id)!.push(card);
+      }
+    }
+    
+    console.log(`[Modelo Atual Analytics] Cohort mode: ${activeCardIds.size} unique cards with full history`);
+    return cardHistories;
+  }, [cards, startTime, endTime]);
+
+  // Get detail items for indicator using FULL history (for cohort mode tier conversion)
+  const getDetailItemsWithFullHistory = (indicator: IndicatorType): DetailItem[] => {
+    const result: DetailItem[] = [];
+    const seenIds = new Set<string>();
+    
+    const cardHistories = getCardsWithFullHistory;
+    
+    for (const [cardId, movements] of cardHistories.entries()) {
+      if (seenIds.has(cardId)) continue;
+      
+      // Find movement matching the indicator
+      const matchingMovement = movements.find(m => {
+        const cardIndicator = PHASE_TO_INDICATOR[m.faseDestino];
+        
+        // LEADS = Union of 'Novos Leads' (leads) + 'MQLs' (mql)
+        if (indicator === 'leads') {
+          return cardIndicator === 'leads' || cardIndicator === 'mql';
+        }
+        return cardIndicator === indicator;
+      });
+      
+      if (matchingMovement) {
+        seenIds.add(cardId);
+        result.push(toDetailItem(matchingMovement));
+      }
+    }
+    
+    console.log(`[Modelo Atual Analytics] getDetailItemsWithFullHistory(${indicator}): ${result.length} unique cards`);
+    return result;
+  };
+
   return {
     isLoading,
     error,
@@ -287,6 +346,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     getLeadsCards,
     toDetailItem,
     getDetailItemsForIndicator,
+    getDetailItemsWithFullHistory,
     getAverageSlaMinutes,
   };
 }

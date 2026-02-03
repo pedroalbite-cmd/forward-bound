@@ -550,6 +550,78 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     pontual: card.valorPontual,
   });
 
+  // COHORT MODE: Get cards with full history for tier conversion analysis
+  // Step 1: Identify all card IDs that had ANY movement in the selected period
+  // Step 2: For those cards, include ALL their movements regardless of date
+  const getCardsWithFullHistory = useMemo(() => {
+    // Find all card IDs with movement in period
+    const activeCardIds = new Set<string>();
+    for (const card of cards) {
+      const entryTime = card.dataEntrada.getTime();
+      if (entryTime >= startTime && entryTime <= endTime) {
+        activeCardIds.add(card.id);
+      }
+    }
+    
+    // Return all movements for active cards (regardless of date)
+    const cardHistories = new Map<string, O2TaxCard[]>();
+    for (const card of cards) {
+      if (activeCardIds.has(card.id)) {
+        if (!cardHistories.has(card.id)) {
+          cardHistories.set(card.id, []);
+        }
+        cardHistories.get(card.id)!.push(card);
+      }
+    }
+    
+    console.log(`[O2 TAX Analytics] Cohort mode: ${activeCardIds.size} unique cards with full history`);
+    return cardHistories;
+  }, [cards, startTime, endTime]);
+
+  // Get detail items for indicator using FULL history (for cohort mode tier conversion)
+  const getDetailItemsWithFullHistory = (indicator: string): DetailItem[] => {
+    const PHASE_TO_INDICATOR_MAP: Record<string, string> = {
+      'Start form': 'leads',
+      'MQL': 'mql',
+      'Reunião agendada / Qualificado': 'rm',
+      '1° Reunião Realizada - Apresentação': 'rr',
+      'Proposta enviada / Follow Up': 'proposta',
+      'Enviar para assinatura': 'proposta',
+      'Contrato assinado': 'venda',
+    };
+    
+    const result: DetailItem[] = [];
+    const seenIds = new Set<string>();
+    
+    const cardHistories = getCardsWithFullHistory;
+    
+    for (const [cardId, movements] of cardHistories.entries()) {
+      if (seenIds.has(cardId)) continue;
+      
+      // Find movement matching the indicator
+      const matchingMovement = movements.find(m => {
+        const movementIndicator = PHASE_TO_INDICATOR_MAP[m.fase];
+        
+        if (indicator === 'leads') {
+          return m.fase === 'Start form' || m.fase === 'MQL';
+        } else if (indicator === 'venda') {
+          return m.fase === 'Contrato assinado';
+        } else if (indicator === 'proposta') {
+          return movementIndicator === 'proposta';
+        }
+        return movementIndicator === indicator;
+      });
+      
+      if (matchingMovement) {
+        seenIds.add(cardId);
+        result.push(toDetailItem(matchingMovement));
+      }
+    }
+    
+    console.log(`[O2 TAX Analytics] getDetailItemsWithFullHistory(${indicator}): ${result.length} unique cards`);
+    return result;
+  };
+
   return {
     isLoading,
     error,
@@ -563,6 +635,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     getMqlsByRevenue,
     getLeads,
     getDetailItemsForIndicator,
+    getDetailItemsWithFullHistory,
     toDetailItem,
   };
 }

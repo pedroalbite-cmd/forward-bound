@@ -1190,6 +1190,106 @@ export function IndicatorsTab() {
     return items;
   };
 
+  // COHORT MODE: Get items for indicator using full card history 
+  // (for accurate tier conversion analysis across month boundaries)
+  const getItemsWithFullHistory = (indicatorKey: IndicatorType): DetailItem[] => {
+    let items: DetailItem[] = [];
+    
+    // Modelo Atual
+    if (includesModeloAtual) {
+      const closersForBU = effectiveSelectedClosers.filter(c => 
+        BU_CLOSERS.modelo_atual.includes(c as CloserType)
+      );
+      const sdrsForBU = effectiveSelectedSDRs.filter(s => 
+        BU_SDRS.modelo_atual.includes(s)
+      );
+      
+      const includeByCloser = closersForBU.length > 0 || effectiveSelectedClosers.length === 0;
+      const includeBySdr = sdrsForBU.length > 0 || effectiveSelectedSDRs.length === 0;
+      
+      if (includeByCloser && includeBySdr) {
+        const buItems = modeloAtualAnalytics.getDetailItemsWithFullHistory(indicatorKey);
+        const filteredItems = buItems.filter(item => {
+          const matchCloser = effectiveSelectedClosers.length === 0 || matchesCloserFilter(item.closer);
+          const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(item.responsible || item.sdr);
+          return matchCloser && matchSdr;
+        });
+        items = [...items, ...filteredItems];
+      }
+    }
+    
+    // O2 TAX
+    if (includesO2Tax) {
+      const closersForBU = effectiveSelectedClosers.filter(c => 
+        BU_CLOSERS.o2_tax.includes(c as CloserType)
+      );
+      const sdrsForBU = effectiveSelectedSDRs.filter(s => 
+        BU_SDRS.o2_tax.includes(s)
+      );
+      
+      const includeByCloser = closersForBU.length > 0 || effectiveSelectedClosers.length === 0;
+      const includeBySdr = sdrsForBU.length > 0 || effectiveSelectedSDRs.length === 0;
+      
+      if (includeByCloser && includeBySdr) {
+        const buItems = o2TaxAnalytics.getDetailItemsWithFullHistory(indicatorKey);
+        const filteredItems = buItems.filter(item => {
+          const matchCloser = effectiveSelectedClosers.length === 0 || matchesCloserFilter(item.closer || item.responsible);
+          const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(item.responsible);
+          return matchCloser && matchSdr;
+        });
+        items = [...items, ...filteredItems];
+      }
+    }
+    
+    // Franquia
+    if (includesFranquia) {
+      const closersForBU = effectiveSelectedClosers.filter(c => 
+        BU_CLOSERS.franquia.includes(c as CloserType)
+      );
+      const sdrsForBU = effectiveSelectedSDRs.filter(s => 
+        BU_SDRS.franquia.includes(s)
+      );
+      
+      const includeByCloser = closersForBU.length > 0 || effectiveSelectedClosers.length === 0;
+      const includeBySdr = sdrsForBU.length > 0 || effectiveSelectedSDRs.length === 0;
+      
+      if (includeByCloser && includeBySdr) {
+        const buItems = franquiaAnalytics.getDetailItemsWithFullHistory(indicatorKey);
+        const filteredItems = buItems.filter(item => {
+          const matchCloser = effectiveSelectedClosers.length === 0 || matchesCloserFilter(item.closer || item.responsible);
+          const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(item.responsible);
+          return matchCloser && matchSdr;
+        });
+        items = [...items, ...filteredItems];
+      }
+    }
+    
+    // Oxy Hacker
+    if (includesOxyHacker) {
+      const closersForBU = effectiveSelectedClosers.filter(c => 
+        BU_CLOSERS.oxy_hacker.includes(c as CloserType)
+      );
+      const sdrsForBU = effectiveSelectedSDRs.filter(s => 
+        BU_SDRS.oxy_hacker.includes(s)
+      );
+      
+      const includeByCloser = closersForBU.length > 0 || effectiveSelectedClosers.length === 0;
+      const includeBySdr = sdrsForBU.length > 0 || effectiveSelectedSDRs.length === 0;
+      
+      if (includeByCloser && includeBySdr) {
+        const buItems = oxyHackerAnalytics.getDetailItemsWithFullHistory(indicatorKey);
+        const filteredItems = buItems.filter(item => {
+          const matchCloser = effectiveSelectedClosers.length === 0 || matchesCloserFilter(item.closer || item.responsible);
+          const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(item.responsible);
+          return matchCloser && matchSdr;
+        });
+        items = [...items, ...filteredItems];
+      }
+    }
+    
+    return items;
+  };
+
   // === STRATEGIC DRILL-DOWN HANDLERS ===
   
   // Handle radial card click with strategic narratives
@@ -2415,6 +2515,7 @@ export function IndicatorsTab() {
       {/* Funnel Conversion by Revenue Tier Analysis */}
       <FunnelConversionByTierWidget
         getItemsForIndicator={getItemsForIndicator}
+        getItemsWithFullHistory={getItemsWithFullHistory}
       />
 
       {(isLoading || isLoadingExpansao || isLoadingO2Tax) && (
