@@ -1,84 +1,145 @@
 
 
-## Corrigir Busca de Ad Sets (Conjuntos de Anúncios) na Edge Function
+## Adicionar Thumbnail nos Conjuntos de Anúncios (Ad Sets)
 
 ### Problema Identificado
 
-A Edge Function está retornando `"adSets": []` vazio para todas as campanhas. Testando diretamente a API, confirmei que **nenhum ad set está sendo retornado**, mesmo que as campanhas tenham conjuntos de anúncios ativos.
-
-### Causa Provável
-
-Analisando o código da Edge Function (linhas 92-151), há um problema de **escopo/tratamento de erro**:
-
-1. O código busca ad sets dentro de um `try/catch` aninhado
-2. Se a chamada à API do Meta falhar silenciosamente, retorna array vazio
-3. Não há logs para verificar se os ad sets estão sendo encontrados
+1. A Edge Function `fetch-campaign-adsets` não busca thumbnails dos anúncios
+2. A tabela mostra célula vazia na coluna Preview para ad sets
 
 ### Solução
 
-1. **Adicionar logs de diagnóstico** para ver o que a API do Meta está retornando
-2. **Verificar a resposta** da API de ad sets antes de processar
-3. **Retornar os ad sets corretamente** no objeto de campanha
+Buscar o primeiro anúncio de cada ad set e extrair o thumbnail do criativo.
 
 ---
 
-### Mudanças na Edge Function
+### Arquivos a Modificar
 
-**Arquivo:** `supabase/functions/fetch-meta-campaigns/index.ts`
+| Arquivo | Mudança |
+|---------|---------|
+| `supabase/functions/fetch-campaign-adsets/index.ts` | Buscar ads e thumbnail para cada ad set |
+| `src/hooks/useCampaignAdSets.ts` | Mapear novo campo `thumbnailUrl` |
+| `src/components/planning/marketing-indicators/types.ts` | Adicionar `thumbnailUrl` ao `AdSetData` |
+| `src/components/planning/marketing-indicators/CampaignsTable.tsx` | Exibir thumbnail no ad set |
 
-Adicionar logs e correções no bloco de ad sets (linhas 100-123):
+---
+
+### Implementação - Edge Function
+
+Atualizar `fetch-campaign-adsets/index.ts` para buscar anúncios:
 
 ```typescript
-// Fetch ad sets
-const adSetsUrl = `${META_BASE_URL}/${campaign.id}/adsets?fields=id,name,status,daily_budget&access_token=${accessToken}`;
-console.log(`Fetching ad sets for campaign ${campaign.id}`);
-const adSetsResponse = await fetch(adSetsUrl);
-const adSetsData = await adSetsResponse.json();
-
-// LOG: Verificar resposta
-console.log(`Campaign ${campaign.id} - Ad Sets found:`, adSetsData.data?.length || 0);
-
-if (adSetsData.error) {
-  console.error(`Error fetching ad sets for campaign ${campaign.id}:`, adSetsData.error);
-}
-
-// For each ad set, fetch its insights
 const adSetsWithInsights = await Promise.all(
   (adSetsData.data || []).map(async (adSet: MetaAdSet) => {
-    // ... código existente de insights por ad set ...
+    try {
+      // Buscar insights
+      const adSetInsightsUrl = `...`;
+      const adSetInsightsData = await ...;
+      
+      // NOVO: Buscar primeiro anúncio para pegar thumbnail
+      const adsUrl = `${META_BASE_URL}/${adSet.id}/ads?fields=creative{thumbnail_url,image_url}&limit=1&access_token=${accessToken}`;
+      const adsResponse = await fetch(adsUrl);
+      const adsData = await adsResponse.json();
+      
+      const firstAd = adsData.data?.[0];
+      const thumbnailUrl = firstAd?.creative?.thumbnail_url || 
+                           firstAd?.creative?.image_url || 
+                           null;
+      
+      return {
+        ...adSet,
+        insights: adSetInsightsData.data?.[0] || null,
+        thumbnailUrl,  // NOVO
+        previewUrl: `https://www.facebook.com/adsmanager/manage/adsets?...`,
+      };
+    } catch (err) {
+      return { ...adSet, insights: null, thumbnailUrl: null, previewUrl: null };
+    }
   })
 );
-
-console.log(`Campaign ${campaign.id} - Ad Sets with insights:`, adSetsWithInsights.length);
 ```
 
 ---
 
-### Possíveis Causas do Problema
+### Implementação - Tipos
 
-| Causa | Verificação |
-|-------|-------------|
-| Campanhas sem ad sets | Improvável - todas as campanhas têm |
-| Erro de permissão do token | Verificar se token tem `ads_read` |
-| Filtro implícito | Meta pode estar filtrando ad sets inativos |
-| Erro de formato do account ID | Já está formatado corretamente |
+Adicionar ao `AdSetData` em `types.ts`:
+
+```typescript
+export interface AdSetData {
+  id: string;
+  name: string;
+  status: 'active' | 'paused' | 'ended';
+  dailyBudget: number;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  cpl: number;
+  previewUrl?: string;
+  thumbnailUrl?: string;  // NOVO
+}
+```
 
 ---
 
-### Plano de Debug
+### Implementação - Hook
 
-1. **Adicionar logs detalhados** para ver o que a API retorna
-2. **Verificar se há erros** na resposta do Meta para ad sets
-3. **Testar manualmente** uma campanha específica
-4. **Ajustar campos** se necessário (adicionar `effective_status` ao filtro)
+Atualizar `useCampaignAdSets.ts` para mapear o novo campo:
+
+```typescript
+function transformAdSet(adSet: MetaAdSet): AdSetData {
+  return {
+    // ... campos existentes ...
+    thumbnailUrl: adSet.thumbnailUrl,  // NOVO
+    previewUrl: adSet.previewUrl,
+  };
+}
+```
 
 ---
 
-### Resumo
+### Implementação - Tabela
 
-| Arquivo | Ação |
-|---------|------|
-| `supabase/functions/fetch-meta-campaigns/index.ts` | Adicionar logs + verificar resposta de ad sets |
+Atualizar `CampaignsTable.tsx` para exibir thumbnail dos ad sets (linhas 135-136):
 
-A implementação vai adicionar diagnósticos e corrigir a lógica para garantir que os ad sets apareçam na tabela.
+```tsx
+{/* De: célula vazia */}
+<TableCell className="w-14 p-2"></TableCell>
+
+{/* Para: mostrar thumbnail */}
+<TableCell className="w-14 p-2">
+  {adSet.thumbnailUrl ? (
+    <img 
+      src={adSet.thumbnailUrl} 
+      alt={adSet.name}
+      className="w-8 h-8 object-cover rounded"
+    />
+  ) : (
+    <div className="w-8 h-8 bg-muted/50 rounded flex items-center justify-center">
+      <Image className="h-3 w-3 text-muted-foreground" />
+    </div>
+  )}
+</TableCell>
+```
+
+---
+
+### Resultado Visual Esperado
+
+```text
+│  [🖼️ img]   │ Lead Gen Premium 🔗      │ leads │  45k  │ R$ 8k │ Ativo  │
+│    [🖼️]     │ ├─ Conjunto Diretores 🔗 │ Conj. │  28k  │ R$ 5k │ Ativo  │
+│    [🖼️]     │ └─ Conjunto C-Level 🔗   │ Conj. │  17k  │ R$ 3k │ Ativo  │
+```
+
+---
+
+### Considerações
+
+| Aspecto | Detalhe |
+|---------|---------|
+| +1 chamada por ad set | Busca anúncios para cada conjunto |
+| Limite de 1 | Só busca o primeiro anúncio para economizar chamadas |
+| Fallback | Mostra placeholder se não tiver thumbnail |
 
