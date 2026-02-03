@@ -9,10 +9,7 @@ import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
-import { 
-  RevenueChartGroupedBars, 
-  RevenueChartDashboard 
-} from "./revenue-charts";
+import { RevenueChartGroupedBars } from "./revenue-charts";
 
 interface RevenueChartComparisonProps {
   startDate: Date;
@@ -300,25 +297,13 @@ export function RevenueChartComparison({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Faturamento por Período (Detalhado) - Barras Agrupadas */}
-      <RevenueChartGroupedBars
-        startDate={startDate}
-        endDate={endDate}
-        selectedBUs={selectedBUs}
-        chartData={chartData}
-        totals={totals}
-      />
-
-      {/* Resumo de Faturamento - Dashboard */}
-      <RevenueChartDashboard
-        startDate={startDate}
-        endDate={endDate}
-        selectedBUs={selectedBUs}
-        chartData={chartData}
-        totals={totals}
-        metasPorBU={buMetas}
-      />
-    </div>
+    <RevenueChartGroupedBars
+      startDate={startDate}
+      endDate={endDate}
+      selectedBUs={selectedBUs}
+      chartData={chartData}
+      totals={totals}
+      metasPorBU={buMetas}
+    />
   );
 }
