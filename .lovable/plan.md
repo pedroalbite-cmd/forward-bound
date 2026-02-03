@@ -1,96 +1,113 @@
 
-## Consolidar Gráficos de Faturamento: Opção 1 + Dashboard Opção 5
+
+## Consolidar Gráficos de Faturamento em Um Único Componente
 
 ### Objetivo
 
-Simplificar a visualização de faturamento mantendo apenas:
-1. **Opção 1: Barras Agrupadas** - Para comparação lado a lado por período
-2. **Dashboard da Opção 5** - Cards KPI com sparklines + gráfico consolidado
+Criar um único card de faturamento que combine:
+- **Parte Superior**: Cards KPI com sparklines (do RevenueChartDashboard)
+- **Parte Inferior**: Gráfico de barras agrupadas (do RevenueChartGroupedBars)
 
-### Arquivos a Deletar
+### Componente Final
 
-| Arquivo | Motivo |
-|---------|--------|
-| `src/components/planning/revenue-charts/RevenueChartMultiLine.tsx` | Opção 2 - será removida |
-| `src/components/planning/revenue-charts/RevenueChartStackedArea.tsx` | Opção 3 - será removida |
-| `src/components/planning/RevenueBreakdownChart.tsx` | "Faturamento por Período" original - substituído pelas novas opções |
-
-### Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/planning/revenue-charts/index.ts` | Remover exports das opções 2 e 3 |
-| `src/components/planning/RevenueChartComparison.tsx` | Remover imports e renderização das opções 2 e 3, atualizar texto do header |
-| `src/components/planning/IndicatorsTab.tsx` | Remover import e uso do `RevenueBreakdownChart` |
-
----
-
-### Detalhes Técnicos
-
-**1. Atualizar `revenue-charts/index.ts`:**
-
-Antes:
-```typescript
-export { RevenueChartGroupedBars } from './RevenueChartGroupedBars';
-export { RevenueChartMultiLine } from './RevenueChartMultiLine';
-export { RevenueChartStackedArea } from './RevenueChartStackedArea';
-export { RevenueChartDashboard } from './RevenueChartDashboard';
-```
-
-Depois:
-```typescript
-export { RevenueChartGroupedBars } from './RevenueChartGroupedBars';
-export { RevenueChartDashboard } from './RevenueChartDashboard';
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  Faturamento por Período                                    │
+├─────────────────────────────────────────────────────────────┤
+│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌──────────┐  │
+│  │  MA    │ │  TAX   │ │  OXY   │ │  FRQ   │ │  TOTAL   │  │
+│  │ R$200k │ │ R$50k  │ │ R$80k  │ │ R$70k  │ │  R$400k  │  │
+│  │ ~~~    │ │ ~~~    │ │ ~~~    │ │ ~~~    │ │  ~~~     │  │
+│  │ 95%    │ │ 80%    │ │ 120%   │ │ 60%    │ │  100%    │  │
+│  └────────┘ └────────┘ └────────┘ └────────┘ └──────────┘  │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │    ██ ██ ██ ██                                      │   │
+│  │    ██ ██ ██ ██    ██ ██                             │   │
+│  │    ██ ██ ██ ██    ██ ██    ██ ██                    │   │
+│  │    ─────────────────────────────── Meta média       │   │
+│  │    Jan    Fev    Mar    Abr                         │   │
+│  └─────────────────────────────────────────────────────┘   │
+│  [MA] [TAX] [OXY] [FRQ]                                    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-**2. Atualizar `RevenueChartComparison.tsx`:**
+### Alterações Técnicas
 
-- Remover imports de `RevenueChartMultiLine` e `RevenueChartStackedArea`
-- Remover renderização das opções 2 e 3
-- Atualizar título para "Faturamento por Período" (remover texto sobre "comparação")
-- Manter apenas `RevenueChartGroupedBars` e `RevenueChartDashboard`
-
----
-
-**3. Atualizar `IndicatorsTab.tsx`:**
-
-- Remover import do `RevenueBreakdownChart`
-- Remover a seção `{/* Revenue Breakdown Chart */}` (linhas ~2408-2415)
-- O `RevenueChartComparison` já exibe os gráficos necessários
+| Arquivo | Ação |
+|---------|------|
+| `src/components/planning/revenue-charts/RevenueChartGroupedBars.tsx` | Modificar para incluir os KPI cards com sparklines do dashboard |
+| `src/components/planning/revenue-charts/RevenueChartDashboard.tsx` | Deletar (será absorvido pelo GroupedBars) |
+| `src/components/planning/revenue-charts/index.ts` | Remover export do Dashboard |
+| `src/components/planning/RevenueChartComparison.tsx` | Renderizar apenas o RevenueChartGroupedBars |
 
 ---
 
-**4. Atualizar títulos dos componentes mantidos:**
+### Código do Componente Unificado
 
-- `RevenueChartGroupedBars.tsx`: Atualizar título de "Opção 1: Barras Agrupadas" para "Faturamento por Período (Detalhado)"
-- `RevenueChartDashboard.tsx`: Atualizar título de "Opção 5: Dashboard Compacto (Recomendado)" para "Resumo de Faturamento"
+O `RevenueChartGroupedBars.tsx` será atualizado para:
+
+1. Receber `metasPorBU` como prop adicional
+2. Adicionar a seção de KPI cards com sparklines antes do gráfico
+3. Manter o gráfico de barras agrupadas existente
+
+**Nova estrutura:**
+```typescript
+export function RevenueChartGroupedBars({ 
+  startDate, endDate, selectedBUs, chartData, totals, metasPorBU
+}) {
+  // Calcular metas por BU
+  const buMetas = useMemo(() => { ... });
+  
+  // Extrair dados de sparkline
+  const sparklineData = useMemo(() => { ... });
+  
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Faturamento por Período</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {/* KPI Cards Row - do Dashboard */}
+        <div className="flex gap-3 flex-wrap mb-4">
+          {selectedBUs.map(bu => <BUKpiCard ... />)}
+          <TotalCard ... />
+        </div>
+        
+        {/* Gráfico de Barras Agrupadas - existente */}
+        <div className="h-80">
+          <BarChart ... />
+        </div>
+        
+        {/* Legenda */}
+        <Legend ... />
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+---
+
+### Componentes Internos a Mover
+
+Do `RevenueChartDashboard.tsx` para `RevenueChartGroupedBars.tsx`:
+
+1. **BUKpiCard** - Card individual por BU com sparkline
+2. **Total Card** - Card destacado com total geral
+3. Lógica de cálculo de `buMetas` e `sparklineData`
+
+**Remover do Dashboard:**
+- O `ComposedChart` com barras empilhadas (linhas 244-296)
+- A legenda final (linhas 298-309)
 
 ---
 
 ### Resultado Final
 
-A aba Indicadores terá apenas dois gráficos de faturamento:
+- **1 único componente** ao invés de 2
+- **Interface mais limpa** sem duplicação de informação
+- **Melhor UX** com KPIs resumidos + detalhamento por período no mesmo card
 
-```text
-┌─────────────────────────────────────────────────┐
-│  Faturamento por Período (Detalhado)            │
-│  ┌───┬───┬───┬───┐                              │
-│  │MA │TAX│OXY│FRQ│  ← Barras agrupadas por BU   │
-│  └───┴───┴───┴───┘                              │
-│  Jan  Fev  Mar  Abr                             │
-└─────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────┐
-│  Resumo de Faturamento                          │
-│  ┌────┐ ┌────┐ ┌────┐ ┌────┐ ┌─────┐           │
-│  │ MA │ │TAX │ │OXY │ │FRQ │ │TOTAL│           │
-│  │___ │ │___ │ │___ │ │___ │ │____ │           │
-│  │95% │ │80% │ │120%│ │60% │ │92%  │           │
-│  └────┘ └────┘ └────┘ └────┘ └─────┘           │
-│  ┌─────────────────────────────────────┐       │
-│  │ Gráfico empilhado consolidado       │       │
-│  └─────────────────────────────────────┘       │
-└─────────────────────────────────────────────────┘
-```
