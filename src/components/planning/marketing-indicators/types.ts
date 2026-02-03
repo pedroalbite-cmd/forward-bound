@@ -27,6 +27,7 @@ export interface AdSetData {
   clicks: number;
   leads: number;
   cpl: number;
+  previewUrl?: string;
 }
 
 export interface CampaignData {
@@ -45,6 +46,8 @@ export interface CampaignData {
   clicks?: number;
   cpl?: number;
   adSets?: AdSetData[];
+  thumbnailUrl?: string;
+  previewUrl?: string;
 }
 
 export interface InstagramMetrics {

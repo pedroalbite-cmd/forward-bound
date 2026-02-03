@@ -97,35 +97,50 @@ serve(async (req) => {
           const insightsResponse = await fetch(insightsUrl);
           const insightsData = await insightsResponse.json();
           
-          // Fetch ad sets
-          const adSetsUrl = `${META_BASE_URL}/${campaign.id}/adsets?fields=id,name,status,daily_budget&access_token=${accessToken}`;
-          const adSetsResponse = await fetch(adSetsUrl);
-          const adSetsData = await adSetsResponse.json();
+        // Fetch ad sets
+        const adSetsUrl = `${META_BASE_URL}/${campaign.id}/adsets?fields=id,name,status,daily_budget&access_token=${accessToken}`;
+        const adSetsResponse = await fetch(adSetsUrl);
+        const adSetsData = await adSetsResponse.json();
 
-          // For each ad set, fetch its insights
-          const adSetsWithInsights = await Promise.all(
-            (adSetsData.data || []).map(async (adSet: MetaAdSet) => {
-              try {
-                const adSetInsightsUrl = `${META_BASE_URL}/${adSet.id}/insights?fields=${insightsFields}&time_range=${encodeURIComponent(timeRange)}&access_token=${accessToken}`;
-                const adSetInsightsResponse = await fetch(adSetInsightsUrl);
-                const adSetInsightsData = await adSetInsightsResponse.json();
-                
-                return {
-                  ...adSet,
-                  insights: adSetInsightsData.data?.[0] || null,
-                };
-              } catch (err) {
-                console.error(`Error fetching insights for ad set ${adSet.id}:`, err);
-                return { ...adSet, insights: null };
-              }
-            })
-          );
+        // For each ad set, fetch its insights
+        const adSetsWithInsights = await Promise.all(
+          (adSetsData.data || []).map(async (adSet: MetaAdSet) => {
+            try {
+              const adSetInsightsUrl = `${META_BASE_URL}/${adSet.id}/insights?fields=${insightsFields}&time_range=${encodeURIComponent(timeRange)}&access_token=${accessToken}`;
+              const adSetInsightsResponse = await fetch(adSetInsightsUrl);
+              const adSetInsightsData = await adSetInsightsResponse.json();
+              
+              return {
+                ...adSet,
+                insights: adSetInsightsData.data?.[0] || null,
+                previewUrl: `https://www.facebook.com/adsmanager/manage/adsets?act=${formattedAccountId.replace('act_', '')}&selected_adset_ids=${adSet.id}`,
+              };
+            } catch (err) {
+              console.error(`Error fetching insights for ad set ${adSet.id}:`, err);
+              return { ...adSet, insights: null, previewUrl: null };
+            }
+          })
+        );
 
-          return {
-            ...campaign,
-            insights: insightsData.data?.[0] || null,
-            adSets: adSetsWithInsights,
-          };
+        // Fetch first ad creative for thumbnail
+        let thumbnailUrl: string | null = null;
+        try {
+          const adsUrl = `${META_BASE_URL}/${campaign.id}/ads?fields=creative{thumbnail_url,image_url}&limit=1&access_token=${accessToken}`;
+          const adsResponse = await fetch(adsUrl);
+          const adsData = await adsResponse.json();
+          const firstAd = adsData.data?.[0];
+          thumbnailUrl = firstAd?.creative?.thumbnail_url || firstAd?.creative?.image_url || null;
+        } catch (err) {
+          console.error(`Error fetching ads for campaign ${campaign.id}:`, err);
+        }
+
+        return {
+          ...campaign,
+          insights: insightsData.data?.[0] || null,
+          adSets: adSetsWithInsights,
+          thumbnailUrl,
+          previewUrl: `https://www.facebook.com/adsmanager/manage/campaigns?act=${formattedAccountId.replace('act_', '')}&selected_campaign_ids=${campaign.id}`,
+        };
         } catch (err) {
           console.error(`Error enriching campaign ${campaign.id}:`, err);
           return {

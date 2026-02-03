@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, ChevronRight, Loader2, AlertCircle } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronRight, Loader2, AlertCircle, ExternalLink, Image } from "lucide-react";
 import { CampaignData, AdSetData } from "./types";
 
 interface CampaignsTableProps {
@@ -108,6 +108,7 @@ export function CampaignsTable({ campaigns, isLoading, error }: CampaignsTablePr
                   <TableHeader>
                     <TableRow>
                       {hasAdSets && <TableHead className="w-8"></TableHead>}
+                      <TableHead className="w-14">Preview</TableHead>
                       <TableHead>Campanha</TableHead>
                       <TableHead>Objetivo</TableHead>
                       <TableHead className="text-right">Impressões</TableHead>
@@ -139,7 +140,36 @@ export function CampaignsTable({ campaigns, isLoading, error }: CampaignsTablePr
                                 )}
                               </TableCell>
                             )}
-                            <TableCell className="font-medium">{campaign.name}</TableCell>
+                            <TableCell className="w-14 p-2">
+                              {campaign.thumbnailUrl ? (
+                                <img 
+                                  src={campaign.thumbnailUrl} 
+                                  alt={campaign.name}
+                                  className="w-10 h-10 object-cover rounded"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 bg-muted rounded flex items-center justify-center">
+                                  <Image className="h-4 w-4 text-muted-foreground" />
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                <span>{campaign.name}</span>
+                                {campaign.previewUrl && (
+                                  <a 
+                                    href={campaign.previewUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-primary hover:text-primary/80"
+                                    title="Abrir no Meta Ads Manager"
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                  </a>
+                                )}
+                              </div>
+                            </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
                               {campaign.objective?.replace(/_/g, ' ').toLowerCase() || '-'}
                             </TableCell>
@@ -164,8 +194,23 @@ export function CampaignsTable({ campaigns, isLoading, error }: CampaignsTablePr
                               className="bg-muted/30"
                             >
                               {hasAdSets && <TableCell className="p-2"></TableCell>}
-                              <TableCell className="pl-8 font-normal text-sm text-muted-foreground">
-                                ├─ {adSet.name}
+                              <TableCell className="w-14 p-2"></TableCell>
+                              <TableCell className="pl-4 font-normal text-sm text-muted-foreground">
+                                <div className="flex items-center gap-2">
+                                  <span>├─ {adSet.name}</span>
+                                  {adSet.previewUrl && (
+                                    <a 
+                                      href={adSet.previewUrl} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-primary hover:text-primary/80"
+                                      title="Abrir no Meta Ads Manager"
+                                    >
+                                      <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell className="text-xs text-muted-foreground">Conjunto</TableCell>
                               <TableCell className="text-right text-sm">
