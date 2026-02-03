@@ -8,12 +8,37 @@ const corsHeaders = {
 
 // Marketing sheet configuration
 const MARKETING_SHEET_ID = '1O27qvdplGeRGmnueUJOwk1FPN83hiUUf3-SZbR9x4ig';
-const MARKETING_TAB_NAME = 'Indicadores 26';
 
-// Month mapping for column indices (B=1, C=2, etc.)
-const MONTH_COLUMNS: Record<string, number> = {
-  'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
-  'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+// Tab configurations by year
+const TAB_CONFIGS: Record<number, { name: string; gid: string }> = {
+  2025: { name: 'Indicadores 25', gid: '2102339529' },
+  2026: { name: 'Indicadores 26', gid: '1310877066' },
+};
+
+// Column mapping for 2026 (simple: B-M = months 1-12)
+const MONTH_COLUMNS_2026: Record<number, number> = {
+  0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6,
+  6: 7, 7: 8, 8: 9, 9: 10, 10: 11, 11: 12,
+};
+
+// Column mapping for 2025 (with quarterly totals at E, I, M, Q)
+const MONTH_COLUMNS_2025: Record<number, number> = {
+  0: 1,   // Jan = B
+  1: 2,   // Feb = C
+  2: 3,   // Mar = D
+  // E = Q1 total (skip)
+  3: 5,   // Apr = F
+  4: 6,   // May = G
+  5: 7,   // Jun = H
+  // I = Q2 total (skip)
+  6: 9,   // Jul = J
+  7: 10,  // Aug = K
+  8: 11,  // Sep = L
+  // M = Q3 total (skip)
+  9: 13,  // Oct = N
+  10: 14, // Nov = O
+  11: 15, // Dec = P
+  // Q = Q4 total, R = Annual total (skip)
 };
 
 // Metric name mappings (normalized → original variations)
@@ -50,6 +75,21 @@ const METRIC_MAPPINGS: Record<string, string[]> = {
   'roiLtv': ['ROI LTV', 'ROI Ltv', 'Roi LTV', 'ROI x LTV'],
   'ltvCac': ['LTV/CAC', 'LTV / CAC', 'Ltv/Cac', 'LTV:CAC', 'LTV CAC'],
 };
+
+// Metrics that are ratios/averages (not summable)
+const RATIO_METRICS = new Set([
+  'cplGoogle', 'cplMeta', 'cplTotal', 'cpmqlPorFaturamento', 
+  'cprm', 'cprr', 'cpp', 'cpv', 'cac', 'ltv', 'tcv', 
+  'roas', 'roasLtv', 'roiLtv', 'ltvCac'
+]);
+
+// Metrics that are summable (absolute values)
+const SUMMABLE_METRICS = new Set([
+  'midiaGoogle', 'leadsGoogle', 'midiaMeta', 'leadsMeta',
+  'midiaTotal', 'leadsTotais', 'mqlPorFaturamento', 'reuniaoMarcada',
+  'reuniaoRealizada', 'propostaEnviada', 'vendas',
+  'mrr', 'setup', 'pontual', 'educacao', 'gmv'
+]);
 
 function normalizeText(text: string): string {
   return text
@@ -92,32 +132,190 @@ function parseNumericValue(value: unknown): number {
   return 0;
 }
 
-function getMonthIndicesForPeriod(startDate: string, endDate: string): number[] {
+interface YearMonths {
+  year: number;
+  months: number[]; // 0-11
+}
+
+function getYearMonthsForPeriod(startDate: string, endDate: string): YearMonths[] {
   const start = new Date(startDate);
   const end = new Date(endDate);
-  const indices: number[] = [];
+  const result: YearMonths[] = [];
   
-  // IMPORTANTE: A planilha "Indicadores 26" tem rótulos errados (25 = 2025)
-  // mas os dados são de 2026. Colunas B-M = Jan-Dec 2026
-  const startMonth = start.getMonth(); // 0-11
-  const endMonth = end.getMonth(); // 0-11
   const startYear = start.getFullYear();
   const endYear = end.getFullYear();
+  const startMonth = start.getMonth();
+  const endMonth = end.getMonth();
   
   for (let year = startYear; year <= endYear; year++) {
+    // Only support 2025 and 2026
+    if (year !== 2025 && year !== 2026) continue;
+    
     const fromMonth = year === startYear ? startMonth : 0;
     const toMonth = year === endYear ? endMonth : 11;
     
+    const months: number[] = [];
     for (let month = fromMonth; month <= toMonth; month++) {
-      // Colunas B-M (índices 1-12) = dados de 2026
-      // Ignorar anos diferentes de 2026 por enquanto
-      if (year === 2026) {
-        indices.push(month + 1); // +1 porque coluna A é o label
-      }
+      months.push(month);
+    }
+    
+    if (months.length > 0) {
+      result.push({ year, months });
     }
   }
   
-  return indices;
+  return result;
+}
+
+function getColumnIndices(year: number, months: number[]): number[] {
+  const columnMap = year === 2025 ? MONTH_COLUMNS_2025 : MONTH_COLUMNS_2026;
+  return months.map(month => columnMap[month]).filter(col => col !== undefined);
+}
+
+async function fetchSheetData(tabName: string): Promise<{ rows: any[] }> {
+  const sheetUrl = `https://docs.google.com/spreadsheets/d/${MARKETING_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}`;
+  
+  console.log(`Fetching from: ${tabName}`);
+  
+  const response = await fetch(sheetUrl);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch sheet ${tabName}: ${response.status} ${response.statusText}`);
+  }
+  
+  const text = await response.text();
+  
+  // Google Visualization API returns JSONP, extract JSON
+  const jsonMatch = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?$/);
+  if (!jsonMatch) {
+    throw new Error(`Invalid response format from ${tabName}`);
+  }
+  
+  const jsonData = JSON.parse(jsonMatch[1]);
+  
+  if (!jsonData.table || !jsonData.table.rows) {
+    throw new Error(`No data found in ${tabName}`);
+  }
+  
+  return { rows: jsonData.table.rows };
+}
+
+function parseMetricsFromRows(rows: any[], columnIndices: number[]): Record<string, number> {
+  const metrics: Record<string, number> = {};
+  
+  for (const row of rows) {
+    if (!row.c || !row.c[0]) continue;
+    
+    const label = row.c[0].v;
+    if (typeof label !== 'string') continue;
+    
+    const metricKey = findMetricKey(label);
+    if (!metricKey) continue;
+    
+    // Sum values for selected months
+    let sum = 0;
+    for (const colIndex of columnIndices) {
+      if (row.c[colIndex] && row.c[colIndex].v !== null) {
+        sum += parseNumericValue(row.c[colIndex].v);
+      }
+    }
+    
+    metrics[metricKey] = sum;
+  }
+  
+  return metrics;
+}
+
+function mergeMetrics(
+  data2025: Record<string, number> | null, 
+  data2026: Record<string, number> | null
+): Record<string, number> {
+  // If only one year has data, return that
+  if (!data2025 || Object.keys(data2025).length === 0) {
+    return data2026 || {};
+  }
+  if (!data2026 || Object.keys(data2026).length === 0) {
+    return data2025;
+  }
+  
+  const merged: Record<string, number> = {};
+  const allKeys = new Set([...Object.keys(data2025), ...Object.keys(data2026)]);
+  
+  for (const key of allKeys) {
+    const val2025 = data2025[key] || 0;
+    const val2026 = data2026[key] || 0;
+    
+    if (SUMMABLE_METRICS.has(key)) {
+      // Sum absolute values
+      merged[key] = val2025 + val2026;
+    } else if (RATIO_METRICS.has(key)) {
+      // For ratios, we'll recalculate after based on totals
+      // For now, just sum (will be recalculated below)
+      merged[key] = val2025 + val2026;
+    } else {
+      // Unknown metric, sum as fallback
+      merged[key] = val2025 + val2026;
+    }
+  }
+  
+  // Recalculate ratio metrics based on merged totals
+  const midiaTotal = merged.midiaTotal || 0;
+  const leadsTotais = merged.leadsTotais || 0;
+  const mqls = merged.mqlPorFaturamento || 0;
+  const rms = merged.reuniaoMarcada || 0;
+  const rrs = merged.reuniaoRealizada || 0;
+  const propostas = merged.propostaEnviada || 0;
+  const vendas = merged.vendas || 0;
+  
+  // Recalculate CPL metrics
+  if (leadsTotais > 0) {
+    merged.cplTotal = midiaTotal / leadsTotais;
+  }
+  
+  const midiaGoogle = merged.midiaGoogle || 0;
+  const leadsGoogle = merged.leadsGoogle || 0;
+  if (leadsGoogle > 0) {
+    merged.cplGoogle = midiaGoogle / leadsGoogle;
+  }
+  
+  const midiaMeta = merged.midiaMeta || 0;
+  const leadsMeta = merged.leadsMeta || 0;
+  if (leadsMeta > 0) {
+    merged.cplMeta = midiaMeta / leadsMeta;
+  }
+  
+  // Recalculate funnel CPX metrics
+  if (mqls > 0) {
+    merged.cpmqlPorFaturamento = midiaTotal / mqls;
+  }
+  if (rms > 0) {
+    merged.cprm = midiaTotal / rms;
+  }
+  if (rrs > 0) {
+    merged.cprr = midiaTotal / rrs;
+  }
+  if (propostas > 0) {
+    merged.cpp = midiaTotal / propostas;
+  }
+  if (vendas > 0) {
+    merged.cpv = midiaTotal / vendas;
+    merged.cac = midiaTotal / vendas;
+  }
+  
+  // ROAS = GMV / Mídia
+  const gmv = merged.gmv || 0;
+  if (midiaTotal > 0) {
+    merged.roas = gmv / midiaTotal;
+  }
+  
+  // LTV/CAC ratio
+  const ltv = merged.ltv || 0;
+  const cac = merged.cac || 0;
+  if (cac > 0) {
+    merged.ltvCac = ltv / cac;
+  }
+  
+  return merged;
 }
 
 serve(async (req) => {
@@ -131,82 +329,52 @@ serve(async (req) => {
     
     console.log('Fetching marketing sheet data:', { startDate, endDate });
     
-    // Build Google Visualization API URL
-    const sheetUrl = `https://docs.google.com/spreadsheets/d/${MARKETING_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(MARKETING_TAB_NAME)}`;
+    // Determine which years/months to fetch
+    const yearMonthsList = startDate && endDate 
+      ? getYearMonthsForPeriod(startDate, endDate)
+      : [{ year: 2026, months: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] }]; // Default to full 2026
     
-    console.log('Fetching from URL:', sheetUrl);
+    console.log('Year/months to fetch:', yearMonthsList);
     
-    const response = await fetch(sheetUrl);
+    let data2025: Record<string, number> | null = null;
+    let data2026: Record<string, number> | null = null;
+    let totalMonthsIncluded = 0;
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch sheet: ${response.status} ${response.statusText}`);
-    }
-    
-    const text = await response.text();
-    
-    // Google Visualization API returns JSONP, extract JSON
-    const jsonMatch = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?$/);
-    if (!jsonMatch) {
-      throw new Error('Invalid response format from Google Sheets');
-    }
-    
-    const jsonData = JSON.parse(jsonMatch[1]);
-    
-    if (!jsonData.table || !jsonData.table.rows) {
-      throw new Error('No data found in sheet');
-    }
-    
-    const rows = jsonData.table.rows;
-    const monthIndices = startDate && endDate 
-      ? getMonthIndicesForPeriod(startDate, endDate)
-      : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]; // Default to full year
-    
-    console.log('Month indices for period:', monthIndices);
-    
-    // Parse rows and aggregate values
-    const metrics: Record<string, number> = {};
-    const unmappedLabels: string[] = [];
-    
-    for (const row of rows) {
-      if (!row.c || !row.c[0]) continue;
-      
-      const label = row.c[0].v;
-      if (typeof label !== 'string') continue;
-      
-      const metricKey = findMetricKey(label);
-      
-      // Track unmapped labels for debugging
-      if (!metricKey && label.trim() !== '') {
-        unmappedLabels.push(label);
+    // Fetch data for each year
+    for (const { year, months } of yearMonthsList) {
+      const tabConfig = TAB_CONFIGS[year];
+      if (!tabConfig) {
+        console.log(`No tab config for year ${year}, skipping`);
         continue;
       }
       
-      if (!metricKey) continue;
-      
-      // Sum values for selected months
-      let sum = 0;
-      for (const colIndex of monthIndices) {
-        if (row.c[colIndex] && row.c[colIndex].v !== null) {
-          sum += parseNumericValue(row.c[colIndex].v);
+      try {
+        const { rows } = await fetchSheetData(tabConfig.name);
+        const columnIndices = getColumnIndices(year, months);
+        
+        console.log(`Year ${year}: fetching columns ${columnIndices.join(', ')} for months ${months.join(', ')}`);
+        
+        const metrics = parseMetricsFromRows(rows, columnIndices);
+        
+        console.log(`Year ${year}: parsed ${Object.keys(metrics).length} metrics`);
+        
+        if (year === 2025) {
+          data2025 = metrics;
+        } else if (year === 2026) {
+          data2026 = metrics;
         }
-      }
-      
-      // For rate/ratio metrics, calculate average instead of sum
-      const isRatio = ['cplGoogle', 'cplMeta', 'cplTotal', 'cpmqlPorFaturamento', 'cprm', 'cprr', 'cpp', 'cpv', 'cac', 'ltv', 'tcv', 'roas', 'roasLtv', 'roiLtv', 'ltvCac'].includes(metricKey);
-      
-      if (isRatio && monthIndices.length > 1) {
-        metrics[metricKey] = sum;
-      } else {
-        metrics[metricKey] = sum;
+        
+        totalMonthsIncluded += months.length;
+      } catch (err) {
+        console.error(`Error fetching year ${year}:`, err);
+        // Continue with other years
       }
     }
     
-    // Log unmapped labels for debugging
-    if (unmappedLabels.length > 0) {
-      console.log('Unmapped labels found:', unmappedLabels.slice(0, 20));
-    }
+    // Merge data from both years if needed
+    const metrics = mergeMetrics(data2025, data2026);
     
-    console.log('Parsed metrics:', Object.keys(metrics).length, 'metrics found');
+    console.log('Final merged metrics:', Object.keys(metrics).length, 'metrics');
     
     // Return structured data
     const result = {
@@ -253,7 +421,8 @@ serve(async (req) => {
       
       // Meta
       period: { startDate, endDate },
-      monthsIncluded: monthIndices.length,
+      monthsIncluded: totalMonthsIncluded,
+      yearsIncluded: yearMonthsList.map(ym => ym.year),
     };
     
     return new Response(JSON.stringify(result), {
