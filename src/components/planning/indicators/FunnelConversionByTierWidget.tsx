@@ -20,6 +20,9 @@ const TIER_NORMALIZATION: Record<string, string> = {
   'Até 50k': 'Até R$ 50k',
   'Até R$50k': 'Até R$ 50k',
   'Até R$50.000': 'Até R$ 50k',
+  'Ainda não faturamos': 'Até R$ 50k',
+  'Abaixo de R$ 50.000': 'Até R$ 50k',
+  'Abaixo de R$ 50 mil': 'Até R$ 50k',
   
   // R$ 50k - 200k variants
   'Entre R$ 50.000 e R$ 200.000': 'R$ 50k - 200k',
@@ -40,6 +43,10 @@ const TIER_NORMALIZATION: Record<string, string> = {
   'Entre R$200k e R$1M': 'R$ 200k - 1M',
   'De R$ 200k a R$ 1M': 'R$ 200k - 1M',
   'R$200k-1M': 'R$ 200k - 1M',
+  'Entre R$ 200 mil e R$ 350 mil': 'R$ 200k - 1M',
+  'Entre R$ 350 mil e R$ 500 mil': 'R$ 200k - 1M',
+  'Entre R$ 500 mil e R$ 1 milhão': 'R$ 200k - 1M',
+  'Entre R$ 200 mil e R$ 500 mil': 'R$ 200k - 1M',
   
   // Acima de 1M variants
   'Acima de R$ 1.000.000': 'Acima de 1M',
@@ -109,14 +116,17 @@ const normalizeTier = (revenueRange?: string): string => {
   if (lowerNormalized) return lowerNormalized;
   
   // Fallback: try to guess based on keywords
-  if (lowerRange.includes('50') && !lowerRange.includes('200')) {
+  if (lowerRange.includes('não fatur') || lowerRange.includes('ainda não')) {
     return 'Até R$ 50k';
   }
-  if (lowerRange.includes('200') && !lowerRange.includes('1')) {
+  if (lowerRange.includes('abaixo') || (lowerRange.includes('50') && !lowerRange.includes('200') && !lowerRange.includes('500'))) {
+    return 'Até R$ 50k';
+  }
+  if (lowerRange.includes('50 mil') && lowerRange.includes('200')) {
     return 'R$ 50k - 200k';
   }
-  if ((lowerRange.includes('200') && lowerRange.includes('1')) || 
-      (lowerRange.includes('milhão') && !lowerRange.includes('5'))) {
+  if (lowerRange.includes('500 mil') || lowerRange.includes('350 mil') || 
+      (lowerRange.includes('200') && (lowerRange.includes('350') || lowerRange.includes('500') || lowerRange.includes('milhão')))) {
     return 'R$ 200k - 1M';
   }
   if (lowerRange.includes('acima') || lowerRange.includes('5 milh') || 
