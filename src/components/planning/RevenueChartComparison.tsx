@@ -115,10 +115,13 @@ export function RevenueChartComparison({
 
   // Generate chart data
   const chartData = useMemo(() => {
-    const maSalesCards = maMovements.filter(m => m.fase === 'Ganho');
-    const o2SalesMovements = o2TaxMetas.movements.filter(m => m.fase === 'Ganho');
-    const franquiaSalesMovements = franquiaMetas.movements.filter(m => m.fase === 'Ganho');
-    const oxyHackerSalesMovements = oxyHackerMetas.movements.filter(m => m.fase === 'Ganho');
+    // Aceitar tanto 'Ganho' quanto 'Contrato assinado' como fases de venda ganhas
+    const isWonPhase = (fase: string) => fase === 'Ganho' || fase === 'Contrato assinado';
+    
+    const maSalesCards = maMovements.filter(m => isWonPhase(m.fase));
+    const o2SalesMovements = o2TaxMetas.movements.filter(m => isWonPhase(m.fase));
+    const franquiaSalesMovements = franquiaMetas.movements.filter(m => isWonPhase(m.fase));
+    const oxyHackerSalesMovements = oxyHackerMetas.movements.filter(m => isWonPhase(m.fase));
 
     const processPeriodByBU = (periodStart: Date, periodEnd: Date) => {
       const periodStartTime = new Date(periodStart.getFullYear(), periodStart.getMonth(), periodStart.getDate()).getTime();
