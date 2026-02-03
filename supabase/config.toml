@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.fetch-meta-campaigns]
 verify_jwt = false
+
+[functions.fetch-campaign-adsets]
+verify_jwt = false
