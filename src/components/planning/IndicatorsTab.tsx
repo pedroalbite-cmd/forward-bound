@@ -158,8 +158,21 @@ interface RadialProgressCardProps {
 
 const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = false }: RadialProgressCardProps) => {
   const percentage = meta > 0 ? (realized / meta) * 100 : 0;
-  const isAboveMeta = percentage >= 100;
-  const chartData = [{ value: Math.min(percentage, 100), fill: isAboveMeta ? "hsl(var(--chart-2))" : "hsl(var(--destructive))" }];
+  
+  // Nova lógica: Verde >= 100%, Amarelo 80-99%, Vermelho < 80%
+  const getColor = () => {
+    if (percentage >= 100) return "hsl(var(--chart-2))"; // Verde
+    if (percentage >= 80) return "hsl(45, 93%, 47%)";    // Amarelo
+    return "hsl(var(--destructive))";                    // Vermelho
+  };
+  
+  const getTextColorClass = () => {
+    if (percentage >= 100) return "text-chart-2";
+    if (percentage >= 80) return "text-amber-500";
+    return "text-destructive";
+  };
+  
+  const chartData = [{ value: Math.min(percentage, 100), fill: getColor() }];
 
   return (
     <Card 
@@ -185,7 +198,7 @@ const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = fals
           </RadialBarChart>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-3xl font-bold text-foreground">{formatNumber(realized)}</span>
-            <span className={`text-sm font-medium ${isAboveMeta ? "text-chart-2" : "text-destructive"}`}>{Math.round(percentage)}%</span>
+            <span className={`text-sm font-medium ${getTextColorClass()}`}>{Math.round(percentage)}%</span>
           </div>
         </div>
         <p className="text-sm text-muted-foreground mt-2">Meta: {formatNumber(meta)}</p>
@@ -207,8 +220,30 @@ const MonetaryRadialCard = ({ title, realized, meta, format, onClick, isClickabl
   // For SLA (duration format), lower is better - invert the color logic
   const isInverted = format === 'duration';
   const percentage = meta > 0 ? (realized / meta) * 100 : 0;
-  const isAboveMeta = isInverted ? percentage <= 100 : percentage >= 100;
-  const chartData = [{ value: Math.min(percentage, 100), fill: isAboveMeta ? "hsl(var(--chart-2))" : "hsl(var(--destructive))" }];
+  
+  // SLA mantém lógica binária (verde/vermelho)
+  // Outros indicadores usam 3 faixas
+  const getColor = () => {
+    if (isInverted) {
+      // SLA: menor é melhor
+      return percentage <= 100 ? "hsl(var(--chart-2))" : "hsl(var(--destructive))";
+    }
+    // Outros indicadores monetários
+    if (percentage >= 100) return "hsl(var(--chart-2))"; // Verde
+    if (percentage >= 80) return "hsl(45, 93%, 47%)";    // Amarelo
+    return "hsl(var(--destructive))";                    // Vermelho
+  };
+  
+  const getTextColorClass = () => {
+    if (isInverted) {
+      return percentage <= 100 ? "text-chart-2" : "text-destructive";
+    }
+    if (percentage >= 100) return "text-chart-2";
+    if (percentage >= 80) return "text-amber-500";
+    return "text-destructive";
+  };
+  
+  const chartData = [{ value: Math.min(percentage, 100), fill: getColor() }];
 
   const formatValue = format === 'currency' 
     ? formatCompactCurrency 
@@ -240,7 +275,7 @@ const MonetaryRadialCard = ({ title, realized, meta, format, onClick, isClickabl
           </RadialBarChart>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-xl font-bold text-foreground">{formatValue(realized)}</span>
-            <span className={`text-sm font-medium ${isAboveMeta ? "text-chart-2" : "text-destructive"}`}>{Math.round(percentage)}%</span>
+            <span className={`text-sm font-medium ${getTextColorClass()}`}>{Math.round(percentage)}%</span>
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-2">Meta: {formatValue(meta)}</p>
