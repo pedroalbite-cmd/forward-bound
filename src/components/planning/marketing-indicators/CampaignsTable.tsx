@@ -38,7 +38,7 @@ function CampaignRow({
   getStatusBadge 
 }: CampaignRowProps) {
   // Fetch ad sets on-demand when expanded
-  const { data: adSets, isLoading: adSetsLoading } = useCampaignAdSets(
+  const { data: adSets, isLoading: adSetsLoading, error: adSetsError } = useCampaignAdSets(
     isExpanded ? campaign.id : null,
     startDate,
     endDate,
@@ -119,10 +119,21 @@ function CampaignRow({
         </TableRow>
       )}
       
-      {isExpanded && !adSetsLoading && !hasAdSets && (
+      {isExpanded && !adSetsLoading && !hasAdSets && !adSetsError && (
         <TableRow className="bg-muted/30">
           <TableCell colSpan={10} className="text-center py-4 text-muted-foreground text-sm">
             Nenhum conjunto de anúncio encontrado
+          </TableCell>
+        </TableRow>
+      )}
+      
+      {isExpanded && adSetsError && (
+        <TableRow className="bg-muted/30">
+          <TableCell colSpan={10} className="text-center py-4 text-sm text-destructive">
+            {adSetsError.message === 'RATE_LIMIT' 
+              ? '⏳ Limite de requisições atingido. Aguarde alguns segundos e tente novamente.'
+              : `Erro ao carregar conjuntos: ${adSetsError.message}`
+            }
           </TableCell>
         </TableRow>
       )}
