@@ -9,6 +9,7 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useMarketingIndicators } from "@/hooks/useMarketingIndicators";
+import { useMetaCampaigns } from "@/hooks/useMetaCampaigns";
 import { useModeloAtualMetas } from "@/hooks/useModeloAtualMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { PerformanceGauges } from "./marketing-indicators/PerformanceGauges";
@@ -57,6 +58,14 @@ export function MarketingIndicatorsTab() {
     selectedBUs,
     selectedChannels,
   });
+
+  // Fetch Meta Ads campaigns data
+  const { 
+    data: metaCampaigns, 
+    isLoading: isLoadingMeta, 
+    error: metaError,
+    refetch: refetchMeta 
+  } = useMetaCampaigns(dateRange.from, dateRange.to);
 
   // Fetch Modelo Atual revenue data from Pipefy
   const { 
@@ -201,8 +210,13 @@ export function MarketingIndicatorsTab() {
           />
 
           {/* Refresh button */}
-          <Button variant="ghost" size="icon" onClick={refetch} disabled={isLoading}>
-            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => { refetch(); refetchMeta(); }} 
+            disabled={isLoading || isLoadingMeta}
+          >
+            <RefreshCw className={cn("h-4 w-4", (isLoading || isLoadingMeta) && "animate-spin")} />
           </Button>
         </div>
       </div>
@@ -383,8 +397,12 @@ export function MarketingIndicatorsTab() {
       {/* Conversions by Channel Table */}
       <ConversionsByChannelChart channels={data.channels} />
 
-      {/* Campaigns Table (Collapsible) */}
-      <CampaignsTable campaigns={data.campaigns} />
+      {/* Campaigns Table - Meta Ads Integration */}
+      <CampaignsTable 
+        campaigns={metaCampaigns || []} 
+        isLoading={isLoadingMeta}
+        error={metaError || undefined}
+      />
     </div>
   );
 }

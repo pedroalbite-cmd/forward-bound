@@ -17,6 +17,18 @@ export interface MarketingChannel {
   cpv?: number;     // Cost per Venda
 }
 
+export interface AdSetData {
+  id: string;
+  name: string;
+  status: 'active' | 'paused' | 'ended';
+  dailyBudget: number;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  cpl: number;
+}
+
 export interface CampaignData {
   id: string;
   name: string;
@@ -28,6 +40,11 @@ export interface CampaignData {
   roas: number;
   startDate: string;
   endDate?: string;
+  objective?: string;
+  impressions?: number;
+  clicks?: number;
+  cpl?: number;
+  adSets?: AdSetData[];
 }
 
 export interface InstagramMetrics {
