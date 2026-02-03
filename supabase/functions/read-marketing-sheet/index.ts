@@ -139,8 +139,16 @@ interface YearMonths {
 
 function getYearMonthsForPeriod(startDate: string, endDate: string): YearMonths[] {
   const start = new Date(startDate);
-  const end = new Date(endDate);
+  let end = new Date(endDate);
   const result: YearMonths[] = [];
+  
+  // Se a data final é o primeiro dia do mês, 
+  // considerar o mês anterior como o último mês do período
+  // Isso evita incluir um mês inteiro quando só o dia 1 está no range
+  if (end.getDate() === 1) {
+    end = new Date(end);
+    end.setDate(0); // Vai para o último dia do mês anterior
+  }
   
   const startYear = start.getFullYear();
   const endYear = end.getFullYear();
