@@ -374,21 +374,6 @@ export function FunnelConversionByTierWidget({ getItemsForIndicator }: FunnelCon
                     </Table>
                   </div>
                   
-                  {/* Legend */}
-                  <div className="flex flex-wrap gap-4 justify-center text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded bg-green-500" />
-                      <span className="text-muted-foreground">≥ 70% (Excelente)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded bg-amber-500" />
-                      <span className="text-muted-foreground">40-69% (Atenção)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded bg-red-500" />
-                      <span className="text-muted-foreground">&lt; 40% (Gargalo)</span>
-                    </div>
-                  </div>
                   
                   {/* Grouped Bar Chart */}
                   <div className="h-72">
