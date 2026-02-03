@@ -318,6 +318,62 @@ function mergeMetrics(
   return merged;
 }
 
+// Fetch Meta API data for a period (fallback when sheet has no data)
+async function fetchMetaDataForPeriod(
+  startDate: string, 
+  endDate: string,
+  metaAccessToken: string,
+  metaAdAccountId: string
+): Promise<{ spend: number; leads: number; impressions: number; clicks: number }> {
+  
+  const formattedAccountId = metaAdAccountId.startsWith('act_') 
+    ? metaAdAccountId 
+    : `act_${metaAdAccountId}`;
+    
+  // Format dates for Meta API (YYYY-MM-DD)
+  const since = startDate.split('T')[0];
+  const until = endDate.split('T')[0];
+  const timeRange = JSON.stringify({ since, until });
+  const fields = "spend,impressions,clicks,actions";
+  
+  const url = `https://graph.facebook.com/v21.0/${formattedAccountId}/insights?fields=${fields}&time_range=${encodeURIComponent(timeRange)}&access_token=${metaAccessToken}`;
+  
+  console.log('Fetching Meta API fallback for period:', { since, until });
+  
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.error) {
+      console.error("Meta API error:", data.error);
+      return { spend: 0, leads: 0, impressions: 0, clicks: 0 };
+    }
+    
+    const insights = data.data?.[0] || {};
+    const spend = parseFloat(insights.spend || '0');
+    const impressions = parseInt(insights.impressions || '0', 10);
+    const clicks = parseInt(insights.clicks || '0', 10);
+    
+    // Extract leads from actions
+    let leads = 0;
+    if (insights.actions) {
+      const leadAction = insights.actions.find((a: any) => 
+        a.action_type === 'lead' || 
+        a.action_type === 'onsite_conversion.lead_grouped' ||
+        a.action_type === 'offsite_conversion.fb_pixel_lead'
+      );
+      leads = leadAction ? parseInt(leadAction.value, 10) : 0;
+    }
+    
+    console.log('Meta API fallback result:', { spend, leads, impressions, clicks });
+    
+    return { spend, leads, impressions, clicks };
+  } catch (error) {
+    console.error("Meta API fetch error:", error);
+    return { spend: 0, leads: 0, impressions: 0, clicks: 0 };
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -372,9 +428,44 @@ serve(async (req) => {
     }
     
     // Merge data from both years if needed
-    const metrics = mergeMetrics(data2025, data2026);
+    let metrics = mergeMetrics(data2025, data2026);
     
-    console.log('Final merged metrics:', Object.keys(metrics).length, 'metrics');
+    // Check if sheet returned data (indicator: midiaTotal > 0)
+    const hasSheetData = (metrics.midiaTotal || 0) > 0;
+    let dataSource = 'sheet';
+    
+    if (!hasSheetData && startDate && endDate) {
+      // Fetch fallback from Meta API
+      const metaToken = Deno.env.get("META_ACCESS_TOKEN");
+      const metaAccount = Deno.env.get("META_AD_ACCOUNT_ID");
+      
+      if (metaToken && metaAccount) {
+        console.log("Sheet has no data, fetching from Meta API as fallback");
+        
+        const metaData = await fetchMetaDataForPeriod(startDate, endDate, metaToken, metaAccount);
+        
+        // Fill only Meta Ads (not Google)
+        metrics.midiaMeta = metaData.spend;
+        metrics.midiaTotal = metaData.spend; // Only Meta, Google = 0
+        metrics.leadsMeta = metaData.leads;
+        metrics.leadsTotais = metaData.leads;
+        
+        // Recalculate CPL
+        if (metaData.leads > 0) {
+          metrics.cplMeta = metaData.spend / metaData.leads;
+          metrics.cplTotal = metaData.spend / metaData.leads;
+        }
+        
+        // The rest stays 0 (no source available)
+        // MQL, RM, RR, Propostas, Vendas, MRR, Setup, etc = 0
+        dataSource = 'meta_api';
+      } else {
+        console.log("No Meta API credentials available for fallback");
+        dataSource = 'none';
+      }
+    }
+    
+    console.log('Final metrics:', Object.keys(metrics).length, 'metrics, source:', dataSource);
     
     // Return structured data
     const result = {
@@ -423,6 +514,7 @@ serve(async (req) => {
       period: { startDate, endDate },
       monthsIncluded: totalMonthsIncluded,
       yearsIncluded: yearMonthsList.map(ym => ym.year),
+      dataSource, // 'sheet', 'meta_api', or 'none'
     };
     
     return new Response(JSON.stringify(result), {
