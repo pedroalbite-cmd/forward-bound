@@ -8,70 +8,55 @@ import { ChevronDown, ChevronUp, TrendingUp, AlertTriangle } from "lucide-react"
 import { DetailItem, DetailSheet, columnFormatters } from "./DetailSheet";
 import { IndicatorType } from "@/hooks/useFunnelRealized";
 
-// Tier normalization map - standardizes various naming conventions
+// Tier normalization map - maps database values to 8 standardized display labels
 const TIER_NORMALIZATION: Record<string, string> = {
-  // Até R$ 50k variants
-  'Até R$ 50.000': 'Até R$ 50k',
-  'Até R$ 50 mil': 'Até R$ 50k',
-  'Até R$ 50k': 'Até R$ 50k',
-  'até r$ 50.000': 'Até R$ 50k',
-  'até r$ 50 mil': 'Até R$ 50k',
-  'até 50k': 'Até R$ 50k',
-  'Até 50k': 'Até R$ 50k',
-  'Até R$50k': 'Até R$ 50k',
-  'Até R$50.000': 'Até R$ 50k',
-  'Ainda não faturamos': 'Até R$ 50k',
-  'Abaixo de R$ 50.000': 'Até R$ 50k',
-  'Abaixo de R$ 50 mil': 'Até R$ 50k',
+  // Tier 1: Ainda não fatura
+  'Ainda não faturamos': 'Ainda não fatura',
   
-  // R$ 50k - 200k variants
-  'Entre R$ 50.000 e R$ 200.000': 'R$ 50k - 200k',
-  'Entre R$ 50 mil e R$ 200 mil': 'R$ 50k - 200k',
-  'R$ 50k - 200k': 'R$ 50k - 200k',
-  'R$ 50k - R$ 200k': 'R$ 50k - 200k',
-  'entre r$ 50.000 e r$ 200.000': 'R$ 50k - 200k',
-  'Entre R$50k e R$200k': 'R$ 50k - 200k',
-  'De R$ 50k a R$ 200k': 'R$ 50k - 200k',
-  'R$50k-200k': 'R$ 50k - 200k',
+  // Tier 2: Menos de R$ 100k
+  'Menos de R$ 100 mil': '< R$ 100k',
   
-  // R$ 200k - 1M variants
-  'Entre R$ 200.000 e R$ 1.000.000': 'R$ 200k - 1M',
-  'Entre R$ 200 mil e R$ 1 milhão': 'R$ 200k - 1M',
-  'R$ 200k - 1M': 'R$ 200k - 1M',
-  'R$ 200k - R$ 1M': 'R$ 200k - 1M',
-  'entre r$ 200.000 e r$ 1.000.000': 'R$ 200k - 1M',
-  'Entre R$200k e R$1M': 'R$ 200k - 1M',
-  'De R$ 200k a R$ 1M': 'R$ 200k - 1M',
-  'R$200k-1M': 'R$ 200k - 1M',
-  'Entre R$ 200 mil e R$ 350 mil': 'R$ 200k - 1M',
-  'Entre R$ 350 mil e R$ 500 mil': 'R$ 200k - 1M',
-  'Entre R$ 500 mil e R$ 1 milhão': 'R$ 200k - 1M',
-  'Entre R$ 200 mil e R$ 500 mil': 'R$ 200k - 1M',
+  // Tier 3: R$ 200k - 350k
+  'Entre R$ 200 mil e R$ 350 mil': 'R$ 200k - 350k',
   
-  // Acima de 1M variants
-  'Acima de R$ 1.000.000': 'Acima de 1M',
-  'Acima de R$ 1 milhão': 'Acima de 1M',
-  'Acima de 1M': 'Acima de 1M',
-  'acima de r$ 1.000.000': 'Acima de 1M',
-  'Entre R$ 1 milhão e R$ 5 milhões': 'Acima de 1M',
-  'Entre R$ 1M e R$ 5M': 'Acima de 1M',
-  'Mais de R$ 1M': 'Acima de 1M',
-  'R$ 1M+': 'Acima de 1M',
-  'Acima de R$1M': 'Acima de 1M',
-  'Entre R$ 5 milhões e R$ 10 milhões': 'Acima de 1M',
-  'Acima de R$ 5 milhões': 'Acima de 1M',
-  'Acima de R$ 10 milhões': 'Acima de 1M',
+  // Tier 4: R$ 350k - 500k
+  'Entre R$ 350 mil e R$ 500 mil': 'R$ 350k - 500k',
+  
+  // Tier 5: R$ 500k - 1M
+  'Entre R$ 500 mil e R$ 1 milhão': 'R$ 500k - 1M',
+  
+  // Tier 6: R$ 1M - 5M
+  'Entre R$ 1 milhão e R$ 5 milhões': 'R$ 1M - 5M',
+  
+  // Tier 7: R$ 5M - 10M
+  'Entre R$ 5 milhões e R$ 10 milhões': 'R$ 5M - 10M',
+  
+  // Tier 8: Acima de R$ 5M
+  'Acima de R$ 5 milhões': '> R$ 5M',
 };
 
-// Ordered tiers for display
-const TIER_ORDER = ['Até R$ 50k', 'R$ 50k - 200k', 'R$ 200k - 1M', 'Acima de 1M'];
+// Ordered tiers for display (8 distinct categories)
+const TIER_ORDER = [
+  'Ainda não fatura',
+  '< R$ 100k',
+  'R$ 200k - 350k',
+  'R$ 350k - 500k',
+  'R$ 500k - 1M',
+  'R$ 1M - 5M',
+  'R$ 5M - 10M',
+  '> R$ 5M',
+];
 
-// Tier colors for charts
+// Tier colors for charts (8 distinct colors)
 const TIER_COLORS: Record<string, string> = {
-  'Até R$ 50k': 'hsl(var(--chart-4))',
-  'R$ 50k - 200k': 'hsl(var(--chart-3))',
-  'R$ 200k - 1M': 'hsl(var(--chart-2))',
-  'Acima de 1M': 'hsl(var(--chart-1))',
+  'Ainda não fatura': 'hsl(var(--chart-5))',
+  '< R$ 100k': 'hsl(var(--chart-4))',
+  'R$ 200k - 350k': 'hsl(var(--chart-3))',
+  'R$ 350k - 500k': 'hsl(210, 70%, 50%)',
+  'R$ 500k - 1M': 'hsl(var(--chart-2))',
+  'R$ 1M - 5M': 'hsl(270, 70%, 50%)',
+  'R$ 5M - 10M': 'hsl(var(--chart-1))',
+  '> R$ 5M': 'hsl(330, 70%, 50%)',
 };
 
 // Conversion stage labels
@@ -109,28 +94,10 @@ const normalizeTier = (revenueRange?: string): string => {
   const normalized = TIER_NORMALIZATION[revenueRange];
   if (normalized) return normalized;
   
-  // Try lowercase match
+  // Try case-insensitive match
   const lowerRange = revenueRange.toLowerCase().trim();
-  const lowerNormalized = TIER_NORMALIZATION[lowerRange];
-  if (lowerNormalized) return lowerNormalized;
-  
-  // Fallback: try to guess based on keywords
-  if (lowerRange.includes('não fatur') || lowerRange.includes('ainda não')) {
-    return 'Até R$ 50k';
-  }
-  if (lowerRange.includes('abaixo') || (lowerRange.includes('50') && !lowerRange.includes('200') && !lowerRange.includes('500'))) {
-    return 'Até R$ 50k';
-  }
-  if (lowerRange.includes('50 mil') && lowerRange.includes('200')) {
-    return 'R$ 50k - 200k';
-  }
-  if (lowerRange.includes('500 mil') || lowerRange.includes('350 mil') || 
-      (lowerRange.includes('200') && (lowerRange.includes('350') || lowerRange.includes('500') || lowerRange.includes('milhão')))) {
-    return 'R$ 200k - 1M';
-  }
-  if (lowerRange.includes('acima') || lowerRange.includes('5 milh') || 
-      lowerRange.includes('10 milh') || lowerRange.includes('mais')) {
-    return 'Acima de 1M';
+  for (const [key, value] of Object.entries(TIER_NORMALIZATION)) {
+    if (key.toLowerCase() === lowerRange) return value;
   }
   
   return 'Não informado';
