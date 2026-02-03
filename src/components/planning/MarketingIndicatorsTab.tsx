@@ -402,6 +402,8 @@ export function MarketingIndicatorsTab() {
         campaigns={metaCampaigns || []} 
         isLoading={isLoadingMeta}
         error={metaError || undefined}
+        startDate={dateRange.from}
+        endDate={dateRange.to}
       />
     </div>
   );
