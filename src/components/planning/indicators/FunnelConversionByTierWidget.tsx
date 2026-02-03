@@ -76,7 +76,6 @@ const TIER_COLORS: Record<string, string> = {
 
 // Conversion stage labels
 const STAGE_LABELS = [
-  { key: 'leadToMql', label: 'Lead→MQL', from: 'leads', to: 'mql' },
   { key: 'mqlToRm', label: 'MQL→RM', from: 'mql', to: 'rm' },
   { key: 'rmToRr', label: 'RM→RR', from: 'rm', to: 'rr' },
   { key: 'rrToProposta', label: 'RR→Prop', from: 'rr', to: 'proposta' },
