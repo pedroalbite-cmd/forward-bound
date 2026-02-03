@@ -6,14 +6,175 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp, ChevronRight, Loader2, AlertCircle, ExternalLink, Image } from "lucide-react";
 import { CampaignData, AdSetData } from "./types";
+import { useCampaignAdSets } from "@/hooks/useCampaignAdSets";
 
 interface CampaignsTableProps {
   campaigns: CampaignData[];
   isLoading?: boolean;
   error?: Error | null;
+  startDate: Date;
+  endDate: Date;
 }
 
-export function CampaignsTable({ campaigns, isLoading, error }: CampaignsTableProps) {
+interface CampaignRowProps {
+  campaign: CampaignData;
+  isExpanded: boolean;
+  onToggle: () => void;
+  startDate: Date;
+  endDate: Date;
+  formatCurrency: (value: number) => string;
+  formatNumber: (value: number) => string;
+  getStatusBadge: (status: CampaignData['status']) => React.ReactNode;
+}
+
+function CampaignRow({ 
+  campaign, 
+  isExpanded, 
+  onToggle, 
+  startDate, 
+  endDate,
+  formatCurrency,
+  formatNumber,
+  getStatusBadge 
+}: CampaignRowProps) {
+  // Fetch ad sets on-demand when expanded
+  const { data: adSets, isLoading: adSetsLoading } = useCampaignAdSets(
+    isExpanded ? campaign.id : null,
+    startDate,
+    endDate,
+    isExpanded
+  );
+
+  const hasAdSets = adSets && adSets.length > 0;
+
+  return (
+    <>
+      <TableRow 
+        className="cursor-pointer hover:bg-muted/50"
+        onClick={onToggle}
+      >
+        <TableCell className="p-2">
+          {adSetsLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ChevronRight 
+              className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`} 
+            />
+          )}
+        </TableCell>
+        <TableCell className="w-14 p-2">
+          {campaign.thumbnailUrl ? (
+            <img 
+              src={campaign.thumbnailUrl} 
+              alt={campaign.name}
+              className="w-10 h-10 object-cover rounded"
+            />
+          ) : (
+            <div className="w-10 h-10 bg-muted rounded flex items-center justify-center">
+              <Image className="h-4 w-4 text-muted-foreground" />
+            </div>
+          )}
+        </TableCell>
+        <TableCell className="font-medium">
+          <div className="flex items-center gap-2">
+            <span>{campaign.name}</span>
+            {campaign.previewUrl && (
+              <a 
+                href={campaign.previewUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-primary hover:text-primary/80"
+                title="Abrir no Meta Ads Manager"
+              >
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+        </TableCell>
+        <TableCell className="text-xs text-muted-foreground">
+          {campaign.objective?.replace(/_/g, ' ').toLowerCase() || '-'}
+        </TableCell>
+        <TableCell className="text-right">
+          {formatNumber(campaign.impressions || 0)}
+        </TableCell>
+        <TableCell className="text-right">
+          {formatNumber(campaign.clicks || 0)}
+        </TableCell>
+        <TableCell className="text-right">{formatNumber(campaign.leads)}</TableCell>
+        <TableCell className="text-right">{formatCurrency(campaign.investment)}</TableCell>
+        <TableCell className="text-right">
+          {campaign.cpl && campaign.cpl > 0 ? formatCurrency(campaign.cpl) : '-'}
+        </TableCell>
+        <TableCell>{getStatusBadge(campaign.status)}</TableCell>
+      </TableRow>
+      
+      {/* Ad Sets rows */}
+      {isExpanded && adSetsLoading && (
+        <TableRow className="bg-muted/30">
+          <TableCell colSpan={10} className="text-center py-4 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+            Carregando conjuntos de anúncios...
+          </TableCell>
+        </TableRow>
+      )}
+      
+      {isExpanded && !adSetsLoading && !hasAdSets && (
+        <TableRow className="bg-muted/30">
+          <TableCell colSpan={10} className="text-center py-4 text-muted-foreground text-sm">
+            Nenhum conjunto de anúncio encontrado
+          </TableCell>
+        </TableRow>
+      )}
+      
+      {isExpanded && hasAdSets && adSets!.map((adSet) => (
+        <TableRow 
+          key={adSet.id}
+          className="bg-muted/30"
+        >
+          <TableCell className="p-2"></TableCell>
+          <TableCell className="w-14 p-2"></TableCell>
+          <TableCell className="pl-4 font-normal text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span>├─ {adSet.name}</span>
+              {adSet.previewUrl && (
+                <a 
+                  href={adSet.previewUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-primary hover:text-primary/80"
+                  title="Abrir no Meta Ads Manager"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+          </TableCell>
+          <TableCell className="text-xs text-muted-foreground">Conjunto</TableCell>
+          <TableCell className="text-right text-sm">
+            {formatNumber(adSet.impressions)}
+          </TableCell>
+          <TableCell className="text-right text-sm">
+            {formatNumber(adSet.clicks)}
+          </TableCell>
+          <TableCell className="text-right text-sm">
+            {formatNumber(adSet.leads)}
+          </TableCell>
+          <TableCell className="text-right text-sm">
+            {formatCurrency(adSet.spend)}
+          </TableCell>
+          <TableCell className="text-right text-sm">
+            {adSet.cpl > 0 ? formatCurrency(adSet.cpl) : '-'}
+          </TableCell>
+          <TableCell>{getStatusBadge(adSet.status)}</TableCell>
+        </TableRow>
+      ))}
+    </>
+  );
+}
+
+export function CampaignsTable({ campaigns, isLoading, error, startDate, endDate }: CampaignsTableProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
 
@@ -57,7 +218,6 @@ export function CampaignsTable({ campaigns, isLoading, error }: CampaignsTablePr
   };
 
   const hasData = campaigns.length > 0;
-  const hasAdSets = campaigns.some(c => c.adSets && c.adSets.length > 0);
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -107,7 +267,7 @@ export function CampaignsTable({ campaigns, isLoading, error }: CampaignsTablePr
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      {hasAdSets && <TableHead className="w-8"></TableHead>}
+                      <TableHead className="w-8"></TableHead>
                       <TableHead className="w-14">Preview</TableHead>
                       <TableHead>Campanha</TableHead>
                       <TableHead>Objetivo</TableHead>
@@ -120,120 +280,19 @@ export function CampaignsTable({ campaigns, isLoading, error }: CampaignsTablePr
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {campaigns.map((campaign) => {
-                      const isExpanded = expandedCampaigns.has(campaign.id);
-                      const hasChildAdSets = campaign.adSets && campaign.adSets.length > 0;
-
-                      return (
-                        <>
-                          <TableRow 
-                            key={campaign.id}
-                            className={hasChildAdSets ? "cursor-pointer hover:bg-muted/50" : ""}
-                            onClick={() => hasChildAdSets && toggleCampaign(campaign.id)}
-                          >
-                            {hasAdSets && (
-                              <TableCell className="p-2">
-                                {hasChildAdSets && (
-                                  <ChevronRight 
-                                    className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`} 
-                                  />
-                                )}
-                              </TableCell>
-                            )}
-                            <TableCell className="w-14 p-2">
-                              {campaign.thumbnailUrl ? (
-                                <img 
-                                  src={campaign.thumbnailUrl} 
-                                  alt={campaign.name}
-                                  className="w-10 h-10 object-cover rounded"
-                                />
-                              ) : (
-                                <div className="w-10 h-10 bg-muted rounded flex items-center justify-center">
-                                  <Image className="h-4 w-4 text-muted-foreground" />
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              <div className="flex items-center gap-2">
-                                <span>{campaign.name}</span>
-                                {campaign.previewUrl && (
-                                  <a 
-                                    href={campaign.previewUrl} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-primary hover:text-primary/80"
-                                    title="Abrir no Meta Ads Manager"
-                                  >
-                                    <ExternalLink className="h-3 w-3" />
-                                  </a>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {campaign.objective?.replace(/_/g, ' ').toLowerCase() || '-'}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatNumber(campaign.impressions || 0)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatNumber(campaign.clicks || 0)}
-                            </TableCell>
-                            <TableCell className="text-right">{formatNumber(campaign.leads)}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(campaign.investment)}</TableCell>
-                            <TableCell className="text-right">
-                              {campaign.cpl && campaign.cpl > 0 ? formatCurrency(campaign.cpl) : '-'}
-                            </TableCell>
-                            <TableCell>{getStatusBadge(campaign.status)}</TableCell>
-                          </TableRow>
-                          
-                          {/* Ad Sets rows */}
-                          {isExpanded && hasChildAdSets && campaign.adSets!.map((adSet) => (
-                            <TableRow 
-                              key={adSet.id}
-                              className="bg-muted/30"
-                            >
-                              {hasAdSets && <TableCell className="p-2"></TableCell>}
-                              <TableCell className="w-14 p-2"></TableCell>
-                              <TableCell className="pl-4 font-normal text-sm text-muted-foreground">
-                                <div className="flex items-center gap-2">
-                                  <span>├─ {adSet.name}</span>
-                                  {adSet.previewUrl && (
-                                    <a 
-                                      href={adSet.previewUrl} 
-                                      target="_blank" 
-                                      rel="noopener noreferrer"
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="text-primary hover:text-primary/80"
-                                      title="Abrir no Meta Ads Manager"
-                                    >
-                                      <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-xs text-muted-foreground">Conjunto</TableCell>
-                              <TableCell className="text-right text-sm">
-                                {formatNumber(adSet.impressions)}
-                              </TableCell>
-                              <TableCell className="text-right text-sm">
-                                {formatNumber(adSet.clicks)}
-                              </TableCell>
-                              <TableCell className="text-right text-sm">
-                                {formatNumber(adSet.leads)}
-                              </TableCell>
-                              <TableCell className="text-right text-sm">
-                                {formatCurrency(adSet.spend)}
-                              </TableCell>
-                              <TableCell className="text-right text-sm">
-                                {adSet.cpl > 0 ? formatCurrency(adSet.cpl) : '-'}
-                              </TableCell>
-                              <TableCell>{getStatusBadge(adSet.status)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </>
-                      );
-                    })}
+                    {campaigns.map((campaign) => (
+                      <CampaignRow
+                        key={campaign.id}
+                        campaign={campaign}
+                        isExpanded={expandedCampaigns.has(campaign.id)}
+                        onToggle={() => toggleCampaign(campaign.id)}
+                        startDate={startDate}
+                        endDate={endDate}
+                        formatCurrency={formatCurrency}
+                        formatNumber={formatNumber}
+                        getStatusBadge={getStatusBadge}
+                      />
+                    ))}
                   </TableBody>
                 </Table>
                 

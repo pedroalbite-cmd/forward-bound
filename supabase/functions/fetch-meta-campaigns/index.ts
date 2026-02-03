@@ -85,72 +85,65 @@ serve(async (req) => {
 
     console.log(`Found ${campaignsData.data?.length || 0} campaigns`);
 
-    // For each campaign, fetch insights and ad sets
+    // For each campaign, fetch insights only - ad sets fetched on-demand via separate function
     const insightsFields = ["spend", "impressions", "clicks", "actions", "cpc", "cpm"].join(",");
     const timeRange = JSON.stringify({ since: startDate, until: endDate });
     
-    const enrichedCampaigns = await Promise.all(
-      (campaignsData.data || []).map(async (campaign: MetaCampaign) => {
-        try {
-          // Fetch campaign insights
-          const insightsUrl = `${META_BASE_URL}/${campaign.id}/insights?fields=${insightsFields}&time_range=${encodeURIComponent(timeRange)}&access_token=${accessToken}`;
-          const insightsResponse = await fetch(insightsUrl);
-          const insightsData = await insightsResponse.json();
-          
-        // Fetch ad sets
-        const adSetsUrl = `${META_BASE_URL}/${campaign.id}/adsets?fields=id,name,status,daily_budget&access_token=${accessToken}`;
-        const adSetsResponse = await fetch(adSetsUrl);
-        const adSetsData = await adSetsResponse.json();
+    // Process campaigns in small batches with delay to avoid rate limiting
+    const BATCH_SIZE = 3;
+    const BATCH_DELAY_MS = 500;
+    const enrichedCampaigns: any[] = [];
+    
+    for (let i = 0; i < (campaignsData.data || []).length; i += BATCH_SIZE) {
+      const batch = (campaignsData.data || []).slice(i, i + BATCH_SIZE);
+      
+      const batchResults = await Promise.all(
+        batch.map(async (campaign: MetaCampaign) => {
+          try {
+            // Fetch campaign insights only
+            const insightsUrl = `${META_BASE_URL}/${campaign.id}/insights?fields=${insightsFields}&time_range=${encodeURIComponent(timeRange)}&access_token=${accessToken}`;
+            const insightsResponse = await fetch(insightsUrl);
+            const insightsData = await insightsResponse.json();
 
-        // For each ad set, fetch its insights
-        const adSetsWithInsights = await Promise.all(
-          (adSetsData.data || []).map(async (adSet: MetaAdSet) => {
+            // Fetch first ad creative for thumbnail
+            let thumbnailUrl: string | null = null;
             try {
-              const adSetInsightsUrl = `${META_BASE_URL}/${adSet.id}/insights?fields=${insightsFields}&time_range=${encodeURIComponent(timeRange)}&access_token=${accessToken}`;
-              const adSetInsightsResponse = await fetch(adSetInsightsUrl);
-              const adSetInsightsData = await adSetInsightsResponse.json();
-              
-              return {
-                ...adSet,
-                insights: adSetInsightsData.data?.[0] || null,
-                previewUrl: `https://www.facebook.com/adsmanager/manage/adsets?act=${formattedAccountId.replace('act_', '')}&selected_adset_ids=${adSet.id}`,
-              };
+              const adsUrl = `${META_BASE_URL}/${campaign.id}/ads?fields=creative{thumbnail_url,image_url}&limit=1&access_token=${accessToken}`;
+              const adsResponse = await fetch(adsUrl);
+              const adsData = await adsResponse.json();
+              const firstAd = adsData.data?.[0];
+              thumbnailUrl = firstAd?.creative?.thumbnail_url || firstAd?.creative?.image_url || null;
             } catch (err) {
-              console.error(`Error fetching insights for ad set ${adSet.id}:`, err);
-              return { ...adSet, insights: null, previewUrl: null };
+              console.error(`Error fetching ads for campaign ${campaign.id}:`, err);
             }
-          })
-        );
 
-        // Fetch first ad creative for thumbnail
-        let thumbnailUrl: string | null = null;
-        try {
-          const adsUrl = `${META_BASE_URL}/${campaign.id}/ads?fields=creative{thumbnail_url,image_url}&limit=1&access_token=${accessToken}`;
-          const adsResponse = await fetch(adsUrl);
-          const adsData = await adsResponse.json();
-          const firstAd = adsData.data?.[0];
-          thumbnailUrl = firstAd?.creative?.thumbnail_url || firstAd?.creative?.image_url || null;
-        } catch (err) {
-          console.error(`Error fetching ads for campaign ${campaign.id}:`, err);
-        }
-
-        return {
-          ...campaign,
-          insights: insightsData.data?.[0] || null,
-          adSets: adSetsWithInsights,
-          thumbnailUrl,
-          previewUrl: `https://www.facebook.com/adsmanager/manage/campaigns?act=${formattedAccountId.replace('act_', '')}&selected_campaign_ids=${campaign.id}`,
-        };
-        } catch (err) {
-          console.error(`Error enriching campaign ${campaign.id}:`, err);
-          return {
-            ...campaign,
-            insights: null,
-            adSets: [],
-          };
-        }
-      })
-    );
+            return {
+              ...campaign,
+              insights: insightsData.data?.[0] || null,
+              adSets: [], // Ad sets fetched on-demand via fetch-campaign-adsets
+              thumbnailUrl,
+              previewUrl: `https://www.facebook.com/adsmanager/manage/campaigns?act=${formattedAccountId.replace('act_', '')}&selected_campaign_ids=${campaign.id}`,
+            };
+          } catch (err) {
+            console.error(`Error enriching campaign ${campaign.id}:`, err);
+            return {
+              ...campaign,
+              insights: null,
+              adSets: [],
+              thumbnailUrl: null,
+              previewUrl: null,
+            };
+          }
+        })
+      );
+      
+      enrichedCampaigns.push(...batchResults);
+      
+      // Add delay between batches to avoid rate limiting
+      if (i + BATCH_SIZE < (campaignsData.data || []).length) {
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+      }
+    }
 
     console.log("Successfully enriched campaigns with insights and ad sets");
 
