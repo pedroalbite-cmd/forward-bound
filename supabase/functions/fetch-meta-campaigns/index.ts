@@ -1,0 +1,163 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+const META_API_VERSION = "v21.0";
+const META_BASE_URL = `https://graph.facebook.com/${META_API_VERSION}`;
+
+interface MetaInsight {
+  spend?: string;
+  impressions?: string;
+  clicks?: string;
+  actions?: Array<{ action_type: string; value: string }>;
+  cpc?: string;
+  cpm?: string;
+}
+
+interface MetaAdSet {
+  id: string;
+  name: string;
+  status: string;
+  daily_budget?: string;
+}
+
+interface MetaCampaign {
+  id: string;
+  name: string;
+  status: string;
+  objective?: string;
+  daily_budget?: string;
+  lifetime_budget?: string;
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const accessToken = Deno.env.get("META_ACCESS_TOKEN");
+    const adAccountId = Deno.env.get("META_AD_ACCOUNT_ID");
+    
+    if (!accessToken || !adAccountId) {
+      console.error("Missing credentials:", { 
+        hasToken: !!accessToken, 
+        hasAccountId: !!adAccountId 
+      });
+      throw new Error("META_ACCESS_TOKEN ou META_AD_ACCOUNT_ID não configurados");
+    }
+
+    const body = await req.json();
+    const { startDate, endDate } = body;
+
+    console.log("Fetching Meta campaigns:", { startDate, endDate, adAccountId });
+
+    // Ensure ad account ID has proper format
+    const formattedAccountId = adAccountId.startsWith('act_') 
+      ? adAccountId 
+      : `act_${adAccountId}`;
+
+    // Fetch campaigns with filtering for active/paused
+    const campaignFields = [
+      "id", "name", "status", "objective", "daily_budget", "lifetime_budget"
+    ].join(",");
+    
+    const filterJson = JSON.stringify([{
+      field: "effective_status",
+      operator: "IN",
+      value: ["ACTIVE", "PAUSED"]
+    }]);
+    
+    const campaignsUrl = `${META_BASE_URL}/${formattedAccountId}/campaigns?fields=${campaignFields}&filtering=${encodeURIComponent(filterJson)}&access_token=${accessToken}`;
+    
+    console.log("Fetching campaigns from:", campaignsUrl.replace(accessToken, '[REDACTED]'));
+    
+    const campaignsResponse = await fetch(campaignsUrl);
+    const campaignsData = await campaignsResponse.json();
+    
+    if (campaignsData.error) {
+      console.error("Meta API error:", campaignsData.error);
+      throw new Error(campaignsData.error.message || "Erro na API do Meta");
+    }
+
+    console.log(`Found ${campaignsData.data?.length || 0} campaigns`);
+
+    // For each campaign, fetch insights and ad sets
+    const insightsFields = ["spend", "impressions", "clicks", "actions", "cpc", "cpm"].join(",");
+    const timeRange = JSON.stringify({ since: startDate, until: endDate });
+    
+    const enrichedCampaigns = await Promise.all(
+      (campaignsData.data || []).map(async (campaign: MetaCampaign) => {
+        try {
+          // Fetch campaign insights
+          const insightsUrl = `${META_BASE_URL}/${campaign.id}/insights?fields=${insightsFields}&time_range=${encodeURIComponent(timeRange)}&access_token=${accessToken}`;
+          const insightsResponse = await fetch(insightsUrl);
+          const insightsData = await insightsResponse.json();
+          
+          // Fetch ad sets
+          const adSetsUrl = `${META_BASE_URL}/${campaign.id}/adsets?fields=id,name,status,daily_budget&access_token=${accessToken}`;
+          const adSetsResponse = await fetch(adSetsUrl);
+          const adSetsData = await adSetsResponse.json();
+
+          // For each ad set, fetch its insights
+          const adSetsWithInsights = await Promise.all(
+            (adSetsData.data || []).map(async (adSet: MetaAdSet) => {
+              try {
+                const adSetInsightsUrl = `${META_BASE_URL}/${adSet.id}/insights?fields=${insightsFields}&time_range=${encodeURIComponent(timeRange)}&access_token=${accessToken}`;
+                const adSetInsightsResponse = await fetch(adSetInsightsUrl);
+                const adSetInsightsData = await adSetInsightsResponse.json();
+                
+                return {
+                  ...adSet,
+                  insights: adSetInsightsData.data?.[0] || null,
+                };
+              } catch (err) {
+                console.error(`Error fetching insights for ad set ${adSet.id}:`, err);
+                return { ...adSet, insights: null };
+              }
+            })
+          );
+
+          return {
+            ...campaign,
+            insights: insightsData.data?.[0] || null,
+            adSets: adSetsWithInsights,
+          };
+        } catch (err) {
+          console.error(`Error enriching campaign ${campaign.id}:`, err);
+          return {
+            ...campaign,
+            insights: null,
+            adSets: [],
+          };
+        }
+      })
+    );
+
+    console.log("Successfully enriched campaigns with insights and ad sets");
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      campaigns: enrichedCampaigns,
+      dateRange: { startDate, endDate },
+      totalCampaigns: enrichedCampaigns.length,
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+    
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error("Error fetching Meta campaigns:", errorMessage);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: errorMessage,
+      campaigns: [],
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.read-marketing-sheet]
 verify_jwt = false
+
+[functions.fetch-meta-campaigns]
+verify_jwt = false
