@@ -172,12 +172,9 @@ export function RevenueChartDashboard({
           <div className="flex items-center gap-2">
             <LayoutDashboard className="h-5 w-5 text-primary" />
             <CardTitle className="text-base font-semibold">
-              Opção 5: Dashboard Compacto (Recomendado)
+              Resumo de Faturamento
             </CardTitle>
           </div>
-          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-            KPIs + Consolidado
-          </span>
         </div>
       </CardHeader>
       <CardContent className="pt-2 space-y-4">

@@ -1,4 +1,4 @@
-// Comparison view for all revenue chart options
+// Revenue Chart section with Grouped Bars + Dashboard
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { differenceInDays, eachDayOfInterval, eachMonthOfInterval, addDays, format, startOfMonth, endOfMonth } from "date-fns";
@@ -11,8 +11,6 @@ import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { 
   RevenueChartGroupedBars, 
-  RevenueChartMultiLine, 
-  RevenueChartStackedArea, 
   RevenueChartDashboard 
 } from "./revenue-charts";
 
@@ -303,53 +301,24 @@ export function RevenueChartComparison({
 
   return (
     <div className="space-y-6">
-      <Card className="bg-muted/30 border-dashed">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Comparação de Visualizações</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Escolha a melhor opção para o gráfico de Faturamento por Período quando múltiplas BUs estão selecionadas.
-          </p>
-        </CardHeader>
-      </Card>
+      {/* Faturamento por Período (Detalhado) - Barras Agrupadas */}
+      <RevenueChartGroupedBars
+        startDate={startDate}
+        endDate={endDate}
+        selectedBUs={selectedBUs}
+        chartData={chartData}
+        totals={totals}
+      />
 
-      <div className="grid gap-6">
-        {/* Option 1: Grouped Bars */}
-        <RevenueChartGroupedBars
-          startDate={startDate}
-          endDate={endDate}
-          selectedBUs={selectedBUs}
-          chartData={chartData}
-          totals={totals}
-        />
-
-        {/* Option 2: Multi-Line */}
-        <RevenueChartMultiLine
-          startDate={startDate}
-          endDate={endDate}
-          selectedBUs={selectedBUs}
-          chartData={chartData}
-          totals={totals}
-        />
-
-        {/* Option 3: Stacked Area */}
-        <RevenueChartStackedArea
-          startDate={startDate}
-          endDate={endDate}
-          selectedBUs={selectedBUs}
-          chartData={chartData}
-          totals={totals}
-        />
-
-        {/* Option 5: Dashboard Compact (Recommended) */}
-        <RevenueChartDashboard
-          startDate={startDate}
-          endDate={endDate}
-          selectedBUs={selectedBUs}
-          chartData={chartData}
-          totals={totals}
-          metasPorBU={buMetas}
-        />
-      </div>
+      {/* Resumo de Faturamento - Dashboard */}
+      <RevenueChartDashboard
+        startDate={startDate}
+        endDate={endDate}
+        selectedBUs={selectedBUs}
+        chartData={chartData}
+        totals={totals}
+        metasPorBU={buMetas}
+      />
     </div>
   );
 }
