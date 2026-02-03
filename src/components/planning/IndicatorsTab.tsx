@@ -322,34 +322,81 @@ export function IndicatorsTab() {
   const [endDate, setEndDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('daily');
   
-  // Quick date presets for common periods
-  const setDatePreset = (preset: 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'lastQuarter' | 'thisYear') => {
+  // Multi-selection state for date presets
+  type DatePreset = 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'lastQuarter' | 'thisYear';
+  const [selectedPresets, setSelectedPresets] = useState<DatePreset[]>([]);
+  
+  // Calculate combined date range from multiple presets
+  const getDateRangeFromPresets = (presets: DatePreset[]): { start: Date; end: Date } => {
     const today = new Date();
-    
-    switch (preset) {
-      case 'thisMonth':
-        setStartDate(startOfMonth(today));
-        setEndDate(endOfDay(today));
-        break;
-      case 'lastMonth':
-        const lastMonth = subMonths(today, 1);
-        setStartDate(startOfMonth(lastMonth));
-        setEndDate(endOfMonth(lastMonth));
-        break;
-      case 'thisQuarter':
-        setStartDate(startOfQuarter(today));
-        setEndDate(endOfDay(today));
-        break;
-      case 'lastQuarter':
-        const lastQuarter = subQuarters(today, 1);
-        setStartDate(startOfQuarter(lastQuarter));
-        setEndDate(endOfQuarter(lastQuarter));
-        break;
-      case 'thisYear':
-        setStartDate(startOfYear(today));
-        setEndDate(endOfDay(today));
-        break;
+    let minStart: Date | null = null;
+    let maxEnd: Date | null = null;
+
+    for (const preset of presets) {
+      let start: Date, end: Date;
+      
+      switch (preset) {
+        case 'thisMonth':
+          start = startOfMonth(today);
+          end = endOfDay(today);
+          break;
+        case 'lastMonth':
+          const lastMonth = subMonths(today, 1);
+          start = startOfMonth(lastMonth);
+          end = endOfMonth(lastMonth);
+          break;
+        case 'thisQuarter':
+          start = startOfQuarter(today);
+          end = endOfDay(today);
+          break;
+        case 'lastQuarter':
+          const lastQuarter = subQuarters(today, 1);
+          start = startOfQuarter(lastQuarter);
+          end = endOfQuarter(lastQuarter);
+          break;
+        case 'thisYear':
+          start = startOfYear(today);
+          end = endOfDay(today);
+          break;
+      }
+
+      if (!minStart || start < minStart) minStart = start;
+      if (!maxEnd || end > maxEnd) maxEnd = end;
     }
+
+    return {
+      start: minStart || startOfMonth(today),
+      end: maxEnd || endOfDay(today)
+    };
+  };
+  
+  // Toggle preset selection (multi-select)
+  const togglePreset = (preset: DatePreset) => {
+    setSelectedPresets(prev => {
+      const newPresets = prev.includes(preset)
+        ? prev.filter(p => p !== preset)
+        : [...prev, preset];
+      
+      // Update dates based on selected presets
+      if (newPresets.length > 0) {
+        const { start, end } = getDateRangeFromPresets(newPresets);
+        setStartDate(start);
+        setEndDate(end);
+      }
+      
+      return newPresets;
+    });
+  };
+  
+  // Handle manual date selection (clears presets)
+  const handleStartDateChange = (date: Date) => {
+    setStartDate(date);
+    setSelectedPresets([]);
+  };
+  
+  const handleEndDateChange = (date: Date) => {
+    setEndDate(endOfDay(date));
+    setSelectedPresets([]);
   };
   
   // Detail sheet state for radial cards drill-down
@@ -2189,48 +2236,25 @@ export function IndicatorsTab() {
               />
             )}
 
-            {/* Quick date presets */}
+            {/* Quick date presets - Multi-select */}
             <div className="flex gap-1 flex-wrap">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setDatePreset('thisMonth')}
-                className="text-xs"
-              >
-                Este Mês
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setDatePreset('lastMonth')}
-                className="text-xs"
-              >
-                Mês Anterior
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setDatePreset('thisQuarter')}
-                className="text-xs"
-              >
-                Q Atual
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setDatePreset('lastQuarter')}
-                className="text-xs"
-              >
-                Q Anterior
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setDatePreset('thisYear')}
-                className="text-xs"
-              >
-                2026
-              </Button>
+              {[
+                { key: 'thisMonth' as DatePreset, label: 'Este Mês' },
+                { key: 'lastMonth' as DatePreset, label: 'Mês Anterior' },
+                { key: 'thisQuarter' as DatePreset, label: 'Q Atual' },
+                { key: 'lastQuarter' as DatePreset, label: 'Q Anterior' },
+                { key: 'thisYear' as DatePreset, label: '2026' },
+              ].map(({ key, label }) => (
+                <Button 
+                  key={key}
+                  variant={selectedPresets.includes(key) ? "default" : "outline"}
+                  size="sm" 
+                  onClick={() => togglePreset(key)}
+                  className="text-xs"
+                >
+                  {label}
+                </Button>
+              ))}
             </div>
 
             <div className="flex items-center gap-2">
@@ -2243,7 +2267,7 @@ export function IndicatorsTab() {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={startDate} onSelect={(d) => d && setStartDate(d)} locale={ptBR} className="pointer-events-auto" />
+                  <Calendar mode="single" selected={startDate} onSelect={(d) => d && handleStartDateChange(d)} locale={ptBR} className="pointer-events-auto" />
                 </PopoverContent>
               </Popover>
             </div>
@@ -2258,7 +2282,7 @@ export function IndicatorsTab() {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={endDate} onSelect={(d) => d && setEndDate(endOfDay(d))} locale={ptBR} className="pointer-events-auto" />
+                  <Calendar mode="single" selected={endDate} onSelect={(d) => d && handleEndDateChange(d)} locale={ptBR} className="pointer-events-auto" />
                 </PopoverContent>
               </Popover>
             </div>
