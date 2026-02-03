@@ -1444,29 +1444,7 @@ export function IndicatorsTab() {
         ];
         
         // Charts para Venda
-        // 1. TCV por Closer
-        const closerTotals = new Map<string, number>();
-        items.forEach(i => {
-          const closer = i.responsible || i.closer || 'Sem Closer';
-          const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
-          closerTotals.set(closer, (closerTotals.get(closer) || 0) + itemTCV);
-        });
-        const closerRankingData = Array.from(closerTotals.entries())
-          .map(([label, value]) => ({ label: label.split(' ')[0], value }))
-          .sort((a, b) => b.value - a.value);
-        
-        // 2. TCV por SDR originado
-        const sdrTotals = new Map<string, number>();
-        items.forEach(i => {
-          const sdrName = i.sdr || i.responsible || 'Sem SDR';
-          const itemTCV = ((i.mrr || 0) * 12) + (i.setup || 0) + (i.pontual || 0);
-          sdrTotals.set(sdrName, (sdrTotals.get(sdrName) || 0) + itemTCV);
-        });
-        const sdrRankingData = Array.from(sdrTotals.entries())
-          .map(([label, value]) => ({ label: label.split(' ')[0], value }))
-          .sort((a, b) => b.value - a.value);
-        
-        // 3. Composição MRR/Setup/Pontual (Pie)
+        // 1. Composição MRR/Setup/Pontual (Pie)
         const compositionData = [
           { label: 'MRR', value: totalMrr },
           { label: 'Setup', value: totalSetup },
@@ -1546,8 +1524,6 @@ export function IndicatorsTab() {
           .sort((a, b) => b.value - a.value);
         
         const charts: ChartConfig[] = [
-          { type: 'bar', title: 'TCV por Closer', data: closerRankingData, formatValue: formatCompactCurrency },
-          { type: 'bar', title: 'TCV por SDR', data: sdrRankingData, formatValue: formatCompactCurrency },
           { type: 'pie', title: 'Composição do Faturamento', data: compositionData, formatValue: formatCompactCurrency },
           ...(conversionByTierData.length > 0 ? [{ 
             type: 'bar' as const, 
