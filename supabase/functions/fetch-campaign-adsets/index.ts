@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,12 +8,151 @@ const corsHeaders = {
 
 const META_API_VERSION = "v21.0";
 const META_BASE_URL = `https://graph.facebook.com/${META_API_VERSION}`;
+const CACHE_TTL_MINUTES = 60;
 
 interface MetaAdSet {
   id: string;
   name: string;
   status: string;
   daily_budget?: string;
+}
+
+interface BatchResponse {
+  code: number;
+  body: string;
+}
+
+// Initialize Supabase client with service role for cache operations
+function getSupabaseClient() {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  return createClient(supabaseUrl, supabaseServiceKey);
+}
+
+// Check cache for existing data
+async function getCachedData(supabase: any, cacheKey: string) {
+  try {
+    const { data, error } = await supabase
+      .from('meta_ads_cache')
+      .select('data')
+      .eq('cache_key', cacheKey)
+      .gt('expires_at', new Date().toISOString())
+      .single();
+    
+    if (error || !data) return null;
+    return data.data;
+  } catch {
+    return null;
+  }
+}
+
+// Save data to cache
+async function setCachedData(supabase: any, cacheKey: string, data: any) {
+  const expiresAt = new Date(Date.now() + CACHE_TTL_MINUTES * 60 * 1000);
+  
+  try {
+    await supabase
+      .from('meta_ads_cache')
+      .upsert({
+        cache_key: cacheKey,
+        data,
+        fetched_at: new Date().toISOString(),
+        expires_at: expiresAt.toISOString(),
+      }, { onConflict: 'cache_key' });
+  } catch (err) {
+    console.error("Error saving to cache:", err);
+  }
+}
+
+// Fetch ad sets using Meta Batch API to reduce API calls
+async function fetchAdSetsWithBatchAPI(
+  campaignId: string, 
+  startDate: string, 
+  endDate: string, 
+  accessToken: string,
+  formattedAccountId: string
+): Promise<any[]> {
+  // First, fetch the list of ad sets for this campaign (1 API call)
+  const adSetsUrl = `${META_BASE_URL}/${campaignId}/adsets?fields=id,name,status,daily_budget&access_token=${accessToken}`;
+  const adSetsResponse = await fetch(adSetsUrl);
+  const adSetsData = await adSetsResponse.json();
+  
+  if (adSetsData.error) {
+    console.error("Meta API error fetching ad sets:", adSetsData.error);
+    throw new Error(adSetsData.error.message || "Erro ao buscar ad sets");
+  }
+
+  const adSets = adSetsData.data || [];
+  console.log(`Found ${adSets.length} ad sets for campaign ${campaignId}`);
+
+  if (adSets.length === 0) {
+    return [];
+  }
+
+  // Build batch request for insights and thumbnails
+  const timeRange = JSON.stringify({ since: startDate, until: endDate });
+  const insightsFields = "spend,impressions,clicks,actions,cpc,cpm";
+  
+  const batchRequests = adSets.flatMap((adSet: MetaAdSet) => [
+    {
+      method: "GET",
+      relative_url: `${adSet.id}/insights?fields=${insightsFields}&time_range=${encodeURIComponent(timeRange)}`,
+    },
+    {
+      method: "GET",
+      relative_url: `${adSet.id}/ads?fields=creative{thumbnail_url,image_url}&limit=1`,
+    },
+  ]);
+
+  // Execute batch request (1 API call for all insights + thumbnails)
+  const batchUrl = `${META_BASE_URL}?access_token=${accessToken}`;
+  const batchResponse = await fetch(batchUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ batch: batchRequests }),
+  });
+
+  const batchResults: BatchResponse[] = await batchResponse.json();
+  console.log(`Batch API returned ${batchResults.length} responses`);
+
+  // Process batch results
+  const enrichedAdSets = adSets.map((adSet: MetaAdSet, index: number) => {
+    const insightsIndex = index * 2;
+    const adsIndex = index * 2 + 1;
+
+    let insights = null;
+    let thumbnailUrl = null;
+
+    // Parse insights response
+    if (batchResults[insightsIndex]?.code === 200) {
+      try {
+        const insightsBody = JSON.parse(batchResults[insightsIndex].body);
+        insights = insightsBody.data?.[0] || null;
+      } catch {
+        console.error(`Error parsing insights for ad set ${adSet.id}`);
+      }
+    }
+
+    // Parse thumbnail response
+    if (batchResults[adsIndex]?.code === 200) {
+      try {
+        const adsBody = JSON.parse(batchResults[adsIndex].body);
+        const firstAd = adsBody.data?.[0];
+        thumbnailUrl = firstAd?.creative?.thumbnail_url || firstAd?.creative?.image_url || null;
+      } catch {
+        console.error(`Error parsing thumbnail for ad set ${adSet.id}`);
+      }
+    }
+
+    return {
+      ...adSet,
+      insights,
+      thumbnailUrl,
+      previewUrl: `https://www.facebook.com/adsmanager/manage/adsets?act=${formattedAccountId.replace('act_', '')}&selected_adset_ids=${adSet.id}`,
+    };
+  });
+
+  return enrichedAdSets;
 }
 
 serve(async (req) => {
@@ -41,59 +181,46 @@ serve(async (req) => {
       ? adAccountId 
       : `act_${adAccountId}`;
 
-    // Fetch ad sets for this campaign
-    const adSetsUrl = `${META_BASE_URL}/${campaignId}/adsets?fields=id,name,status,daily_budget&access_token=${accessToken}`;
-    const adSetsResponse = await fetch(adSetsUrl);
-    const adSetsData = await adSetsResponse.json();
-    
-    if (adSetsData.error) {
-      console.error("Meta API error fetching ad sets:", adSetsData.error);
-      throw new Error(adSetsData.error.message || "Erro ao buscar ad sets");
+    // Initialize Supabase client
+    const supabase = getSupabaseClient();
+
+    // Check cache first
+    const cacheKey = `adsets:${campaignId}:${startDate}:${endDate}`;
+    const cachedData = await getCachedData(supabase, cacheKey);
+
+    if (cachedData) {
+      console.log(`Cache HIT for ${cacheKey}`);
+      return new Response(JSON.stringify({ 
+        success: true, 
+        adSets: cachedData,
+        campaignId,
+        fromCache: true,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    console.log(`Found ${adSetsData.data?.length || 0} ad sets for campaign ${campaignId}`);
+    console.log(`Cache MISS for ${cacheKey}, fetching from Meta API`);
 
-    // Fetch insights for each ad set
-    const insightsFields = ["spend", "impressions", "clicks", "actions", "cpc", "cpm"].join(",");
-    const timeRange = JSON.stringify({ since: startDate, until: endDate });
-    
-    const adSetsWithInsights = await Promise.all(
-      (adSetsData.data || []).map(async (adSet: MetaAdSet) => {
-        try {
-          // Fetch insights
-          const adSetInsightsUrl = `${META_BASE_URL}/${adSet.id}/insights?fields=${insightsFields}&time_range=${encodeURIComponent(timeRange)}&access_token=${accessToken}`;
-          const adSetInsightsResponse = await fetch(adSetInsightsUrl);
-          const adSetInsightsData = await adSetInsightsResponse.json();
-          
-          // Fetch first ad to get thumbnail
-          const adsUrl = `${META_BASE_URL}/${adSet.id}/ads?fields=creative{thumbnail_url,image_url}&limit=1&access_token=${accessToken}`;
-          const adsResponse = await fetch(adsUrl);
-          const adsData = await adsResponse.json();
-          
-          const firstAd = adsData.data?.[0];
-          const thumbnailUrl = firstAd?.creative?.thumbnail_url || 
-                               firstAd?.creative?.image_url || 
-                               null;
-          
-          return {
-            ...adSet,
-            insights: adSetInsightsData.data?.[0] || null,
-            thumbnailUrl,
-            previewUrl: `https://www.facebook.com/adsmanager/manage/adsets?act=${formattedAccountId.replace('act_', '')}&selected_adset_ids=${adSet.id}`,
-          };
-        } catch (err) {
-          console.error(`Error fetching insights for ad set ${adSet.id}:`, err);
-          return { ...adSet, insights: null, thumbnailUrl: null, previewUrl: null };
-        }
-      })
+    // Fetch fresh data using batch API
+    const adSetsWithInsights = await fetchAdSetsWithBatchAPI(
+      campaignId, 
+      startDate, 
+      endDate, 
+      accessToken, 
+      formattedAccountId
     );
 
-    console.log(`Successfully fetched ${adSetsWithInsights.length} ad sets with insights`);
+    // Save to cache
+    await setCachedData(supabase, cacheKey, adSetsWithInsights);
+
+    console.log(`Successfully fetched and cached ${adSetsWithInsights.length} ad sets`);
 
     return new Response(JSON.stringify({ 
       success: true, 
       adSets: adSetsWithInsights,
       campaignId,
+      fromCache: false,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

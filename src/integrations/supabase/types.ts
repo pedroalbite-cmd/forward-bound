@@ -83,6 +83,30 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_ads_cache: {
+        Row: {
+          cache_key: string
+          data: Json
+          expires_at: string
+          fetched_at: string | null
+          id: string
+        }
+        Insert: {
+          cache_key: string
+          data: Json
+          expires_at: string
+          fetched_at?: string | null
+          id?: string
+        }
+        Update: {
+          cache_key?: string
+          data?: Json
+          expires_at?: string
+          fetched_at?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
       monetary_metas: {
         Row: {
           bu: string

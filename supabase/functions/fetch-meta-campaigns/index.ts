@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,22 +8,9 @@ const corsHeaders = {
 
 const META_API_VERSION = "v21.0";
 const META_BASE_URL = `https://graph.facebook.com/${META_API_VERSION}`;
-
-interface MetaInsight {
-  spend?: string;
-  impressions?: string;
-  clicks?: string;
-  actions?: Array<{ action_type: string; value: string }>;
-  cpc?: string;
-  cpm?: string;
-}
-
-interface MetaAdSet {
-  id: string;
-  name: string;
-  status: string;
-  daily_budget?: string;
-}
+const CACHE_TTL_MINUTES = 60;
+const BATCH_SIZE = 5;
+const BATCH_DELAY_MS = 300;
 
 interface MetaCampaign {
   id: string;
@@ -31,6 +19,138 @@ interface MetaCampaign {
   objective?: string;
   daily_budget?: string;
   lifetime_budget?: string;
+}
+
+interface BatchResponse {
+  code: number;
+  body: string;
+}
+
+// Initialize Supabase client with service role for cache operations
+function getSupabaseClient() {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  return createClient(supabaseUrl, supabaseServiceKey);
+}
+
+// Check cache for existing data
+async function getCachedData(supabase: any, cacheKey: string) {
+  try {
+    const { data, error } = await supabase
+      .from('meta_ads_cache')
+      .select('data')
+      .eq('cache_key', cacheKey)
+      .gt('expires_at', new Date().toISOString())
+      .single();
+    
+    if (error || !data) return null;
+    return data.data;
+  } catch {
+    return null;
+  }
+}
+
+// Save data to cache
+async function setCachedData(supabase: any, cacheKey: string, data: any) {
+  const expiresAt = new Date(Date.now() + CACHE_TTL_MINUTES * 60 * 1000);
+  
+  try {
+    await supabase
+      .from('meta_ads_cache')
+      .upsert({
+        cache_key: cacheKey,
+        data,
+        fetched_at: new Date().toISOString(),
+        expires_at: expiresAt.toISOString(),
+      }, { onConflict: 'cache_key' });
+  } catch (err) {
+    console.error("Error saving to cache:", err);
+  }
+}
+
+// Process campaigns in batches with delay to avoid rate limiting
+async function enrichCampaignsWithBatchAPI(
+  campaigns: MetaCampaign[],
+  startDate: string,
+  endDate: string,
+  accessToken: string,
+  formattedAccountId: string
+): Promise<any[]> {
+  const timeRange = JSON.stringify({ since: startDate, until: endDate });
+  const insightsFields = "spend,impressions,clicks,actions,cpc,cpm";
+  const enrichedCampaigns: any[] = [];
+
+  // Process in batches
+  for (let i = 0; i < campaigns.length; i += BATCH_SIZE) {
+    const batch = campaigns.slice(i, i + BATCH_SIZE);
+    
+    // Build batch request for this group
+    const batchRequests = batch.flatMap((campaign: MetaCampaign) => [
+      {
+        method: "GET",
+        relative_url: `${campaign.id}/insights?fields=${insightsFields}&time_range=${encodeURIComponent(timeRange)}`,
+      },
+      {
+        method: "GET",
+        relative_url: `${campaign.id}/ads?fields=creative{thumbnail_url,image_url}&limit=1`,
+      },
+    ]);
+
+    // Execute batch request
+    const batchUrl = `${META_BASE_URL}?access_token=${accessToken}`;
+    const batchResponse = await fetch(batchUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ batch: batchRequests }),
+    });
+
+    const batchResults: BatchResponse[] = await batchResponse.json();
+
+    // Process batch results
+    batch.forEach((campaign: MetaCampaign, index: number) => {
+      const insightsIndex = index * 2;
+      const adsIndex = index * 2 + 1;
+
+      let insights = null;
+      let thumbnailUrl = null;
+
+      // Parse insights response
+      if (batchResults[insightsIndex]?.code === 200) {
+        try {
+          const insightsBody = JSON.parse(batchResults[insightsIndex].body);
+          insights = insightsBody.data?.[0] || null;
+        } catch {
+          console.error(`Error parsing insights for campaign ${campaign.id}`);
+        }
+      }
+
+      // Parse thumbnail response
+      if (batchResults[adsIndex]?.code === 200) {
+        try {
+          const adsBody = JSON.parse(batchResults[adsIndex].body);
+          const firstAd = adsBody.data?.[0];
+          thumbnailUrl = firstAd?.creative?.thumbnail_url || firstAd?.creative?.image_url || null;
+        } catch {
+          console.error(`Error parsing thumbnail for campaign ${campaign.id}`);
+        }
+      }
+
+      enrichedCampaigns.push({
+        ...campaign,
+        insights,
+        adSets: [], // Ad sets fetched on-demand via fetch-campaign-adsets
+        thumbnailUrl,
+        previewUrl: `https://www.facebook.com/adsmanager/manage/campaigns?act=${formattedAccountId.replace('act_', '')}&selected_campaign_ids=${campaign.id}`,
+      });
+    });
+
+    // Add delay between batches to avoid rate limiting
+    if (i + BATCH_SIZE < campaigns.length) {
+      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+    }
+  }
+
+  return enrichedCampaigns;
 }
 
 serve(async (req) => {
@@ -60,6 +180,28 @@ serve(async (req) => {
       ? adAccountId 
       : `act_${adAccountId}`;
 
+    // Initialize Supabase client
+    const supabase = getSupabaseClient();
+
+    // Check cache first
+    const cacheKey = `campaigns:${formattedAccountId}:${startDate}:${endDate}`;
+    const cachedData = await getCachedData(supabase, cacheKey);
+
+    if (cachedData) {
+      console.log(`Cache HIT for ${cacheKey}`);
+      return new Response(JSON.stringify({ 
+        success: true, 
+        campaigns: cachedData,
+        dateRange: { startDate, endDate },
+        totalCampaigns: cachedData.length,
+        fromCache: true,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`Cache MISS for ${cacheKey}, fetching from Meta API`);
+
     // Fetch campaigns with filtering for active/paused
     const campaignFields = [
       "id", "name", "status", "objective", "daily_budget", "lifetime_budget"
@@ -73,7 +215,7 @@ serve(async (req) => {
     
     const campaignsUrl = `${META_BASE_URL}/${formattedAccountId}/campaigns?fields=${campaignFields}&filtering=${encodeURIComponent(filterJson)}&access_token=${accessToken}`;
     
-    console.log("Fetching campaigns from:", campaignsUrl.replace(accessToken, '[REDACTED]'));
+    console.log("Fetching campaigns from Meta API");
     
     const campaignsResponse = await fetch(campaignsUrl);
     const campaignsData = await campaignsResponse.json();
@@ -85,73 +227,26 @@ serve(async (req) => {
 
     console.log(`Found ${campaignsData.data?.length || 0} campaigns`);
 
-    // For each campaign, fetch insights only - ad sets fetched on-demand via separate function
-    const insightsFields = ["spend", "impressions", "clicks", "actions", "cpc", "cpm"].join(",");
-    const timeRange = JSON.stringify({ since: startDate, until: endDate });
-    
-    // Process campaigns in small batches with delay to avoid rate limiting
-    const BATCH_SIZE = 3;
-    const BATCH_DELAY_MS = 500;
-    const enrichedCampaigns: any[] = [];
-    
-    for (let i = 0; i < (campaignsData.data || []).length; i += BATCH_SIZE) {
-      const batch = (campaignsData.data || []).slice(i, i + BATCH_SIZE);
-      
-      const batchResults = await Promise.all(
-        batch.map(async (campaign: MetaCampaign) => {
-          try {
-            // Fetch campaign insights only
-            const insightsUrl = `${META_BASE_URL}/${campaign.id}/insights?fields=${insightsFields}&time_range=${encodeURIComponent(timeRange)}&access_token=${accessToken}`;
-            const insightsResponse = await fetch(insightsUrl);
-            const insightsData = await insightsResponse.json();
+    // Enrich campaigns with insights using batch API
+    const enrichedCampaigns = await enrichCampaignsWithBatchAPI(
+      campaignsData.data || [],
+      startDate,
+      endDate,
+      accessToken,
+      formattedAccountId
+    );
 
-            // Fetch first ad creative for thumbnail
-            let thumbnailUrl: string | null = null;
-            try {
-              const adsUrl = `${META_BASE_URL}/${campaign.id}/ads?fields=creative{thumbnail_url,image_url}&limit=1&access_token=${accessToken}`;
-              const adsResponse = await fetch(adsUrl);
-              const adsData = await adsResponse.json();
-              const firstAd = adsData.data?.[0];
-              thumbnailUrl = firstAd?.creative?.thumbnail_url || firstAd?.creative?.image_url || null;
-            } catch (err) {
-              console.error(`Error fetching ads for campaign ${campaign.id}:`, err);
-            }
+    // Save to cache
+    await setCachedData(supabase, cacheKey, enrichedCampaigns);
 
-            return {
-              ...campaign,
-              insights: insightsData.data?.[0] || null,
-              adSets: [], // Ad sets fetched on-demand via fetch-campaign-adsets
-              thumbnailUrl,
-              previewUrl: `https://www.facebook.com/adsmanager/manage/campaigns?act=${formattedAccountId.replace('act_', '')}&selected_campaign_ids=${campaign.id}`,
-            };
-          } catch (err) {
-            console.error(`Error enriching campaign ${campaign.id}:`, err);
-            return {
-              ...campaign,
-              insights: null,
-              adSets: [],
-              thumbnailUrl: null,
-              previewUrl: null,
-            };
-          }
-        })
-      );
-      
-      enrichedCampaigns.push(...batchResults);
-      
-      // Add delay between batches to avoid rate limiting
-      if (i + BATCH_SIZE < (campaignsData.data || []).length) {
-        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
-      }
-    }
-
-    console.log("Successfully enriched campaigns with insights and ad sets");
+    console.log(`Successfully fetched and cached ${enrichedCampaigns.length} campaigns`);
 
     return new Response(JSON.stringify({ 
       success: true, 
       campaigns: enrichedCampaigns,
       dateRange: { startDate, endDate },
       totalCampaigns: enrichedCampaigns.length,
+      fromCache: false,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
