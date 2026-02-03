@@ -221,15 +221,21 @@ const MonetaryRadialCard = ({ title, realized, meta, format, onClick, isClickabl
   const isInverted = format === 'duration';
   const percentage = meta > 0 ? (realized / meta) * 100 : 0;
   
+  // Tolerância para valores monetários: considera "atingido" se faltar menos de R$ 500
+  // ou menos de 0.5% da meta (o que for menor)
+  const isCurrencyFormat = format === 'currency';
+  const tolerance = isCurrencyFormat ? Math.min(500, meta * 0.005) : 0;
+  const isWithinTolerance = isCurrencyFormat && (meta - realized) <= tolerance && (meta - realized) >= 0;
+  
   // SLA mantém lógica binária (verde/vermelho)
-  // Outros indicadores usam 3 faixas
+  // Outros indicadores usam 3 faixas com tolerância
   const getColor = () => {
     if (isInverted) {
       // SLA: menor é melhor
       return percentage <= 100 ? "hsl(var(--chart-2))" : "hsl(var(--destructive))";
     }
-    // Outros indicadores monetários
-    if (percentage >= 100) return "hsl(var(--chart-2))"; // Verde
+    // Outros indicadores monetários - considera verde se >= 100% OU dentro da tolerância
+    if (percentage >= 100 || isWithinTolerance) return "hsl(var(--chart-2))"; // Verde
     if (percentage >= 80) return "hsl(45, 93%, 47%)";    // Amarelo
     return "hsl(var(--destructive))";                    // Vermelho
   };
@@ -238,7 +244,7 @@ const MonetaryRadialCard = ({ title, realized, meta, format, onClick, isClickabl
     if (isInverted) {
       return percentage <= 100 ? "text-chart-2" : "text-destructive";
     }
-    if (percentage >= 100) return "text-chart-2";
+    if (percentage >= 100 || isWithinTolerance) return "text-chart-2";
     if (percentage >= 80) return "text-amber-500";
     return "text-destructive";
   };
