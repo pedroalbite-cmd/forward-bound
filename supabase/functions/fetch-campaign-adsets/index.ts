@@ -29,18 +29,25 @@ function getSupabaseClient() {
   return createClient(supabaseUrl, supabaseServiceKey);
 }
 
-// Check cache for existing data
-async function getCachedData(supabase: any, cacheKey: string) {
+// Check cache for existing data (optionally include stale data)
+async function getCachedData(supabase: any, cacheKey: string, includeStale = false) {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('meta_ads_cache')
-      .select('data')
-      .eq('cache_key', cacheKey)
-      .gt('expires_at', new Date().toISOString())
-      .single();
+      .select('data, expires_at')
+      .eq('cache_key', cacheKey);
+    
+    if (!includeStale) {
+      query = query.gt('expires_at', new Date().toISOString());
+    }
+    
+    const { data, error } = await query.single();
     
     if (error || !data) return null;
-    return data.data;
+    return { 
+      data: data.data, 
+      isStale: new Date(data.expires_at) < new Date() 
+    };
   } catch {
     return null;
   }
@@ -186,13 +193,13 @@ serve(async (req) => {
 
     // Check cache first
     const cacheKey = `adsets:${campaignId}:${startDate}:${endDate}`;
-    const cachedData = await getCachedData(supabase, cacheKey);
+    const cachedResult = await getCachedData(supabase, cacheKey);
 
-    if (cachedData) {
+    if (cachedResult && !cachedResult.isStale) {
       console.log(`Cache HIT for ${cacheKey}`);
       return new Response(JSON.stringify({ 
         success: true, 
-        adSets: cachedData,
+        adSets: cachedResult.data,
         campaignId,
         fromCache: true,
       }), {
@@ -200,30 +207,52 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Cache MISS for ${cacheKey}, fetching from Meta API`);
+    console.log(`Cache ${cachedResult?.isStale ? 'STALE' : 'MISS'} for ${cacheKey}, fetching from Meta API`);
 
-    // Fetch fresh data using batch API
-    const adSetsWithInsights = await fetchAdSetsWithBatchAPI(
-      campaignId, 
-      startDate, 
-      endDate, 
-      accessToken, 
-      formattedAccountId
-    );
+    // Try to fetch fresh data
+    try {
+      const adSetsWithInsights = await fetchAdSetsWithBatchAPI(
+        campaignId, 
+        startDate, 
+        endDate, 
+        accessToken, 
+        formattedAccountId
+      );
 
-    // Save to cache
-    await setCachedData(supabase, cacheKey, adSetsWithInsights);
+      // Save to cache
+      await setCachedData(supabase, cacheKey, adSetsWithInsights);
 
-    console.log(`Successfully fetched and cached ${adSetsWithInsights.length} ad sets`);
+      console.log(`Successfully fetched and cached ${adSetsWithInsights.length} ad sets`);
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      adSets: adSetsWithInsights,
-      campaignId,
-      fromCache: false,
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+      return new Response(JSON.stringify({ 
+        success: true, 
+        adSets: adSetsWithInsights,
+        campaignId,
+        fromCache: false,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (fetchError) {
+      const errorMsg = fetchError instanceof Error ? fetchError.message : 'Unknown error';
+      
+      // If rate limited and we have stale cache, return it
+      if (errorMsg.includes('request limit') || errorMsg.includes('rate limit')) {
+        if (cachedResult?.data) {
+          console.log(`Rate limited, returning stale cache for ${cacheKey}`);
+          return new Response(JSON.stringify({ 
+            success: true, 
+            adSets: cachedResult.data,
+            campaignId,
+            fromCache: true,
+            stale: true,
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+      
+      throw fetchError;
+    }
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
