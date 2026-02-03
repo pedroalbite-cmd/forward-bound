@@ -4,9 +4,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Cell } from "recharts";
-import { ChevronDown, ChevronUp, TrendingUp, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronUp, TrendingUp, AlertTriangle, History } from "lucide-react";
 import { DetailItem, DetailSheet, columnFormatters } from "./DetailSheet";
 import { IndicatorType } from "@/hooks/useFunnelRealized";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 // Tier normalization map - maps database values to 7 standardized display labels
 const TIER_NORMALIZATION: Record<string, string> = {
@@ -79,6 +81,7 @@ interface TierConversionData {
 
 interface FunnelConversionByTierWidgetProps {
   getItemsForIndicator: (indicator: IndicatorType) => DetailItem[];
+  getItemsWithFullHistory?: (indicator: IndicatorType) => DetailItem[];
 }
 
 // Normalize tier string to standard format
@@ -131,19 +134,25 @@ const getConversionBgClass = (rate: number): string => {
   return 'bg-red-50 dark:bg-red-950/30';
 };
 
-export function FunnelConversionByTierWidget({ getItemsForIndicator }: FunnelConversionByTierWidgetProps) {
+export function FunnelConversionByTierWidget({ getItemsForIndicator, getItemsWithFullHistory }: FunnelConversionByTierWidgetProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [drillDownOpen, setDrillDownOpen] = useState(false);
   const [drillDownTitle, setDrillDownTitle] = useState('');
   const [drillDownItems, setDrillDownItems] = useState<DetailItem[]>([]);
+  const [cohortMode, setCohortMode] = useState(false);
   
-  // Fetch items for each stage
-  const leads = useMemo(() => getItemsForIndicator('leads'), [getItemsForIndicator]);
-  const mqls = useMemo(() => getItemsForIndicator('mql'), [getItemsForIndicator]);
-  const rms = useMemo(() => getItemsForIndicator('rm'), [getItemsForIndicator]);
-  const rrs = useMemo(() => getItemsForIndicator('rr'), [getItemsForIndicator]);
-  const propostas = useMemo(() => getItemsForIndicator('proposta'), [getItemsForIndicator]);
-  const vendas = useMemo(() => getItemsForIndicator('venda'), [getItemsForIndicator]);
+  // Determine which getter to use based on cohort mode
+  const effectiveGetItems = cohortMode && getItemsWithFullHistory 
+    ? getItemsWithFullHistory 
+    : getItemsForIndicator;
+  
+  // Fetch items for each stage using the effective getter
+  const leads = useMemo(() => effectiveGetItems('leads'), [effectiveGetItems]);
+  const mqls = useMemo(() => effectiveGetItems('mql'), [effectiveGetItems]);
+  const rms = useMemo(() => effectiveGetItems('rm'), [effectiveGetItems]);
+  const rrs = useMemo(() => effectiveGetItems('rr'), [effectiveGetItems]);
+  const propostas = useMemo(() => effectiveGetItems('proposta'), [effectiveGetItems]);
+  const vendas = useMemo(() => effectiveGetItems('venda'), [effectiveGetItems]);
   
   // Calculate conversion data by tier
   const conversionData = useMemo((): TierConversionData[] => {
@@ -279,6 +288,39 @@ export function FunnelConversionByTierWidget({ getItemsForIndicator }: FunnelCon
                   )}
                 </div>
                 <div className="flex items-center gap-4 text-sm">
+                  {/* Cohort Mode Toggle */}
+                  {getItemsWithFullHistory && (
+                    <div 
+                      className="flex items-center gap-2 border border-border rounded-md px-2 py-1 bg-muted/30"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-2">
+                            <History className="h-3.5 w-3.5 text-muted-foreground" />
+                            <Label htmlFor="cohort-mode" className="text-xs text-muted-foreground cursor-pointer">
+                              Coorte
+                            </Label>
+                            <Switch
+                              id="cohort-mode"
+                              checked={cohortMode}
+                              onCheckedChange={setCohortMode}
+                              className="scale-75"
+                            />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-xs">
+                          <p className="font-medium">Modo Coorte</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Ativado: Considera histórico completo dos cards que tiveram atividade no período (ex: card que fechou em Janeiro inclui seu histórico de Dezembro).
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Desativado: Conta apenas movimentações dentro do período selecionado.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  )}
                   {bestTier.tier && (
                     <span className="text-muted-foreground flex items-center gap-1">
                       <TrendingUp className="h-3 w-3 text-chart-2" />
