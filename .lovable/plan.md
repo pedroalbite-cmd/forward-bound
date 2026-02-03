@@ -1,12 +1,16 @@
 
-## Ajustes nos Acelerômetros e Widget de Conversão
 
-### Objetivo
+## Adicionar Tolerância de "Quase Atingiu" nos Acelerômetros Monetários
 
-Implementar três alterações solicitadas:
-1. Remover a legenda de cores do widget de Conversão de Funil por Tier
-2. Corrigir a coloração do acelerômetro de Faturamento (garantir que 100% seja verde)
-3. Adicionar faixa amarela para 80-99% nos acelerômetros (exceto SLA)
+### Problema
+
+O Faturamento está mostrando amarelo com R$ 399.832,02 / R$ 400.000 (99,96%), mas uma diferença de apenas ~R$ 168 deveria ser considerada como meta atingida para fins visuais.
+
+---
+
+### Solução
+
+Adicionar uma tolerância para métricas monetárias: se a diferença entre realizado e meta for menor que **R$ 500** (ou menos de **0,5% da meta**), considerar como "verde" mesmo que tecnicamente seja < 100%.
 
 ---
 
@@ -14,103 +18,38 @@ Implementar três alterações solicitadas:
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/planning/indicators/FunnelConversionByTierWidget.tsx` | Remover linhas 378-391 (legenda de cores) |
-| `src/components/planning/IndicatorsTab.tsx` | Ajustar lógica de cores nos componentes RadialProgressCard e MonetaryRadialCard |
+| `src/components/planning/IndicatorsTab.tsx` | Adicionar lógica de tolerância no `MonetaryRadialCard` |
 
 ---
 
-### 1. Remover Legenda do Widget de Conversão
-
-**Código a remover (linhas 377-392):**
-
-```tsx
-{/* Legend */}
-<div className="flex flex-wrap gap-4 justify-center text-sm">
-  <div className="flex items-center gap-2">
-    <div className="w-3 h-3 rounded bg-green-500" />
-    <span className="text-muted-foreground">≥ 70% (Excelente)</span>
-  </div>
-  <div className="flex items-center gap-2">
-    <div className="w-3 h-3 rounded bg-amber-500" />
-    <span className="text-muted-foreground">40-69% (Atenção)</span>
-  </div>
-  <div className="flex items-center gap-2">
-    <div className="w-3 h-3 rounded bg-red-500" />
-    <span className="text-muted-foreground">&lt; 40% (Gargalo)</span>
-  </div>
-</div>
-```
-
----
-
-### 2. Nova Lógica de Cores com Faixa Amarela (80-99%)
-
-**Lógica atual (2 faixas):**
-- Verde: >= 100%
-- Vermelho: < 100%
-
-**Nova lógica (3 faixas) - Exceto SLA:**
-- Verde: >= 100%
-- Amarelo: 80% a 99%
-- Vermelho: < 80%
-
-**SLA mantém lógica invertida:**
-- Verde: <= 100%
-- Vermelho: > 100%
-
----
-
-### 3. Código Atualizado para RadialProgressCard
-
-```typescript
-const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = false }: RadialProgressCardProps) => {
-  const percentage = meta > 0 ? (realized / meta) * 100 : 0;
-  
-  // Nova lógica: Verde >= 100%, Amarelo 80-99%, Vermelho < 80%
-  const getColor = () => {
-    if (percentage >= 100) return "hsl(var(--chart-2))"; // Verde
-    if (percentage >= 80) return "hsl(45, 93%, 47%)";    // Amarelo
-    return "hsl(var(--destructive))";                    // Vermelho
-  };
-  
-  const getTextColorClass = () => {
-    if (percentage >= 100) return "text-chart-2";
-    if (percentage >= 80) return "text-amber-500";
-    return "text-destructive";
-  };
-  
-  const chartData = [{ value: Math.min(percentage, 100), fill: getColor() }];
-  // ...
-};
-```
-
----
-
-### 4. Código Atualizado para MonetaryRadialCard
+### Código Atualizado
 
 ```typescript
 const MonetaryRadialCard = ({ title, realized, meta, format, onClick, isClickable = false }: MonetaryRadialCardProps) => {
-  const isInverted = format === 'duration'; // SLA
+  const isInverted = format === 'duration';
   const percentage = meta > 0 ? (realized / meta) * 100 : 0;
   
-  // SLA mantém lógica binária (verde/vermelho)
-  // Outros indicadores usam 3 faixas
+  // Tolerância para valores monetários: considera "atingido" se faltar menos de R$ 500
+  // ou menos de 0.5% da meta (o que for menor)
+  const isCurrencyFormat = format === 'currency';
+  const tolerance = isCurrencyFormat ? Math.min(500, meta * 0.005) : 0;
+  const isWithinTolerance = isCurrencyFormat && (meta - realized) <= tolerance && (meta - realized) >= 0;
+  
   const getColor = () => {
     if (isInverted) {
-      // SLA: menor é melhor
       return percentage <= 100 ? "hsl(var(--chart-2))" : "hsl(var(--destructive))";
     }
-    // Outros indicadores monetários
-    if (percentage >= 100) return "hsl(var(--chart-2))";
-    if (percentage >= 80) return "hsl(45, 93%, 47%)";
-    return "hsl(var(--destructive))";
+    // Considera verde se >= 100% OU dentro da tolerância
+    if (percentage >= 100 || isWithinTolerance) return "hsl(var(--chart-2))"; // Verde
+    if (percentage >= 80) return "hsl(45, 93%, 47%)";    // Amarelo
+    return "hsl(var(--destructive))";                    // Vermelho
   };
   
   const getTextColorClass = () => {
     if (isInverted) {
       return percentage <= 100 ? "text-chart-2" : "text-destructive";
     }
-    if (percentage >= 100) return "text-chart-2";
+    if (percentage >= 100 || isWithinTolerance) return "text-chart-2";
     if (percentage >= 80) return "text-amber-500";
     return "text-destructive";
   };
@@ -120,16 +59,19 @@ const MonetaryRadialCard = ({ title, realized, meta, format, onClick, isClickabl
 
 ---
 
-### Resultado Visual
+### Lógica da Tolerância
 
-| Indicador | < 80% | 80-99% | >= 100% |
-|-----------|-------|--------|---------|
-| MQLs, RMs, RRs, etc. | Vermelho | Amarelo | Verde |
-| Faturamento, MRR, Setup, Pontual | Vermelho | Amarelo | Verde |
-| SLA | Verde (<=100%) | - | Vermelho (>100%) |
+| Meta | Tolerância Calculada | Limite para Verde |
+|------|---------------------|-------------------|
+| R$ 400.000 | min(500, 2000) = R$ 500 | R$ 399.500+ |
+| R$ 100.000 | min(500, 500) = R$ 500 | R$ 99.500+ |
+| R$ 50.000 | min(500, 250) = R$ 250 | R$ 49.750+ |
 
 ---
 
-### Sobre o Problema do Faturamento a 100%
+### Resultado
 
-A imagem mostra Faturamento com R$ 400k / Meta R$ 400k = 100%. Se o valor realizado for exatamente igual à meta, a condição `percentage >= 100` deveria retornar verde. Se estiver mostrando vermelho, pode haver uma pequena diferença de arredondamento (ex: 399.999 / 400.000 = 99.9998%). A nova lógica com faixa amarela de 80-99% também ajudará a evitar essa situação, pois 99.9998% será exibido como amarelo ao invés de vermelho.
+- **Faturamento R$ 399.832 / Meta R$ 400.000**: Diferença de R$ 168 < R$ 500 → **VERDE** ✅
+- **Faturamento R$ 350.000 / Meta R$ 400.000**: Diferença de R$ 50.000 > R$ 500 → Amarelo (87,5%)
+- **SLA**: Mantém lógica invertida sem tolerância
+
