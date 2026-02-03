@@ -1,92 +1,49 @@
 
 
-## Correção da Normalização de Tiers de Faturamento
+## Remover Coluna Lead→MQL do Widget de Conversão por Tier
 
-### Problema Identificado
+### Alteração
 
-Os dados são **reais e vêm do banco de dados** (tabela `pipefy_moviment_cfos`), mas a tabela de normalização está **incompleta**. 
-
-Analisando os dados reais do banco, encontrei estes formatos que **não estão mapeados**:
-
-| Valor no Banco | Tier Esperado | Status |
-|----------------|---------------|--------|
-| `"Entre R$ 500 mil e R$ 1 milhão"` | R$ 200k - 1M | **Faltando** |
-| `"Entre R$ 200 mil e R$ 350 mil"` | R$ 200k - 1M | **Faltando** |
-| `"Entre R$ 350 mil e R$ 500 mil"` | R$ 200k - 1M | **Faltando** |
-| `"Ainda não faturamos"` | Até R$ 50k | **Faltando** |
-| `"Abaixo de R$ 50.000"` | Até R$ 50k | **Faltando** |
-
-### Consequência
-
-Registros com esses valores estão caindo no fallback "Não informado", distorcendo as taxas de conversão calculadas.
-
----
-
-### Solução
-
-Expandir a tabela `TIER_NORMALIZATION` no arquivo `FunnelConversionByTierWidget.tsx` para incluir **todos** os formatos encontrados no banco de dados.
-
-### Mapeamento Completo
-
-```typescript
-const TIER_NORMALIZATION: Record<string, string> = {
-  // Até R$ 50k variants
-  'Até R$ 50.000': 'Até R$ 50k',
-  'Até R$ 50 mil': 'Até R$ 50k',
-  'Até R$ 50k': 'Até R$ 50k',
-  'Ainda não faturamos': 'Até R$ 50k', // NOVO
-  'Abaixo de R$ 50.000': 'Até R$ 50k', // NOVO
-  'Abaixo de R$ 50 mil': 'Até R$ 50k', // NOVO
-  
-  // R$ 50k - 200k variants
-  'Entre R$ 50.000 e R$ 200.000': 'R$ 50k - 200k',
-  'Entre R$ 50 mil e R$ 200 mil': 'R$ 50k - 200k',
-  
-  // R$ 200k - 1M variants (MUITOS NOVOS)
-  'Entre R$ 200.000 e R$ 1.000.000': 'R$ 200k - 1M',
-  'Entre R$ 200 mil e R$ 350 mil': 'R$ 200k - 1M',   // NOVO
-  'Entre R$ 350 mil e R$ 500 mil': 'R$ 200k - 1M',   // NOVO
-  'Entre R$ 500 mil e R$ 1 milhão': 'R$ 200k - 1M',  // NOVO - Encontrado nos dados!
-  'Entre R$ 200 mil e R$ 500 mil': 'R$ 200k - 1M',   // NOVO
-  
-  // Acima de 1M variants
-  'Entre R$ 1 milhão e R$ 5 milhões': 'Acima de 1M',
-  'Entre R$ 5 milhões e R$ 10 milhões': 'Acima de 1M',
-  'Acima de R$ 5 milhões': 'Acima de 1M',
-  'Acima de R$ 10 milhões': 'Acima de 1M',           // NOVO
-};
-```
-
----
+Remover a etapa **Lead→MQL** do array `STAGE_LABELS` no arquivo `FunnelConversionByTierWidget.tsx`.
 
 ### Arquivo a Modificar
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/planning/indicators/FunnelConversionByTierWidget.tsx` | Expandir `TIER_NORMALIZATION` com todos os valores do banco |
+| `src/components/planning/indicators/FunnelConversionByTierWidget.tsx` | Remover primeira entrada do `STAGE_LABELS` |
 
 ---
 
-### Verificação Adicional
-
-Também melhorarei a lógica de fallback (linhas 112-127) para capturar padrões como:
+### Código Atual (Linha 78-84)
 
 ```typescript
-// Improved fallback logic
-if (lowerRange.includes('500 mil') || lowerRange.includes('350 mil')) {
-  return 'R$ 200k - 1M';
-}
-if (lowerRange.includes('não fatur') || lowerRange.includes('ainda não')) {
-  return 'Até R$ 50k';
-}
+const STAGE_LABELS = [
+  { key: 'leadToMql', label: 'Lead→MQL', from: 'leads', to: 'mql' },  // REMOVER
+  { key: 'mqlToRm', label: 'MQL→RM', from: 'mql', to: 'rm' },
+  { key: 'rmToRr', label: 'RM→RR', from: 'rm', to: 'rr' },
+  { key: 'rrToProposta', label: 'RR→Prop', from: 'rr', to: 'proposta' },
+  { key: 'propostaToVenda', label: 'Prop→Venda', from: 'proposta', to: 'venda' },
+] as const;
+```
+
+### Código Novo
+
+```typescript
+const STAGE_LABELS = [
+  { key: 'mqlToRm', label: 'MQL→RM', from: 'mql', to: 'rm' },
+  { key: 'rmToRr', label: 'RM→RR', from: 'rm', to: 'rr' },
+  { key: 'rrToProposta', label: 'RR→Prop', from: 'rr', to: 'proposta' },
+  { key: 'propostaToVenda', label: 'Prop→Venda', from: 'proposta', to: 'venda' },
+] as const;
 ```
 
 ---
 
-### Resultado Esperado
+### Resultado
 
-Após a correção:
-- Todos os registros serão corretamente categorizados
-- As taxas de conversão refletirão os dados reais do banco
-- Menos registros cairão em "Não informado"
+Após a alteração:
+- A tabela mostrará 4 colunas de conversão em vez de 5
+- O gráfico de barras terá 4 grupos em vez de 5
+- A análise de gargalo também ignorará a etapa Lead→MQL
+- O cálculo de "melhor tier" continuará baseado em MQL→Venda (sem mudança)
 
