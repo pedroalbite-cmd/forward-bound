@@ -1,206 +1,254 @@
 
-## Híbrido: Planilha + Meta API para Meses Sem Dados
+## Comparativo de Análise de Conversão de Funil por Tier de Faturamento
 
-### Contexto
+### Objetivo
 
-A planilha de marketing só tem dados até Janeiro/2026. Para Fevereiro em diante, o sistema precisa buscar o que conseguir da API do Meta Ads e deixar vazio o que não tiver fonte de dados.
+Adicionar uma nova seção na aba **Indicadores** que exiba um comparativo visual da taxa de conversão em cada etapa do funil (Leads → MQL → RM → RR → Proposta → Venda) segmentado por **tier de faturamento** do cliente.
 
-### Mapeamento de Fontes de Dados
-
-| Métrica | Planilha (Jan) | Meta API (Fev+) | Fallback |
-|---------|----------------|-----------------|----------|
-| **Mídia Meta** | midiaMeta | `spend` agregado | 0 |
-| **Mídia Google** | midiaGoogle | - | 0 |
-| **Leads Meta** | leadsMeta | `actions.lead` | 0 |
-| **Leads Google** | leadsGoogle | - | 0 |
-| **CPL** | calculado | calculado | 0 |
-| **MQL** | mqlPorFaturamento | - | 0 |
-| **Reunião Marcada** | reuniaoMarcada | - | 0 |
-| **Reunião Realizada** | reuniaoRealizada | - | 0 |
-| **Proposta** | propostaEnviada | - | 0 |
-| **Vendas** | vendas | - | 0 |
-| **MRR, Setup, etc** | mrr, setup... | - (Pipefy) | 0 |
-| **GMV** | gmv | - | 0 |
-
-**Resumo:** Para meses sem dados na planilha, a Meta API fornece:
-- Mídia Meta (spend)
-- Leads Meta (actions)
-- Impressões, Cliques
-
-O resto fica zerado ou vem de outras fontes (Pipefy para MRR/Setup/Pontual).
+Esta análise responde à pergunta estratégica: **"Em quais faixas de faturamento temos melhor conversão em cada etapa do funil?"**
 
 ---
 
-### Solução Proposta
-
-Modificar a Edge Function `read-marketing-sheet` para:
-
-1. Detectar quais meses não têm dados na planilha (valores zerados ou inexistentes)
-2. Para esses meses, buscar dados agregados da Meta API
-3. Combinar: dados da planilha + dados da Meta para meses faltantes
-4. Deixar como 0 (não mock) as métricas que não têm fonte
-
----
-
-### Arquivos a Modificar
-
-| Arquivo | Mudança |
-|---------|---------|
-| `supabase/functions/read-marketing-sheet/index.ts` | Adicionar busca de fallback da Meta API para meses sem dados |
-| `src/hooks/useMarketingIndicators.ts` | Ajuste menor se necessário |
-
----
-
-### Lógica de Implementação
+### Visualização Proposta
 
 ```text
-Período Selecionado (ex: Jan-Mar 2026)
-         │
-         ▼
-┌─────────────────────────────┐
-│ Buscar dados da planilha    │
-│ para todos os meses         │
-└────────────┬────────────────┘
-             │
-             ▼
-┌─────────────────────────────┐
-│ Verificar: planilha tem     │
-│ dados para cada mês?        │
-│ (midiaTotal > 0?)           │
-└────────────┬────────────────┘
-             │
-   ┌─────────┴─────────┐
-   │                   │
-  Sim                 Não
-   │                   │
-   ▼                   ▼
-┌─────────┐    ┌─────────────────────┐
-│Usar     │    │Buscar da Meta API:  │
-│planilha │    │- spend (mídia)      │
-└─────────┘    │- leads (actions)    │
-               └──────────┬──────────┘
-                          │
-                          ▼
-               ┌─────────────────────┐
-               │ Combinar resultados │
-               │ Deixar 0 o que não  │
-               │ tem fonte           │
-               └─────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Comparativo de Conversão por Tier de Faturamento                        │
+│  ──────────────────────────────────────────────────────────────────────  │
+│                                                                          │
+│  ┌─────────────┬──────────┬──────────┬──────────┬──────────┬──────────┐  │
+│  │   Tier      │ Lead→MQL │ MQL→RM   │ RM→RR    │ RR→Prop  │ Prop→Venda│  │
+│  ├─────────────┼──────────┼──────────┼──────────┼──────────┼──────────┤  │
+│  │ Até R$ 50k  │  85% ■■■ │  32% ■■  │  75% ■■■ │  40% ■■  │  12% ■   │  │
+│  │ R$ 50k-200k │  78% ■■■ │  45% ■■■ │  82% ■■■ │  55% ■■■ │  18% ■■  │  │
+│  │ R$ 200k-1M  │  72% ■■■ │  52% ■■■ │  88% ■■■ │  62% ■■■ │  22% ■■■ │  │
+│  │ Acima de 1M │  65% ■■  │  48% ■■■ │  90% ■■■ │  70% ■■■ │  28% ■■■ │  │
+│  └─────────────┴──────────┴──────────┴──────────┴──────────┴──────────┘  │
+│                                                                          │
+│  [Gráfico de Barras Agrupadas - Conversão por Etapa e Tier]              │
+│                                                                          │
+│  ┌─────────────────────────────────────────────────────────────────────┐ │
+│  │     Lead→MQL      MQL→RM       RM→RR       RR→Prop    Prop→Venda   │ │
+│  │  ████ ████ ██   ██ ███ ████   ███ ███ ██  ██ ███ ██   ██ ███ ██    │ │
+│  │  ████ ████ ██   ██ ███ ████   ███ ███ ██  ██ ███ ██   ██ ███ ██    │ │
+│  │  ████ ████ ██   ██ ███ ████   ███ ███ ██  ██ ███ ██   ██ ███ ██    │ │
+│  └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                          │
+│  Legenda: ■ Até R$50k  ■ R$50k-200k  ■ R$200k-1M  ■ Acima de 1M          │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### Implementação Detalhada na Edge Function
+### Arquivos a Criar/Modificar
+
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/components/planning/indicators/FunnelConversionByTierWidget.tsx` | **Criar** | Novo widget com tabela + gráfico de barras agrupadas |
+| `src/components/planning/IndicatorsTab.tsx` | **Modificar** | Adicionar widget após o RevenueChartComparison |
+
+---
+
+### Estrutura de Dados
+
+O widget utilizará os dados já disponíveis nos hooks existentes:
 
 ```typescript
-// Novo: buscar dados da Meta API para meses específicos
-async function fetchMetaDataForPeriod(
-  startDate: string, 
-  endDate: string,
-  metaAccessToken: string,
-  metaAdAccountId: string
-): Promise<{ spend: number; leads: number; impressions: number; clicks: number }> {
-  
-  const formattedAccountId = metaAdAccountId.startsWith('act_') 
-    ? metaAdAccountId 
-    : `act_${metaAdAccountId}`;
-    
-  const timeRange = JSON.stringify({ since: startDate, until: endDate });
-  const fields = "spend,impressions,clicks,actions";
-  
-  const url = `https://graph.facebook.com/v21.0/${formattedAccountId}/insights?fields=${fields}&time_range=${encodeURIComponent(timeRange)}&access_token=${metaAccessToken}`;
-  
-  const response = await fetch(url);
-  const data = await response.json();
-  
-  if (data.error) {
-    console.error("Meta API error:", data.error);
-    return { spend: 0, leads: 0, impressions: 0, clicks: 0 };
-  }
-  
-  const insights = data.data?.[0] || {};
-  const spend = parseFloat(insights.spend || '0');
-  const impressions = parseInt(insights.impressions || '0', 10);
-  const clicks = parseInt(insights.clicks || '0', 10);
-  
-  // Extrair leads das actions
-  let leads = 0;
-  if (insights.actions) {
-    const leadAction = insights.actions.find((a: any) => 
-      a.action_type === 'lead' || 
-      a.action_type === 'onsite_conversion.lead_grouped' ||
-      a.action_type === 'offsite_conversion.fb_pixel_lead'
-    );
-    leads = leadAction ? parseInt(leadAction.value, 10) : 0;
-  }
-  
-  return { spend, leads, impressions, clicks };
-}
-
-// No serve(), após buscar dados da planilha:
-const sheetMetrics = mergeMetrics(data2025, data2026);
-
-// Verificar se planilha retornou dados (indicador: midiaTotal > 0)
-const hasSheetData = (sheetMetrics.midiaTotal || 0) > 0;
-
-if (!hasSheetData && startDate && endDate) {
-  // Buscar fallback da Meta API
-  const metaToken = Deno.env.get("META_ACCESS_TOKEN");
-  const metaAccount = Deno.env.get("META_AD_ACCOUNT_ID");
-  
-  if (metaToken && metaAccount) {
-    console.log("Sheet has no data, fetching from Meta API as fallback");
-    
-    const metaData = await fetchMetaDataForPeriod(startDate, endDate, metaToken, metaAccount);
-    
-    // Preencher apenas Meta Ads (não Google)
-    sheetMetrics.midiaMeta = metaData.spend;
-    sheetMetrics.midiaTotal = metaData.spend; // Só Meta, Google = 0
-    sheetMetrics.leadsMeta = metaData.leads;
-    sheetMetrics.leadsTotais = metaData.leads;
-    
-    // Recalcular CPL
-    if (metaData.leads > 0) {
-      sheetMetrics.cplMeta = metaData.spend / metaData.leads;
-      sheetMetrics.cplTotal = metaData.spend / metaData.leads;
-    }
-    
-    // O resto fica 0 (não tem fonte)
-    // MQL, RM, RR, Propostas, Vendas, MRR, Setup, etc = 0
-  }
+interface TierConversionData {
+  tier: string;           // "Até R$ 50k", "R$ 50k - 200k", etc.
+  leadToMql: number;      // % de conversão Lead→MQL
+  mqlToRm: number;        // % de conversão MQL→RM
+  rmToRr: number;         // % de conversão RM→RR
+  rrToProposta: number;   // % de conversão RR→Proposta
+  propostaToVenda: number;// % de conversão Proposta→Venda
+  // Contagens absolutas para tooltip
+  leads: number;
+  mqls: number;
+  rms: number;
+  rrs: number;
+  propostas: number;
+  vendas: number;
 }
 ```
+
+---
+
+### Lógica de Cálculo
+
+O widget precisa:
+
+1. **Obter todos os cards** de cada indicador (Leads, MQL, RM, RR, Proposta, Venda) usando `getItemsForIndicator()`
+2. **Agrupar por tier** usando o campo `revenueRange` de cada item
+3. **Calcular taxa de conversão** entre etapas consecutivas:
+
+```typescript
+// Exemplo de cálculo
+const leadsByTier = groupByTier(getItemsForIndicator('leads'));
+const mqlsByTier = groupByTier(getItemsForIndicator('mql'));
+const rmsByTier = groupByTier(getItemsForIndicator('rm'));
+// ...
+
+const conversionData = tiers.map(tier => ({
+  tier,
+  leadToMql: (mqlsByTier[tier] / leadsByTier[tier]) * 100,
+  mqlToRm: (rmsByTier[tier] / mqlsByTier[tier]) * 100,
+  // ...continuação
+}));
+```
+
+---
+
+### Componentes Visuais
+
+O widget incluirá:
+
+1. **Tabela de Conversão** - Visão matricial tier × etapa
+2. **Gráfico de Barras Agrupadas** - Comparativo visual usando Recharts
+3. **Destaque de Gargalos** - Células vermelhas/amarelas para baixa conversão
+4. **Drill-down** - Clique em célula abre detalhes dos cards daquele tier/etapa
+
+---
+
+### Normalização de Tiers
+
+Os dados do Pipefy têm várias nomenclaturas para faixas de faturamento. O widget normalizará para 4 tiers principais:
+
+```typescript
+const TIER_NORMALIZATION: Record<string, string> = {
+  'Até R$ 50.000': 'Até R$ 50k',
+  'Até R$ 50 mil': 'Até R$ 50k',
+  'Até R$ 50k': 'Até R$ 50k',
+  // ... outras variantes
+  
+  'Entre R$ 50.000 e R$ 200.000': 'R$ 50k - 200k',
+  'R$ 50k - 200k': 'R$ 50k - 200k',
+  // ...
+  
+  'Entre R$ 200.000 e R$ 1.000.000': 'R$ 200k - 1M',
+  'R$ 200k - 1M': 'R$ 200k - 1M',
+  // ...
+  
+  'Acima de R$ 1.000.000': 'Acima de 1M',
+  'Acima de 1M': 'Acima de 1M',
+  'Entre R$ 1 milhão e R$ 5 milhões': 'Acima de 1M',
+  // ...
+};
+```
+
+---
+
+### Implementação Técnica
+
+```typescript
+// FunnelConversionByTierWidget.tsx (estrutura simplificada)
+
+interface FunnelConversionByTierWidgetProps {
+  startDate: Date;
+  endDate: Date;
+  selectedBUs: string[];
+  selectedClosers: string[];
+  getItemsForIndicator: (indicator: IndicatorType) => DetailItem[];
+}
+
+export function FunnelConversionByTierWidget(props) {
+  // 1. Buscar itens de cada etapa
+  const leads = props.getItemsForIndicator('leads');
+  const mqls = props.getItemsForIndicator('mql');
+  const rms = props.getItemsForIndicator('rm');
+  const rrs = props.getItemsForIndicator('rr');
+  const propostas = props.getItemsForIndicator('proposta');
+  const vendas = props.getItemsForIndicator('venda');
+  
+  // 2. Agrupar por tier normalizado
+  const groupByTier = (items: DetailItem[]) => {
+    const groups = new Map<string, DetailItem[]>();
+    items.forEach(item => {
+      const tier = normalizeTier(item.revenueRange);
+      if (!groups.has(tier)) groups.set(tier, []);
+      groups.get(tier)!.push(item);
+    });
+    return groups;
+  };
+  
+  // 3. Calcular conversões
+  const conversionData = useMemo(() => {
+    const leadsByTier = groupByTier(leads);
+    const mqlsByTier = groupByTier(mqls);
+    // ... mais agrupamentos
+    
+    return TIER_ORDER.map(tier => ({
+      tier,
+      leads: leadsByTier.get(tier)?.length || 0,
+      mqls: mqlsByTier.get(tier)?.length || 0,
+      leadToMql: calcConversion(leadsByTier.get(tier), mqlsByTier.get(tier)),
+      // ... mais conversões
+    }));
+  }, [leads, mqls, rms, rrs, propostas, vendas]);
+  
+  // 4. Renderizar tabela + gráfico
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Conversão de Funil por Tier de Faturamento</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {/* Tabela de conversões */}
+        <ConversionTable data={conversionData} />
+        
+        {/* Gráfico de barras agrupadas */}
+        <ConversionChart data={conversionData} />
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+---
+
+### Integração no IndicatorsTab
+
+O widget será adicionado após o `RevenueChartComparison`:
+
+```typescript
+// IndicatorsTab.tsx (trecho de modificação)
+
+// Após linha ~2381
+<RevenueChartComparison ... />
+
+{/* NOVO: Comparativo de Conversão por Tier */}
+<FunnelConversionByTierWidget
+  startDate={startDate}
+  endDate={endDate}
+  selectedBUs={selectedBUs}
+  selectedClosers={selectedClosers}
+  getItemsForIndicator={getItemsForIndicator}
+/>
+```
+
+---
+
+### Cores e Destaque Visual
+
+| Taxa de Conversão | Cor | Significado |
+|------------------|-----|-------------|
+| ≥ 70% | Verde | Excelente |
+| 40% - 69% | Amarelo | Atenção |
+| < 40% | Vermelho | Gargalo |
+
+---
+
+### Funcionalidades Extras
+
+1. **Tooltip detalhado** - Ao passar mouse sobre célula, mostra números absolutos
+2. **Click para drill-down** - Abre DetailSheet com lista de cards filtrada
+3. **Responsividade** - Tabela com scroll horizontal em mobile
+4. **Collapsible** - Seção pode ser expandida/recolhida como os gráficos existentes
 
 ---
 
 ### Resultado Esperado
 
-| Período | Fonte Mídia Meta | Fonte Leads Meta | Fonte MQL/RM/etc | Fonte MRR/Setup |
-|---------|------------------|------------------|------------------|-----------------|
-| Jan 2026 | Planilha | Planilha | Planilha | Planilha |
-| Fev 2026 | Meta API | Meta API | 0 (sem fonte) | Pipefy (já integrado) |
-| Mar 2026 | Meta API | Meta API | 0 (sem fonte) | Pipefy (já integrado) |
-
-**Importante:** O MRR/Setup/Pontual já vem do Pipefy no frontend (hook `useModeloAtualMetas` e `useO2TaxMetas`), então continuará funcionando para Fev+.
-
----
-
-### Tratamento de Erros
-
-- Se Meta API falhar: retorna 0 para os campos
-- Se planilha falhar: tenta Meta API como fallback completo
-- Nunca usa dados mockados
-
----
-
-### Observações
-
-1. **Google Ads não tem API integrada** - ficará zerado para meses sem planilha
-2. **Funil de vendas** (MQL, RM, RR, Proposta, Venda) vem do CRM - não disponível ainda, ficará zerado
-3. **Revenue** (MRR, Setup, Pontual) já vem do Pipefy no frontend, não precisa de fallback
-4. **GMV** não tem fonte alternativa - ficará zerado
-
-Esta abordagem garante que:
-- Dados reais são usados quando disponíveis
-- Meta API complementa para mídia/leads
-- Nenhum dado mockado é utilizado
+O gestor poderá visualizar rapidamente:
+- Em qual tier há maior conversão final (MQL→Venda)
+- Onde estão os gargalos por tier (ex: tier premium converte bem no início mas perde em Proposta→Venda)
+- Comparar eficiência do funil entre diferentes portes de clientes
