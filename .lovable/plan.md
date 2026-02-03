@@ -1,79 +1,113 @@
 
-## Corrigir Filtro de Vendas no Gráfico de Faturamento
 
-### Problema
+## Investigação: Discrepância de Faturamento O2 TAX (87k vs 54k)
 
-O gráfico "Faturamento por Período" está filtrando movimentos por `fase === 'Ganho'`, mas a maioria dos hooks de BUs usam `'Contrato assinado'` como a fase que representa uma venda. Isso faz com que apenas dados da O2 TAX (que aparentemente tem cards com a fase "Ganho" nos dados) apareçam no gráfico.
+### Problema Identificado
 
-### Causa Raiz
+Ao filtrar apenas O2 TAX em Janeiro de 2026:
+- **Gráfico "Faturamento por Período"**: Exibe R$ 87k
+- **Acelerômetro (Card Faturamento)**: Exibe R$ 54k
 
-No `RevenueChartComparison.tsx`, linha 118-121:
+### Causa Raiz (2 fatores)
+
+| Fator | Faturamento por Período | Acelerômetro |
+|-------|------------------------|--------------|
+| **Fases contadas** | `'Ganho'` OU `'Contrato assinado'` | Apenas `'Contrato assinado'` |
+| **Fallback s/ valor** | R$ 15.000 por card | R$ 0 (sem fallback) |
+
+---
+
+### Detalhamento Técnico
+
+**1. Filtro de fases diferente:**
+
+No `RevenueChartComparison.tsx` (linha 119):
 ```typescript
-const maSalesCards = maMovements.filter(m => m.fase === 'Ganho');
-const o2SalesMovements = o2TaxMetas.movements.filter(m => m.fase === 'Ganho');
-const franquiaSalesMovements = franquiaMetas.movements.filter(m => m.fase === 'Ganho');
-const oxyHackerSalesMovements = oxyHackerMetas.movements.filter(m => m.fase === 'Ganho');
+// Inclui DUAS fases como "venda ganha"
+const isWonPhase = (fase: string) => fase === 'Ganho' || fase === 'Contrato assinado';
+const o2SalesMovements = o2TaxMetas.movements.filter(m => isWonPhase(m.fase));
 ```
 
-Mas nos hooks:
-- `useModeloAtualMetas`: Mapeia `'Contrato assinado'` → `'venda'`
-- `useO2TaxMetas`: Mapeia `'Contrato assinado'` → `'venda'`
-- `useExpansaoMetas`: Mapeia `'Contrato assinado'` → `'venda'`
-- `useOxyHackerMetas`: Mapeia `'Contrato assinado'` → `'venda'`
-
-### Solução
-
-Alterar o filtro para usar `'Contrato assinado'` (a fase real nos dados) ou aceitar ambas as fases:
-
+No `useO2TaxMetas.ts` (linha 155-159), usado pelo Acelerômetro:
 ```typescript
-// Aceitar tanto 'Ganho' quanto 'Contrato assinado' para compatibilidade
+// Inclui APENAS uma fase
+if (indicator === 'venda') {
+  if (movement.fase === 'Contrato assinado') {
+    shouldCount = true;
+  }
+}
+```
+
+**2. Fallback de valor diferente:**
+
+No `RevenueChartComparison.tsx` (linhas 96-102):
+```typescript
+const getO2TaxCardValue = (movement: any): number => {
+  const sum = mrr + setup + pontual;
+  return sum === 0 ? DEFAULT_TICKETS.o2_tax : sum;  // Fallback R$ 15.000
+};
+```
+
+No `useO2TaxMetas.ts` (linhas 173-177):
+```typescript
+// Soma direta, sem fallback
+const pontual = movement.valorPontual || 0;
+const setup = movement.valorSetup || 0;
+const mrr = movement.valorMRR || 0;
+cardValues.set(movement.id, pontual + setup + mrr);  // Se 0, fica 0
+```
+
+---
+
+### Correção Proposta
+
+**Opção A: Alinhar ambos para usar APENAS `'Contrato assinado'`** (recomendado)
+
+Justificativa: A memória `sales-phase-universal-definition` define que "a contagem de vendas em todas as Unidades de Negócio é disparada pela entrada do card na fase 'Contrato assinado'" e "A fase 'Ganho' foi descontinuada".
+
+**Arquivo:** `src/components/planning/RevenueChartComparison.tsx`
+
+Alterar linha 119:
+```typescript
+// ANTES
 const isWonPhase = (fase: string) => fase === 'Ganho' || fase === 'Contrato assinado';
 
-const maSalesCards = maMovements.filter(m => isWonPhase(m.fase));
-const o2SalesMovements = o2TaxMetas.movements.filter(m => isWonPhase(m.fase));
-const franquiaSalesMovements = franquiaMetas.movements.filter(m => isWonPhase(m.fase));
-const oxyHackerSalesMovements = oxyHackerMetas.movements.filter(m => isWonPhase(m.fase));
+// DEPOIS
+const isWonPhase = (fase: string) => fase === 'Contrato assinado';
 ```
 
----
+**Opção B: Alinhar o fallback de valor**
 
-### Alteração Técnica
+Também aplicar o fallback de R$ 15k no hook `useO2TaxMetas.ts` para garantir que cards sem valores monetários preenchidos tenham um valor mínimo.
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/planning/RevenueChartComparison.tsx` | Atualizar filtro de fases para incluir 'Contrato assinado' além de 'Ganho' |
+**Arquivo:** `src/hooks/useO2TaxMetas.ts`
 
----
-
-### Código a Modificar
-
-**Antes (linhas 117-121):**
+Alterar linhas 172-177:
 ```typescript
-const chartData = useMemo(() => {
-  const maSalesCards = maMovements.filter(m => m.fase === 'Ganho');
-  const o2SalesMovements = o2TaxMetas.movements.filter(m => m.fase === 'Ganho');
-  const franquiaSalesMovements = franquiaMetas.movements.filter(m => m.fase === 'Ganho');
-  const oxyHackerSalesMovements = oxyHackerMetas.movements.filter(m => m.fase === 'Ganho');
-```
+// ANTES
+if (shouldCount && !cardValues.has(movement.id)) {
+  const pontual = movement.valorPontual || 0;
+  const setup = movement.valorSetup || 0;
+  const mrr = movement.valorMRR || 0;
+  cardValues.set(movement.id, pontual + setup + mrr);
+}
 
-**Depois:**
-```typescript
-const chartData = useMemo(() => {
-  // Aceitar tanto 'Ganho' quanto 'Contrato assinado' como fases de venda ganhas
-  const isWonPhase = (fase: string) => fase === 'Ganho' || fase === 'Contrato assinado';
-  
-  const maSalesCards = maMovements.filter(m => isWonPhase(m.fase));
-  const o2SalesMovements = o2TaxMetas.movements.filter(m => isWonPhase(m.fase));
-  const franquiaSalesMovements = franquiaMetas.movements.filter(m => isWonPhase(m.fase));
-  const oxyHackerSalesMovements = oxyHackerMetas.movements.filter(m => isWonPhase(m.fase));
+// DEPOIS (com fallback)
+if (shouldCount && !cardValues.has(movement.id)) {
+  const pontual = movement.valorPontual || 0;
+  const setup = movement.valorSetup || 0;
+  const mrr = movement.valorMRR || 0;
+  const sum = pontual + setup + mrr;
+  cardValues.set(movement.id, sum === 0 ? 15000 : sum);  // Fallback R$ 15k
+}
 ```
 
 ---
 
 ### Resultado Esperado
 
-Após a correção, o gráfico "Faturamento por Período" exibirá dados de todas as 4 BUs:
-- **Modelo Atual**: Barras azuis com valores reais de MRR + Setup + Pontual
-- **O2 TAX**: Barras âmbar com valores do banco de dados
-- **Oxy Hacker**: Barras roxas com ticket de R$ 54k
-- **Franquia**: Barras verdes com ticket de R$ 140k
+Após aplicar a Opção A + B:
+- Ambos os componentes exibirão o **mesmo valor de faturamento O2 TAX**
+- O valor será baseado apenas em cards que entraram na fase `'Contrato assinado'`
+- Cards sem valores monetários receberão fallback de R$ 15k em ambos os lugares
+
