@@ -27,6 +27,7 @@ import { MeetingsScheduledChart } from "./MeetingsScheduledChart";
 import { ClickableFunnelChart } from "./ClickableFunnelChart";
 import { RevenueBreakdownChart } from "./RevenueBreakdownChart";
 import { RevenueChartComparison } from "./RevenueChartComparison";
+import { FunnelConversionByTierWidget } from "./indicators/FunnelConversionByTierWidget";
 import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSheet";
 import { KpiItem } from "./indicators/KpiCard";
 import { ChartConfig } from "./indicators/DrillDownCharts";
@@ -2378,6 +2379,11 @@ export function IndicatorsTab() {
         endDate={endDate}
         selectedBUs={selectedBUs}
         selectedClosers={selectedClosers}
+      />
+
+      {/* Funnel Conversion by Revenue Tier Analysis */}
+      <FunnelConversionByTierWidget
+        getItemsForIndicator={getItemsForIndicator}
       />
 
       {(isLoading || isLoadingExpansao || isLoadingO2Tax) && (
