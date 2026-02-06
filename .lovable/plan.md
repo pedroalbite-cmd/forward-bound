@@ -1,70 +1,71 @@
 
-# Plano: Corrigir Inconsistência de MQL entre Card Radial e Drill-Down
+# Plano: Exibir Data da Primeira Qualificação MQL
 
 ## Problema Identificado
 
-O número de MQLs está diferente em dois lugares:
-- **Card Radial (acelerômetro)**: 50 MQLs
-- **Drill-Down (ao clicar)**: 72 MQLs (correto)
+O card **1291436814 (A3P Transporte)** aparece na aba MQLs com data **02/02/2026**, mas sua primeira qualificação como MQL foi em **31/01/2026**.
+
+### Histórico do Card:
+| Fase | Entrada |
+|------|---------|
+| MQLs | 31/01/2026 19:08:49 |
+| Tentativas de contato | 02/02/2026 09:15:32 |
 
 ### Causa Raiz
 
-Os dois hooks usam mapeamentos diferentes de fases para MQL:
-
-| Hook | Fases mapeadas para 'mql' | Resultado |
-|------|---------------------------|-----------|
-| `useModeloAtualMetas.ts` | Apenas "MQLs" | 50 MQLs |
-| `useModeloAtualAnalytics.ts` | "MQLs" + "Tentativas de contato" | 72 MQLs |
-
-A fase "Tentativas de contato" representa leads qualificados que estão em processo de contato inicial. Pela regra de negócio, se um lead tem faturamento >= R$ 200k, ele é MQL independente de estar na fase "MQLs" ou "Tentativas de contato".
+Quando o período selecionado é **Fevereiro 2026**:
+1. O sistema filtra apenas movimentações dentro do período (01/02 a 28/02)
+2. A entrada em "MQLs" (31/01) está **fora do período**, não é carregada
+3. A entrada em "Tentativas de contato" (02/02) está **dentro do período**
+4. Como ambas as fases são mapeadas para `mql`, o card aparece com data 02/02
 
 ## Solução Proposta
 
-Adicionar a fase "Tentativas de contato" ao mapeamento de MQL no hook `useModeloAtualMetas.ts` para garantir consistência com o drill-down.
+Modificar a lógica para que, ao exibir um MQL, sempre use a **data da primeira entrada em qualquer fase MQL** (a mais antiga entre "MQLs" e "Tentativas de contato").
 
 ### Arquivo a Modificar
 
-**`src/hooks/useModeloAtualMetas.ts`**
+**`src/hooks/useModeloAtualAnalytics.ts`**
 
 ```text
-Antes (linhas 42-48):
-const PHASE_TO_INDICATOR: Record<string, ModeloAtualIndicator> = {
-  // Leads
-  'Novos Leads': 'leads',
-  
-  // MQL - Leads qualificados
-  'MQLs': 'mql',
-  
-  // RM...
+Mudanças na função getCardsForIndicator (linhas 205-237):
+
+ANTES:
+- Filtra apenas cards no período (cardsInPeriod)
+- Para MQL, pega a entrada mais antiga DENTRO do período filtrado
+
+DEPOIS (Opção A - Mostrar sempre a primeira entrada):
+- Usar histórico completo do card (não apenas período)
+- Para cada card único no período, buscar a primeira entrada em fase MQL
+- Exibir com a data da primeira qualificação
+
+DEPOIS (Opção B - Mostrar entrada no período selecionado):
+- Manter comportamento atual
+- Card aparece com a data da movimentação que ocorreu no período selecionado
 ```
 
-```text
-Depois (adicionar "Tentativas de contato"):
-const PHASE_TO_INDICATOR: Record<string, ModeloAtualIndicator> = {
-  // Leads
-  'Novos Leads': 'leads',
-  
-  // MQL - Leads qualificados (inclui fase de tentativa de contato)
-  'MQLs': 'mql',
-  'Tentativas de contato': 'mql',
-  
-  // RM...
-```
+## Pergunta de Esclarecimento
 
-## Por Que Esta É a Solução Correta
+Qual comportamento você prefere?
 
-1. **Consistência**: O mapeamento ficará idêntico nos dois hooks
-2. **Regra de Negócio**: A fase "Tentativas de contato" é uma etapa intermediária onde SDRs tentam contato com leads qualificados. Se o lead tem faturamento >= R$ 200k, ele é MQL
-3. **Drill-Down Já Funciona**: O `useModeloAtualAnalytics` já usa este mapeamento e mostra 72 MQLs (número correto)
+**Opção A - Data da Primeira Qualificação:**
+- Card 1291436814 aparece como MQL com data **31/01/2026**
+- Mesmo quando você seleciona Fevereiro, mostra a data original de qualificação
+- Porém, o card apareceria em AMBOS os meses (Janeiro e Fevereiro)
 
-## Resultado Esperado
+**Opção B - Data da Movimentação no Período (atual):**
+- Em Janeiro: card aparece com data 31/01 (entrada em MQLs)
+- Em Fevereiro: card aparece com data 02/02 (entrada em Tentativas de contato)
+- Card conta apenas uma vez por período (não duplica)
 
-- Card radial de MQL: **72** (antes: 50)
-- Drill-down de MQL: **72** (sem mudança)
-- Ambos usando a mesma lógica: fase "MQLs" ou "Tentativas de contato" + faturamento >= R$ 200k
+**Opção C - Aparecer Apenas no Primeiro Mês:**
+- Card conta como MQL apenas em Janeiro (31/01) 
+- Em Fevereiro, não aparece mais (já foi contado)
+- Evita contagem dupla, mostra apenas a primeira qualificação
 
-## Notas Técnicas
+## Recomendação
 
-- A lógica de filtro por faturamento (`isMqlQualified`) permanece inalterada
-- Apenas cards com faturamento >= R$ 200k serão contados como MQL
-- A fase "Tentativas de contato" é contada apenas para MQL, não afeta o indicador de Leads
+**Opção C** é a mais precisa para métricas de funil:
+- Um lead qualifica como MQL apenas uma vez
+- A data mostrada é sempre a da primeira qualificação
+- Evita duplicação entre períodos
