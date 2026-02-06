@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DetailItem } from "@/components/planning/indicators/DetailSheet";
 import { IndicatorType } from "@/hooks/useFunnelRealized";
+import { isMqlQualified } from "@/hooks/useModeloAtualMetas";
 
 export interface ModeloAtualCard {
   id: string;
@@ -210,9 +211,15 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         
         // LEADS = Union of 'Novos Leads' (leads) + 'MQLs' (mql)
         // This ensures every card entering the funnel is counted as a Lead
-        const matchesIndicator = indicator === 'leads'
-          ? (cardIndicator === 'leads' || cardIndicator === 'mql')
-          : cardIndicator === indicator;
+        let matchesIndicator = false;
+        if (indicator === 'leads') {
+          matchesIndicator = cardIndicator === 'leads' || cardIndicator === 'mql';
+        } else if (indicator === 'mql') {
+          // MQL = card entered MQLs phase AND has revenue >= R$ 200k
+          matchesIndicator = cardIndicator === 'mql' && isMqlQualified(card.faixa);
+        } else {
+          matchesIndicator = cardIndicator === indicator;
+        }
         
         if (matchesIndicator) {
           // Keep EARLIEST entry per card (first time entering the phase)
@@ -324,6 +331,10 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         // LEADS = Union of 'Novos Leads' (leads) + 'MQLs' (mql)
         if (indicator === 'leads') {
           return cardIndicator === 'leads' || cardIndicator === 'mql';
+        }
+        // MQL = card entered MQLs phase AND has revenue >= R$ 200k
+        if (indicator === 'mql') {
+          return cardIndicator === 'mql' && isMqlQualified(m.faixa);
         }
         return cardIndicator === indicator;
       });
