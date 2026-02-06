@@ -1,272 +1,125 @@
 
-
-# Plano: Filtrar Indicadores pela Primeira Entrada em Cada Fase
-
-## Comportamento Desejado
-
-**Regra universal para TODOS os indicadores:**
-Um card só aparece em um indicador se a **primeira entrada naquela fase específica** ocorreu dentro do período selecionado.
-
-| Indicador | Card aparece se... |
-|-----------|---------------------|
-| MQL | Primeira entrada em fase MQL foi no período |
-| RM | Primeira entrada em fase RM foi no período |
-| RR | Primeira entrada em fase RR foi no período |
-| Proposta | Primeira entrada em fase Proposta foi no período |
-| Venda | Primeira entrada em fase Venda foi no período |
-
-**Exemplo (Card A3P Transporte):**
-- MQL em 31/01/2026
-- RM em 02/02/2026
-- RR em 05/02/2026
-- Proposta em 10/02/2026
-- Venda em 15/02/2026
-
-| Período | MQL | RM | RR | Proposta | Venda |
-|---------|-----|-----|-----|----------|-------|
-| Janeiro | Aparece | NÃO | NÃO | NÃO | NÃO |
-| Fevereiro | NÃO | Aparece | Aparece | Aparece | Aparece |
+# Plano: Implementar Lógica de "Primeira Entrada" em TODOS os Hooks de Analytics
 
 ## Problema Atual
 
-1. **Query limitada ao período**: `query_period` só busca movimentos dentro do período selecionado
-2. **Sem visibilidade do histórico**: Quando Fevereiro é selecionado, o sistema não vê que MQL aconteceu em Janeiro
-3. **Lógica incompleta**: Apenas MQL tem lógica de "primeira entrada", outras fases mostram qualquer movimento no período
+Atualmente, apenas o `useModeloAtualAnalytics` foi atualizado para usar a lógica de "primeira entrada". Os outros hooks (`useO2TaxAnalytics` e `useExpansaoAnalytics`) ainda contam **qualquer movimento no período**, causando:
 
-## Solução Técnica
+1. Cards aparecem em múltiplos períodos para o mesmo indicador
+2. Inconsistência entre BUs
+3. Discrepância entre acelerômetros e drill-downs
 
-### Arquivos a Modificar
+## Arquitetura da Solução
 
-#### 1. Edge Function `supabase/functions/query-external-db/index.ts`
+Todos os hooks de analytics devem seguir a mesma lógica:
 
-**Adicionar nova action `query_card_history`** (após linha 272):
-
-```typescript
-} else if (action === 'query_card_history') {
-  // Query full history for specific card IDs (used to find first phase entry)
-  const { cardIds } = body;
-  
-  if (!Array.isArray(cardIds) || cardIds.length === 0) {
-    await client.end();
-    return new Response(
-      JSON.stringify({ error: 'cardIds array required' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-  
-  const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
-  if (!validTables.includes(table)) {
-    await client.end();
-    return new Response(
-      JSON.stringify({ error: 'Invalid table name' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-  
-  // Limit to 500 IDs per request for safety
-  const limitedIds = cardIds.slice(0, 500);
-  
-  console.log(`Querying full history for ${limitedIds.length} card IDs in ${table}`);
-  
-  // Build parameterized query with placeholders
-  const placeholders = limitedIds.map((_, i) => `$${i + 1}`).join(', ');
-  const dataQuery = `
-    SELECT * FROM ${table} 
-    WHERE "ID" IN (${placeholders})
-    ORDER BY "Entrada" ASC
-  `;
-  
-  const dataResult = await client.queryObject(dataQuery, limitedIds);
-  
-  result = {
-    action: 'query_card_history',
-    table,
-    cardIds: limitedIds,
-    totalRows: dataResult.rows.length,
-    data: dataResult.rows,
-  };
-  console.log(`Card history query: ${result.totalRows} total movements for ${limitedIds.length} cards`);
-}
-```
-
-**Atualizar mensagem de erro** (linha 276):
-```typescript
-JSON.stringify({ error: 'Invalid action. Use: schema, preview, count, query_period, search, stats, or query_card_history' })
-```
-
-#### 2. Hook `src/hooks/useModeloAtualAnalytics.ts`
-
-**Mudanças principais no `queryFn`** (linhas 111-198):
-
-```text
-Fluxo atualizado:
-
-1. QUERY PRINCIPAL: Buscar movimentos do período selecionado (como hoje)
-   → Identificar todos os card IDs únicos que aparecem no período
-
-2. QUERY SECUNDÁRIA: Para esses cards, buscar TODO o histórico
-   → Chamar action 'query_card_history' com os IDs únicos
-   → Retorna TODOS os movimentos desses cards (inclusive de meses anteriores)
-
-3. RETORNAR AMBOS: 
-   → cards: movimentos do período (como hoje)
-   → fullHistory: todos os movimentos para verificar primeira entrada
-```
-
-**Modificar `queryFn`:**
-```typescript
-queryFn: async () => {
-  // Step 1: Fetch movements in the selected period
-  const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
-    body: { 
-      table: 'pipefy_moviment_cfos', 
-      action: 'query_period',
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-      limit: 10000 
-    }
-  });
-
-  if (fetchError) throw fetchError;
-  if (!responseData?.data) return { cards: [], fullHistory: [] };
-
-  const cards = parseCards(responseData.data); // Extract parsing to helper
-
-  // Step 2: Get unique card IDs from period
-  const uniqueCardIds = [...new Set(cards.map(c => c.id))];
-  
-  // Step 3: Fetch full history for these cards
-  let fullHistory: ModeloAtualCard[] = [];
-  if (uniqueCardIds.length > 0) {
-    const { data: historyData } = await supabase.functions.invoke('query-external-db', {
-      body: { 
-        table: 'pipefy_moviment_cfos', 
-        action: 'query_card_history',
-        cardIds: uniqueCardIds
-      }
-    });
-    
-    if (historyData?.data) {
-      fullHistory = parseCards(historyData.data);
-    }
-  }
-
-  return { cards, fullHistory };
-}
-```
-
-**Criar mapa de PRIMEIRA ENTRADA por INDICADOR** (substituir `firstMqlEntryByCard`):
-
-```typescript
-// Build a map of first entry for EACH indicator per card (using full history)
-const firstEntryByCardAndIndicator = useMemo(() => {
-  const firstEntries = new Map<string, Map<IndicatorType, ModeloAtualCard>>();
-  const history = data?.fullHistory ?? [];
-  
-  for (const card of history) {
-    const indicator = PHASE_TO_INDICATOR[card.fase];
-    if (!indicator) continue;
-    
-    // Special validation for MQL (requires revenue >= 200k)
-    if (indicator === 'mql' && !isMqlQualified(card.faixa)) continue;
-    
-    if (!firstEntries.has(card.id)) {
-      firstEntries.set(card.id, new Map());
-    }
-    
-    const cardMap = firstEntries.get(card.id)!;
-    const existing = cardMap.get(indicator);
-    
-    // Keep the EARLIEST entry for this indicator
-    if (!existing || card.dataEntrada < existing.dataEntrada) {
-      cardMap.set(indicator, card);
-    }
-  }
-  
-  return firstEntries;
-}, [data?.fullHistory]);
-```
-
-**Modificar `getCardsForIndicator`** para usar a nova lógica universal:
-
-```typescript
-const getCardsForIndicator = useMemo(() => {
-  return (indicator: IndicatorType): ModeloAtualCard[] => {
-    const uniqueCards = new Map<string, ModeloAtualCard>();
-    
-    // For LEADS indicator: union of leads + mql phases
-    const indicatorsToCheck = indicator === 'leads' 
-      ? ['leads', 'mql'] as IndicatorType[]
-      : [indicator];
-    
-    for (const ind of indicatorsToCheck) {
-      // Check each card's first entry for this indicator
-      for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
-        const firstEntry = indicatorMap.get(ind);
-        if (!firstEntry) continue;
-        
-        const entryTime = firstEntry.dataEntrada.getTime();
-        
-        // Only include if FIRST entry was in selected period
-        if (entryTime >= startTime && entryTime <= endTime) {
-          // For same card appearing in multiple indicators, keep earliest
-          const existing = uniqueCards.get(cardId);
-          if (!existing || firstEntry.dataEntrada < existing.dataEntrada) {
-            uniqueCards.set(cardId, firstEntry);
-          }
-        }
-      }
-    }
-    
-    return Array.from(uniqueCards.values());
-  };
-}, [firstEntryByCardAndIndicator, startTime, endTime]);
-```
-
-## Fluxo de Dados Corrigido
-
-```text
-Período selecionado: Fevereiro 2026
-Card: A3P Transporte
-
-1. Query período (01/02 - 28/02):
-   → Retorna movimento em "Tentativas de contato" (02/02)
-   → ID do card: 1291436814
-
-2. Query histórico (card 1291436814):
-   → Retorna TODOS os movimentos:
-     - 31/01 "MQLs" (fase MQL)
-     - 02/02 "Tentativas de contato" (fase MQL)
-     - 05/02 "Reunião agendada" (fase RM)
-     - etc.
-
-3. Construção firstEntryByCardAndIndicator:
-   → card[1291436814][mql] = { data: 31/01 }  ← primeira MQL
-   → card[1291436814][rm] = { data: 05/02 }   ← primeira RM
-   → etc.
-
-4. Filtragem para Fevereiro:
-   → MQL: primeira entrada 31/01 → fora do período → NÃO aparece ✓
-   → RM: primeira entrada 05/02 → dentro do período → aparece ✓
-   → etc.
-```
-
-## Impacto
-
-- Card A3P Transporte:
-  - **Janeiro**: Aparece apenas em MQL (primeira qualificação 31/01)
-  - **Fevereiro**: Aparece apenas em RM, RR, Proposta, Venda (se passou por essas fases em Fev)
-  - **NÃO aparece em MQL em Fevereiro** (já contou em Janeiro)
-
-## Considerações de Performance
-
-- Query adicional apenas quando há cards no período
-- Histórico limitado a 500 IDs por request
-- Cache do React Query preserva resultados entre navegações
-- Dados memoizados evitam recálculos desnecessários
+| Etapa | Descrição |
+|-------|-----------|
+| 1. Query período | Buscar movimentos dentro do período selecionado |
+| 2. Query histórico | Buscar TODO o histórico dos cards identificados |
+| 3. Primeira entrada | Identificar a primeira entrada de cada card em cada indicador |
+| 4. Filtrar | Mostrar apenas cards cuja primeira entrada foi no período |
 
 ## Arquivos a Modificar
 
-1. `supabase/functions/query-external-db/index.ts` - Adicionar action `query_card_history`
-2. `src/hooks/useModeloAtualAnalytics.ts` - Busca em duas etapas + lógica universal de primeira entrada
+### 1. `src/hooks/useO2TaxAnalytics.ts`
 
+**Mudanças:**
+
+```text
+1. Modificar queryFn:
+   - Buscar movimentos do período (como hoje)
+   - Extrair IDs únicos dos cards
+   - Buscar histórico completo usando 'query_card_history' na tabela 'pipefy_cards_movements'
+   - Retornar { movements, fullHistory }
+
+2. Criar mapa firstEntryByCardAndIndicator:
+   - Usar fullHistory para encontrar a PRIMEIRA entrada de cada card em cada indicador
+   - Mapeamento: Start form/MQL → leads, MQL → mql, etc.
+
+3. Modificar getDetailItemsForIndicator:
+   - Verificar se a primeira entrada do card naquele indicador está no período
+   - Se primeira entrada foi em período anterior → NÃO incluir
+```
+
+### 2. `src/hooks/useExpansaoAnalytics.ts`
+
+**Mudanças:**
+
+```text
+1. Modificar queryFn:
+   - Buscar movimentos do período (como hoje)
+   - Extrair IDs únicos dos cards
+   - Buscar histórico completo usando 'query_card_history' na tabela 'pipefy_cards_movements_expansao'
+   - Retornar { movements, fullHistory }
+
+2. Criar mapa firstEntryByCardAndIndicator:
+   - Usar fullHistory para encontrar a PRIMEIRA entrada de cada card em cada indicador
+   - Mapeamento: Start form → leads, MQL → mql, etc.
+
+3. Modificar getCardsForIndicator:
+   - Verificar se a primeira entrada do card naquele indicador está no período
+   - Se primeira entrada foi em período anterior → NÃO incluir
+```
+
+### 3. `src/components/planning/IndicatorsTab.tsx`
+
+**Mudanças no `getRealizedForIndicator`:**
+
+```text
+Linha 811-814 (Modelo Atual sem filtros):
+ANTES: total += getModeloAtualQty(indicator.key, startDate, endDate);
+DEPOIS: total += modeloAtualAnalytics.getCardsForIndicator(indicator.key).length;
+
+Linha 839-841 (O2 TAX sem filtros):
+ANTES: total += getO2TaxQty(indicator.key, startDate, endDate);
+DEPOIS: total += o2TaxAnalytics.getDetailItemsForIndicator(indicator.key).length;
+
+Linha 867 (Oxy Hacker sem filtros):
+ANTES: total += getOxyHackerQty(indicator.key, startDate, endDate);
+DEPOIS: total += oxyHackerAnalytics.getDetailItemsForIndicator(indicator.key).length;
+
+Linha 894 (Franquia sem filtros):
+ANTES: total += getExpansaoQty(indicator.key, startDate, endDate);
+DEPOIS: total += franquiaAnalytics.getDetailItemsForIndicator(indicator.key).length;
+```
+
+## Exemplo de Fluxo (O2 TAX)
+
+```text
+Período selecionado: Fevereiro 2026
+Card: Exemplo Corp
+
+1. Query período (01/02 - 28/02):
+   → Retorna movimento em "Reunião agendada" (05/02)
+   → ID do card: 123456
+
+2. Query histórico (card 123456):
+   → Retorna:
+     - 25/01 "MQL" (primeira MQL!)
+     - 05/02 "Reunião agendada" (primeira RM!)
+     - 10/02 "Reunião Realizada" (primeira RR!)
+
+3. Construção firstEntryByCardAndIndicator:
+   → card[123456][mql] = { data: 25/01 }
+   → card[123456][rm] = { data: 05/02 }
+   → card[123456][rr] = { data: 10/02 }
+
+4. Filtragem para Fevereiro:
+   → MQL: primeira entrada 25/01 → NÃO aparece ✓
+   → RM: primeira entrada 05/02 → aparece ✓
+   → RR: primeira entrada 10/02 → aparece ✓
+```
+
+## Resultado Esperado
+
+- Todos os indicadores (MQL, RM, RR, Proposta, Venda) seguem a mesma regra
+- Cards aparecem apenas no período da primeira entrada em cada fase
+- Acelerômetros e drill-downs mostram os mesmos valores
+- Consistência entre todas as BUs (Modelo Atual, O2 TAX, Oxy Hacker, Franquia)
+
+## Ordem de Implementação
+
+1. `useO2TaxAnalytics.ts` - Adicionar busca de histórico e lógica de primeira entrada
+2. `useExpansaoAnalytics.ts` - Adicionar busca de histórico e lógica de primeira entrada
+3. `IndicatorsTab.tsx` - Usar `getCardsForIndicator.length` em vez de `getQty` para todas as BUs
