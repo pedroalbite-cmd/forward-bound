@@ -1,68 +1,113 @@
 
-# Plano: Restaurar Metas Corretas do Modelo Atual
+# Plano: Corrigir Lógica de MQL Baseada em Faturamento
 
-## Resumo do Problema
-Os valores de "Meta" (coluna `faturamento`) para o Modelo Atual foram incorretamente alterados no banco de dados. Alguém inseriu os valores de "A Vender" (receita incremental) em vez da "Meta Total" (MRR Base + A Vender).
+## Problema Identificado
 
-## O Que Está Errado
+A lógica atual conta MQLs apenas verificando se o card entrou na fase "MQLs" no Pipefy. Porém, a regra de negócio correta é:
 
-| Mes | Valor Atual (Errado) | Valor Correto |
-|-----|---------------------|---------------|
-| Jan | R$ 400.000 | R$ 1.125.000 |
-| Fev | R$ 556.000 | R$ 1.237.500 |
-| Mar | R$ 738.890 | R$ 1.387.500 |
-| Abr | R$ 773.614 | R$ 1.350.000 |
-| Mai | R$ 871.337 | R$ 1.485.000 |
-| Jun | R$ 1.011.457 | R$ 1.665.000 |
-| Jul | R$ 1.093.855 | R$ 1.800.000 |
-| Ago | R$ 1.224.579 | R$ 1.980.000 |
-| Set | R$ 1.407.116 | R$ 2.220.000 |
-| Out | R$ 1.523.169 | R$ 2.640.000 |
-| Nov | R$ 1.701.969 | R$ 2.960.000 |
-| Dez | R$ 2.041.593 | R$ 2.400.000 |
+**MQL = Lead com faturamento mensal >= R$ 200 mil**
 
-## Impacto Atual
+Isso significa:
+- Cards com faturamento "Entre R$ 100 mil e R$ 200 mil" **NÃO são MQLs**, mesmo que entrem na fase "MQLs"
+- Cards podem ser MQLs baseado no faturamento mesmo sem passar explicitamente pela fase "MQLs"
 
-Com os valores errados:
-- **MRR Base Janeiro**: Aparece como R$ 0 (deveria ser ~R$ 700k)
-- **Calculo de Vendas**: Numero de vendas necessarias esta subdimensionado
-- **Metas de Funil**: MQLs, RMs, RRs, Propostas estao todos incorretos
-
-## Solucao Proposta
-
-Executar uma migracao SQL para restaurar os valores corretos na tabela `monetary_metas`:
+### Faixas de Faturamento no Banco
 
 ```text
-UPDATE monetary_metas 
-SET faturamento = CASE month
-  WHEN 'Jan' THEN 1125000
-  WHEN 'Fev' THEN 1237500
-  WHEN 'Mar' THEN 1387500
-  WHEN 'Abr' THEN 1350000
-  WHEN 'Mai' THEN 1485000
-  WHEN 'Jun' THEN 1665000
-  WHEN 'Jul' THEN 1800000
-  WHEN 'Ago' THEN 1980000
-  WHEN 'Set' THEN 2220000
-  WHEN 'Out' THEN 2640000
-  WHEN 'Nov' THEN 2960000
-  WHEN 'Dez' THEN 2400000
-END
-WHERE bu = 'modelo_atual' AND year = 2026;
+| Valor no Banco                           | É MQL? |
+|------------------------------------------|--------|
+| "Ainda não faturamos"                    | Não    |
+| "Menos de R$ 100 mil"                    | Não    |
+| "Entre R$ 100 mil e R$ 200 mil"          | Não    |
+| "Entre R$ 200 mil e R$ 350 mil"          | Sim    |
+| "Entre R$ 350 mil e R$ 500 mil"          | Sim    |
+| "Entre R$ 500 mil e R$ 1 milhão"         | Sim    |
+| "Entre R$ 1 milhão e R$ 5 milhões"       | Sim    |
+| "Acima de R$ 5 milhões"                  | Sim    |
 ```
 
-## Resultado Esperado Apos Correcao
+## Arquivos a Modificar
 
-| Mes | Meta | MRR Base | A Vender | Vendas |
-|-----|------|----------|----------|--------|
-| Jan | R$ 1.125.000 | ~R$ 700.000 | ~R$ 425.000 | ~25 |
-| Fev | R$ 1.237.500 | ~R$ 764.000 | ~R$ 473.500 | ~28 |
-| ... | (valores corretos calculados dinamicamente) | ... | ... | ... |
+### 1. `src/hooks/useModeloAtualMetas.ts`
 
-## Notas Tecnicas
+Adicionar lógica de validação de faturamento na contagem de MQLs:
 
-A logica de calculo do MRR Base utiliza a formula:
-- **Janeiro**: `MRR Base = Meta - Valor A Vender Inicial (R$ 400k)`
-- **Demais meses**: `MRR Base = MRR Anterior * (1 - 6% churn) + 25% retencao vendas anteriores`
+```text
+Mudanças:
+- Adicionar campo "faixaFaturamento" no interface ModeloAtualMovement
+- Criar constante MQL_QUALIFYING_TIERS com as faixas >= R$ 200k
+- Criar função isMqlQualified(faixaFaturamento) que valida o tier
+- Modificar lógica de contagem de MQLs para:
+  1. Verificar se card entrou na fase MQLs
+  2. Verificar se a faixa de faturamento é >= R$ 200k
+  3. Só contar como MQL se AMBAS condições forem verdadeiras
+```
 
-Com as metas corrigidas, o sistema recalculara automaticamente todos os indicadores do funil.
+### 2. `src/hooks/useModeloAtualAnalytics.ts`
+
+Adicionar mesma validação para drill-down:
+
+```text
+Mudanças:
+- Importar/criar mesma função isMqlQualified()
+- Modificar getCardsForIndicator para aplicar filtro de faturamento
+- Modificar getDetailItemsWithFullHistory para aplicar mesmo filtro
+```
+
+### 3. `src/components/planning/indicators/FunnelConversionByTierWidget.tsx`
+
+Adicionar faixa faltante no mapeamento de tiers:
+
+```text
+Mudanças no TIER_NORMALIZATION:
++ 'Entre R$ 100 mil e R$ 200 mil': 'R$ 100k - 200k',
+
+Mudanças no TIER_ORDER:
++ 'R$ 100k - 200k', (entre '< R$ 100k' e 'R$ 200k - 350k')
+
+Mudanças no TIER_COLORS:
++ 'R$ 100k - 200k': 'hsl(30, 70%, 50%)', (cor laranja)
+```
+
+## Lógica de Implementação
+
+```text
+// Faixas que qualificam como MQL (faturamento >= R$ 200k)
+const MQL_QUALIFYING_TIERS = [
+  'Entre R$ 200 mil e R$ 350 mil',
+  'Entre R$ 350 mil e R$ 500 mil',
+  'Entre R$ 500 mil e R$ 1 milhão',
+  'Entre R$ 1 milhão e R$ 5 milhões',
+  'Acima de R$ 5 milhões',
+];
+
+// Verifica se o card qualifica como MQL baseado no faturamento
+function isMqlQualified(faixaFaturamento?: string): boolean {
+  if (!faixaFaturamento) return false;
+  return MQL_QUALIFYING_TIERS.includes(faixaFaturamento);
+}
+```
+
+## Impacto nas Contagens
+
+Após a correção:
+- Cards na fase "MQLs" com faturamento < R$ 200k serão EXCLUÍDOS da contagem de MQL
+- A contagem de Leads permanece inalterada (todos os leads independente de faturamento)
+- A conversão Lead → MQL passará a refletir a qualificação real por faturamento
+
+## Resultado Esperado
+
+Antes (com erro):
+- MQL = 26 (contando todos que entraram na fase "MQLs")
+
+Depois (corrigido):
+- MQL = Apenas os que têm faturamento >= R$ 200k
+- Cards como o "😤😤😤😤" com faturamento "Entre R$ 100 mil e R$ 200 mil" serão excluídos
+
+## Notas Técnicas
+
+1. A validação usa o campo `Faixa de faturamento mensal` do banco de dados
+2. Cards sem faixa de faturamento preenchida NÃO serão contados como MQL
+3. A lógica é aplicada em ambos os hooks para garantir paridade entre:
+   - Números nos cards/gráficos (useModeloAtualMetas)
+   - Listas de drill-down (useModeloAtualAnalytics)
