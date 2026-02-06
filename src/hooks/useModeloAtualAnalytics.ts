@@ -201,32 +201,58 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     });
   }, [cards, startTime, endTime]);
 
+  // Build a map of first MQL entry for each card across ALL data (not just period)
+  // This ensures we count MQL only once, in the month of first qualification
+  const firstMqlEntryByCard = useMemo(() => {
+    const firstEntries = new Map<string, ModeloAtualCard>();
+    
+    for (const card of cards) {
+      const cardIndicator = PHASE_TO_INDICATOR[card.faseDestino];
+      // Only consider MQL phases with qualifying revenue
+      if (cardIndicator === 'mql' && isMqlQualified(card.faixa)) {
+        const existing = firstEntries.get(card.id);
+        if (!existing || card.dataEntrada < existing.dataEntrada) {
+          firstEntries.set(card.id, card);
+        }
+      }
+    }
+    
+    return firstEntries;
+  }, [cards]);
+
   // Get cards for a specific indicator
   const getCardsForIndicator = useMemo(() => {
     return (indicator: IndicatorType): ModeloAtualCard[] => {
       const uniqueCards = new Map<string, ModeloAtualCard>();
       
-      for (const card of cardsInPeriod) {
-        const cardIndicator = PHASE_TO_INDICATOR[card.faseDestino];
-        
-        // LEADS = Union of 'Novos Leads' (leads) + 'MQLs' (mql)
-        // This ensures every card entering the funnel is counted as a Lead
-        let matchesIndicator = false;
-        if (indicator === 'leads') {
-          matchesIndicator = cardIndicator === 'leads' || cardIndicator === 'mql';
-        } else if (indicator === 'mql') {
-          // MQL = card entered MQLs phase AND has revenue >= R$ 200k
-          matchesIndicator = cardIndicator === 'mql' && isMqlQualified(card.faixa);
-        } else {
-          matchesIndicator = cardIndicator === indicator;
+      if (indicator === 'mql') {
+        // OPTION C: MQL counts only in the month of FIRST qualification
+        // Check if first MQL entry falls within the selected period
+        for (const [cardId, firstEntry] of firstMqlEntryByCard.entries()) {
+          const entryTime = firstEntry.dataEntrada.getTime();
+          if (entryTime >= startTime && entryTime <= endTime) {
+            uniqueCards.set(cardId, firstEntry);
+          }
         }
-        
-        if (matchesIndicator) {
-          // Keep EARLIEST entry per card (first time entering the phase)
-          // This ensures a sale is counted in the month it was FIRST signed, not re-moved
-          const existing = uniqueCards.get(card.id);
-          if (!existing || card.dataEntrada < existing.dataEntrada) {
-            uniqueCards.set(card.id, card);
+      } else {
+        for (const card of cardsInPeriod) {
+          const cardIndicator = PHASE_TO_INDICATOR[card.faseDestino];
+          
+          // LEADS = Union of 'Novos Leads' (leads) + 'MQLs' (mql)
+          // This ensures every card entering the funnel is counted as a Lead
+          let matchesIndicator = false;
+          if (indicator === 'leads') {
+            matchesIndicator = cardIndicator === 'leads' || cardIndicator === 'mql';
+          } else {
+            matchesIndicator = cardIndicator === indicator;
+          }
+          
+          if (matchesIndicator) {
+            // Keep EARLIEST entry per card (first time entering the phase)
+            const existing = uniqueCards.get(card.id);
+            if (!existing || card.dataEntrada < existing.dataEntrada) {
+              uniqueCards.set(card.id, card);
+            }
           }
         }
       }
@@ -234,7 +260,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       console.log(`[useModeloAtualAnalytics] getCardsForIndicator ${indicator}: ${uniqueCards.size} cards`);
       return Array.from(uniqueCards.values());
     };
-  }, [cardsInPeriod]);
+  }, [cardsInPeriod, firstMqlEntryByCard, startTime, endTime]);
 
   // Get cards for leads - now uses actual data from database
   const getLeadsCards = useMemo(() => {
