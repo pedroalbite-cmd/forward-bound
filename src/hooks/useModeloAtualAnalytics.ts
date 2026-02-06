@@ -178,13 +178,20 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     queryFn: async () => {
       console.log(`[useModeloAtualAnalytics] Fetching data from pipefy_moviment_cfos with server-side date filter`);
       
+      // CRITICAL: Build UTC date strings at midnight to ensure we don't miss records
+      // due to timezone offsets (e.g., Brazil is UTC-3, so local midnight = 03:00 UTC)
+      const startDateUtc = `${startDateStr}T00:00:00.000Z`;
+      const endDateUtc = `${endDateStr}T23:59:59.999Z`;
+      
+      console.log(`[useModeloAtualAnalytics] Query period: ${startDateUtc} to ${endDateUtc}`);
+      
       // Step 1: Fetch movements in the selected period
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
         body: { 
           table: 'pipefy_moviment_cfos', 
           action: 'query_period',
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
+          startDate: startDateUtc,
+          endDate: endDateUtc,
           limit: 50000 
         }
       });
