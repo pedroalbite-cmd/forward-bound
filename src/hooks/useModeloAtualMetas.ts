@@ -43,8 +43,9 @@ const PHASE_TO_INDICATOR: Record<string, ModeloAtualIndicator> = {
   // Leads - Total de leads (primeira etapa)
   'Novos Leads': 'leads',
   
-  // MQL - Leads qualificados
+  // MQL - Leads qualificados (inclui fase de tentativa de contato)
   'MQLs': 'mql',
+  'Tentativas de contato': 'mql',
   
   // RM - Reunião Marcada
   'Reunião agendada / Qualificado': 'rm',
