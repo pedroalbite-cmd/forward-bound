@@ -269,10 +269,54 @@ Deno.serve(async (req) => {
         stats: statsResult.rows[0],
       };
       console.log(`Stats for ${table}:`, result.stats);
+    } else if (action === 'query_card_history') {
+      // Query full history for specific card IDs (used to find first phase entry)
+      const { cardIds } = body;
+      
+      if (!Array.isArray(cardIds) || cardIds.length === 0) {
+        await client.end();
+        return new Response(
+          JSON.stringify({ error: 'cardIds array required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
+      if (!validTables.includes(table)) {
+        await client.end();
+        return new Response(
+          JSON.stringify({ error: 'Invalid table name' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      // Limit to 500 IDs per request for safety
+      const limitedIds = cardIds.slice(0, 500);
+      
+      console.log(`Querying full history for ${limitedIds.length} card IDs in ${table}`);
+      
+      // Build parameterized query with placeholders
+      const placeholders = limitedIds.map((_: string, i: number) => `$${i + 1}`).join(', ');
+      const dataQuery = `
+        SELECT * FROM ${table} 
+        WHERE "ID" IN (${placeholders})
+        ORDER BY "Entrada" ASC
+      `;
+      
+      const dataResult = await client.queryObject(dataQuery, limitedIds);
+      
+      result = {
+        action: 'query_card_history',
+        table,
+        cardIds: limitedIds,
+        totalRows: dataResult.rows.length,
+        data: dataResult.rows,
+      };
+      console.log(`Card history query: ${result.totalRows} total movements for ${limitedIds.length} cards`);
     } else {
       await client.end();
       return new Response(
-        JSON.stringify({ error: 'Invalid action. Use: schema, preview, count, query_period, or stats' }),
+        JSON.stringify({ error: 'Invalid action. Use: schema, preview, count, query_period, search, stats, or query_card_history' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
