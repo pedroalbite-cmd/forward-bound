@@ -90,7 +90,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
   // Use DIFFERENT query key to avoid cache collision with useO2TaxMetas
   // This ensures closer/sdr fields are preserved in the data
   const { data, isLoading, error } = useQuery({
-    queryKey: ['o2tax-movements-analytics'],
+    queryKey: ['o2tax-movements-analytics', startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
         body: { 
@@ -134,6 +134,8 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
+    refetchOnWindowFocus: false,
+    gcTime: 10 * 60 * 1000,
   });
 
   // Transform movements into O2TaxCards for drill-down (processed via useMemo)
