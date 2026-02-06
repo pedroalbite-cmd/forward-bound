@@ -82,15 +82,23 @@ function parseDate(dateValue: string | null): Date | null {
 }
 
 export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
-  const startTime = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
-  const endTime = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).getTime();
+  // Memoize date strings to prevent queryKey instability (fixes "Should have a queue" error)
+  const startDateStr = useMemo(() => startDate.toISOString().split('T')[0], [startDate.getTime()]);
+  const endDateStr = useMemo(() => endDate.toISOString().split('T')[0], [endDate.getTime()]);
+  
+  const startTime = useMemo(() => 
+    new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime(), 
+    [startDate.getTime()]
+  );
+  const endTime = useMemo(() => 
+    new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).getTime(), 
+    [endDate.getTime()]
+  );
 
-  // Use the SAME data source and cache as useO2TaxMetas for consistency
-  // Both hooks share queryKey ['o2tax-movements-all'] and return { movements: [] }
   // Use DIFFERENT query key to avoid cache collision with useO2TaxMetas
   // This ensures closer/sdr fields are preserved in the data
   const { data, isLoading, error } = useQuery({
-    queryKey: ['o2tax-movements-analytics', startDate.toISOString(), endDate.toISOString()],
+    queryKey: ['o2tax-movements-analytics', startDateStr, endDateStr],
     queryFn: async () => {
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
         body: { 
