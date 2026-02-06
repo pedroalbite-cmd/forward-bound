@@ -119,27 +119,27 @@ export function LeadsMqlsStackedChart({ startDate, endDate, selectedBU, selected
     (includesOxyHacker ? calcularMetaDoPeriodo(funnelData?.oxyHacker) : 0) +
     (includesFranquia ? calcularMetaDoPeriodo(funnelData?.franquia) : 0);
     
-  // Calculate total realized based on selected BUs
+  // Calculate total realized based on selected BUs using first-entry logic
   const getTotalRealized = (): number => {
     let total = 0;
     
     // For Modelo Atual, apply closer filter if active
     if (includesModeloAtual) {
+      const cards = modeloAtualAnalytics.getCardsForIndicator('mql');
       if (selectedClosers?.length && selectedClosers.length > 0) {
-        const cards = modeloAtualAnalytics.getCardsForIndicator('mql');
         const filteredCards = cards.filter(c => {
           const closerValue = (c.closer || '').trim();
           return closerValue && selectedClosers.includes(closerValue);
         });
         total += filteredCards.length;
       } else {
-        total += getModeloAtualQty('mql', startDate, endDate);
+        total += cards.length;
       }
     }
     
-    if (includesO2Tax) total += getO2TaxQty('mql', startDate, endDate);
-    if (includesOxyHacker) total += getOxyHackerQty('mql', startDate, endDate);
-    if (includesFranquia) total += getExpansaoQty('mql', startDate, endDate);
+    if (includesO2Tax) total += o2TaxAnalytics.getMqlsByRevenue.flatMap(r => r.cards).length;
+    if (includesOxyHacker) total += oxyHackerAnalytics.getDetailItemsForIndicator('mql').length;
+    if (includesFranquia) total += franquiaAnalytics.getDetailItemsForIndicator('mql').length;
     
     return total;
   };
