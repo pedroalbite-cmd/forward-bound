@@ -185,7 +185,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
           action: 'query_period',
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString(),
-          limit: 10000 
+          limit: 50000 
         }
       });
 
