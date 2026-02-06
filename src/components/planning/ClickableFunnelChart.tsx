@@ -84,18 +84,20 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
   const oxyHackerLeadsQty = getOxyHackerQty('leads', startDate, endDate);
   const franquiaLeadsQty = getExpansaoQty('leads', startDate, endDate);
   
-  // Helper to get filtered qty for Modelo Atual when closers filter is active
+  // Helper to get qty for Modelo Atual - ALWAYS uses analytics for "first entry" logic
   const getFilteredModeloAtualQty = (indicator: IndicatorType): number => {
+    const cards = modeloAtualAnalytics.getCardsForIndicator(indicator);
+    
+    // Apply closer filter if active
     if (selectedClosers?.length && selectedClosers.length > 0) {
-      const cards = modeloAtualAnalytics.getCardsForIndicator(indicator);
       const filteredCards = cards.filter(c => {
         const closerValue = (c.closer || '').trim();
         return closerValue && selectedClosers.includes(closerValue);
       });
       return filteredCards.length;
     }
-    if (indicator === 'leads') return leadsQty;
-    return getModeloAtualQty(indicator, startDate, endDate);
+    
+    return cards.length;
   };
 
   // Helper to get filtered value for Modelo Atual when closers filter is active
@@ -111,32 +113,50 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
     return getModeloAtualValue(indicator, startDate, endDate);
   };
 
-  // Get totals based on selected BUs array - sum only included BUs
+  // Get totals based on selected BUs array - using analytics hooks for "first entry" consistency
+  const getO2TaxAnalyticsQty = (indicator: IndicatorType): number => {
+    if (indicator === 'leads') {
+      return o2TaxAnalytics.getDetailItemsForIndicator('leads').length;
+    }
+    if (indicator === 'mql') {
+      return o2TaxAnalytics.getMqlsByRevenue.flatMap(r => r.cards).length;
+    }
+    return o2TaxAnalytics.getDetailItemsForIndicator(indicator).length;
+  };
+  
+  const getOxyHackerAnalyticsQty = (indicator: IndicatorType): number => {
+    return oxyHackerAnalytics.getDetailItemsForIndicator(indicator).length;
+  };
+  
+  const getFranquiaAnalyticsQty = (indicator: IndicatorType): number => {
+    return franquiaAnalytics.getDetailItemsForIndicator(indicator).length;
+  };
+  
   const totals = {
     leads: (includesModeloAtual ? getFilteredModeloAtualQty('leads') : 0) + 
-           (includesO2Tax ? o2TaxLeadsQty : 0) + 
-           (includesOxyHacker ? oxyHackerLeadsQty : 0) + 
-           (includesFranquia ? franquiaLeadsQty : 0),
+           (includesO2Tax ? getO2TaxAnalyticsQty('leads') : 0) + 
+           (includesOxyHacker ? getOxyHackerAnalyticsQty('leads') : 0) + 
+           (includesFranquia ? getFranquiaAnalyticsQty('leads') : 0),
     mql: (includesModeloAtual ? getFilteredModeloAtualQty('mql') : 0) + 
-         (includesO2Tax ? getO2TaxQty('mql', startDate, endDate) : 0) + 
-         (includesOxyHacker ? getOxyHackerQty('mql', startDate, endDate) : 0) + 
-         (includesFranquia ? getExpansaoQty('mql', startDate, endDate) : 0),
+         (includesO2Tax ? getO2TaxAnalyticsQty('mql') : 0) + 
+         (includesOxyHacker ? getOxyHackerAnalyticsQty('mql') : 0) + 
+         (includesFranquia ? getFranquiaAnalyticsQty('mql') : 0),
     rm: (includesModeloAtual ? getFilteredModeloAtualQty('rm') : 0) + 
-        (includesO2Tax ? getO2TaxQty('rm', startDate, endDate) : 0) + 
-        (includesOxyHacker ? getOxyHackerQty('rm', startDate, endDate) : 0) + 
-        (includesFranquia ? getExpansaoQty('rm', startDate, endDate) : 0),
+        (includesO2Tax ? getO2TaxAnalyticsQty('rm') : 0) + 
+        (includesOxyHacker ? getOxyHackerAnalyticsQty('rm') : 0) + 
+        (includesFranquia ? getFranquiaAnalyticsQty('rm') : 0),
     rr: (includesModeloAtual ? getFilteredModeloAtualQty('rr') : 0) + 
-        (includesO2Tax ? getO2TaxQty('rr', startDate, endDate) : 0) + 
-        (includesOxyHacker ? getOxyHackerQty('rr', startDate, endDate) : 0) + 
-        (includesFranquia ? getExpansaoQty('rr', startDate, endDate) : 0),
+        (includesO2Tax ? getO2TaxAnalyticsQty('rr') : 0) + 
+        (includesOxyHacker ? getOxyHackerAnalyticsQty('rr') : 0) + 
+        (includesFranquia ? getFranquiaAnalyticsQty('rr') : 0),
     proposta: (includesModeloAtual ? getFilteredModeloAtualQty('proposta') : 0) + 
-              (includesO2Tax ? getO2TaxQty('proposta', startDate, endDate) : 0) + 
-              (includesOxyHacker ? getOxyHackerQty('proposta', startDate, endDate) : 0) + 
-              (includesFranquia ? getExpansaoQty('proposta', startDate, endDate) : 0),
+              (includesO2Tax ? getO2TaxAnalyticsQty('proposta') : 0) + 
+              (includesOxyHacker ? getOxyHackerAnalyticsQty('proposta') : 0) + 
+              (includesFranquia ? getFranquiaAnalyticsQty('proposta') : 0),
     venda: (includesModeloAtual ? getFilteredModeloAtualQty('venda') : 0) + 
-           (includesO2Tax ? getO2TaxQty('venda', startDate, endDate) : 0) + 
-           (includesOxyHacker ? getOxyHackerQty('venda', startDate, endDate) : 0) + 
-           (includesFranquia ? getExpansaoQty('venda', startDate, endDate) : 0),
+           (includesO2Tax ? getO2TaxAnalyticsQty('venda') : 0) + 
+           (includesOxyHacker ? getOxyHackerAnalyticsQty('venda') : 0) + 
+           (includesFranquia ? getFranquiaAnalyticsQty('venda') : 0),
   };
 
   // Calculate conversions
