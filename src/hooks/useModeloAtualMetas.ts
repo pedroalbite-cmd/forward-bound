@@ -16,6 +16,22 @@ interface ModeloAtualMovement {
   valorEducacao: number;
   valorSetup: number;
   valor: number;
+  faixaFaturamento?: string;
+}
+
+// Faixas de faturamento que qualificam como MQL (>= R$ 200k)
+export const MQL_QUALIFYING_TIERS = [
+  'Entre R$ 200 mil e R$ 350 mil',
+  'Entre R$ 350 mil e R$ 500 mil',
+  'Entre R$ 500 mil e R$ 1 milhão',
+  'Entre R$ 1 milhão e R$ 5 milhões',
+  'Acima de R$ 5 milhões',
+];
+
+// Verifica se o card qualifica como MQL baseado no faturamento
+export function isMqlQualified(faixaFaturamento?: string): boolean {
+  if (!faixaFaturamento) return false;
+  return MQL_QUALIFYING_TIERS.includes(faixaFaturamento);
 }
 
 interface ModeloAtualMetasResult {
@@ -126,8 +142,8 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
         // Skip if no valid phase mapping
         if (!fase || !PHASE_TO_INDICATOR[fase]) continue;
 
-        // Note: Logic for "Data de assinatura do contrato" removed since
-        // we now use "Ganho" phase for sales instead of "Contrato assinado"
+        // Parse faixa de faturamento for MQL validation
+        const faixaFaturamento = row['Faixa de faturamento mensal'] || row['Faixa'] || row['faixa'] || '';
 
         // Log raw values for debugging
         const rawMRR = row['Valor MRR'] || row['valor_mrr'] || 0;
@@ -153,6 +169,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
           valorEducacao,
           valorSetup,
           valor: valorMRR + valorPontual + valorEducacao + valorSetup,
+          faixaFaturamento: faixaFaturamento || undefined,
         });
       }
 
@@ -186,6 +203,11 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
         // This ensures every card entering the funnel is counted as a Lead
         if (indicator === 'leads') {
           if ((moveIndicator === 'leads' || moveIndicator === 'mql') && !seenIds.has(movement.id)) {
+            seenIds.add(movement.id);
+          }
+        } else if (indicator === 'mql') {
+          // MQL = card entered MQLs phase AND has revenue >= R$ 200k
+          if (moveIndicator === 'mql' && isMqlQualified(movement.faixaFaturamento) && !seenIds.has(movement.id)) {
             seenIds.add(movement.id);
           }
         } else if (moveIndicator === indicator && !seenIds.has(movement.id)) {
@@ -268,6 +290,11 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
               if ((moveIndicator === 'leads' || moveIndicator === 'mql') && !seenIds.has(movement.id)) {
                 seenIds.add(movement.id);
               }
+            } else if (indicator === 'mql') {
+              // MQL = card entered MQLs phase AND has revenue >= R$ 200k
+              if (moveIndicator === 'mql' && isMqlQualified(movement.faixaFaturamento) && !seenIds.has(movement.id)) {
+                seenIds.add(movement.id);
+              }
             } else if (moveIndicator === indicator && !seenIds.has(movement.id)) {
               seenIds.add(movement.id);
             }
@@ -297,6 +324,11 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
               if ((moveIndicator === 'leads' || moveIndicator === 'mql') && !seenIds.has(movement.id)) {
                 seenIds.add(movement.id);
               }
+            } else if (indicator === 'mql') {
+              // MQL = card entered MQLs phase AND has revenue >= R$ 200k
+              if (moveIndicator === 'mql' && isMqlQualified(movement.faixaFaturamento) && !seenIds.has(movement.id)) {
+                seenIds.add(movement.id);
+              }
             } else if (moveIndicator === indicator && !seenIds.has(movement.id)) {
               seenIds.add(movement.id);
             }
@@ -321,6 +353,11 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
             // LEADS = Union of 'Novos Leads' + 'MQLs'
             if (indicator === 'leads') {
               if ((moveIndicator === 'leads' || moveIndicator === 'mql') && !seenIds.has(movement.id)) {
+                seenIds.add(movement.id);
+              }
+            } else if (indicator === 'mql') {
+              // MQL = card entered MQLs phase AND has revenue >= R$ 200k
+              if (moveIndicator === 'mql' && isMqlQualified(movement.faixaFaturamento) && !seenIds.has(movement.id)) {
                 seenIds.add(movement.id);
               }
             } else if (moveIndicator === indicator && !seenIds.has(movement.id)) {
