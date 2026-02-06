@@ -1,113 +1,70 @@
 
-# Plano: Corrigir Lógica de MQL Baseada em Faturamento
+# Plano: Corrigir Inconsistência de MQL entre Card Radial e Drill-Down
 
 ## Problema Identificado
 
-A lógica atual conta MQLs apenas verificando se o card entrou na fase "MQLs" no Pipefy. Porém, a regra de negócio correta é:
+O número de MQLs está diferente em dois lugares:
+- **Card Radial (acelerômetro)**: 50 MQLs
+- **Drill-Down (ao clicar)**: 72 MQLs (correto)
 
-**MQL = Lead com faturamento mensal >= R$ 200 mil**
+### Causa Raiz
 
-Isso significa:
-- Cards com faturamento "Entre R$ 100 mil e R$ 200 mil" **NÃO são MQLs**, mesmo que entrem na fase "MQLs"
-- Cards podem ser MQLs baseado no faturamento mesmo sem passar explicitamente pela fase "MQLs"
+Os dois hooks usam mapeamentos diferentes de fases para MQL:
 
-### Faixas de Faturamento no Banco
+| Hook | Fases mapeadas para 'mql' | Resultado |
+|------|---------------------------|-----------|
+| `useModeloAtualMetas.ts` | Apenas "MQLs" | 50 MQLs |
+| `useModeloAtualAnalytics.ts` | "MQLs" + "Tentativas de contato" | 72 MQLs |
 
-```text
-| Valor no Banco                           | É MQL? |
-|------------------------------------------|--------|
-| "Ainda não faturamos"                    | Não    |
-| "Menos de R$ 100 mil"                    | Não    |
-| "Entre R$ 100 mil e R$ 200 mil"          | Não    |
-| "Entre R$ 200 mil e R$ 350 mil"          | Sim    |
-| "Entre R$ 350 mil e R$ 500 mil"          | Sim    |
-| "Entre R$ 500 mil e R$ 1 milhão"         | Sim    |
-| "Entre R$ 1 milhão e R$ 5 milhões"       | Sim    |
-| "Acima de R$ 5 milhões"                  | Sim    |
-```
+A fase "Tentativas de contato" representa leads qualificados que estão em processo de contato inicial. Pela regra de negócio, se um lead tem faturamento >= R$ 200k, ele é MQL independente de estar na fase "MQLs" ou "Tentativas de contato".
 
-## Arquivos a Modificar
+## Solução Proposta
 
-### 1. `src/hooks/useModeloAtualMetas.ts`
+Adicionar a fase "Tentativas de contato" ao mapeamento de MQL no hook `useModeloAtualMetas.ts` para garantir consistência com o drill-down.
 
-Adicionar lógica de validação de faturamento na contagem de MQLs:
+### Arquivo a Modificar
+
+**`src/hooks/useModeloAtualMetas.ts`**
 
 ```text
-Mudanças:
-- Adicionar campo "faixaFaturamento" no interface ModeloAtualMovement
-- Criar constante MQL_QUALIFYING_TIERS com as faixas >= R$ 200k
-- Criar função isMqlQualified(faixaFaturamento) que valida o tier
-- Modificar lógica de contagem de MQLs para:
-  1. Verificar se card entrou na fase MQLs
-  2. Verificar se a faixa de faturamento é >= R$ 200k
-  3. Só contar como MQL se AMBAS condições forem verdadeiras
+Antes (linhas 42-48):
+const PHASE_TO_INDICATOR: Record<string, ModeloAtualIndicator> = {
+  // Leads
+  'Novos Leads': 'leads',
+  
+  // MQL - Leads qualificados
+  'MQLs': 'mql',
+  
+  // RM...
 ```
-
-### 2. `src/hooks/useModeloAtualAnalytics.ts`
-
-Adicionar mesma validação para drill-down:
 
 ```text
-Mudanças:
-- Importar/criar mesma função isMqlQualified()
-- Modificar getCardsForIndicator para aplicar filtro de faturamento
-- Modificar getDetailItemsWithFullHistory para aplicar mesmo filtro
+Depois (adicionar "Tentativas de contato"):
+const PHASE_TO_INDICATOR: Record<string, ModeloAtualIndicator> = {
+  // Leads
+  'Novos Leads': 'leads',
+  
+  // MQL - Leads qualificados (inclui fase de tentativa de contato)
+  'MQLs': 'mql',
+  'Tentativas de contato': 'mql',
+  
+  // RM...
 ```
 
-### 3. `src/components/planning/indicators/FunnelConversionByTierWidget.tsx`
+## Por Que Esta É a Solução Correta
 
-Adicionar faixa faltante no mapeamento de tiers:
-
-```text
-Mudanças no TIER_NORMALIZATION:
-+ 'Entre R$ 100 mil e R$ 200 mil': 'R$ 100k - 200k',
-
-Mudanças no TIER_ORDER:
-+ 'R$ 100k - 200k', (entre '< R$ 100k' e 'R$ 200k - 350k')
-
-Mudanças no TIER_COLORS:
-+ 'R$ 100k - 200k': 'hsl(30, 70%, 50%)', (cor laranja)
-```
-
-## Lógica de Implementação
-
-```text
-// Faixas que qualificam como MQL (faturamento >= R$ 200k)
-const MQL_QUALIFYING_TIERS = [
-  'Entre R$ 200 mil e R$ 350 mil',
-  'Entre R$ 350 mil e R$ 500 mil',
-  'Entre R$ 500 mil e R$ 1 milhão',
-  'Entre R$ 1 milhão e R$ 5 milhões',
-  'Acima de R$ 5 milhões',
-];
-
-// Verifica se o card qualifica como MQL baseado no faturamento
-function isMqlQualified(faixaFaturamento?: string): boolean {
-  if (!faixaFaturamento) return false;
-  return MQL_QUALIFYING_TIERS.includes(faixaFaturamento);
-}
-```
-
-## Impacto nas Contagens
-
-Após a correção:
-- Cards na fase "MQLs" com faturamento < R$ 200k serão EXCLUÍDOS da contagem de MQL
-- A contagem de Leads permanece inalterada (todos os leads independente de faturamento)
-- A conversão Lead → MQL passará a refletir a qualificação real por faturamento
+1. **Consistência**: O mapeamento ficará idêntico nos dois hooks
+2. **Regra de Negócio**: A fase "Tentativas de contato" é uma etapa intermediária onde SDRs tentam contato com leads qualificados. Se o lead tem faturamento >= R$ 200k, ele é MQL
+3. **Drill-Down Já Funciona**: O `useModeloAtualAnalytics` já usa este mapeamento e mostra 72 MQLs (número correto)
 
 ## Resultado Esperado
 
-Antes (com erro):
-- MQL = 26 (contando todos que entraram na fase "MQLs")
-
-Depois (corrigido):
-- MQL = Apenas os que têm faturamento >= R$ 200k
-- Cards como o "😤😤😤😤" com faturamento "Entre R$ 100 mil e R$ 200 mil" serão excluídos
+- Card radial de MQL: **72** (antes: 50)
+- Drill-down de MQL: **72** (sem mudança)
+- Ambos usando a mesma lógica: fase "MQLs" ou "Tentativas de contato" + faturamento >= R$ 200k
 
 ## Notas Técnicas
 
-1. A validação usa o campo `Faixa de faturamento mensal` do banco de dados
-2. Cards sem faixa de faturamento preenchida NÃO serão contados como MQL
-3. A lógica é aplicada em ambos os hooks para garantir paridade entre:
-   - Números nos cards/gráficos (useModeloAtualMetas)
-   - Listas de drill-down (useModeloAtualAnalytics)
+- A lógica de filtro por faturamento (`isMqlQualified`) permanece inalterada
+- Apenas cards com faturamento >= R$ 200k serão contados como MQL
+- A fase "Tentativas de contato" é contada apenas para MQL, não afeta o indicador de Leads
