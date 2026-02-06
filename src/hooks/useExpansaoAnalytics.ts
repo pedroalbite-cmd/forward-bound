@@ -63,22 +63,70 @@ function parseDate(dateValue: string | null): Date | null {
   return isNaN(date.getTime()) ? null : date;
 }
 
+function parseRawCard(row: any, defaultTicket: number): ExpansaoCard {
+  const id = String(row.ID);
+  const dataEntrada = parseDate(row['Entrada']) || new Date();
+  const dataSaida = parseDate(row['Saída']);
+  
+  // Calculate duration dynamically
+  let duracao = 0;
+  if (dataSaida) {
+    duracao = Math.floor((dataSaida.getTime() - dataEntrada.getTime()) / 1000);
+  } else {
+    duracao = Math.floor((Date.now() - dataEntrada.getTime()) / 1000);
+  }
+  
+  const taxaFranquia = row['Taxa de franquia'] ? parseFloat(row['Taxa de franquia']) : 0;
+  const valorMRR = row['Valor MRR'] ? parseFloat(row['Valor MRR']) : 0;
+  const valorPontual = row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : 0;
+  const valorSetup = row['Valor Setup'] ? parseFloat(row['Valor Setup']) : 0;
+  
+  // Calculate value: prioritize taxaFranquia, then sum of values, then default
+  let valor = taxaFranquia;
+  if (valor <= 0) {
+    const sumValues = valorPontual + valorSetup + valorMRR;
+    valor = sumValues > 0 ? sumValues : defaultTicket;
+  }
+  
+  return {
+    id,
+    titulo: row['Título'] || '',
+    fase: row['Fase'] || '',
+    faseAtual: row['Fase Atual'] || '',
+    dataEntrada,
+    dataSaida,
+    valor,
+    taxaFranquia,
+    valorMRR,
+    valorPontual,
+    valorSetup,
+    produto: row['Produtos'] || '',
+    responsavel: row['Closer responsável'] || row['SDR responsável'] || null,
+    motivoPerda: row['Motivo da perda'] || null,
+    duracao,
+  };
+}
+
 export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'Franquia' | 'Oxy Hacker' = 'Franquia') {
+  const startDateStr = useMemo(() => startDate.toISOString().split('T')[0], [startDate.getTime()]);
+  const endDateStr = useMemo(() => endDate.toISOString().split('T')[0], [endDate.getTime()]);
+  
   const startTime = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
   const endTime = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).getTime();
 
   const defaultTicket = produto === 'Franquia' ? 140000 : 54000;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['expansao-movements-all', produto],
+    queryKey: ['expansao-movements-analytics', produto, startDateStr, endDateStr],
     queryFn: async () => {
-      // Use 'preview' action (same as useExpansaoMetas/useOxyHackerMetas) for consistency
-      // This ensures the same data source and filtering logic between indicators and drill-down
+      // Step 1: Fetch movements in the selected period
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
         body: { 
           table: 'pipefy_cards_movements_expansao', 
-          action: 'preview', 
-          limit: 5000 
+          action: 'query_period',
+          startDate: `${startDateStr}T00:00:00`,
+          endDate: `${endDateStr}T23:59:59`,
+          limit: 10000 
         }
       });
 
@@ -88,123 +136,112 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
       }
 
       if (!responseData?.data) {
-        return { movements: [] };
+        return { cards: [], fullHistory: [] };
       }
 
-      // Keep ALL movements (not just latest per card) to match useExpansaoMetas logic
-      const allMovements: ExpansaoCard[] = [];
-      
+      // Filter by product and parse cards
+      const cards: ExpansaoCard[] = [];
       for (const row of responseData.data) {
         const rowProduto = row['Produtos'] || '';
-        
-        // Filter by product type
         if (rowProduto !== produto) continue;
-        
-        const id = String(row.ID);
-        // Use fallback date like useExpansaoMetas to avoid skipping records
-        const dataEntrada = parseDate(row['Entrada']) || new Date();
-        
-        // Parse exit date and calculate duration dynamically
-        const dataSaida = parseDate(row['Saída']);
-        let duracao = 0;
-        if (dataSaida) {
-          // Card already left the phase: difference between Exit and Entry
-          duracao = Math.floor((dataSaida.getTime() - dataEntrada.getTime()) / 1000);
-        } else {
-          // Card still in phase: time since entry until now
-          duracao = Math.floor((Date.now() - dataEntrada.getTime()) / 1000);
-        }
-        
-        const taxaFranquia = row['Taxa de franquia'] ? parseFloat(row['Taxa de franquia']) : 0;
-        const valorMRR = row['Valor MRR'] ? parseFloat(row['Valor MRR']) : 0;
-        const valorPontual = row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : 0;
-        const valorSetup = row['Valor Setup'] ? parseFloat(row['Valor Setup']) : 0;
-        
-        // Calculate value: prioritize taxaFranquia, then sum of values, then default
-        let valor = taxaFranquia;
-        if (valor <= 0) {
-          const sumValues = valorPontual + valorSetup + valorMRR;
-          valor = sumValues > 0 ? sumValues : defaultTicket;
-        }
-        
-        const movement: ExpansaoCard = {
-          id,
-          titulo: row['Título'] || '',
-          fase: row['Fase'] || '',
-          faseAtual: row['Fase Atual'] || '',
-          dataEntrada,
-          dataSaida,
-          valor,
-          taxaFranquia,
-          valorMRR,
-          valorPontual,
-          valorSetup,
-          produto: rowProduto,
-          responsavel: row['Closer responsável'] || row['SDR responsável'] || null,
-          motivoPerda: row['Motivo da perda'] || null,
-          duracao,
-        };
-        
-        allMovements.push(movement);
+        cards.push(parseRawCard(row, defaultTicket));
       }
 
-      const uniquePhases = [...new Set(allMovements.map(m => m.fase))];
-      console.log(`[useExpansaoAnalytics] Raw rows: ${responseData.data.length}, Filtered ${produto}: ${allMovements.length}`);
-      console.log(`[useExpansaoAnalytics] Unique phases:`, uniquePhases);
-      return { movements: allMovements };
+      console.log(`[${produto} Analytics] Period query returned ${cards.length} movements`);
+
+      // Step 2: Get unique card IDs from period
+      const uniqueCardIds = [...new Set(cards.map(c => c.id))];
+      
+      // Step 3: Fetch full history for these cards
+      let fullHistory: ExpansaoCard[] = [];
+      if (uniqueCardIds.length > 0) {
+        const { data: historyData, error: historyError } = await supabase.functions.invoke('query-external-db', {
+          body: { 
+            table: 'pipefy_cards_movements_expansao', 
+            action: 'query_card_history',
+            cardIds: uniqueCardIds
+          }
+        });
+        
+        if (!historyError && historyData?.data) {
+          // Filter history by product too
+          for (const row of historyData.data) {
+            const rowProduto = row['Produtos'] || '';
+            if (rowProduto !== produto) continue;
+            fullHistory.push(parseRawCard(row, defaultTicket));
+          }
+          console.log(`[${produto} Analytics] Full history: ${fullHistory.length} movements for ${uniqueCardIds.length} cards`);
+        }
+      }
+
+      return { cards, fullHistory };
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
 
-  const movements = data?.movements ?? [];
+  const cards = data?.cards ?? [];
+  const fullHistory = data?.fullHistory ?? [];
 
-  // Get unique cards that entered a specific indicator phase during the period
-  // ALIGNED with useExpansaoMetas.getQtyForPeriod logic for consistency
+  // Build a map of FIRST entry for EACH indicator per card (using full history)
+  const firstEntryByCardAndIndicator = useMemo(() => {
+    const firstEntries = new Map<string, Map<IndicatorType, ExpansaoCard>>();
+    const historyToUse = fullHistory.length > 0 ? fullHistory : cards;
+    
+    for (const card of historyToUse) {
+      const indicator = PHASE_TO_INDICATOR[card.fase];
+      if (!indicator) continue;
+      
+      if (!firstEntries.has(card.id)) {
+        firstEntries.set(card.id, new Map());
+      }
+      
+      const cardMap = firstEntries.get(card.id)!;
+      const existing = cardMap.get(indicator);
+      
+      // Keep the EARLIEST entry for this indicator
+      if (!existing || card.dataEntrada < existing.dataEntrada) {
+        cardMap.set(indicator, card);
+      }
+    }
+    
+    console.log(`[${produto} Analytics] Built first entry map for ${firstEntries.size} cards`);
+    return firstEntries;
+  }, [cards, fullHistory, produto]);
+
+  // Get cards for a specific indicator (using FIRST ENTRY logic)
   const getCardsForIndicator = useMemo(() => {
     return (indicator: IndicatorType): ExpansaoCard[] => {
-      console.log(`[useExpansaoAnalytics] getCardsForIndicator(${indicator}): checking ${movements.length} movements, period ${new Date(startTime).toLocaleDateString()} - ${new Date(endTime).toLocaleDateString()}`);
+      console.log(`[${produto} Analytics] getCardsForIndicator(${indicator}): checking ${firstEntryByCardAndIndicator.size} cards`);
       
-      const seenIds = new Set<string>();
-      const result: ExpansaoCard[] = [];
+      const uniqueCards = new Map<string, ExpansaoCard>();
       
-      for (const movement of movements) {
-        const entryTime = movement.dataEntrada.getTime();
-        if (entryTime < startTime || entryTime > endTime) continue;
-        if (seenIds.has(movement.id)) continue;
-        
-        const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
-        
-        // Check if movement matches the indicator (SAME logic as useExpansaoMetas)
-        let matches = false;
-        
-        if (indicator === 'venda') {
-          // For "venda", count unique cards that ENTERED "Contrato assinado" phase during the period
-          if (movement.fase === 'Contrato assinado') {
-            matches = true;
+      // For LEADS indicator: union of leads + mql phases
+      const indicatorsToCheck = indicator === 'leads' 
+        ? ['leads', 'mql'] as IndicatorType[]
+        : [indicator];
+      
+      for (const ind of indicatorsToCheck) {
+        for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
+          const firstEntry = indicatorMap.get(ind);
+          if (!firstEntry) continue;
+          
+          const entryTime = firstEntry.dataEntrada.getTime();
+          
+          // Only include if FIRST entry was in selected period
+          if (entryTime >= startTime && entryTime <= endTime) {
+            const existing = uniqueCards.get(cardId);
+            if (!existing || firstEntry.dataEntrada < existing.dataEntrada) {
+              uniqueCards.set(cardId, firstEntry);
+            }
           }
-        } else if (indicator === 'proposta') {
-          // For "proposta", count ONLY cards that explicitly passed through proposta phases
-          if (movementIndicator === 'proposta') {
-            matches = true;
-          }
-        } else {
-          // For other indicators, count unique cards that passed through the phase
-          if (movementIndicator === indicator) {
-            matches = true;
-          }
-        }
-        
-        if (matches) {
-          seenIds.add(movement.id);
-          result.push(movement);
         }
       }
       
-      console.log(`[useExpansaoAnalytics] getCardsForIndicator(${indicator}): found ${result.length} unique cards`);
-      return result;
+      console.log(`[${produto} Analytics] getCardsForIndicator(${indicator}): ${uniqueCards.size} cards (first entry in period)`);
+      return Array.from(uniqueCards.values());
     };
-  }, [movements, startTime, endTime]);
+  }, [firstEntryByCardAndIndicator, startTime, endTime, produto]);
 
   // Helper function to convert ExpansaoCard to DetailItem
   const toDetailItem = (card: ExpansaoCard): DetailItem => ({
@@ -223,7 +260,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
     pontual: card.valorPontual,
   });
 
-  // Get detail items for an indicator
+  // Get detail items for an indicator (uses same FIRST ENTRY logic)
   const getDetailItemsForIndicator = useMemo(() => {
     return (indicator: IndicatorType): DetailItem[] => {
       const indicatorCards = getCardsForIndicator(indicator);
@@ -249,27 +286,28 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
   const getCardsWithFullHistory = useMemo(() => {
     // Find all card IDs with movement in period
     const activeCardIds = new Set<string>();
-    for (const movement of movements) {
-      const entryTime = movement.dataEntrada.getTime();
+    for (const card of cards) {
+      const entryTime = card.dataEntrada.getTime();
       if (entryTime >= startTime && entryTime <= endTime) {
-        activeCardIds.add(movement.id);
+        activeCardIds.add(card.id);
       }
     }
     
     // Return all movements for active cards (regardless of date)
     const cardHistories = new Map<string, ExpansaoCard[]>();
-    for (const movement of movements) {
-      if (activeCardIds.has(movement.id)) {
-        if (!cardHistories.has(movement.id)) {
-          cardHistories.set(movement.id, []);
+    const historyToUse = fullHistory.length > 0 ? fullHistory : cards;
+    for (const card of historyToUse) {
+      if (activeCardIds.has(card.id)) {
+        if (!cardHistories.has(card.id)) {
+          cardHistories.set(card.id, []);
         }
-        cardHistories.get(movement.id)!.push(movement);
+        cardHistories.get(card.id)!.push(card);
       }
     }
     
-    console.log(`[Expansão Analytics] Cohort mode: ${activeCardIds.size} unique cards with full history`);
+    console.log(`[${produto} Analytics] Cohort mode: ${activeCardIds.size} unique cards with full history`);
     return cardHistories;
-  }, [movements, startTime, endTime]);
+  }, [cards, fullHistory, startTime, endTime, produto]);
 
   // Get detail items for indicator using FULL history (for cohort mode tier conversion)
   const getDetailItemsWithFullHistory = useMemo(() => {
@@ -300,15 +338,15 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
         }
       }
       
-      console.log(`[Expansão Analytics] getDetailItemsWithFullHistory(${indicator}): ${result.length} unique cards`);
+      console.log(`[${produto} Analytics] getDetailItemsWithFullHistory(${indicator}): ${result.length} unique cards`);
       return result;
     };
-  }, [getCardsWithFullHistory, toDetailItem]);
+  }, [getCardsWithFullHistory, produto]);
 
   return {
     isLoading,
     error,
-    movements,
+    cards,
     getCardsForIndicator,
     toDetailItem,
     getDetailItemsForIndicator,

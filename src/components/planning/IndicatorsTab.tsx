@@ -809,8 +809,8 @@ export function IndicatorsTab() {
           });
           total += filteredCards.length;
         } else {
-          // No filters - use aggregated count
-          total += getModeloAtualQty(indicator.key as ModeloAtualIndicator, startDate, endDate);
+          // No filters - use analytics hook with first-entry logic for consistency
+          total += modeloAtualAnalytics.getCardsForIndicator(indicator.key).length;
         }
       }
     }
@@ -837,7 +837,8 @@ export function IndicatorsTab() {
           });
           total += filteredCards.length;
         } else {
-          total += getO2TaxQty(indicator.key as O2TaxIndicator, startDate, endDate);
+          // No filters - use analytics hook with first-entry logic for consistency
+          total += o2TaxAnalytics.getDetailItemsForIndicator(indicator.key).length;
         }
       }
     }
@@ -864,7 +865,8 @@ export function IndicatorsTab() {
           });
           total += filteredCards.length;
         } else {
-          total += getOxyHackerQty(indicator.key as OxyHackerIndicator, startDate, endDate);
+          // No filters - use analytics hook with first-entry logic for consistency
+          total += oxyHackerAnalytics.getDetailItemsForIndicator(indicator.key).length;
         }
       }
     }
@@ -891,7 +893,8 @@ export function IndicatorsTab() {
           });
           total += filteredCards.length;
         } else {
-          total += getExpansaoQty(indicator.key as ExpansaoIndicator, startDate, endDate);
+          // No filters - use analytics hook with first-entry logic for consistency
+          total += franquiaAnalytics.getDetailItemsForIndicator(indicator.key).length;
         }
       }
     }

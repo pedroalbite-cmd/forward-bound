@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DetailItem } from "@/components/planning/indicators/DetailSheet";
+import { IndicatorType } from "@/hooks/useFunnelRealized";
 
 export interface O2TaxCard {
   id: string;
@@ -59,6 +60,17 @@ const PHASE_DISPLAY_MAP: Record<string, string> = {
   'Arquivado': 'Arquivado',
 };
 
+// Map Pipefy phase to indicator type
+const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
+  'Start form': 'leads',
+  'MQL': 'mql',
+  'Reunião agendada / Qualificado': 'rm',
+  '1° Reunião Realizada - Apresentação': 'rr',
+  'Proposta enviada / Follow Up': 'proposta',
+  'Enviar para assinatura': 'proposta',
+  'Contrato assinado': 'venda',
+};
+
 // Active phases (not lost/won)
 const ACTIVE_PHASES = [
   'Reunião agendada / Qualificado',
@@ -81,6 +93,43 @@ function parseDate(dateValue: string | null): Date | null {
   return isNaN(date.getTime()) ? null : date;
 }
 
+function parseRawCard(row: any): O2TaxCard {
+  const dataEntrada = parseDate(row['Entrada']) || new Date();
+  const dataSaida = parseDate(row['Saída']);
+  
+  // Calculate duration dynamically
+  let duracao = 0;
+  if (dataSaida) {
+    duracao = Math.floor((dataSaida.getTime() - dataEntrada.getTime()) / 1000);
+  } else {
+    duracao = Math.floor((Date.now() - dataEntrada.getTime()) / 1000);
+  }
+  
+  const valorPontual = row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : 0;
+  const valorSetup = row['Valor Setup'] ? parseFloat(row['Valor Setup']) : 0;
+  const valorMRR = row['Valor MRR'] ? parseFloat(row['Valor MRR']) : 0;
+  
+  return {
+    id: String(row.ID),
+    titulo: row['Título'] || '',
+    fase: row['Fase'] || '',
+    faseAtual: row['Fase Atual'] || '',
+    faixa: row['Faixa de faturamento mensal'] || null,
+    valorMRR,
+    valorPontual,
+    valorSetup,
+    valor: valorPontual + valorSetup + valorMRR,
+    responsavel: row['SDR responsável'] || null,
+    closer: String(row['Closer responsável'] ?? '').trim(),
+    motivoPerda: row['Motivo da perda'] || null,
+    dataEntrada,
+    dataSaida,
+    contato: row['Nome - Interlocução O2'] || row['Nome'] || null,
+    setor: row['Setor'] || null,
+    duracao,
+  };
+}
+
 export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
   // Memoize date strings to prevent queryKey instability (fixes "Should have a queue" error)
   const startDateStr = useMemo(() => startDate.toISOString().split('T')[0], [startDate.getTime()]);
@@ -100,11 +149,14 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['o2tax-movements-analytics', startDateStr, endDateStr],
     queryFn: async () => {
+      // Step 1: Fetch movements in the selected period
       const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
         body: { 
           table: 'pipefy_cards_movements', 
-          action: 'preview', 
-          limit: 5000 
+          action: 'query_period',
+          startDate: `${startDateStr}T00:00:00`,
+          endDate: `${endDateStr}T23:59:59`,
+          limit: 10000 
         }
       });
 
@@ -114,31 +166,34 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
       }
 
       if (!responseData?.data) {
-        return { movements: [] };
+        return { cards: [], fullHistory: [] };
       }
 
-      console.log(`[O2 TAX Analytics] Loaded ${responseData.data.length} movements`);
+      console.log(`[O2 TAX Analytics] Period query returned ${responseData.data.length} movements`);
+      
+      const cards = responseData.data.map(parseRawCard);
 
-      // Return movements in the SAME structure as useO2TaxMetas
-      const movements = responseData.data.map((row: any) => ({
-        id: String(row.ID),
-        titulo: row['Título'] || '',
-        fase: row['Fase'] || '',
-        faseAtual: row['Fase Atual'] || '',
-        dataEntrada: parseDate(row['Entrada']) || new Date(),
-        dataSaida: parseDate(row['Saída']),
-        valorMRR: row['Valor MRR'] ? parseFloat(row['Valor MRR']) : null,
-        valorPontual: row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : null,
-        valorSetup: row['Valor Setup'] ? parseFloat(row['Valor Setup']) : null,
-        faixa: row['Faixa de faturamento mensal'] || null,
-        responsavel: row['SDR responsável'] || null, // SDR field (separate from Closer)
-        closer: String(row['Closer responsável'] ?? '').trim(),
-        motivoPerda: row['Motivo da perda'] || null,
-        contato: row['Nome - Interlocução O2'] || row['Nome'] || null,
-        setor: row['Setor'] || null,
-      }));
+      // Step 2: Get unique card IDs from period
+      const uniqueCardIds = [...new Set(cards.map((c: O2TaxCard) => c.id))];
+      
+      // Step 3: Fetch full history for these cards
+      let fullHistory: O2TaxCard[] = [];
+      if (uniqueCardIds.length > 0) {
+        const { data: historyData, error: historyError } = await supabase.functions.invoke('query-external-db', {
+          body: { 
+            table: 'pipefy_cards_movements', 
+            action: 'query_card_history',
+            cardIds: uniqueCardIds
+          }
+        });
+        
+        if (!historyError && historyData?.data) {
+          fullHistory = historyData.data.map(parseRawCard);
+          console.log(`[O2 TAX Analytics] Full history: ${fullHistory.length} movements for ${uniqueCardIds.length} cards`);
+        }
+      }
 
-      return { movements };
+      return { cards, fullHistory };
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
@@ -146,55 +201,35 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     gcTime: 10 * 60 * 1000,
   });
 
-  // Transform movements into O2TaxCards for drill-down (processed via useMemo)
-  const cards: O2TaxCard[] = useMemo(() => {
-    if (!data?.movements) return [];
+  const cards = data?.cards ?? [];
+  const fullHistory = data?.fullHistory ?? [];
+
+  // Build a map of FIRST entry for EACH indicator per card (using full history)
+  // This is used to determine if the card's first entry in a phase was in the selected period
+  const firstEntryByCardAndIndicator = useMemo(() => {
+    const firstEntries = new Map<string, Map<IndicatorType, O2TaxCard>>();
+    const historyToUse = fullHistory.length > 0 ? fullHistory : cards;
     
-    return data.movements.map((mov: any) => {
-      const dataEntrada = mov.dataEntrada instanceof Date ? mov.dataEntrada : new Date(mov.dataEntrada);
-      const dataSaida = mov.dataSaida ? (mov.dataSaida instanceof Date ? mov.dataSaida : new Date(mov.dataSaida)) : null;
+    for (const card of historyToUse) {
+      const indicator = PHASE_TO_INDICATOR[card.fase];
+      if (!indicator) continue;
       
-      // Calculate duration dynamically
-      let duracao = 0;
-      if (dataSaida) {
-        duracao = Math.floor((dataSaida.getTime() - dataEntrada.getTime()) / 1000);
-      } else {
-        duracao = Math.floor((Date.now() - dataEntrada.getTime()) / 1000);
+      if (!firstEntries.has(card.id)) {
+        firstEntries.set(card.id, new Map());
       }
       
-      const valorPontual = mov.valorPontual || 0;
-      const valorSetup = mov.valorSetup || 0;
-      const valorMRR = mov.valorMRR || 0;
+      const cardMap = firstEntries.get(card.id)!;
+      const existing = cardMap.get(indicator);
       
-      return {
-        id: mov.id,
-        titulo: mov.titulo,
-        fase: mov.fase,
-        faseAtual: mov.faseAtual,
-        faixa: mov.faixa || null,
-        valorMRR,
-        valorPontual,
-        valorSetup,
-        valor: valorPontual + valorSetup + valorMRR,
-        responsavel: mov.responsavel || null,
-        closer: mov.closer || '',
-        motivoPerda: mov.motivoPerda || null,
-        dataEntrada,
-        dataSaida,
-        contato: mov.contato || null,
-        setor: mov.setor || null,
-        duracao,
-      } as O2TaxCard;
-    });
-  }, [data?.movements]);
-
-  // Filter cards by period
-  const cardsInPeriod = useMemo(() => {
-    return cards.filter(card => {
-      const entryTime = card.dataEntrada.getTime();
-      return entryTime >= startTime && entryTime <= endTime;
-    });
-  }, [cards, startTime, endTime]);
+      // Keep the EARLIEST entry for this indicator
+      if (!existing || card.dataEntrada < existing.dataEntrada) {
+        cardMap.set(indicator, card);
+      }
+    }
+    
+    console.log(`[O2 TAX Analytics] Built first entry map for ${firstEntries.size} cards`);
+    return firstEntries;
+  }, [cards, fullHistory]);
 
   // Get unique cards by current phase
   const getCardsByPhase = useMemo((): PhaseData[] => {
@@ -263,21 +298,19 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     };
   }, [cards]);
 
-  // Get deals won in period
+  // Get deals won in period (using first entry logic)
   const getDealsWon = useMemo(() => {
     const wonCards: O2TaxCard[] = [];
     const seenIds = new Set<string>();
     
-    for (const card of cards) {
-      const entryTime = card.dataEntrada.getTime();
-      if (
-        card.fase === 'Contrato assinado' &&
-        entryTime >= startTime &&
-        entryTime <= endTime &&
-        !seenIds.has(card.id)
-      ) {
-        wonCards.push(card);
-        seenIds.add(card.id);
+    for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
+      const firstVenda = indicatorMap.get('venda');
+      if (!firstVenda) continue;
+      
+      const entryTime = firstVenda.dataEntrada.getTime();
+      if (entryTime >= startTime && entryTime <= endTime && !seenIds.has(cardId)) {
+        wonCards.push(firstVenda);
+        seenIds.add(cardId);
       }
     }
     
@@ -289,27 +322,25 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
       trend: 0, // Would need previous period data to calculate
       cards: wonCards,
     };
-  }, [cards, startTime, endTime]);
+  }, [firstEntryByCardAndIndicator, startTime, endTime]);
 
-  // Get meetings (RM) by revenue range
+  // Get meetings (RM) by revenue range (using first entry logic)
   const getMeetingsByRevenue = useMemo((): RevenueRangeData[] => {
     const rangeMap = new Map<string, O2TaxCard[]>();
     const seenIds = new Set<string>();
     
-    for (const card of cards) {
-      const entryTime = card.dataEntrada.getTime();
-      if (
-        card.fase === 'Reunião agendada / Qualificado' &&
-        entryTime >= startTime &&
-        entryTime <= endTime &&
-        !seenIds.has(card.id)
-      ) {
-        const range = card.faixa || 'Não informado';
+    for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
+      const firstRM = indicatorMap.get('rm');
+      if (!firstRM) continue;
+      
+      const entryTime = firstRM.dataEntrada.getTime();
+      if (entryTime >= startTime && entryTime <= endTime && !seenIds.has(cardId)) {
+        const range = firstRM.faixa || 'Não informado';
         if (!rangeMap.has(range)) {
           rangeMap.set(range, []);
         }
-        rangeMap.get(range)!.push(card);
-        seenIds.add(card.id);
+        rangeMap.get(range)!.push(firstRM);
+        seenIds.add(cardId);
       }
     }
     
@@ -324,28 +355,38 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
         color: CHART_COLORS[index % CHART_COLORS.length],
       }))
       .sort((a, b) => b.count - a.count);
-  }, [cards, startTime, endTime]);
+  }, [firstEntryByCardAndIndicator, startTime, endTime]);
 
   // Get no shows (RM without RR in period)
   const getNoShows = useMemo(() => {
     const rmCards = new Set<string>();
     const rrCards = new Set<string>();
     
-    for (const card of cards) {
-      const entryTime = card.dataEntrada.getTime();
-      if (entryTime >= startTime && entryTime <= endTime) {
-        if (card.fase === 'Reunião agendada / Qualificado') {
-          rmCards.add(card.id);
+    for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
+      const firstRM = indicatorMap.get('rm');
+      const firstRR = indicatorMap.get('rr');
+      
+      if (firstRM) {
+        const entryTime = firstRM.dataEntrada.getTime();
+        if (entryTime >= startTime && entryTime <= endTime) {
+          rmCards.add(cardId);
         }
-        if (card.fase === '1° Reunião Realizada - Apresentação') {
-          rrCards.add(card.id);
+      }
+      
+      if (firstRR) {
+        const entryTime = firstRR.dataEntrada.getTime();
+        if (entryTime >= startTime && entryTime <= endTime) {
+          rrCards.add(cardId);
         }
       }
     }
     
     const noShowIds = Array.from(rmCards).filter(id => !rrCards.has(id));
     const noShowCards = noShowIds
-      .map(id => cards.find(c => c.id === id))
+      .map(id => {
+        const indicatorMap = firstEntryByCardAndIndicator.get(id);
+        return indicatorMap?.get('rm');
+      })
       .filter((c): c is O2TaxCard => c !== undefined);
     
     const rate = rmCards.size > 0 ? Math.round((noShowIds.length / rmCards.size) * 100) : 0;
@@ -356,7 +397,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
       totalMeetings: rmCards.size,
       cards: noShowCards,
     };
-  }, [cards, startTime, endTime]);
+  }, [firstEntryByCardAndIndicator, startTime, endTime]);
 
   // Get lost deals in period
   const getLostDeals = useMemo(() => {
@@ -421,34 +462,27 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
       .sort((a, b) => b.count - a.count);
   }, [cards, startTime, endTime]);
 
-  // Get MQLs by revenue range (using cards that entered pipeline)
+  // Get MQLs by revenue range (using first entry logic)
   const getMqlsByRevenue = useMemo((): RevenueRangeData[] => {
     const rangeMap = new Map<string, O2TaxCard[]>();
-    const uniqueCards = new Map<string, O2TaxCard>();
+    const seenIds = new Set<string>();
     
-    // Get unique cards in period that entered via MQL phase
-    for (const card of cards) {
-      const entryTime = card.dataEntrada.getTime();
-      if (
-        card.fase === 'MQL' &&
-        entryTime >= startTime && 
-        entryTime <= endTime && 
-        !uniqueCards.has(card.id)
-      ) {
-        uniqueCards.set(card.id, card);
+    for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
+      const firstMQL = indicatorMap.get('mql');
+      if (!firstMQL) continue;
+      
+      const entryTime = firstMQL.dataEntrada.getTime();
+      if (entryTime >= startTime && entryTime <= endTime && !seenIds.has(cardId)) {
+        const range = firstMQL.faixa || 'Não informado';
+        if (!rangeMap.has(range)) {
+          rangeMap.set(range, []);
+        }
+        rangeMap.get(range)!.push(firstMQL);
+        seenIds.add(cardId);
       }
     }
     
-    // Group by revenue range
-    for (const card of uniqueCards.values()) {
-      const range = card.faixa || 'Não informado';
-      if (!rangeMap.has(range)) {
-        rangeMap.set(range, []);
-      }
-      rangeMap.get(range)!.push(card);
-    }
-    
-    const total = uniqueCards.size;
+    const total = Array.from(rangeMap.values()).reduce((sum, arr) => sum + arr.length, 0);
     
     return Array.from(rangeMap.entries())
       .map(([range, cards], index) => ({
@@ -459,86 +493,79 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
         color: CHART_COLORS[index % CHART_COLORS.length],
       }))
       .sort((a, b) => b.count - a.count);
-  }, [cards, startTime, endTime]);
+  }, [firstEntryByCardAndIndicator, startTime, endTime]);
 
-  // Get leads (cards that entered via "Start form" OR "MQL" in the period)
+  // Get leads (using first entry logic)
   const getLeads = useMemo(() => {
     const leadsCards: O2TaxCard[] = [];
     const seenIds = new Set<string>();
     
-    for (const card of cards) {
-      const entryTime = card.dataEntrada.getTime();
-      if (
-        (card.fase === 'Start form' || card.fase === 'MQL') &&
-        entryTime >= startTime &&
-        entryTime <= endTime &&
-        !seenIds.has(card.id)
-      ) {
-        leadsCards.push(card);
-        seenIds.add(card.id);
+    for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
+      // For leads, check both 'leads' and 'mql' indicators
+      const firstLeads = indicatorMap.get('leads');
+      const firstMQL = indicatorMap.get('mql');
+      
+      // Use the earliest between leads and mql
+      let firstEntry: O2TaxCard | undefined;
+      if (firstLeads && firstMQL) {
+        firstEntry = firstLeads.dataEntrada < firstMQL.dataEntrada ? firstLeads : firstMQL;
+      } else {
+        firstEntry = firstLeads || firstMQL;
+      }
+      
+      if (!firstEntry) continue;
+      
+      const entryTime = firstEntry.dataEntrada.getTime();
+      if (entryTime >= startTime && entryTime <= endTime && !seenIds.has(cardId)) {
+        leadsCards.push(firstEntry);
+        seenIds.add(cardId);
       }
     }
     
     return leadsCards;
-  }, [cards, startTime, endTime]);
+  }, [firstEntryByCardAndIndicator, startTime, endTime]);
+
+  // Get cards for a specific indicator (using FIRST ENTRY logic)
+  // This is the main function that ensures counts match drill-down
+  const getCardsForIndicator = useMemo(() => {
+    return (indicator: IndicatorType): O2TaxCard[] => {
+      const uniqueCards = new Map<string, O2TaxCard>();
+      
+      // For LEADS indicator: union of leads + mql phases
+      const indicatorsToCheck = indicator === 'leads' 
+        ? ['leads', 'mql'] as IndicatorType[]
+        : [indicator];
+      
+      for (const ind of indicatorsToCheck) {
+        for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
+          const firstEntry = indicatorMap.get(ind);
+          if (!firstEntry) continue;
+          
+          const entryTime = firstEntry.dataEntrada.getTime();
+          
+          // Only include if FIRST entry was in selected period
+          if (entryTime >= startTime && entryTime <= endTime) {
+            const existing = uniqueCards.get(cardId);
+            if (!existing || firstEntry.dataEntrada < existing.dataEntrada) {
+              uniqueCards.set(cardId, firstEntry);
+            }
+          }
+        }
+      }
+      
+      console.log(`[O2 TAX Analytics] getCardsForIndicator(${indicator}): ${uniqueCards.size} cards (first entry in period)`);
+      return Array.from(uniqueCards.values());
+    };
+  }, [firstEntryByCardAndIndicator, startTime, endTime]);
 
   // Get detail items for a specific indicator (for drill-down)
-  // ALIGNED with useO2TaxMetas logic for consistency
-  const getDetailItemsForIndicator = (indicator: string): DetailItem[] => {
-    const targetCards: O2TaxCard[] = [];
-    const seenIds = new Set<string>();
-    
-    // Map indicator to Pipefy phases (same as PHASE_TO_INDICATOR in useO2TaxMetas)
-    const PHASE_TO_INDICATOR_MAP: Record<string, string> = {
-      'Start form': 'leads',
-      'MQL': 'mql',
-      'Reunião agendada / Qualificado': 'rm',
-      '1° Reunião Realizada - Apresentação': 'rr',
-      'Proposta enviada / Follow Up': 'proposta',
-      'Enviar para assinatura': 'proposta',
-      'Contrato assinado': 'venda',
+  // Uses the same FIRST ENTRY logic as getCardsForIndicator
+  const getDetailItemsForIndicator = useMemo(() => {
+    return (indicator: string): DetailItem[] => {
+      const indicatorCards = getCardsForIndicator(indicator as IndicatorType);
+      return indicatorCards.map(toDetailItem);
     };
-    
-    // Filter cards using the SAME logic as useO2TaxMetas.getQtyForPeriod
-    for (const card of cards) {
-      const entryTime = card.dataEntrada.getTime();
-      if (entryTime < startTime || entryTime > endTime) continue;
-      if (seenIds.has(card.id)) continue;
-      
-      const movementIndicator = PHASE_TO_INDICATOR_MAP[card.fase];
-      let matches = false;
-      
-      if (indicator === 'leads') {
-        // For "leads", count unique cards that entered via "Start form" OR "MQL"
-        if (card.fase === 'Start form' || card.fase === 'MQL') {
-          matches = true;
-        }
-      } else if (indicator === 'venda') {
-        // For "venda", count unique cards that ENTERED "Contrato assinado" phase
-        if (card.fase === 'Contrato assinado') {
-          matches = true;
-        }
-      } else if (indicator === 'proposta') {
-        // For "proposta", count ONLY cards that explicitly passed through proposta phases
-        if (movementIndicator === 'proposta') {
-          matches = true;
-        }
-      } else {
-        // For other indicators, count unique cards that passed through the phase
-        if (movementIndicator === indicator) {
-          matches = true;
-        }
-      }
-      
-      if (matches) {
-        seenIds.add(card.id);
-        targetCards.push(card);
-      }
-    }
-    
-    console.log(`[O2 TAX Analytics] getDetailItemsForIndicator(${indicator}): ${targetCards.length} unique cards in period`);
-    return targetCards.map(toDetailItem);
-  };
+  }, [getCardsForIndicator]);
 
   // Helper function to convert O2TaxCard to DetailItem
   const toDetailItem = (card: O2TaxCard): DetailItem => ({
@@ -575,7 +602,8 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     
     // Return all movements for active cards (regardless of date)
     const cardHistories = new Map<string, O2TaxCard[]>();
-    for (const card of cards) {
+    const historyToUse = fullHistory.length > 0 ? fullHistory : cards;
+    for (const card of historyToUse) {
       if (activeCardIds.has(card.id)) {
         if (!cardHistories.has(card.id)) {
           cardHistories.set(card.id, []);
@@ -586,51 +614,43 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     
     console.log(`[O2 TAX Analytics] Cohort mode: ${activeCardIds.size} unique cards with full history`);
     return cardHistories;
-  }, [cards, startTime, endTime]);
+  }, [cards, fullHistory, startTime, endTime]);
 
   // Get detail items for indicator using FULL history (for cohort mode tier conversion)
-  const getDetailItemsWithFullHistory = (indicator: string): DetailItem[] => {
-    const PHASE_TO_INDICATOR_MAP: Record<string, string> = {
-      'Start form': 'leads',
-      'MQL': 'mql',
-      'Reunião agendada / Qualificado': 'rm',
-      '1° Reunião Realizada - Apresentação': 'rr',
-      'Proposta enviada / Follow Up': 'proposta',
-      'Enviar para assinatura': 'proposta',
-      'Contrato assinado': 'venda',
-    };
-    
-    const result: DetailItem[] = [];
-    const seenIds = new Set<string>();
-    
-    const cardHistories = getCardsWithFullHistory;
-    
-    for (const [cardId, movements] of cardHistories.entries()) {
-      if (seenIds.has(cardId)) continue;
+  const getDetailItemsWithFullHistory = useMemo(() => {
+    return (indicator: string): DetailItem[] => {
+      const result: DetailItem[] = [];
+      const seenIds = new Set<string>();
       
-      // Find movement matching the indicator
-      const matchingMovement = movements.find(m => {
-        const movementIndicator = PHASE_TO_INDICATOR_MAP[m.fase];
+      const cardHistories = getCardsWithFullHistory;
+      
+      for (const [cardId, movements] of cardHistories.entries()) {
+        if (seenIds.has(cardId)) continue;
         
-        if (indicator === 'leads') {
-          return m.fase === 'Start form' || m.fase === 'MQL';
-        } else if (indicator === 'venda') {
-          return m.fase === 'Contrato assinado';
-        } else if (indicator === 'proposta') {
-          return movementIndicator === 'proposta';
+        // Find movement matching the indicator
+        const matchingMovement = movements.find(m => {
+          const movementIndicator = PHASE_TO_INDICATOR[m.fase];
+          
+          if (indicator === 'leads') {
+            return m.fase === 'Start form' || m.fase === 'MQL';
+          } else if (indicator === 'venda') {
+            return m.fase === 'Contrato assinado';
+          } else if (indicator === 'proposta') {
+            return movementIndicator === 'proposta';
+          }
+          return movementIndicator === indicator;
+        });
+        
+        if (matchingMovement) {
+          seenIds.add(cardId);
+          result.push(toDetailItem(matchingMovement));
         }
-        return movementIndicator === indicator;
-      });
-      
-      if (matchingMovement) {
-        seenIds.add(cardId);
-        result.push(toDetailItem(matchingMovement));
       }
-    }
-    
-    console.log(`[O2 TAX Analytics] getDetailItemsWithFullHistory(${indicator}): ${result.length} unique cards`);
-    return result;
-  };
+      
+      console.log(`[O2 TAX Analytics] getDetailItemsWithFullHistory(${indicator}): ${result.length} unique cards`);
+      return result;
+    };
+  }, [getCardsWithFullHistory]);
 
   return {
     isLoading,
@@ -644,6 +664,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     getLossReasons,
     getMqlsByRevenue,
     getLeads,
+    getCardsForIndicator,
     getDetailItemsForIndicator,
     getDetailItemsWithFullHistory,
     toDetailItem,
