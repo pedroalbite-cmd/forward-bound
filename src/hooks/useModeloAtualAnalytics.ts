@@ -93,11 +93,21 @@ function parseNumericValue(value: any): number {
 }
 
 export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
-  const startTime = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
-  const endTime = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).getTime();
+  // Memoize date strings to prevent queryKey instability (fixes "Should have a queue" error)
+  const startDateStr = useMemo(() => startDate.toISOString().split('T')[0], [startDate.getTime()]);
+  const endDateStr = useMemo(() => endDate.toISOString().split('T')[0], [endDate.getTime()]);
+  
+  const startTime = useMemo(() => 
+    new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime(), 
+    [startDate.getTime()]
+  );
+  const endTime = useMemo(() => 
+    new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).getTime(), 
+    [endDate.getTime()]
+  );
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['modelo-atual-analytics', startDate.toISOString(), endDate.toISOString()],
+    queryKey: ['modelo-atual-analytics', startDateStr, endDateStr],
     queryFn: async () => {
       console.log(`[useModeloAtualAnalytics] Fetching data from pipefy_moviment_cfos with server-side date filter`);
       
