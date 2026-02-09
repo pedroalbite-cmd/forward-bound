@@ -94,10 +94,16 @@ export function useConsolidatedMetas() {
     month: MonthType,
     metric: ConsolidatedMetricType
   ): ConsolidatedMetaResult => {
-    // 1. Tentar banco de dados primeiro
-    const dbValue = getMeta(bu, month, metric as MetricType);
-    if (dbValue > 0) {
-      return { value: dbValue, source: 'database' };
+    // Para modelo_atual + faturamento, usar Plan Growth (que calcula Incremento = Total - MRR Base)
+    // O DB armazena o faturamento TOTAL, mas o acelerômetro precisa do INCREMENTO
+    const skipDbForFaturamento = bu === 'modelo_atual' && metric === 'faturamento';
+
+    // 1. Tentar banco de dados primeiro (exceto modelo_atual faturamento)
+    if (!skipDbForFaturamento) {
+      const dbValue = getMeta(bu, month, metric as MetricType);
+      if (dbValue > 0) {
+        return { value: dbValue, source: 'database' };
+      }
     }
 
     // 2. Fallback para Plan Growth
@@ -162,23 +168,31 @@ export function useConsolidatedMetas() {
 
     for (const monthDate of monthsInPeriod) {
       const monthName = MONTH_NAMES[getMonth(monthDate)];
-      
+      const monthStart = startOfMonth(monthDate);
+      const monthEnd = endOfMonth(monthDate);
+
+      const overlapStart = startDate > monthStart ? startDate : monthStart;
+      const overlapEnd = endDate < monthEnd ? endDate : monthEnd;
+      if (overlapStart > overlapEnd) continue;
+
+      const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
+      const daysInMonth = differenceInDays(monthEnd, monthStart) + 1;
+      const fraction = daysInMonth > 0 ? overlapDays / daysInMonth : 0;
+
       bus.forEach(bu => {
         let faturamento = getConsolidatedMeta(bu, monthName, 'faturamento').value;
-        
-        // Aplicar filtro de closer apenas para modelo_atual
+
         if (bu === 'modelo_atual' && closerFilter && closerFilter.length > 0 && getFilteredMeta) {
-          // Precisa recalcular baseado em vendas para aplicar o filtro corretamente
           const vendas = faturamento / BU_TICKETS[bu];
           const filteredVendas = getFilteredMeta(vendas, bu, monthName, closerFilter);
           faturamento = filteredVendas * BU_TICKETS[bu];
         }
-        
-        total += faturamento;
+
+        total += faturamento * fraction;
       });
     }
 
-    return total;
+    return Math.round(total);
   };
 
   /**
