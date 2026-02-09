@@ -48,7 +48,6 @@ const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
   
   // Proposta
   'Proposta enviada / Follow Up': 'proposta',
-  'Enviar proposta': 'proposta',
   
   // Venda
   'Contrato assinado': 'venda',
