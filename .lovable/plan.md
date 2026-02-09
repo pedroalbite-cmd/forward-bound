@@ -1,40 +1,99 @@
 
-# Corrigir meta de Faturamento (Incremento) no acelerometro
 
-## Problema
+# Corrigir meta de Faturamento no acelerometro
 
-O banco de dados (`monetary_metas`) armazena o **faturamento total** (meta total do mes) no campo `faturamento`. Exemplo: Fev modelo_atual = R$ 1.237.500.
+## Problema confirmado
 
-Porem, o acelerometro "Faturamento" exibe o **Incremento** (A Vender = Total - MRR Base), que deveria ser ~R$ 400k para Fev.
+O arquivo `useConsolidatedMetas.ts` **nao foi modificado** na tentativa anterior - o codigo continua identico ao original.
 
-O hook `useConsolidatedMetas` retorna o valor do banco (1.2M) diretamente para o acelerometro, sem subtrair o MRR Base. O fallback do Plan Growth (que calcula corretamente via `vendas * ticket`) nunca eh ativado porque o banco tem prioridade.
+O banco `monetary_metas` tem para Fev modelo_atual:
+- `faturamento`: R$ 1.237.500 (meta **total** do mes)
+- `mrr`: R$ 139.000, `setup`: R$ 333.600, `pontual`: R$ 83.400
 
-### Sintomas
-- Filtro Fev 1-9: meta mostra ~R$ 398k (pro-rata de 1.2M, nao de ~400k)
-- Filtro Fev inteiro: meta mostra R$ 1.2M (deveria ser ~R$ 400k)
+O acelerometro "Faturamento" deveria mostrar o **Incremento** (A Vender), mas `getConsolidatedMeta` retorna R$ 1.237.500 do banco diretamente.
+
+Para 9 dias: pro-rata = 1.237.500 * 9/28 = ~R$ 398k (o que aparece no screenshot).
+Para mes inteiro: retorna R$ 1.237.500 (o "milhao" que o usuario ve).
 
 ## Solucao
 
-Alterar o `useConsolidatedMetas` para que, **no caso do modelo_atual + metrica faturamento**, nao use o valor bruto do banco (que eh o total) e sim o valor calculado pelo Plan Growth (que ja computa o Incremento = revenueToSell corretamente a partir do mesmo valor do banco).
+### Arquivo: `src/hooks/useConsolidatedMetas.ts`
 
-### Logica
-- `modelo_atual` + `faturamento`: sempre usar Plan Growth (que ja le o banco e calcula Incremento = Total - MRR Base)
-- `modelo_atual` + `mrr/setup/pontual`: continuar usando DB normalmente (esses valores sao o breakdown correto do incremento)
-- Todas as outras BUs: manter logica atual (DB faturamento = incremento para elas)
+**Mudanca 1 - `getConsolidatedMeta` (linhas 92-111)**:
+Para `modelo_atual` + `faturamento`, pular o DB e usar Plan Growth (que calcula Incremento = vendas * ticket, onde vendas vem do `revenueToSell`).
 
-### Bug secundario
-A funcao `getFilteredFaturamentoMeta` (usada quando ha filtro de closer) nao aplica pro-rata por dias. Sera corrigida para usar a mesma logica de fracao do `getMetaForPeriod`.
+```typescript
+const getConsolidatedMeta = (
+  bu: BuType,
+  month: MonthType,
+  metric: ConsolidatedMetricType
+): ConsolidatedMetaResult => {
+  // Para modelo_atual + faturamento, usar Plan Growth (que calcula Incremento = Total - MRR Base)
+  // O DB armazena o faturamento TOTAL, mas o acelerometro precisa do INCREMENTO
+  const skipDbForFaturamento = bu === 'modelo_atual' && metric === 'faturamento';
 
-## Arquivos a modificar
+  if (!skipDbForFaturamento) {
+    const dbValue = getMeta(bu, month, metric as MetricType);
+    if (dbValue > 0) {
+      return { value: dbValue, source: 'database' };
+    }
+  }
 
-### `src/hooks/useConsolidatedMetas.ts`
+  const planGrowthValue = getPlanGrowthMeta(bu, month, metric);
+  if (planGrowthValue > 0) {
+    return { value: planGrowthValue, source: 'plan_growth' };
+  }
 
-1. Em `getConsolidatedMeta`: para `bu === 'modelo_atual'` e `metric === 'faturamento'`, pular o check do DB e ir direto para o Plan Growth fallback
-2. Em `getFilteredFaturamentoMeta`: adicionar calculo de pro-rata (fracao de dias do mes cobertos pelo periodo selecionado), igual ao que ja existe em `getMetaForPeriod`
+  return { value: 0, source: 'calculated' };
+};
+```
 
-## Impacto esperado
+**Mudanca 2 - `getFilteredFaturamentoMeta` (linhas 153-182)**:
+Adicionar pro-rata por dias (igual a `getMetaForPeriod`).
 
-- Fev inteiro, Modelo Atual: Faturamento passara de R$ 1.2M para ~R$ 400k (Incremento correto)
-- Fev 1-9, Modelo Atual: Faturamento sera pro-rata do incremento (~R$ 400k * 9/28 ≈ R$ 129k)
-- MRR, Setup, Pontual: sem alteracao (valores do banco sao corretos)
-- Outras BUs: sem alteracao
+```typescript
+const getFilteredFaturamentoMeta = (
+  bus: BuType[],
+  startDate: Date,
+  endDate: Date,
+  closerFilter?: string[],
+  getFilteredMeta?: (...) => number
+): number => {
+  const monthsInPeriod = eachMonthOfInterval({ start: startDate, end: endDate });
+  let total = 0;
+
+  for (const monthDate of monthsInPeriod) {
+    const monthName = MONTH_NAMES[getMonth(monthDate)];
+    const monthStart = startOfMonth(monthDate);
+    const monthEnd = endOfMonth(monthDate);
+
+    const overlapStart = startDate > monthStart ? startDate : monthStart;
+    const overlapEnd = endDate < monthEnd ? endDate : monthEnd;
+    if (overlapStart > overlapEnd) continue;
+
+    const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
+    const daysInMonth = differenceInDays(monthEnd, monthStart) + 1;
+    const fraction = daysInMonth > 0 ? overlapDays / daysInMonth : 0;
+
+    bus.forEach(bu => {
+      let faturamento = getConsolidatedMeta(bu, monthName, 'faturamento').value;
+
+      if (bu === 'modelo_atual' && closerFilter?.length > 0 && getFilteredMeta) {
+        const vendas = faturamento / BU_TICKETS[bu];
+        const filteredVendas = getFilteredMeta(vendas, bu, monthName, closerFilter);
+        faturamento = filteredVendas * BU_TICKETS[bu];
+      }
+
+      total += faturamento * fraction;
+    });
+  }
+
+  return Math.round(total);
+};
+```
+
+## Resultado esperado
+
+- Fev 1-9 Modelo Atual: Faturamento de ~R$ 398k para ~R$ 129k (incremento pro-rata)
+- Fev inteiro Modelo Atual: Faturamento de ~R$ 1.2M para ~R$ 400k (incremento correto)
+- MRR (R$ 45k), Setup (R$ 107k), Pontual (R$ 27k): sem alteracao (valores do DB ja sao corretos)
