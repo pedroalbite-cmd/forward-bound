@@ -293,7 +293,14 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       const existing = cardMap.get(indicator);
       
       // Keep the EARLIEST entry for this indicator
-      if (!existing || card.dataEntrada < existing.dataEntrada) {
+      // For venda: use dataAssinatura as effective date when available
+      const effectiveDate = indicator === 'venda' 
+        ? (card.dataAssinatura || card.dataEntrada) 
+        : card.dataEntrada;
+      const existingDate = existing 
+        ? (indicator === 'venda' ? (existing.dataAssinatura || existing.dataEntrada) : existing.dataEntrada)
+        : null;
+      if (!existingDate || effectiveDate < existingDate) {
         cardMap.set(indicator, card);
       }
     }
@@ -335,9 +342,12 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
           const firstEntry = indicatorMap.get(ind);
           if (!firstEntry) continue;
           
-          const entryTime = firstEntry.dataEntrada.getTime();
+          // For venda: use dataAssinatura as effective date when available
+          const effectiveTime = (ind === 'venda' && firstEntry.dataAssinatura)
+            ? firstEntry.dataAssinatura.getTime()
+            : firstEntry.dataEntrada.getTime();
           
-          if (entryTime >= startTime && entryTime <= endTime) {
+          if (effectiveTime >= startTime && effectiveTime <= endTime) {
             const existing = uniqueCards.get(cardId);
             if (!existing || firstEntry.dataEntrada < existing.dataEntrada) {
               uniqueCards.set(cardId, firstEntry);
@@ -362,7 +372,9 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     name: card.titulo || card.empresa || 'Sem título',
     company: card.empresa || card.contato || undefined,
     phase: card.faseDestino,
-    date: card.dataEntrada.toISOString(),
+    date: (card.dataAssinatura && PHASE_TO_INDICATOR[card.fase] === 'venda' 
+      ? card.dataAssinatura 
+      : card.dataEntrada).toISOString(),
     value: card.valor,
     revenueRange: card.faixa || undefined,
     responsible: card.closer || card.responsavel || undefined, // Prioritize closer for display
