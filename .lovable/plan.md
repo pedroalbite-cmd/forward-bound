@@ -1,99 +1,47 @@
 
 
-# Corrigir meta de Faturamento no acelerometro
+# Alinhar MQL do O2 TAX com logica do Modelo Atual (threshold >= R$ 500k)
 
-## Problema confirmado
+## Contexto
 
-O arquivo `useConsolidatedMetas.ts` **nao foi modificado** na tentativa anterior - o codigo continua identico ao original.
+O Modelo Atual conta MQLs por **Data de Criacao** + **faturamento >= R$ 200k**. O O2 TAX deve usar a mesma logica, mas com threshold de **>= R$ 500k**.
 
-O banco `monetary_metas` tem para Fev modelo_atual:
-- `faturamento`: R$ 1.237.500 (meta **total** do mes)
-- `mrr`: R$ 139.000, `setup`: R$ 333.600, `pontual`: R$ 83.400
+## Mudancas
 
-O acelerometro "Faturamento" deveria mostrar o **Incremento** (A Vender), mas `getConsolidatedMeta` retorna R$ 1.237.500 do banco diretamente.
+### 1. `src/hooks/useO2TaxAnalytics.ts`
 
-Para 9 dias: pro-rata = 1.237.500 * 9/28 = ~R$ 398k (o que aparece no screenshot).
-Para mes inteiro: retorna R$ 1.237.500 (o "milhao" que o usuario ve).
+- Adicionar campo `dataCriacao` ao `O2TaxCard` interface e ao `parseRawCard` (parsear `row['Data Criação']`)
+- Na queryFn, apos buscar movements por `query_period`, fazer segunda chamada `query_period_by_creation` na tabela `pipefy_cards_movements` para o mesmo periodo, armazenar como `mqlByCreation`
+- Criar funcao `isO2TaxMqlQualified(faixa)` com tiers >= R$ 500k:
+  - `'Entre R$ 500 mil e R$ 1 milhão'`
+  - `'Entre R$ 1 milhão e R$ 5 milhões'`
+  - `'Acima de R$ 5 milhões'`
+- Em `getCardsForIndicator`: quando `indicator === 'mql'`, usar `mqlByCreation` filtrado por `dataCriacao` no periodo + `isO2TaxMqlQualified(faixa)`, deduplicando por card ID
+- Em `getDetailItemsForIndicator`: mesma logica para MQL drill-down
+- Em `firstEntryByCardAndIndicator`: para MQL, validar `isO2TaxMqlQualified` antes de incluir
 
-## Solucao
+### 2. `src/hooks/useO2TaxMetas.ts`
 
-### Arquivo: `src/hooks/useConsolidatedMetas.ts`
+- Adicionar `dataCriacao` ao `O2TaxMovement` e parsear `row['Data Criação']`
+- Adicionar `faixaFaturamento` ao `O2TaxMovement` e parsear `row['Faixa de faturamento mensal']`
+- Na queryFn, adicionar segunda chamada `query_period_by_creation` na tabela `pipefy_cards_movements`, armazenar como `mqlByCreation`
+- Em `getQtyForPeriod`: quando `indicator === 'mql'`, contar cards unicos de `mqlByCreation` onde `dataCriacao` esta no periodo e `isO2TaxMqlQualified(faixa)` retorna true
+- Em `countUniqueCardsInPeriod` (usado por `getGroupedData`): mesma logica para MQL nos graficos de barras
 
-**Mudanca 1 - `getConsolidatedMeta` (linhas 92-111)**:
-Para `modelo_atual` + `faturamento`, pular o DB e usar Plan Growth (que calcula Incremento = vendas * ticket, onde vendas vem do `revenueToSell`).
+### Funcao de qualificacao
 
-```typescript
-const getConsolidatedMeta = (
-  bu: BuType,
-  month: MonthType,
-  metric: ConsolidatedMetricType
-): ConsolidatedMetaResult => {
-  // Para modelo_atual + faturamento, usar Plan Growth (que calcula Incremento = Total - MRR Base)
-  // O DB armazena o faturamento TOTAL, mas o acelerometro precisa do INCREMENTO
-  const skipDbForFaturamento = bu === 'modelo_atual' && metric === 'faturamento';
-
-  if (!skipDbForFaturamento) {
-    const dbValue = getMeta(bu, month, metric as MetricType);
-    if (dbValue > 0) {
-      return { value: dbValue, source: 'database' };
-    }
-  }
-
-  const planGrowthValue = getPlanGrowthMeta(bu, month, metric);
-  if (planGrowthValue > 0) {
-    return { value: planGrowthValue, source: 'plan_growth' };
-  }
-
-  return { value: 0, source: 'calculated' };
-};
-```
-
-**Mudanca 2 - `getFilteredFaturamentoMeta` (linhas 153-182)**:
-Adicionar pro-rata por dias (igual a `getMetaForPeriod`).
-
-```typescript
-const getFilteredFaturamentoMeta = (
-  bus: BuType[],
-  startDate: Date,
-  endDate: Date,
-  closerFilter?: string[],
-  getFilteredMeta?: (...) => number
-): number => {
-  const monthsInPeriod = eachMonthOfInterval({ start: startDate, end: endDate });
-  let total = 0;
-
-  for (const monthDate of monthsInPeriod) {
-    const monthName = MONTH_NAMES[getMonth(monthDate)];
-    const monthStart = startOfMonth(monthDate);
-    const monthEnd = endOfMonth(monthDate);
-
-    const overlapStart = startDate > monthStart ? startDate : monthStart;
-    const overlapEnd = endDate < monthEnd ? endDate : monthEnd;
-    if (overlapStart > overlapEnd) continue;
-
-    const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
-    const daysInMonth = differenceInDays(monthEnd, monthStart) + 1;
-    const fraction = daysInMonth > 0 ? overlapDays / daysInMonth : 0;
-
-    bus.forEach(bu => {
-      let faturamento = getConsolidatedMeta(bu, monthName, 'faturamento').value;
-
-      if (bu === 'modelo_atual' && closerFilter?.length > 0 && getFilteredMeta) {
-        const vendas = faturamento / BU_TICKETS[bu];
-        const filteredVendas = getFilteredMeta(vendas, bu, monthName, closerFilter);
-        faturamento = filteredVendas * BU_TICKETS[bu];
-      }
-
-      total += faturamento * fraction;
-    });
-  }
-
-  return Math.round(total);
-};
+```text
+O2_TAX_MQL_QUALIFYING_TIERS = [
+  'Entre R$ 500 mil e R$ 1 milhão',
+  'Entre R$ 1 milhão e R$ 5 milhões',
+  'Acima de R$ 5 milhões',
+]
 ```
 
 ## Resultado esperado
 
-- Fev 1-9 Modelo Atual: Faturamento de ~R$ 398k para ~R$ 129k (incremento pro-rata)
-- Fev inteiro Modelo Atual: Faturamento de ~R$ 1.2M para ~R$ 400k (incremento correto)
-- MRR (R$ 45k), Setup (R$ 107k), Pontual (R$ 27k): sem alteracao (valores do DB ja sao corretos)
+- MQL O2 TAX passara a contar cards **criados no periodo** com faturamento **>= R$ 500k**
+- Dos ~55 cards da planilha (Fev 1-9), apenas os com faixa >= R$ 500k serao contados como MQL
+- Drill-down de MQL mostrara exatamente os mesmos cards
+- Graficos temporais agruparao MQLs pela data de criacao
+- Outros indicadores (leads, RM, RR, proposta, venda) permanecem inalterados
