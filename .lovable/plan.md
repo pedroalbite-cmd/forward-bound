@@ -1,46 +1,51 @@
 
 
-# Corrigir SLA nulo na BU O2 TAX
+# Corrigir contagem de vendas: usar Data de Assinatura do Contrato
 
-## Verificacao no banco
+## Problema
 
-Confirmado que a fase **"Tentativas de Contato"** (com C maiusculo) existe na tabela `pipefy_cards_movements` do O2 TAX. Os campos `Data Criacao` e `Entrada` estao presentes e populados. Exemplo real do banco:
-- Fase: `"Tentativas de Contato"`
-- Data Criacao: `2026-02-08T15:08:23.000Z`
-- Entrada: `2026-02-08T15:21:11.000Z`
+O sistema mostra apenas 13 vendas em Janeiro quando o Pipefy mostra 18. A causa raiz: o sistema usa a data de **Entrada** na fase "Contrato assinado" para determinar o mes da venda. Porem, alguns cards sao assinados em Janeiro mas movidos para "Contrato assinado" no Pipefy apenas em Fevereiro. O campo **"Data de assinatura do contrato"** tem a data correta, mas nao e usado na filtragem por periodo.
 
-No Modelo Atual, a fase equivalente e `"Tentativas de contato"` (c minusculo). A diferenca e apenas de capitalizacao.
+## Solucao
 
-## Mudancas
-
-### 1. `src/hooks/useO2TaxAnalytics.ts`
-
-Adicionar `getAverageSlaMinutes` como `useMemo`:
-- Filtrar `cards` onde `fase.toLowerCase() === 'tentativas de contato'` e `dataCriacao` existente
-- Calcular media: `sum(dataEntrada - dataCriacao) / count` em minutos
-- Retornar 0 se nenhum card encontrado
-- Exportar `getAverageSlaMinutes` e `cards` no return do hook
-
-### 2. `src/components/planning/IndicatorsTab.tsx`
-
-**No `case 'sla'` (linhas 1860-1866):**
-- Adicionar: se `includesO2Tax`, somar `o2TaxAnalytics.getAverageSlaMinutes`
-- Media ponderada quando ambas BUs selecionadas
-
-**No drill-down de SLA (linhas 1968-2056):**
-- Quando `includesO2Tax`, incluir cards O2 TAX da fase `"Tentativas de Contato"` (case-insensitive) com `dataCriacao`
-- Concatenar com cards do Modelo Atual
-- Recalcular KPIs sobre o conjunto combinado
-- Produto: `'O2 TAX'` para cards O2 TAX
-
-## Detalhes tecnicos
-
-- Match case-insensitive via `.toLowerCase() === 'tentativas de contato'` para robustez
-- O campo `empresa` nao existe no `O2TaxCard` (usa `titulo`), ajustar no drill-down
-- O campo `responsavel` no O2 TAX vem de `SDR responsavel` (ja parseado)
+Priorizar o campo `Data de assinatura do contrato` sobre `Entrada` ao determinar a data do evento de venda. Quando preenchido, esse campo substitui a data de Entrada para fins de contagem no periodo.
 
 ## Arquivos a modificar
 
-1. `src/hooks/useO2TaxAnalytics.ts` - adicionar `getAverageSlaMinutes`, exportar `cards`
-2. `src/components/planning/IndicatorsTab.tsx` - expandir `case 'sla'` e drill-down para incluir O2 TAX
+### 1. `src/hooks/useModeloAtualMetas.ts`
+
+**Parsing (linhas 165-200):**
+- Adicionar parsing de `Data de assinatura do contrato` como `dataAssinatura`
+- Para movimentos na fase `'Contrato assinado'`: se `dataAssinatura` existir, sobrescrever `dataEntrada` com `dataAssinatura`
+- Adicionar `dataAssinatura` ao tipo `ModeloAtualMovement`
+
+Isso corrige automaticamente `getQtyForPeriod('venda')`, `getValueForPeriod('venda')`, `countForWindow('venda')` e `getGroupedData('venda')`, pois todos usam `movement.dataEntrada`.
+
+### 2. `src/hooks/useModeloAtualAnalytics.ts`
+
+**No `firstEntryByCardAndIndicator` (linhas 275-303):**
+- Para o indicador `'venda'`: ao determinar a data mais antiga, usar `card.dataAssinatura || card.dataEntrada` como data efetiva
+- Isso garante que o first-entry use a data real da assinatura
+
+**No `getCardsForIndicator` (linhas 307-351):**
+- Para `'venda'`: usar `firstEntry.dataAssinatura?.getTime() || firstEntry.dataEntrada.getTime()` ao verificar se esta dentro do periodo
+
+**No `toDetailItem` (linhas 360-377):**
+- Para vendas, usar `dataAssinatura` como `date` quando disponivel (para exibicao correta no drill-down)
+
+## Impacto
+
+- A contagem de vendas passara de 13 para 18 em Janeiro (compativel com o XLSX do Pipefy)
+- O calculo de receita realizada (`useIndicatorsRealized`) tambem sera corrigido automaticamente, pois usa `getValueForPeriod('venda')` do `useModeloAtualMetas`
+- Os graficos e drill-downs na aba Indicadores refletirao os dados corretos
+- Nenhum outro indicador (leads, mql, rm, rr, proposta) e afetado -- a mudanca so se aplica quando `fase === 'Contrato assinado'` E `Data de assinatura do contrato` esta preenchido
+
+## Detalhes tecnicos
+
+A regra de priorizacao:
+```text
+data_efetiva_venda = dataAssinatura ?? dataEntrada
+```
+
+Aplicada APENAS para o indicador 'venda' (fase 'Contrato assinado'). Todos os outros indicadores continuam usando `Entrada` normalmente.
 
