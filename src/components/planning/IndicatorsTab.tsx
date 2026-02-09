@@ -1858,12 +1858,25 @@ export function IndicatorsTab() {
       }
       
       case 'sla': {
-        // SLA: Average time from card creation to "Tentativas de contato" phase
-        // Only available for Modelo Atual which has this phase
+        // SLA: Average time from card creation to first contact attempt
+        // Modelo Atual: "Tentativas de contato", O2 TAX: "Tentativas de Contato"
+        let totalMinutes = 0;
+        let totalCount = 0;
         if (includesModeloAtual) {
-          return modeloAtualAnalytics.getAverageSlaMinutes;
+          const maCards = modeloAtualAnalytics.cards.filter(card =>
+            card.fase.toLowerCase() === 'tentativas de contato' && card.dataCriacao
+          );
+          totalMinutes += maCards.reduce((s, c) => s + (c.dataEntrada.getTime() - c.dataCriacao!.getTime()) / 1000 / 60, 0);
+          totalCount += maCards.length;
         }
-        return 0;
+        if (includesO2Tax) {
+          const o2Cards = o2TaxAnalytics.cards.filter(card =>
+            card.fase.toLowerCase() === 'tentativas de contato' && card.dataCriacao
+          );
+          totalMinutes += o2Cards.reduce((s, c) => s + (c.dataEntrada.getTime() - c.dataCriacao!.getTime()) / 1000 / 60, 0);
+          totalCount += o2Cards.length;
+        }
+        return totalCount > 0 ? totalMinutes / totalCount : 0;
       }
       
       case 'mrr': {
@@ -1966,27 +1979,55 @@ export function IndicatorsTab() {
     
     // SLA drill-down: "Estamos Respondendo Rápido?"
     if (indicator.key === 'sla') {
-      const tentativasCards = modeloAtualAnalytics.cards.filter(card => 
-        card.fase === 'Tentativas de contato' && card.dataCriacao
-      ).map(card => {
-        const slaMinutes = (card.dataEntrada.getTime() - card.dataCriacao!.getTime()) / 1000 / 60;
-        const slaStatus: 'ok' | 'warning' | 'danger' = slaMinutes <= 30 ? 'ok' : slaMinutes <= 60 ? 'warning' : 'danger';
-        return {
-          id: card.id,
-          name: card.titulo || card.empresa || 'Sem título',
-          company: card.empresa || card.contato || undefined,
-          phase: 'Tentativas de contato',
-          date: card.dataEntrada.toISOString(),
-          value: 0,
-          sla: slaMinutes,
-          slaStatus,
-          responsible: card.responsavel || undefined,
-          product: 'CaaS',
-        } as DetailItem;
-      });
+      // Combine SLA cards from all selected BUs
+      let tentativasCards: DetailItem[] = [];
       
-      // Calculate SLA metrics
-      const avgSla = modeloAtualAnalytics.getAverageSlaMinutes;
+      if (includesModeloAtual) {
+        const maCards = modeloAtualAnalytics.cards.filter(card => 
+          card.fase.toLowerCase() === 'tentativas de contato' && card.dataCriacao
+        ).map(card => {
+          const slaMinutes = (card.dataEntrada.getTime() - card.dataCriacao!.getTime()) / 1000 / 60;
+          return {
+            id: card.id,
+            name: card.titulo || card.empresa || 'Sem título',
+            company: card.empresa || card.contato || undefined,
+            phase: 'Tentativas de contato',
+            date: card.dataEntrada.toISOString(),
+            value: 0,
+            sla: slaMinutes,
+            slaStatus: (slaMinutes <= 30 ? 'ok' : slaMinutes <= 60 ? 'warning' : 'danger') as 'ok' | 'warning' | 'danger',
+            responsible: card.responsavel || undefined,
+            product: 'CaaS',
+          } as DetailItem;
+        });
+        tentativasCards = tentativasCards.concat(maCards);
+      }
+      
+      if (includesO2Tax) {
+        const o2Cards = o2TaxAnalytics.cards.filter(card =>
+          card.fase.toLowerCase() === 'tentativas de contato' && card.dataCriacao
+        ).map(card => {
+          const slaMinutes = (card.dataEntrada.getTime() - card.dataCriacao!.getTime()) / 1000 / 60;
+          return {
+            id: card.id,
+            name: card.titulo,
+            company: card.contato || card.titulo,
+            phase: 'Tentativas de Contato',
+            date: card.dataEntrada.toISOString(),
+            value: 0,
+            sla: slaMinutes,
+            slaStatus: (slaMinutes <= 30 ? 'ok' : slaMinutes <= 60 ? 'warning' : 'danger') as 'ok' | 'warning' | 'danger',
+            responsible: card.responsavel || undefined,
+            product: 'O2 TAX',
+          } as DetailItem;
+        });
+        tentativasCards = tentativasCards.concat(o2Cards);
+      }
+      
+      // Calculate SLA metrics over combined set
+      const avgSla = tentativasCards.length > 0
+        ? tentativasCards.reduce((s, c) => s + (c.sla || 0), 0) / tentativasCards.length
+        : 0;
       const withinTarget = tentativasCards.filter(c => (c.sla || 0) <= 30).length;
       const withinTargetPct = tentativasCards.length > 0 ? Math.round((withinTarget / tentativasCards.length) * 100) : 0;
       const slaValues = tentativasCards.map(c => c.sla || 0).sort((a, b) => a - b);
