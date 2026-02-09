@@ -100,7 +100,7 @@ function parseNumericValue(value: any): number {
 function parseCardRow(row: Record<string, any>, skipPhaseFilter = false): ModeloAtualCard | null {
   const id = String(row['ID'] || row['id'] || '');
   const fase = row['Fase'] || row['fase'] || '';
-  const dataEntrada = parseDate(row['Entrada'] || row['entrada']) || new Date();
+  let dataEntrada = parseDate(row['Entrada'] || row['entrada']) || new Date();
   
   // Skip if no id, no phase, or phase not in mapping (unless skipPhaseFilter is true)
   if (!id || !fase) return null;
@@ -108,6 +108,12 @@ function parseCardRow(row: Record<string, any>, skipPhaseFilter = false): Modelo
 
   // Parse additional dates
   const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
+  
+  // For "Contrato assinado" phase: override dataEntrada with dataAssinatura
+  // This ensures sales are counted in the month they were signed, not when moved in Pipefy
+  if (fase === 'Contrato assinado' && dataAssinatura) {
+    dataEntrada = dataAssinatura;
+  }
   const valorMRR = parseNumericValue(row['Valor MRR'] || row['valor_mrr'] || 0);
   const valorPontual = parseNumericValue(row['Valor Pontual'] || row['valor_pontual'] || 0);
   const valorEducacao = parseNumericValue(row['Valor Educação'] || row['Valor Educacao'] || row['valor_educacao'] || 0);
@@ -188,7 +194,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       
       // Step 1: Fetch movements in the selected period (by Entrada)
       // Step 1b: Fetch cards CREATED in the period (for MQL by creation date)
-      const [periodResponse, creationResponse] = await Promise.all([
+      const [periodResponse, creationResponse, signatureResponse] = await Promise.all([
         supabase.functions.invoke('query-external-db', {
           body: { 
             table: 'pipefy_moviment_cfos', 
@@ -202,6 +208,15 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
           body: { 
             table: 'pipefy_moviment_cfos', 
             action: 'query_period_by_creation',
+            startDate: startDateUtc,
+            endDate: endDateUtc,
+            limit: 50000 
+          }
+        }),
+        supabase.functions.invoke('query-external-db', {
+          body: { 
+            table: 'pipefy_moviment_cfos', 
+            action: 'query_period_by_signature',
             startDate: startDateUtc,
             endDate: endDateUtc,
             limit: 50000 
@@ -231,11 +246,29 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       } else if (creationResponse.error) {
         console.error('[useModeloAtualAnalytics] Error fetching creation data:', creationResponse.error);
       }
+      
+      // Parse signature-date cards (captures sales signed in period but moved later in Pipefy)
+      let signatureCards: ModeloAtualCard[] = [];
+      if (signatureResponse.data?.data) {
+        signatureCards = parseCards(signatureResponse.data.data);
+        console.log(`[useModeloAtualAnalytics] Cards signed in period: ${signatureCards.length}`);
+      } else if (signatureResponse.error) {
+        console.error('[useModeloAtualAnalytics] Error fetching signature data:', signatureResponse.error);
+      }
+      
+      // Merge signature cards into main cards (deduplicate by id+fase)
+      const existingKeys = new Set(cards.map(c => `${c.id}|${c.fase}`));
+      for (const sc of signatureCards) {
+        if (!existingKeys.has(`${sc.id}|${sc.fase}`)) {
+          cards.push(sc);
+          existingKeys.add(`${sc.id}|${sc.fase}`);
+        }
+      }
 
       const uniquePhases = [...new Set(cards.map(c => c.fase))];
       console.log(`[useModeloAtualAnalytics] Unique phases:`, uniquePhases);
       
-      // Step 2: Get unique card IDs from period (union of both queries)
+      // Step 2: Get unique card IDs from period (union of all queries)
       const allCardIds = new Set([...cards.map(c => c.id), ...mqlByCreation.map(c => c.id)]);
       const uniqueCardIds = [...allCardIds];
       console.log(`[useModeloAtualAnalytics] Unique card IDs (union): ${uniqueCardIds.length}`);
