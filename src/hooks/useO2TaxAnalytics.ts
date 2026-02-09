@@ -19,9 +19,22 @@ export interface O2TaxCard {
   motivoPerda: string | null;
   dataEntrada: Date;
   dataSaida: Date | null; // "Saída" from database
+  dataCriacao: Date | null; // "Data Criação" for MQL logic
   contato: string | null;
   setor: string | null;
   duracao: number; // Duration calculated dynamically from Entrada/Saída
+}
+
+// O2 TAX MQL qualifying tiers (>= R$ 500k)
+const O2_TAX_MQL_QUALIFYING_TIERS = [
+  'Entre R$ 500 mil e R$ 1 milhão',
+  'Entre R$ 1 milhão e R$ 5 milhões',
+  'Acima de R$ 5 milhões',
+];
+
+export function isO2TaxMqlQualified(faixa: string | null): boolean {
+  if (!faixa) return false;
+  return O2_TAX_MQL_QUALIFYING_TIERS.some(tier => faixa.includes(tier));
 }
 
 interface PhaseData {
@@ -124,6 +137,7 @@ function parseRawCard(row: any): O2TaxCard {
     motivoPerda: row['Motivo da perda'] || null,
     dataEntrada,
     dataSaida,
+    dataCriacao: parseDate(row['Data Criação']),
     contato: row['Nome - Interlocução O2'] || row['Nome'] || null,
     setor: row['Setor'] || null,
     duracao,
@@ -193,7 +207,24 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
         }
       }
 
-      return { cards, fullHistory };
+      // Step 4: Fetch MQL by creation date for the period
+      let mqlByCreation: O2TaxCard[] = [];
+      const { data: mqlCreationData, error: mqlCreationError } = await supabase.functions.invoke('query-external-db', {
+        body: { 
+          table: 'pipefy_cards_movements', 
+          action: 'query_period_by_creation',
+          startDate: `${startDateStr}T00:00:00`,
+          endDate: `${endDateStr}T23:59:59`,
+          limit: 10000 
+        }
+      });
+      
+      if (!mqlCreationError && mqlCreationData?.data) {
+        mqlByCreation = mqlCreationData.data.map(parseRawCard);
+        console.log(`[O2 TAX Analytics] MQL by creation date: ${mqlByCreation.length} movements`);
+      }
+
+      return { cards, fullHistory, mqlByCreation };
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
@@ -203,6 +234,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
 
   const cards = data?.cards ?? [];
   const fullHistory = data?.fullHistory ?? [];
+  const mqlByCreation = data?.mqlByCreation ?? [];
 
   // Build a map of FIRST entry for EACH indicator per card (using full history)
   // This is used to determine if the card's first entry in a phase was in the selected period
@@ -526,9 +558,24 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
   }, [firstEntryByCardAndIndicator, startTime, endTime]);
 
   // Get cards for a specific indicator (using FIRST ENTRY logic)
-  // This is the main function that ensures counts match drill-down
+  // MQL uses CREATION DATE + revenue >= R$ 500k (aligned with Modelo Atual logic)
   const getCardsForIndicator = useMemo(() => {
     return (indicator: IndicatorType): O2TaxCard[] => {
+      // MQL: use creation date + revenue qualification
+      if (indicator === 'mql') {
+        const uniqueCards = new Map<string, O2TaxCard>();
+        for (const card of mqlByCreation) {
+          if (uniqueCards.has(card.id)) continue;
+          if (!card.dataCriacao) continue;
+          const creationTime = card.dataCriacao.getTime();
+          if (creationTime >= startTime && creationTime <= endTime && isO2TaxMqlQualified(card.faixa)) {
+            uniqueCards.set(card.id, card);
+          }
+        }
+        console.log(`[O2 TAX Analytics] getCardsForIndicator(mql): ${uniqueCards.size} cards (creation date + faixa >= 500k)`);
+        return Array.from(uniqueCards.values());
+      }
+
       const uniqueCards = new Map<string, O2TaxCard>();
       
       // For LEADS indicator: union of leads + mql phases
@@ -556,7 +603,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
       console.log(`[O2 TAX Analytics] getCardsForIndicator(${indicator}): ${uniqueCards.size} cards (first entry in period)`);
       return Array.from(uniqueCards.values());
     };
-  }, [firstEntryByCardAndIndicator, startTime, endTime]);
+  }, [firstEntryByCardAndIndicator, mqlByCreation, startTime, endTime]);
 
   // Get detail items for a specific indicator (for drill-down)
   // Uses the same FIRST ENTRY logic as getCardsForIndicator

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { eachDayOfInterval, eachMonthOfInterval, addDays, differenceInDays } from "date-fns";
+import { isO2TaxMqlQualified } from "@/hooks/useO2TaxAnalytics";
 
 export type O2TaxIndicator = 'leads' | 'mql' | 'rm' | 'rr' | 'proposta' | 'venda';
 export type ChartGrouping = 'daily' | 'weekly' | 'monthly';
@@ -12,6 +13,8 @@ interface O2TaxMovement {
   faseAtual: string;      // Current phase of the card
   dataEntrada: Date;      // When entered this phase
   dataSaida: Date | null; // When left this phase
+  dataCriacao: Date | null; // Creation date for MQL logic
+  faixaFaturamento: string | null; // Revenue tier for MQL qualification
   valorMRR: number | null;
   valorPontual: number | null;
   valorSetup: number | null;
@@ -19,6 +22,7 @@ interface O2TaxMovement {
 
 interface O2TaxMetasResult {
   movements: O2TaxMovement[];
+  mqlByCreation: O2TaxMovement[];
 }
 
 // Map Pipefy phase names to indicator keys
@@ -57,7 +61,7 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
 
       if (!responseData?.data) {
         console.warn('No data returned from external db for O2 TAX movements');
-        return { movements: [] };
+        return { movements: [], mqlByCreation: [] };
       }
 
       // Parse movements - each row is a phase transition
@@ -67,10 +71,12 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
         const movement: O2TaxMovement = {
           id: String(row.ID),
           titulo: row['Título'] || '',
-          fase: row['Fase'] || '',  // This is the phase name from movement
-          faseAtual: row['Fase Atual'] || '', // Current phase of the card
+          fase: row['Fase'] || '',
+          faseAtual: row['Fase Atual'] || '',
           dataEntrada: parseDate(row['Entrada']) || new Date(),
           dataSaida: parseDate(row['Saída']),
+          dataCriacao: parseDate(row['Data Criação']),
+          faixaFaturamento: row['Faixa de faturamento mensal'] || null,
           valorMRR: row['Valor MRR'] ? parseFloat(row['Valor MRR']) : null,
           valorPontual: row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : null,
           valorSetup: row['Valor Setup'] ? parseFloat(row['Valor Setup']) : null,
@@ -79,26 +85,60 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
         movements.push(movement);
       }
 
+      // Fetch MQL by creation date
+      let mqlByCreation: O2TaxMovement[] = [];
+      const { data: mqlCreationData, error: mqlCreationError } = await supabase.functions.invoke('query-external-db', {
+        body: { table: 'pipefy_cards_movements', action: 'query_period_by_creation', limit: 5000 }
+      });
+      if (!mqlCreationError && mqlCreationData?.data) {
+        mqlByCreation = mqlCreationData.data.map((row: any) => ({
+          id: String(row.ID),
+          titulo: row['Título'] || '',
+          fase: row['Fase'] || '',
+          faseAtual: row['Fase Atual'] || '',
+          dataEntrada: parseDate(row['Entrada']) || new Date(),
+          dataSaida: parseDate(row['Saída']),
+          dataCriacao: parseDate(row['Data Criação']),
+          faixaFaturamento: row['Faixa de faturamento mensal'] || null,
+          valorMRR: row['Valor MRR'] ? parseFloat(row['Valor MRR']) : null,
+          valorPontual: row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : null,
+          valorSetup: row['Valor Setup'] ? parseFloat(row['Valor Setup']) : null,
+        }));
+        console.log(`[useO2TaxMetas] MQL by creation: ${mqlByCreation.length} movements`);
+      }
+
       // Log unique phases for debugging
       const uniquePhases = [...new Set(movements.map(m => m.fase))];
-      const uniqueFasesAtuais = [...new Set(movements.map(m => m.faseAtual))];
       console.log(`[useO2TaxMetas] Loaded ${movements.length} movements from pipefy_cards_movements`);
       console.log(`[useO2TaxMetas] Unique phases:`, uniquePhases);
-      console.log(`[useO2TaxMetas] Unique fases atuais:`, uniqueFasesAtuais);
       
-      return { movements };
+      return { movements, mqlByCreation };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1,
   });
 
   // Get total qty for a specific indicator and date range
-  // Count UNIQUE CARDS that entered a phase during the period
+  // MQL uses CREATION DATE + revenue >= R$ 500k
   const getQtyForPeriod = (indicator: O2TaxIndicator, start?: Date, end?: Date): number => {
     if (!data?.movements || data.movements.length === 0) return 0;
     
     const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
     const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
+    
+    // MQL: count by creation date + revenue qualification
+    if (indicator === 'mql') {
+      const uniqueCards = new Set<string>();
+      for (const movement of data.mqlByCreation) {
+        if (!movement.dataCriacao) continue;
+        const creationTime = movement.dataCriacao.getTime();
+        if (creationTime >= startTime && creationTime <= endTime && isO2TaxMqlQualified(movement.faixaFaturamento)) {
+          uniqueCards.add(movement.id);
+        }
+      }
+      console.log(`[useO2TaxMetas] getQtyForPeriod mql: ${uniqueCards.size} unique cards (creation + faixa >= 500k)`);
+      return uniqueCards.size;
+    }
     
     const uniqueCards = new Set<string>();
     
@@ -108,22 +148,18 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
         const movementIndicator = PHASE_TO_INDICATOR[movement.fase];
         
         if (indicator === 'leads') {
-          // For "leads", count unique cards that entered via "Start form" OR "MQL"
           if (movement.fase === 'Start form' || movement.fase === 'MQL') {
             uniqueCards.add(movement.id);
           }
         } else if (indicator === 'venda') {
-          // For "venda", count unique cards that ENTERED "Contrato assinado" phase during the period
           if (movement.fase === 'Contrato assinado') {
             uniqueCards.add(movement.id);
           }
         } else if (indicator === 'proposta') {
-          // For "proposta", count ONLY cards that explicitly passed through proposta phases
           if (movementIndicator === 'proposta') {
             uniqueCards.add(movement.id);
           }
         } else {
-          // For other indicators, count unique cards that passed through the phase
           if (movementIndicator === indicator) {
             uniqueCards.add(movement.id);
           }
@@ -284,6 +320,19 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
 
     // Helper function to count unique cards in a period
     const countUniqueCardsInPeriod = (periodStart: number, periodEnd: number): number => {
+      // MQL: use creation date + revenue qualification
+      if (indicator === 'mql') {
+        const uniqueCards = new Set<string>();
+        for (const movement of data.mqlByCreation) {
+          if (!movement.dataCriacao) continue;
+          const creationTime = movement.dataCriacao.getTime();
+          if (creationTime >= periodStart && creationTime <= periodEnd && isO2TaxMqlQualified(movement.faixaFaturamento)) {
+            uniqueCards.add(movement.id);
+          }
+        }
+        return uniqueCards.size;
+      }
+
       const uniqueCards = new Set<string>();
       
       for (const movement of data.movements) {
