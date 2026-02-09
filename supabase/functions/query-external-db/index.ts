@@ -313,6 +313,48 @@ Deno.serve(async (req) => {
         data: dataResult.rows,
       };
       console.log(`Card history query: ${result.totalRows} total movements for ${limitedIds.length} cards`);
+    } else if (action === 'query_period_by_signature') {
+      // Query with date filtering by "Data de assinatura do contrato"
+      // Used to capture sales signed in a period but moved to "Contrato assinado" later
+      const { startDate, endDate } = body;
+      
+      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
+      if (!validTables.includes(table)) {
+        await client.end();
+        return new Response(
+          JSON.stringify({ error: 'Invalid table name' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`Querying ${table} by signature date for period: ${startDate} to ${endDate}`);
+
+      const dataQuery = `
+        SELECT * FROM ${table} 
+        WHERE "Data de assinatura do contrato" >= $1::timestamp 
+        AND "Data de assinatura do contrato" <= $2::timestamp 
+        ORDER BY "Data de assinatura do contrato" DESC 
+        LIMIT $3
+      `;
+      const dataResult = await client.queryObject(dataQuery, [startDate, endDate, limit]);
+      
+      const countQuery = `
+        SELECT COUNT(*) as total FROM ${table} 
+        WHERE "Data de assinatura do contrato" >= $1::timestamp 
+        AND "Data de assinatura do contrato" <= $2::timestamp
+      `;
+      const countResult = await client.queryObject<CountRow>(countQuery, [startDate, endDate]);
+      
+      result = {
+        action: 'query_period_by_signature',
+        table,
+        startDate,
+        endDate,
+        totalRows: countResult.rows[0]?.total,
+        previewRows: dataResult.rows.length,
+        data: dataResult.rows,
+      };
+      console.log(`Signature date query for ${table}: ${result.previewRows} rows of ${result.totalRows} total in period`);
     } else if (action === 'query_period_by_creation') {
       // Query with date filtering by "Data Criacao" (card creation date) instead of "Entrada"
       // Used for MQL counting aligned with Pipefy criteria
@@ -358,7 +400,7 @@ Deno.serve(async (req) => {
     } else {
       await client.end();
       return new Response(
-        JSON.stringify({ error: 'Invalid action. Use: schema, preview, count, query_period, query_period_by_creation, search, stats, or query_card_history' }),
+        JSON.stringify({ error: 'Invalid action. Use: schema, preview, count, query_period, query_period_by_creation, query_period_by_signature, search, stats, or query_card_history' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
