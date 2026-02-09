@@ -129,7 +129,7 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
     // MQL: count by creation date + revenue qualification
     if (indicator === 'mql') {
       const uniqueCards = new Set<string>();
-      for (const movement of data.mqlByCreation) {
+      for (const movement of (data.mqlByCreation || [])) {
         if (!movement.dataCriacao) continue;
         const creationTime = movement.dataCriacao.getTime();
         if (creationTime >= startTime && creationTime <= endTime && isO2TaxMqlQualified(movement.faixaFaturamento)) {
@@ -323,7 +323,7 @@ export function useO2TaxMetas(startDate?: Date, endDate?: Date) {
       // MQL: use creation date + revenue qualification
       if (indicator === 'mql') {
         const uniqueCards = new Set<string>();
-        for (const movement of data.mqlByCreation) {
+        for (const movement of (data.mqlByCreation || [])) {
           if (!movement.dataCriacao) continue;
           const creationTime = movement.dataCriacao.getTime();
           if (creationTime >= periodStart && creationTime <= periodEnd && isO2TaxMqlQualified(movement.faixaFaturamento)) {
