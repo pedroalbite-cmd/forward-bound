@@ -66,7 +66,7 @@ const PHASE_TO_INDICATOR: Record<string, ModeloAtualIndicator> = {
   
   // Venda
   'Contrato assinado': 'venda',
-  'Contrato em elaboração': 'venda',
+  
 };
 
 // Parse date from PostgreSQL format
