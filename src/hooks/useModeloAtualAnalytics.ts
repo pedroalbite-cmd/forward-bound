@@ -41,8 +41,6 @@ const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
   
   // RM - Reunião Marcada
   'Reunião agendada / Qualificado': 'rm',
-  'Remarcar Reunião': 'rm',
-  'Remarcar reunião / No show': 'rm',
   
   // RR - Reunião Realizada
   'Reunião Realizada': 'rr',
