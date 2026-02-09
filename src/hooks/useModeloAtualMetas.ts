@@ -12,6 +12,7 @@ interface ModeloAtualMovement {
   faseAtual: string;
   dataEntrada: Date;
   dataCriacao: Date | null;
+  dataAssinatura: Date | null;
   valorMRR: number;
   valorPontual: number;
   valorEducacao: number;
@@ -183,6 +184,12 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
         const valorSetup = parseNumericValue(rawSetup);
         const titulo = row['Título'] || row['titulo'] || row['Nome'] || '';
         const dataCriacao = parseDate(row['Data Criação']);
+        const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
+
+        // For 'Contrato assinado' phase: prioritize signature date over entry date
+        if (fase === 'Contrato assinado' && dataAssinatura) {
+          dataEntrada = dataAssinatura;
+        }
 
         movements.push({
           id,
@@ -191,6 +198,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
           faseAtual: row['Fase Atual'] || row['fase_atual'] || fase,
           dataEntrada,
           dataCriacao,
+          dataAssinatura,
           valorMRR,
           valorPontual,
           valorEducacao,
@@ -216,6 +224,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
             faseAtual: row['Fase Atual'] || row['fase_atual'] || '',
             dataEntrada: parseDate(row['Entrada'] || row['entrada']) || new Date(),
             dataCriacao,
+            dataAssinatura: parseDate(row['Data de assinatura do contrato']),
             valorMRR: parseNumericValue(row['Valor MRR'] || 0),
             valorPontual: parseNumericValue(row['Valor Pontual'] || 0),
             valorEducacao: parseNumericValue(row['Valor Educação'] || 0),
