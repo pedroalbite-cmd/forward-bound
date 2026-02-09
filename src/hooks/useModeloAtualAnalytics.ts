@@ -309,7 +309,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     const firstEntries = new Map<string, Map<IndicatorType, ModeloAtualCard>>();
     
     // Use fullHistory if available, otherwise fall back to cards (period-only)
-    const historyToUse = fullHistory.length > 0 ? fullHistory : cards;
+    const historyToUse = [...fullHistory, ...cards];
     
     for (const card of historyToUse) {
       const indicator = PHASE_TO_INDICATOR[card.fase];
