@@ -1,64 +1,41 @@
 
 
-# Corrigir contagem de vendas no Analytics (13 -> 18)
+# Corrigir contagem de vendas: bug do limite de 500 card IDs
 
-## Diagnostico
+## Causa raiz identificada
 
-O `useModeloAtualMetas` mostra 18 vendas (correto), mas `useModeloAtualAnalytics` mostra apenas 13. A causa raiz esta em DUAS camadas:
+A edge function `query_card_history` limita a consulta a 500 card IDs. O sistema tem mais de 500 cards unicos no periodo (Janeiro). Os 5 cards de venda faltantes foram corretamente capturados pela query `query_period_by_signature` e estao no array `cards`, porem seus IDs ficaram apos a posicao 500 no array `uniqueCardIds`.
 
-### Camada 1: parseCardRow nao sobrescreve dataEntrada
-No `useModeloAtualMetas.ts`, a correcao sobrescreve `dataEntrada = dataAssinatura` no momento do parsing para a fase "Contrato assinado". Porem, no `useModeloAtualAnalytics.ts`, a funcao `parseCardRow` (linha 100) mantem `dataEntrada` como o valor original de `Entrada` e apenas armazena `dataAssinatura` separadamente. A logica de "effective date" nas linhas 297-303 e 346-348 deveria compensar, mas e fragil e depende de `dataAssinatura` estar populado em CADA registro do historico.
+Na linha 312, o codigo usa `fullHistory` exclusivamente quando disponivel:
+```text
+const historyToUse = fullHistory.length > 0 ? fullHistory : cards
+```
 
-### Camada 2: Cards possivelmente nao capturados
-Se algum dos 5 cards faltantes nao tem NENHUMA movimentacao com `Entrada` em Janeiro (apenas `dataAssinatura` em Janeiro), o `query_period` do servidor nao os retorna, e eles nunca entram no `query_card_history`.
+Como `fullHistory` nao contem os 5 cards (truncados pelo limite de 500), eles nunca entram no `firstEntryByCardAndIndicator`, e `getCardsForIndicator('venda')` retorna 13 em vez de 18.
 
 ## Solucao
 
-### 1. `src/hooks/useModeloAtualAnalytics.ts` - parseCardRow
+### Arquivo: `src/hooks/useModeloAtualAnalytics.ts`
 
-Aplicar a mesma logica do metas: sobrescrever `dataEntrada` com `dataAssinatura` quando a fase e "Contrato assinado" e `dataAssinatura` esta preenchido. Isso garante que TODA a logica downstream (firstEntry, getCardsForIndicator, toDetailItem) funcione automaticamente.
-
-Na funcao `parseCardRow` (por volta da linha 100-151):
-- Apos parsear `dataAssinatura` (linha 110), adicionar:
-```
-if (fase === 'Contrato assinado' && dataAssinatura) {
-  dataEntrada = dataAssinatura;
-}
-```
-- Tornar `dataEntrada` mutavel (usar `let` em vez de `const`)
-
-### 2. `src/hooks/useModeloAtualAnalytics.ts` - Query adicional por data de assinatura
-
-Adicionar uma terceira query paralela para buscar cards com `"Data de assinatura do contrato"` no periodo selecionado. Isso captura cards que tem assinatura em Janeiro mas nenhuma `Entrada` em Janeiro.
-
-Na funcao de query (linhas 191-210):
-- Adicionar novo request usando uma nova action `query_period_by_signature`
-- Mergear os resultados com os cards do `query_period`
-- Incluir esses card IDs no `query_card_history`
-
-### 3. `supabase/functions/query-external-db/index.ts` - Nova action
-
-Adicionar action `query_period_by_signature`:
-```sql
-SELECT * FROM pipefy_moviment_cfos
-WHERE "Data de assinatura do contrato" >= $1::timestamp
-AND "Data de assinatura do contrato" <= $2::timestamp
-ORDER BY "Data de assinatura do contrato" DESC
-LIMIT $3
+**Mudanca 1 - Linha 312**: Combinar `fullHistory` E `cards` em vez de usar um ou outro:
+```text
+const historyToUse = [...fullHistory, ...cards];
 ```
 
-### 4. Simplificar logica de effective date
+A logica de "manter a entrada mais antiga" (`effectiveDate < existingDate`) ja trata duplicatas naturalmente -- entradas duplicadas sao simplesmente substituidas pela mais antiga. Isso garante que cards presentes em `cards` mas ausentes de `fullHistory` sejam incluidos.
 
-Com a sobrescrita no parseCardRow, a logica de "effective date" nas linhas 297-303 e 346-348 do `getCardsForIndicator` se torna redundante (pois `dataEntrada` ja contem a data correta). Manter por seguranca, mas agora ambos os caminhos dao o mesmo resultado.
+**Por que isso funciona**: 
+- Cards que estao em ambos (`fullHistory` e `cards`): a logica "keep earliest" seleciona a entrada mais antiga do fullHistory
+- Cards que estao so em `cards` (os 5 faltantes): sao incluidos porque agora fazem parte do `historyToUse`
+- Nenhum dado e perdido ou duplicado incorretamente
 
-## Arquivos a modificar
+### Nenhuma outra mudanca necessaria
 
-1. `supabase/functions/query-external-db/index.ts` - adicionar action `query_period_by_signature`
-2. `src/hooks/useModeloAtualAnalytics.ts` - sobrescrever dataEntrada no parseCardRow + query adicional por assinatura
+- A edge function ja funciona corretamente (retorna 197 rows por assinatura)
+- O `parseCardRow` ja sobrescreve `dataEntrada = dataAssinatura` para "Contrato assinado"
+- O `getCardsForIndicator` ja usa `dataAssinatura` como effective date para vendas
 
 ## Resultado esperado
 
-- `getCardsForIndicator('venda')` retornara 18 cards em Janeiro (igual ao metas)
-- Drill-down de vendas mostrara todos os 18 cards com datas corretas
-- KPIs e graficos refletirao os dados completos
+`getCardsForIndicator('venda')` retornara 18 cards em Janeiro, alinhado com `useModeloAtualMetas`.
 
