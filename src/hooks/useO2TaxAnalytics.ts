@@ -699,9 +699,22 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     };
   }, [getCardsWithFullHistory]);
 
+  // SLA: Average time from card creation to "Tentativas de Contato" phase (case-insensitive)
+  const getAverageSlaMinutes = useMemo(() => {
+    const slaCards = cards.filter(card =>
+      card.fase.toLowerCase() === 'tentativas de contato' && card.dataCriacao
+    );
+    if (slaCards.length === 0) return 0;
+    const totalMinutes = slaCards.reduce((sum, card) => {
+      return sum + (card.dataEntrada.getTime() - card.dataCriacao!.getTime()) / 1000 / 60;
+    }, 0);
+    return totalMinutes / slaCards.length;
+  }, [cards]);
+
   return {
     isLoading,
     error,
+    cards,
     getCardsByPhase,
     getDealsInProgress,
     getDealsWon,
@@ -714,6 +727,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     getCardsForIndicator,
     getDetailItemsForIndicator,
     getDetailItemsWithFullHistory,
+    getAverageSlaMinutes,
     toDetailItem,
   };
 }
