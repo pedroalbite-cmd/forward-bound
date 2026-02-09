@@ -1,47 +1,46 @@
 
 
-# Alinhar MQL do O2 TAX com logica do Modelo Atual (threshold >= R$ 500k)
+# Corrigir SLA nulo na BU O2 TAX
 
-## Contexto
+## Verificacao no banco
 
-O Modelo Atual conta MQLs por **Data de Criacao** + **faturamento >= R$ 200k**. O O2 TAX deve usar a mesma logica, mas com threshold de **>= R$ 500k**.
+Confirmado que a fase **"Tentativas de Contato"** (com C maiusculo) existe na tabela `pipefy_cards_movements` do O2 TAX. Os campos `Data Criacao` e `Entrada` estao presentes e populados. Exemplo real do banco:
+- Fase: `"Tentativas de Contato"`
+- Data Criacao: `2026-02-08T15:08:23.000Z`
+- Entrada: `2026-02-08T15:21:11.000Z`
+
+No Modelo Atual, a fase equivalente e `"Tentativas de contato"` (c minusculo). A diferenca e apenas de capitalizacao.
 
 ## Mudancas
 
 ### 1. `src/hooks/useO2TaxAnalytics.ts`
 
-- Adicionar campo `dataCriacao` ao `O2TaxCard` interface e ao `parseRawCard` (parsear `row['Data Criação']`)
-- Na queryFn, apos buscar movements por `query_period`, fazer segunda chamada `query_period_by_creation` na tabela `pipefy_cards_movements` para o mesmo periodo, armazenar como `mqlByCreation`
-- Criar funcao `isO2TaxMqlQualified(faixa)` com tiers >= R$ 500k:
-  - `'Entre R$ 500 mil e R$ 1 milhão'`
-  - `'Entre R$ 1 milhão e R$ 5 milhões'`
-  - `'Acima de R$ 5 milhões'`
-- Em `getCardsForIndicator`: quando `indicator === 'mql'`, usar `mqlByCreation` filtrado por `dataCriacao` no periodo + `isO2TaxMqlQualified(faixa)`, deduplicando por card ID
-- Em `getDetailItemsForIndicator`: mesma logica para MQL drill-down
-- Em `firstEntryByCardAndIndicator`: para MQL, validar `isO2TaxMqlQualified` antes de incluir
+Adicionar `getAverageSlaMinutes` como `useMemo`:
+- Filtrar `cards` onde `fase.toLowerCase() === 'tentativas de contato'` e `dataCriacao` existente
+- Calcular media: `sum(dataEntrada - dataCriacao) / count` em minutos
+- Retornar 0 se nenhum card encontrado
+- Exportar `getAverageSlaMinutes` e `cards` no return do hook
 
-### 2. `src/hooks/useO2TaxMetas.ts`
+### 2. `src/components/planning/IndicatorsTab.tsx`
 
-- Adicionar `dataCriacao` ao `O2TaxMovement` e parsear `row['Data Criação']`
-- Adicionar `faixaFaturamento` ao `O2TaxMovement` e parsear `row['Faixa de faturamento mensal']`
-- Na queryFn, adicionar segunda chamada `query_period_by_creation` na tabela `pipefy_cards_movements`, armazenar como `mqlByCreation`
-- Em `getQtyForPeriod`: quando `indicator === 'mql'`, contar cards unicos de `mqlByCreation` onde `dataCriacao` esta no periodo e `isO2TaxMqlQualified(faixa)` retorna true
-- Em `countUniqueCardsInPeriod` (usado por `getGroupedData`): mesma logica para MQL nos graficos de barras
+**No `case 'sla'` (linhas 1860-1866):**
+- Adicionar: se `includesO2Tax`, somar `o2TaxAnalytics.getAverageSlaMinutes`
+- Media ponderada quando ambas BUs selecionadas
 
-### Funcao de qualificacao
+**No drill-down de SLA (linhas 1968-2056):**
+- Quando `includesO2Tax`, incluir cards O2 TAX da fase `"Tentativas de Contato"` (case-insensitive) com `dataCriacao`
+- Concatenar com cards do Modelo Atual
+- Recalcular KPIs sobre o conjunto combinado
+- Produto: `'O2 TAX'` para cards O2 TAX
 
-```text
-O2_TAX_MQL_QUALIFYING_TIERS = [
-  'Entre R$ 500 mil e R$ 1 milhão',
-  'Entre R$ 1 milhão e R$ 5 milhões',
-  'Acima de R$ 5 milhões',
-]
-```
+## Detalhes tecnicos
 
-## Resultado esperado
+- Match case-insensitive via `.toLowerCase() === 'tentativas de contato'` para robustez
+- O campo `empresa` nao existe no `O2TaxCard` (usa `titulo`), ajustar no drill-down
+- O campo `responsavel` no O2 TAX vem de `SDR responsavel` (ja parseado)
 
-- MQL O2 TAX passara a contar cards **criados no periodo** com faturamento **>= R$ 500k**
-- Dos ~55 cards da planilha (Fev 1-9), apenas os com faixa >= R$ 500k serao contados como MQL
-- Drill-down de MQL mostrara exatamente os mesmos cards
-- Graficos temporais agruparao MQLs pela data de criacao
-- Outros indicadores (leads, RM, RR, proposta, venda) permanecem inalterados
+## Arquivos a modificar
+
+1. `src/hooks/useO2TaxAnalytics.ts` - adicionar `getAverageSlaMinutes`, exportar `cards`
+2. `src/components/planning/IndicatorsTab.tsx` - expandir `case 'sla'` e drill-down para incluir O2 TAX
+
