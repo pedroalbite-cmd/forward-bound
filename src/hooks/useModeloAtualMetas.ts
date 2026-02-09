@@ -43,23 +43,28 @@ const PHASE_TO_INDICATOR: Record<string, ModeloAtualIndicator> = {
   // Leads - Total de leads (primeira etapa)
   'Novos Leads': 'leads',
   
-  // MQL - Leads qualificados (inclui fase de tentativa de contato)
+  // MQL - Leads qualificados (inclui fases iniciais do funil)
   'MQLs': 'mql',
   'Tentativas de contato': 'mql',
+  'Material ISCA': 'mql',
+  'Start form': 'mql',
   
   // RM - Reunião Marcada
   'Reunião agendada / Qualificado': 'rm',
   'Remarcar Reunião': 'rm',
+  'Remarcar reunião / No show': 'rm',
   
   // RR - Reunião Realizada
   'Reunião Realizada': 'rr',
   '1° Reunião Realizada - Apresentação': 'rr',
   
-  // Proposta (somente esta fase conta)
+  // Proposta
   'Proposta enviada / Follow Up': 'proposta',
+  'Enviar proposta': 'proposta',
   
-  // Venda (somente esta fase conta)
+  // Venda
   'Contrato assinado': 'venda',
+  'Contrato em elaboração': 'venda',
 };
 
 // Parse date from PostgreSQL format
