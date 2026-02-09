@@ -313,10 +313,52 @@ Deno.serve(async (req) => {
         data: dataResult.rows,
       };
       console.log(`Card history query: ${result.totalRows} total movements for ${limitedIds.length} cards`);
+    } else if (action === 'query_period_by_creation') {
+      // Query with date filtering by "Data Criacao" (card creation date) instead of "Entrada"
+      // Used for MQL counting aligned with Pipefy criteria
+      const { startDate, endDate } = body;
+      
+      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
+      if (!validTables.includes(table)) {
+        await client.end();
+        return new Response(
+          JSON.stringify({ error: 'Invalid table name' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`Querying ${table} by creation date for period: ${startDate} to ${endDate}`);
+
+      const dataQuery = `
+        SELECT * FROM ${table} 
+        WHERE "Data Criação" >= $1::timestamp 
+        AND "Data Criação" <= $2::timestamp 
+        ORDER BY "Data Criação" DESC 
+        LIMIT $3
+      `;
+      const dataResult = await client.queryObject(dataQuery, [startDate, endDate, limit]);
+      
+      const countQuery = `
+        SELECT COUNT(*) as total FROM ${table} 
+        WHERE "Data Criação" >= $1::timestamp 
+        AND "Data Criação" <= $2::timestamp
+      `;
+      const countResult = await client.queryObject<CountRow>(countQuery, [startDate, endDate]);
+      
+      result = {
+        action: 'query_period_by_creation',
+        table,
+        startDate,
+        endDate,
+        totalRows: countResult.rows[0]?.total,
+        previewRows: dataResult.rows.length,
+        data: dataResult.rows,
+      };
+      console.log(`Creation date query for ${table}: ${result.previewRows} rows of ${result.totalRows} total in period`);
     } else {
       await client.end();
       return new Response(
-        JSON.stringify({ error: 'Invalid action. Use: schema, preview, count, query_period, search, stats, or query_card_history' }),
+        JSON.stringify({ error: 'Invalid action. Use: schema, preview, count, query_period, query_period_by_creation, search, stats, or query_card_history' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

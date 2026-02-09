@@ -98,14 +98,14 @@ function parseNumericValue(value: any): number {
 }
 
 // Helper to parse a row from the database into a ModeloAtualCard
-function parseCardRow(row: Record<string, any>): ModeloAtualCard | null {
+function parseCardRow(row: Record<string, any>, skipPhaseFilter = false): ModeloAtualCard | null {
   const id = String(row['ID'] || row['id'] || '');
   const fase = row['Fase'] || row['fase'] || '';
   const dataEntrada = parseDate(row['Entrada'] || row['entrada']) || new Date();
   
-  // Skip if no id, no phase, or phase not in mapping
+  // Skip if no id, no phase, or phase not in mapping (unless skipPhaseFilter is true)
   if (!id || !fase) return null;
-  if (!PHASE_TO_INDICATOR[fase]) return null;
+  if (!skipPhaseFilter && !PHASE_TO_INDICATOR[fase]) return null;
 
   // Parse additional dates
   const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
@@ -120,10 +120,8 @@ function parseCardRow(row: Record<string, any>): ModeloAtualCard | null {
   const dataCriacao = parseDate(row['Data Criação']); // For SLA calculation
   let duracao = 0;
   if (dataSaida) {
-    // Card already left the phase: difference between Exit and Entry
     duracao = Math.floor((dataSaida.getTime() - dataEntrada.getTime()) / 1000);
   } else {
-    // Card still in phase: time since entry until now
     duracao = Math.floor((Date.now() - dataEntrada.getTime()) / 1000);
   }
   
@@ -136,7 +134,7 @@ function parseCardRow(row: Record<string, any>): ModeloAtualCard | null {
     empresa: row['Empresa'] || row['empresa'] || row['Organização'] || '',
     contato: row['Contato'] || row['contato'] || row['Nome - Interlocução O2'] || '',
     fase,
-    faseDestino: fase, // Same as fase for pipefy_moviment_cfos
+    faseDestino: fase,
     dataEntrada,
     dataSaida,
     dataCriacao,
@@ -147,7 +145,7 @@ function parseCardRow(row: Record<string, any>): ModeloAtualCard | null {
     valorSetup,
     valor,
     sdr: sdr || undefined,
-    closer: String(row['Closer responsável'] ?? '').trim(), // Closer specific field for filtering - normalized
+    closer: String(row['Closer responsável'] ?? '').trim(),
     responsavel: String(row['SDR responsável'] || row['Responsável'] || row['responsavel'] || '').trim(),
     faixa: row['Faixa de faturamento mensal'] || row['Faixa'] || row['faixa'] || '',
     duracao,
@@ -155,10 +153,10 @@ function parseCardRow(row: Record<string, any>): ModeloAtualCard | null {
 }
 
 // Parse multiple rows into cards
-function parseCards(rows: Record<string, any>[]): ModeloAtualCard[] {
+function parseCards(rows: Record<string, any>[], skipPhaseFilter = false): ModeloAtualCard[] {
   const cards: ModeloAtualCard[] = [];
   for (const row of rows) {
-    const card = parseCardRow(row);
+    const card = parseCardRow(row, skipPhaseFilter);
     if (card) cards.push(card);
   }
   return cards;
@@ -184,44 +182,64 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       console.log(`[useModeloAtualAnalytics] Fetching data from pipefy_moviment_cfos with server-side date filter`);
       
       // CRITICAL: Build UTC date strings at midnight to ensure we don't miss records
-      // due to timezone offsets (e.g., Brazil is UTC-3, so local midnight = 03:00 UTC)
       const startDateUtc = `${startDateStr}T00:00:00.000Z`;
       const endDateUtc = `${endDateStr}T23:59:59.999Z`;
       
       console.log(`[useModeloAtualAnalytics] Query period: ${startDateUtc} to ${endDateUtc}`);
       
-      // Step 1: Fetch movements in the selected period
-      const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
-        body: { 
-          table: 'pipefy_moviment_cfos', 
-          action: 'query_period',
-          startDate: startDateUtc,
-          endDate: endDateUtc,
-          limit: 50000 
-        }
-      });
+      // Step 1: Fetch movements in the selected period (by Entrada)
+      // Step 1b: Fetch cards CREATED in the period (for MQL by creation date)
+      const [periodResponse, creationResponse] = await Promise.all([
+        supabase.functions.invoke('query-external-db', {
+          body: { 
+            table: 'pipefy_moviment_cfos', 
+            action: 'query_period',
+            startDate: startDateUtc,
+            endDate: endDateUtc,
+            limit: 50000 
+          }
+        }),
+        supabase.functions.invoke('query-external-db', {
+          body: { 
+            table: 'pipefy_moviment_cfos', 
+            action: 'query_period_by_creation',
+            startDate: startDateUtc,
+            endDate: endDateUtc,
+            limit: 50000 
+          }
+        }),
+      ]);
 
-      if (fetchError) {
-        console.error('[useModeloAtualAnalytics] Error fetching data:', fetchError);
-        throw fetchError;
+      if (periodResponse.error) {
+        console.error('[useModeloAtualAnalytics] Error fetching period data:', periodResponse.error);
+        throw periodResponse.error;
       }
 
-      if (!responseData?.data) {
+      if (!periodResponse.data?.data) {
         console.warn('[useModeloAtualAnalytics] No data returned');
-        return { cards: [], fullHistory: [] };
+        return { cards: [], fullHistory: [], mqlByCreation: [] };
       }
 
-      console.log(`[useModeloAtualAnalytics] Raw data rows: ${responseData.data.length}`);
-
-      const cards = parseCards(responseData.data);
-
+      console.log(`[useModeloAtualAnalytics] Raw period data rows: ${periodResponse.data.data.length}`);
+      const cards = parseCards(periodResponse.data.data);
       console.log(`[useModeloAtualAnalytics] Parsed ${cards.length} card movements`);
+      
+      // Parse MQL-by-creation cards (skip phase filter - these can be in any phase including "Perdido")
+      let mqlByCreation: ModeloAtualCard[] = [];
+      if (creationResponse.data?.data) {
+        mqlByCreation = parseCards(creationResponse.data.data, true); // skipPhaseFilter=true
+        console.log(`[useModeloAtualAnalytics] Cards created in period: ${mqlByCreation.length}`);
+      } else if (creationResponse.error) {
+        console.error('[useModeloAtualAnalytics] Error fetching creation data:', creationResponse.error);
+      }
+
       const uniquePhases = [...new Set(cards.map(c => c.fase))];
       console.log(`[useModeloAtualAnalytics] Unique phases:`, uniquePhases);
       
-      // Step 2: Get unique card IDs from period
-      const uniqueCardIds = [...new Set(cards.map(c => c.id))];
-      console.log(`[useModeloAtualAnalytics] Unique card IDs in period: ${uniqueCardIds.length}`);
+      // Step 2: Get unique card IDs from period (union of both queries)
+      const allCardIds = new Set([...cards.map(c => c.id), ...mqlByCreation.map(c => c.id)]);
+      const uniqueCardIds = [...allCardIds];
+      console.log(`[useModeloAtualAnalytics] Unique card IDs (union): ${uniqueCardIds.length}`);
       
       // Step 3: Fetch full history for these cards (to find absolute first entry per phase)
       let fullHistory: ModeloAtualCard[] = [];
@@ -237,14 +255,13 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         
         if (historyError) {
           console.error('[useModeloAtualAnalytics] Error fetching full history:', historyError);
-          // Continue without full history - will fall back to period-only data
         } else if (historyData?.data) {
           fullHistory = parseCards(historyData.data);
           console.log(`[useModeloAtualAnalytics] Full history loaded: ${fullHistory.length} movements`);
         }
       }
 
-      return { cards, fullHistory };
+      return { cards, fullHistory, mqlByCreation };
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
@@ -252,6 +269,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
 
   const cards = data?.cards ?? [];
   const fullHistory = data?.fullHistory ?? [];
+  const mqlByCreation = data?.mqlByCreation ?? [];
 
   // Build a map of FIRST entry for EACH indicator per card (using full history)
   // This ensures we count each indicator only once, in the month of first entry
@@ -286,26 +304,41 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
   }, [fullHistory, cards]);
 
   // Get cards for a specific indicator - UNIVERSAL FIRST-ENTRY LOGIC
+  // MQL uses CREATION DATE logic (aligned with Pipefy): card created in period + faturamento >= 200k
   const getCardsForIndicator = useMemo(() => {
     return (indicator: IndicatorType): ModeloAtualCard[] => {
       const uniqueCards = new Map<string, ModeloAtualCard>();
       
-      // For LEADS indicator: union of leads + mql phases
+      if (indicator === 'mql') {
+        // MQL: Use creation date logic (aligned with Pipefy)
+        // Card created in the period + faturamento >= R$ 200k
+        for (const card of mqlByCreation) {
+          if (!card.dataCriacao) continue;
+          const creationTime = card.dataCriacao.getTime();
+          if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa)) {
+            // Deduplicate by card ID - keep first occurrence
+            if (!uniqueCards.has(card.id)) {
+              uniqueCards.set(card.id, card);
+            }
+          }
+        }
+        console.log(`[useModeloAtualAnalytics] getCardsForIndicator mql (by creation): ${uniqueCards.size} cards`);
+        return Array.from(uniqueCards.values());
+      }
+      
+      // For all other indicators: use FIRST-ENTRY logic
       const indicatorsToCheck: IndicatorType[] = indicator === 'leads' 
         ? ['leads', 'mql']
         : [indicator];
       
       for (const ind of indicatorsToCheck) {
-        // Check each card's first entry for this indicator
         for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
           const firstEntry = indicatorMap.get(ind);
           if (!firstEntry) continue;
           
           const entryTime = firstEntry.dataEntrada.getTime();
           
-          // Only include if FIRST entry was in selected period
           if (entryTime >= startTime && entryTime <= endTime) {
-            // For same card appearing in multiple indicators (e.g., leads+mql), keep earliest
             const existing = uniqueCards.get(cardId);
             if (!existing || firstEntry.dataEntrada < existing.dataEntrada) {
               uniqueCards.set(cardId, firstEntry);
@@ -317,7 +350,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       console.log(`[useModeloAtualAnalytics] getCardsForIndicator ${indicator}: ${uniqueCards.size} cards`);
       return Array.from(uniqueCards.values());
     };
-  }, [firstEntryByCardAndIndicator, startTime, endTime]);
+  }, [firstEntryByCardAndIndicator, mqlByCreation, startTime, endTime]);
 
   // Get cards for leads - now uses actual data from database
   const getLeadsCards = useMemo(() => {
