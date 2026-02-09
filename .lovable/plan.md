@@ -1,51 +1,64 @@
 
 
-# Corrigir contagem de vendas: usar Data de Assinatura do Contrato
+# Corrigir contagem de vendas no Analytics (13 -> 18)
 
-## Problema
+## Diagnostico
 
-O sistema mostra apenas 13 vendas em Janeiro quando o Pipefy mostra 18. A causa raiz: o sistema usa a data de **Entrada** na fase "Contrato assinado" para determinar o mes da venda. Porem, alguns cards sao assinados em Janeiro mas movidos para "Contrato assinado" no Pipefy apenas em Fevereiro. O campo **"Data de assinatura do contrato"** tem a data correta, mas nao e usado na filtragem por periodo.
+O `useModeloAtualMetas` mostra 18 vendas (correto), mas `useModeloAtualAnalytics` mostra apenas 13. A causa raiz esta em DUAS camadas:
+
+### Camada 1: parseCardRow nao sobrescreve dataEntrada
+No `useModeloAtualMetas.ts`, a correcao sobrescreve `dataEntrada = dataAssinatura` no momento do parsing para a fase "Contrato assinado". Porem, no `useModeloAtualAnalytics.ts`, a funcao `parseCardRow` (linha 100) mantem `dataEntrada` como o valor original de `Entrada` e apenas armazena `dataAssinatura` separadamente. A logica de "effective date" nas linhas 297-303 e 346-348 deveria compensar, mas e fragil e depende de `dataAssinatura` estar populado em CADA registro do historico.
+
+### Camada 2: Cards possivelmente nao capturados
+Se algum dos 5 cards faltantes nao tem NENHUMA movimentacao com `Entrada` em Janeiro (apenas `dataAssinatura` em Janeiro), o `query_period` do servidor nao os retorna, e eles nunca entram no `query_card_history`.
 
 ## Solucao
 
-Priorizar o campo `Data de assinatura do contrato` sobre `Entrada` ao determinar a data do evento de venda. Quando preenchido, esse campo substitui a data de Entrada para fins de contagem no periodo.
+### 1. `src/hooks/useModeloAtualAnalytics.ts` - parseCardRow
+
+Aplicar a mesma logica do metas: sobrescrever `dataEntrada` com `dataAssinatura` quando a fase e "Contrato assinado" e `dataAssinatura` esta preenchido. Isso garante que TODA a logica downstream (firstEntry, getCardsForIndicator, toDetailItem) funcione automaticamente.
+
+Na funcao `parseCardRow` (por volta da linha 100-151):
+- Apos parsear `dataAssinatura` (linha 110), adicionar:
+```
+if (fase === 'Contrato assinado' && dataAssinatura) {
+  dataEntrada = dataAssinatura;
+}
+```
+- Tornar `dataEntrada` mutavel (usar `let` em vez de `const`)
+
+### 2. `src/hooks/useModeloAtualAnalytics.ts` - Query adicional por data de assinatura
+
+Adicionar uma terceira query paralela para buscar cards com `"Data de assinatura do contrato"` no periodo selecionado. Isso captura cards que tem assinatura em Janeiro mas nenhuma `Entrada` em Janeiro.
+
+Na funcao de query (linhas 191-210):
+- Adicionar novo request usando uma nova action `query_period_by_signature`
+- Mergear os resultados com os cards do `query_period`
+- Incluir esses card IDs no `query_card_history`
+
+### 3. `supabase/functions/query-external-db/index.ts` - Nova action
+
+Adicionar action `query_period_by_signature`:
+```sql
+SELECT * FROM pipefy_moviment_cfos
+WHERE "Data de assinatura do contrato" >= $1::timestamp
+AND "Data de assinatura do contrato" <= $2::timestamp
+ORDER BY "Data de assinatura do contrato" DESC
+LIMIT $3
+```
+
+### 4. Simplificar logica de effective date
+
+Com a sobrescrita no parseCardRow, a logica de "effective date" nas linhas 297-303 e 346-348 do `getCardsForIndicator` se torna redundante (pois `dataEntrada` ja contem a data correta). Manter por seguranca, mas agora ambos os caminhos dao o mesmo resultado.
 
 ## Arquivos a modificar
 
-### 1. `src/hooks/useModeloAtualMetas.ts`
+1. `supabase/functions/query-external-db/index.ts` - adicionar action `query_period_by_signature`
+2. `src/hooks/useModeloAtualAnalytics.ts` - sobrescrever dataEntrada no parseCardRow + query adicional por assinatura
 
-**Parsing (linhas 165-200):**
-- Adicionar parsing de `Data de assinatura do contrato` como `dataAssinatura`
-- Para movimentos na fase `'Contrato assinado'`: se `dataAssinatura` existir, sobrescrever `dataEntrada` com `dataAssinatura`
-- Adicionar `dataAssinatura` ao tipo `ModeloAtualMovement`
+## Resultado esperado
 
-Isso corrige automaticamente `getQtyForPeriod('venda')`, `getValueForPeriod('venda')`, `countForWindow('venda')` e `getGroupedData('venda')`, pois todos usam `movement.dataEntrada`.
-
-### 2. `src/hooks/useModeloAtualAnalytics.ts`
-
-**No `firstEntryByCardAndIndicator` (linhas 275-303):**
-- Para o indicador `'venda'`: ao determinar a data mais antiga, usar `card.dataAssinatura || card.dataEntrada` como data efetiva
-- Isso garante que o first-entry use a data real da assinatura
-
-**No `getCardsForIndicator` (linhas 307-351):**
-- Para `'venda'`: usar `firstEntry.dataAssinatura?.getTime() || firstEntry.dataEntrada.getTime()` ao verificar se esta dentro do periodo
-
-**No `toDetailItem` (linhas 360-377):**
-- Para vendas, usar `dataAssinatura` como `date` quando disponivel (para exibicao correta no drill-down)
-
-## Impacto
-
-- A contagem de vendas passara de 13 para 18 em Janeiro (compativel com o XLSX do Pipefy)
-- O calculo de receita realizada (`useIndicatorsRealized`) tambem sera corrigido automaticamente, pois usa `getValueForPeriod('venda')` do `useModeloAtualMetas`
-- Os graficos e drill-downs na aba Indicadores refletirao os dados corretos
-- Nenhum outro indicador (leads, mql, rm, rr, proposta) e afetado -- a mudanca so se aplica quando `fase === 'Contrato assinado'` E `Data de assinatura do contrato` esta preenchido
-
-## Detalhes tecnicos
-
-A regra de priorizacao:
-```text
-data_efetiva_venda = dataAssinatura ?? dataEntrada
-```
-
-Aplicada APENAS para o indicador 'venda' (fase 'Contrato assinado'). Todos os outros indicadores continuam usando `Entrada` normalmente.
+- `getCardsForIndicator('venda')` retornara 18 cards em Janeiro (igual ao metas)
+- Drill-down de vendas mostrara todos os 18 cards com datas corretas
+- KPIs e graficos refletirao os dados completos
 
