@@ -1,13 +1,11 @@
 import { useState, useMemo } from "react";
-import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { Calendar as CalendarIcon, RefreshCw } from "lucide-react";
+import { startOfMonth, endOfMonth } from "date-fns";
+import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { DateRangePickerGA } from "./DateRangePickerGA";
 import { useMarketingIndicators } from "@/hooks/useMarketingIndicators";
 import { useMetaCampaigns } from "@/hooks/useMetaCampaigns";
 import { useModeloAtualMetas } from "@/hooks/useModeloAtualMetas";
@@ -115,26 +113,9 @@ export function MarketingIndicatorsTab() {
     };
   }, [dateRange, selectedBUs, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod, getO2TaxMrr, getO2TaxSetup, getO2TaxPontual, data.revenue]);
 
-  // Format date range for display
-  const dateRangeDisplay = useMemo(() => {
-    return `${format(dateRange.from, "dd/MM/yyyy", { locale: ptBR })} - ${format(dateRange.to, "dd/MM/yyyy", { locale: ptBR })}`;
-  }, [dateRange]);
 
-  // Quick date presets
-  const setQuickDate = (months: number) => {
-    const today = new Date();
-    if (months === 0) {
-      setDateRange({
-        from: startOfMonth(today),
-        to: endOfMonth(today),
-      });
-    } else {
-      const start = startOfMonth(subMonths(today, months));
-      setDateRange({
-        from: start,
-        to: endOfMonth(today),
-      });
-    }
+  const handleDateRangeChange = (start: Date, end: Date) => {
+    setDateRange({ from: start, to: end });
   };
 
   return (
@@ -144,48 +125,11 @@ export function MarketingIndicatorsTab() {
         <h2 className="text-2xl font-bold">Indicadores de Marketing</h2>
         
         <div className="flex flex-wrap items-center gap-3">
-          {/* Quick date buttons */}
-          <div className="flex gap-1">
-            <Button variant="outline" size="sm" onClick={() => setQuickDate(0)}>
-              Mês Atual
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setQuickDate(2)}>
-              3M
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setQuickDate(5)}>
-              6M
-            </Button>
-          </div>
-
-          {/* Date Range Picker */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "justify-start text-left font-normal min-w-[220px]",
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {dateRangeDisplay}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar
-                mode="range"
-                selected={{ from: dateRange.from, to: dateRange.to }}
-                onSelect={(range) => {
-                  if (range?.from && range?.to) {
-                    setDateRange({ from: range.from, to: range.to });
-                  }
-                }}
-                numberOfMonths={2}
-                locale={ptBR}
-              />
-            </PopoverContent>
-          </Popover>
-
-
+          <DateRangePickerGA
+            startDate={dateRange.from}
+            endDate={dateRange.to}
+            onDateChange={handleDateRangeChange}
+          />
           {/* Channel Filter */}
           <MultiSelect
             options={CHANNEL_OPTIONS}
