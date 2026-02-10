@@ -65,8 +65,13 @@ function parseDate(dateValue: string | null): Date | null {
 
 function parseRawCard(row: any, defaultTicket: number): ExpansaoCard {
   const id = String(row.ID);
-  const dataEntrada = parseDate(row['Entrada']) || new Date();
+  let dataEntrada = parseDate(row['Entrada']) || new Date();
   const dataSaida = parseDate(row['Saída']);
+  const fase = row['Fase'] || '';
+  const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
+  if (fase === 'Contrato assinado' && dataAssinatura) {
+    dataEntrada = dataAssinatura;
+  }
   
   // Calculate duration dynamically
   let duracao = 0;
@@ -126,30 +131,46 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
     queryKey: ['expansao-movements-analytics', produto, startDateStr, endDateStr],
     queryFn: async () => {
       // Step 1: Fetch movements in the selected period
-      const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
-        body: { 
-          table: 'pipefy_cards_movements_expansao', 
-          action: 'query_period',
-          startDate: `${startDateStr}T00:00:00`,
-          endDate: `${endDateStr}T23:59:59`,
-          limit: 10000 
-        }
-      });
+      // Parallel queries: by entry date AND by signature date
+      const [periodRes, signatureRes] = await Promise.all([
+        supabase.functions.invoke('query-external-db', {
+          body: { 
+            table: 'pipefy_cards_movements_expansao', 
+            action: 'query_period',
+            startDate: `${startDateStr}T00:00:00`,
+            endDate: `${endDateStr}T23:59:59`,
+            limit: 10000 
+          }
+        }),
+        supabase.functions.invoke('query-external-db', {
+          body: { 
+            table: 'pipefy_cards_movements_expansao', 
+            action: 'query_period_by_signature',
+            startDate: `${startDateStr}T00:00:00`,
+            endDate: `${endDateStr}T23:59:59`,
+            limit: 10000 
+          }
+        }),
+      ]);
 
-      if (fetchError) {
-        console.error(`Error fetching ${produto} analytics:`, fetchError);
-        throw fetchError;
+      if (periodRes.error) {
+        console.error(`Error fetching ${produto} analytics:`, periodRes.error);
+        throw periodRes.error;
       }
 
-      if (!responseData?.data) {
-        return { cards: [], fullHistory: [] };
-      }
-
-      // Filter by product and parse cards
+      // Merge and deduplicate by ID + Fase
+      const allRows = [
+        ...(periodRes.data?.data || []),
+        ...(signatureRes.data?.data || []),
+      ];
+      const seen = new Set<string>();
       const cards: ExpansaoCard[] = [];
-      for (const row of responseData.data) {
+      for (const row of allRows) {
         const rowProduto = row['Produtos'] || '';
         if (rowProduto !== produto) continue;
+        const key = `${row['ID']}_${row['Fase']}_${row['Entrada']}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
         cards.push(parseRawCard(row, defaultTicket));
       }
 
