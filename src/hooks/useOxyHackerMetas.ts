@@ -10,8 +10,9 @@ interface OxyHackerMovement {
   titulo: string;
   fase: string;           // Phase name from movement
   faseAtual: string;      // Current phase of the card
-  dataEntrada: Date;      // When entered this phase
+  dataEntrada: Date;      // When entered this phase (or signature date for sales)
   dataSaida: Date | null; // When left this phase
+  dataAssinatura: Date | null; // Data de assinatura do contrato
   valorMRR: number | null;
   valorPontual: number | null;
   valorSetup: number | null;
@@ -45,23 +46,53 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['oxy-hacker-metas-movements', startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async (): Promise<OxyHackerMetasResult> => {
-      // Use movements table for accurate phase tracking with server-side date filter
-      const { data: responseData, error: fetchError } = await supabase.functions.invoke('query-external-db', {
-        body: { 
-          table: 'pipefy_cards_movements_expansao', 
-          action: 'query_period',
-          startDate: startDate?.toISOString().split('T')[0] + 'T00:00:00',
-          endDate: endDate?.toISOString().split('T')[0] + 'T23:59:59',
-          limit: 10000 
-        }
-      });
+      // Query by entry date AND by signature date in parallel
+      // This captures sales signed in the period but entered later in Pipefy
+      const [entryResponse, signatureResponse] = await Promise.all([
+        supabase.functions.invoke('query-external-db', {
+          body: { 
+            table: 'pipefy_cards_movements_expansao', 
+            action: 'query_period',
+            startDate: startDate?.toISOString().split('T')[0] + 'T00:00:00',
+            endDate: endDate?.toISOString().split('T')[0] + 'T23:59:59',
+            limit: 10000 
+          }
+        }),
+        supabase.functions.invoke('query-external-db', {
+          body: { 
+            table: 'pipefy_cards_movements_expansao', 
+            action: 'query_period_by_signature',
+            startDate: startDate?.toISOString().split('T')[0] + 'T00:00:00',
+            endDate: endDate?.toISOString().split('T')[0] + 'T23:59:59',
+            limit: 10000 
+          }
+        }),
+      ]);
 
-      if (fetchError) {
-        console.error('Error fetching oxy hacker movements:', fetchError);
-        throw fetchError;
+      if (entryResponse.error) {
+        console.error('Error fetching oxy hacker movements by entry:', entryResponse.error);
+        throw entryResponse.error;
       }
 
-      if (!responseData?.data) {
+      // Merge results with deduplication by id + fase
+      const allRows: any[] = [...(entryResponse.data?.data || [])];
+      const seen = new Set<string>();
+      for (const row of allRows) {
+        seen.add(`${row.ID}_${row['Fase']}`);
+      }
+      
+      // Add signature-period rows that weren't already in entry-period results
+      if (signatureResponse.data?.data) {
+        for (const row of signatureResponse.data.data) {
+          const key = `${row.ID}_${row['Fase']}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            allRows.push(row);
+          }
+        }
+      }
+
+      if (allRows.length === 0) {
         console.warn('No data returned from external db for oxy hacker movements');
         return { movements: [] };
       }
@@ -70,19 +101,29 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
       // Filter only "Oxy Hacker" products for this hook
       const movements: OxyHackerMovement[] = [];
       
-      for (const row of responseData.data) {
+      for (const row of allRows) {
         const produto = row['Produtos'] || '';
         
         // Filter only "Oxy Hacker" products for this hook
         if (produto !== 'Oxy Hacker') continue;
         
+        const fase = row['Fase'] || '';
+        const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
+        
+        // Para vendas (Contrato assinado), priorizar data de assinatura sobre data de entrada
+        let dataEntrada = parseDate(row['Entrada']) || new Date();
+        if (fase === 'Contrato assinado' && dataAssinatura) {
+          dataEntrada = dataAssinatura;
+        }
+        
         const movement: OxyHackerMovement = {
           id: String(row.ID),
           titulo: row['Título'] || '',
-          fase: row['Fase'] || '',  // This is the phase name from movement
-          faseAtual: row['Fase Atual'] || '', // Current phase of the card
-          dataEntrada: parseDate(row['Entrada']) || new Date(),
+          fase,
+          faseAtual: row['Fase Atual'] || '',
+          dataEntrada,
           dataSaida: parseDate(row['Saída']),
+          dataAssinatura,
           valorMRR: row['Valor MRR'] ? parseFloat(row['Valor MRR']) : null,
           valorPontual: row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : null,
           valorSetup: row['Valor Setup'] ? parseFloat(row['Valor Setup']) : null,
