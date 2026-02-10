@@ -1,78 +1,54 @@
 
 
-# Corrigir contagem de Propostas Enviadas (134 -> 95)
+# Corrigir vendas Oxy Hacker usando Data de Assinatura do Contrato
 
 ## Problema
 
-O sistema conta 134 propostas em Janeiro enquanto o Pipefy mostra 95. A diferenca de 39 cards vem de duas fontes:
+17 vendas Oxy Hacker aparecem em Fevereiro porque foram alimentadas no Pipefy nesse mes, mas os contratos foram assinados entre Outubro e Dezembro de 2025. O sistema usa a coluna "Entrada" (data de alimentacao) ao inves da "Data de assinatura do contrato" (data real).
 
-### Causa 1: Fase "Enviar proposta" inflando contagem
-O mapeamento inclui duas fases para o indicador `proposta`:
-- "Proposta enviada / Follow Up" (correto - proposta efetivamente enviada)
-- "Enviar proposta" (incorreto - fase intermediaria ANTES do envio, nao deve contar)
+## Evidencia do banco de dados
 
-O Pipefy so rastreia "First time enter Proposta enviada / Follow Up". Cards que estao em "Enviar proposta" (etapa preparatoria) nao devem ser contados como propostas enviadas.
-
-### Causa 2: Re-entradas no periodo
-O sistema usa `query_period` que busca movimentacoes com `Entrada` em Janeiro. Cards que entraram em "Proposta enviada / Follow Up" pela primeira vez em Dezembro e re-entraram em Janeiro sao contados pelo sistema, mas nao pelo Pipefy (que usa "First time enter").
-
-Como o `query_period` so tem dados de Janeiro, o sistema nao consegue saber que a primeira entrada foi em outro mes. A deduplicacao por card ID funciona dentro do dataset, mas nao tem a informacao historica para filtrar re-entradas.
+Todos os cards de "Contrato assinado" Oxy Hacker com Entrada em Fevereiro tem "Data de assinatura do contrato" preenchida com datas de 2025:
+- Formato: ISO 8601 (`"2025-10-30T00:00:00.000Z"`)
+- Todas as 17 vendas tem assinatura ANTES de 2026
 
 ## Solucao
 
-### Mudanca 1: Remover "Enviar proposta" do mapeamento
+Modificar o hook `useOxyHackerMetas.ts` para priorizar a "Data de assinatura do contrato" sobre a "Entrada" quando a fase for "Contrato assinado". Esta e a mesma abordagem ja usada no Modelo Atual (`useModeloAtualMetas.ts`).
 
-Nos dois hooks, remover a fase "Enviar proposta" do indicador `proposta`:
+## Mudancas tecnicas
 
-**Arquivo: `src/hooks/useModeloAtualMetas.ts`**
+### Arquivo: `src/hooks/useOxyHackerMetas.ts`
+
+**1. Adicionar campo `dataAssinatura` na interface `OxyHackerMovement`**
+
+Adicionar `dataAssinatura: Date | null;` para armazenar a data real de assinatura.
+
+**2. Parsear a coluna no momento da criacao do movement**
+
+No loop de parsing (linha 79-91), capturar `row['Data de assinatura do contrato']` e, quando a fase for "Contrato assinado" e a data de assinatura existir, substituir `dataEntrada` pela data de assinatura:
+
 ```text
 ANTES:
-  'Proposta enviada / Follow Up': 'proposta',
-  'Enviar proposta': 'proposta',
+  dataEntrada: parseDate(row['Entrada']) || new Date(),
 
 DEPOIS:
-  'Proposta enviada / Follow Up': 'proposta',
+  // Para vendas, priorizar data de assinatura sobre data de entrada
+  const fase = row['Fase'] || '';
+  const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
+  let dataEntrada = parseDate(row['Entrada']) || new Date();
+  if (fase === 'Contrato assinado' && dataAssinatura) {
+    dataEntrada = dataAssinatura;
+  }
 ```
 
-**Arquivo: `src/hooks/useModeloAtualAnalytics.ts`**
-Mesma mudanca no `PHASE_TO_INDICATOR`.
+**3. Adicionar query paralela por data de assinatura**
 
-### Mudanca 2: Filtrar re-entradas usando historico
-
-Para eliminar cards que re-entraram em Janeiro mas cuja primeira entrada foi em outro mes, adicionar uma query historica especifica para propostas. O sistema ja faz `query_card_history` no analytics; no metas, precisamos de uma abordagem mais leve.
-
-**Abordagem**: No `useModeloAtualMetas`, apos coletar os card IDs de proposta, buscar o historico desses cards especificos e manter apenas aqueles cuja PRIMEIRA entrada em "Proposta enviada / Follow Up" esta dentro do periodo selecionado.
-
-**Arquivo: `src/hooks/useModeloAtualMetas.ts`**
-- Na funcao `getQtyForPeriod`, quando `indicator === 'proposta'`:
-  1. Coletar os card IDs candidatos (como ja faz)
-  2. Buscar historico desses cards via `query_card_history`
-  3. Para cada card, verificar se a primeira entrada em "Proposta enviada / Follow Up" esta no periodo
-  4. Retornar apenas os cards que passam nesse filtro
-
-Como isso requer uma chamada async dentro de `getQtyForPeriod` (que hoje e sincrono), a alternativa mais simples e:
-- Buscar o historico de propostas durante o fetch inicial (junto com `query_period` e `query_period_by_creation`)
-- Filtrar no momento do parsing, antes de adicionar ao array `movements`
-
-**Implementacao concreta**:
-- Adicionar um terceiro request paralelo no fetch: buscar todos os cards que ALGUMA VEZ entraram em "Proposta enviada / Follow Up" e estao no dataset
-- Usar a logica de "first entry" para filtrar
-
-Na verdade, a abordagem mais simples e eficiente: mudar a action da query para propostas de `query_period` (filtra por `Entrada`) para uma nova logica que filtra pela PRIMEIRA entrada na fase. Como isso exigiria mudancas no backend, a alternativa e:
-
-**Solucao simplificada**: Apos remover "Enviar proposta", verificar se a contagem se aproxima de 95. Se ainda houver discrepancia significativa (re-entradas), implementar o filtro historico como segundo passo.
-
-## Arquivos a modificar
-
-### 1. `src/hooks/useModeloAtualMetas.ts`
-- Remover `'Enviar proposta': 'proposta'` do mapeamento PHASE_TO_INDICATOR
-
-### 2. `src/hooks/useModeloAtualAnalytics.ts`
-- Remover `'Enviar proposta': 'proposta'` do mapeamento PHASE_TO_INDICATOR
+Adicionar uma segunda chamada `query_period_by_signature` em paralelo com a `query_period` existente, para capturar vendas cujo contrato foi assinado no periodo mas cuja "Entrada" esta fora dele. Mesclar resultados com deduplicacao por `id + fase`.
 
 ## Resultado esperado
 
-- A contagem de propostas diminuira significativamente (removendo cards em fase preparatoria)
-- Apos verificacao, se ainda houver discrepancia por re-entradas, implementaremos o filtro historico como segundo passo
-- Nenhum outro indicador e afetado
+- As 17 vendas com assinatura em 2025 deixarao de aparecer em Fevereiro 2026
+- Se houver vendas reais em Fevereiro (com data de assinatura em Fevereiro), elas continuarao aparecendo
+- Nenhum outro indicador e afetado (leads, mql, rm, rr, proposta) -- a priorizacao so ocorre para "Contrato assinado"
 
