@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChevronDown, ChevronUp, ChevronRight, Loader2, AlertCircle, ExternalLink, Image } from "lucide-react";
-import { CampaignData, AdSetData, AdData } from "./types";
+import { CampaignData, AdSetData, AdData, CampaignFunnel } from "./types";
 import { useCampaignAdSets } from "@/hooks/useCampaignAdSets";
 import { useAdSetAds } from "@/hooks/useAdSetAds";
+import { cn } from "@/lib/utils";
 
 interface CampaignsTableProps {
   campaigns: CampaignData[];
+  campaignFunnels?: CampaignFunnel[];
   isLoading?: boolean;
   error?: Error | null;
   startDate: Date;
@@ -225,10 +227,11 @@ function AdSetRow({
 // ─── Campaign Row (level 1) ───────────────────────────────────
 
 function CampaignRow({
-  campaign, isExpanded, onToggle, startDate, endDate, onPreview,
+  campaign, isExpanded, onToggle, startDate, endDate, onPreview, funnel,
 }: {
   campaign: CampaignData; isExpanded: boolean; onToggle: () => void;
   startDate: Date; endDate: Date; onPreview: (data: PreviewModalData) => void;
+  funnel?: CampaignFunnel;
 }) {
   const { data: adSets, isLoading: adSetsLoading, error: adSetsError } = useCampaignAdSets(
     isExpanded ? campaign.id : null, startDate, endDate, isExpanded
@@ -285,6 +288,14 @@ function CampaignRow({
           {(campaign.cpa || 0) > 0 ? formatCurrency(campaign.cpa!) : '-'}
         </TableCell>
         <TableCell>{getStatusBadge(campaign.status)}</TableCell>
+        {/* CRM funnel columns */}
+        <TableCell className="text-right font-medium">{funnel ? funnel.leads : '-'}</TableCell>
+        <TableCell className="text-right font-medium">{funnel ? funnel.mqls : '-'}</TableCell>
+        <TableCell className="text-right font-medium">{funnel ? funnel.vendas : '-'}</TableCell>
+        <TableCell className="text-right font-medium">{funnel ? formatCurrency(funnel.receita) : '-'}</TableCell>
+        <TableCell className={cn("text-right font-medium", funnel && funnel.roi > 0 && (funnel.roi >= 1 ? "text-chart-2" : "text-destructive"))}>
+          {funnel && funnel.investimento > 0 ? `${funnel.roi.toFixed(1)}x` : '-'}
+        </TableCell>
       </TableRow>
 
       {isExpanded && adSetsLoading && (
@@ -372,7 +383,7 @@ function CreativePreviewModal({
 
 // ─── Main Component ───────────────────────────────────────────
 
-export function CampaignsTable({ campaigns, isLoading, error, startDate, endDate }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns, campaignFunnels, isLoading, error, startDate, endDate }: CampaignsTableProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
   const [previewData, setPreviewData] = useState<PreviewModalData | null>(null);
@@ -385,6 +396,17 @@ export function CampaignsTable({ campaigns, isLoading, error, startDate, endDate
       return newSet;
     });
   };
+
+  // Build lookup: campaign ID -> funnel
+  const funnelMap = useMemo(() => {
+    const map = new Map<string, CampaignFunnel>();
+    if (campaignFunnels) {
+      for (const f of campaignFunnels) {
+        if (f.campaignId) map.set(f.campaignId, f);
+      }
+    }
+    return map;
+  }, [campaignFunnels]);
 
   const hasData = campaigns.length > 0;
 
@@ -442,6 +464,11 @@ export function CampaignsTable({ campaigns, isLoading, error, startDate, endDate
                         <TableHead className="text-right">CPL</TableHead>
                         <TableHead className="text-right">CPA</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead className="text-right border-l">Leads (CRM)</TableHead>
+                        <TableHead className="text-right">MQLs</TableHead>
+                        <TableHead className="text-right">Vendas</TableHead>
+                        <TableHead className="text-right">Receita</TableHead>
+                        <TableHead className="text-right">ROI</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -454,6 +481,7 @@ export function CampaignsTable({ campaigns, isLoading, error, startDate, endDate
                           startDate={startDate}
                           endDate={endDate}
                           onPreview={setPreviewData}
+                          funnel={funnelMap.get(campaign.id)}
                         />
                       ))}
                     </TableBody>
@@ -470,6 +498,18 @@ export function CampaignsTable({ campaigns, isLoading, error, startDate, endDate
                         <span className="text-muted-foreground">Gasto: </span>
                         <span className="font-medium">{formatCurrency(campaigns.reduce((sum, c) => sum + c.investment, 0))}</span>
                       </span>
+                      {campaignFunnels && campaignFunnels.length > 0 && (
+                        <>
+                          <span>
+                            <span className="text-muted-foreground">Vendas (CRM): </span>
+                            <span className="font-medium">{campaignFunnels.reduce((s, f) => s + f.vendas, 0)}</span>
+                          </span>
+                          <span>
+                            <span className="text-muted-foreground">Receita: </span>
+                            <span className="font-medium">{formatCurrency(campaignFunnels.reduce((s, f) => s + f.receita, 0))}</span>
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

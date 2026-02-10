@@ -22,7 +22,6 @@ import { ChannelMetricsCards } from "./marketing-indicators/ChannelMetricsCards"
 import { RevenueMetricsCards } from "./marketing-indicators/RevenueMetricsCards";
 import { CostPerStageGauges } from "./marketing-indicators/CostPerStageGauges";
 import { ChannelAttributionCards } from "./marketing-indicators/ChannelAttributionCards";
-import { CampaignFunnelTable } from "./marketing-indicators/CampaignFunnelTable";
 import { DrillDownBarChart } from "./indicators/DrillDownBarChart";
 import { CHANNEL_LABELS, ChannelId, CostPerStage, AttributionCard } from "./marketing-indicators/types";
 
@@ -223,8 +222,6 @@ export function MarketingIndicatorsTab() {
       {/* Attribution Cards (real data from Pipefy) */}
       <ChannelAttributionCards summaries={channelSummaries} />
 
-      {/* Campaign Funnel Table (real data) */}
-      <CampaignFunnelTable funnels={campaignFunnels} />
 
       {/* Revenue Metrics Cards - Integrated with Modelo Atual data */}
       <RevenueMetricsCards
@@ -385,6 +382,7 @@ export function MarketingIndicatorsTab() {
       {/* Campaigns Table - Meta Ads Integration */}
       <CampaignsTable 
         campaigns={metaCampaigns || []} 
+        campaignFunnels={campaignFunnels}
         isLoading={isLoadingMeta}
         error={metaError || undefined}
         startDate={dateRange.from}
