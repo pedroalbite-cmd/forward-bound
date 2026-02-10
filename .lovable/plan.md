@@ -1,8 +1,22 @@
 
 
-# Ocultar campanhas, conjuntos e anuncios pausados
+# Mostrar campanhas com atividade no periodo (em vez de filtrar por status)
 
-Filtrar itens com status "paused" em todos os 3 niveis da tabela de Campanhas e Anuncios.
+## Problema
+
+O filtro atual (`status !== 'paused'`) usa o status **atual** da campanha. Isso significa que uma campanha que estava ativa em janeiro mas foi pausada em fevereiro nao aparece ao consultar janeiro -- mesmo tendo dados naquele periodo.
+
+## Solucao
+
+Trocar o criterio de filtro: em vez de verificar o status, verificar se houve **gasto no periodo** (`investment > 0`). Se a API do Meta retornou dados de gasto para aquele periodo, a campanha estava ativa nele.
+
+A mesma logica se aplica aos 3 niveis:
+
+| Nivel | Filtro atual | Novo filtro |
+|-------|-------------|-------------|
+| Campanha | `status !== 'paused'` | `investment > 0` |
+| Conjunto | `status !== 'paused'` | `spend > 0` |
+| Anuncio | `status !== 'paused'` | `spend > 0` |
 
 ## Arquivo afetado
 
@@ -10,19 +24,18 @@ Filtrar itens com status "paused" em todos os 3 niveis da tabela de Campanhas e 
 
 ## Mudancas
 
-### 1. Filtrar campanhas pausadas (linha ~438)
-Adicionar `.filter(c => c.status !== 'paused')` antes do `.map()` na renderizacao das campanhas. Isso remove campanhas pausadas da listagem principal.
+### 1. Campanhas (linha ~438, 454, 458, 462)
+Substituir todos os `.filter(c => c.status !== 'paused')` por `.filter(c => c.investment > 0)`.
 
-### 2. Filtrar conjuntos de anuncios pausados (linha ~288)
-Adicionar `.filter(a => a.status !== 'paused')` antes do `.map()` na renderizacao dos ad sets dentro de `CampaignRow`.
+### 2. Conjuntos de anuncios (linha ~288)
+Substituir `.filter(a => a.status !== 'paused')` por `.filter(a => a.spend > 0)`.
 
-### 3. Filtrar anuncios pausados (linha ~198)
-Adicionar `.filter(a => a.status !== 'paused')` antes do `.map()` na renderizacao dos ads dentro de `AdSetRow`.
-
-### 4. Atualizar contagem no footer (linha ~454)
-Aplicar o mesmo filtro no calculo de totais do footer (`campaigns.length`, `reduce` de leads e gasto) para que os numeros reflitam apenas itens ativos/encerrados.
+### 3. Anuncios (linha ~198)
+Substituir `.filter(a => a.status !== 'paused')` por `.filter(a => a.spend > 0)`.
 
 ## Resultado
 
-Apenas campanhas, conjuntos e anuncios com status **ativo** ou **encerrado** serao exibidos. Itens pausados ficam completamente ocultos.
+- **Mes atual**: campanhas pausadas sem gasto ficam ocultas (mesmo comportamento de antes).
+- **Mes passado**: campanhas que estavam ativas e tiveram gasto aparecem normalmente, mesmo que hoje estejam pausadas.
+- Campanhas que nunca tiveram gasto em nenhum periodo continuam ocultas.
 
