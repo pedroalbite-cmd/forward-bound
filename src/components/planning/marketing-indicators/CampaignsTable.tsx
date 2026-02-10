@@ -117,12 +117,6 @@ function AdRow({ ad, onPreview }: { ad: AdData; onPreview: (data: PreviewModalDa
           )}
         </div>
       </TableCell>
-      <TableCell className="text-xs text-muted-foreground">Anúncio</TableCell>
-      <TableCell className="text-right text-xs">{formatNumber(ad.impressions)}</TableCell>
-      <TableCell className="text-right text-xs">{formatNumber(ad.clicks)}</TableCell>
-      <TableCell className="text-right text-xs">{formatPercent(ad.ctr)}</TableCell>
-      <TableCell className="text-right text-xs">{formatNumber(ad.reach)}</TableCell>
-      <TableCell className="text-right text-xs">{ad.frequency > 0 ? ad.frequency.toFixed(2) : '-'}</TableCell>
       <TableCell className="text-right text-xs">{formatNumber(ad.leads)}</TableCell>
       <TableCell className="text-right text-xs">{formatCurrency(ad.spend)}</TableCell>
       <TableCell className="text-right text-xs">{ad.cpl > 0 ? formatCurrency(ad.cpl) : '-'}</TableCell>
@@ -177,12 +171,6 @@ function AdSetRow({
             )}
           </div>
         </TableCell>
-        <TableCell className="text-xs text-muted-foreground">Conjunto</TableCell>
-        <TableCell className="text-right text-sm">{formatNumber(adSet.impressions)}</TableCell>
-        <TableCell className="text-right text-sm">{formatNumber(adSet.clicks)}</TableCell>
-        <TableCell className="text-right text-sm">{formatPercent(adSet.ctr || 0)}</TableCell>
-        <TableCell className="text-right text-sm">{formatNumber(adSet.reach || 0)}</TableCell>
-        <TableCell className="text-right text-sm">{(adSet.frequency || 0) > 0 ? (adSet.frequency!).toFixed(2) : '-'}</TableCell>
         <TableCell className="text-right text-sm">{formatNumber(adSet.leads)}</TableCell>
         <TableCell className="text-right text-sm">{formatCurrency(adSet.spend)}</TableCell>
         <TableCell className="text-right text-sm">{adSet.cpl > 0 ? formatCurrency(adSet.cpl) : '-'}</TableCell>
@@ -192,7 +180,7 @@ function AdSetRow({
 
       {isExpanded && isLoading && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={14} className="text-center py-3 text-muted-foreground text-sm">
+          <TableCell colSpan={13} className="text-center py-3 text-muted-foreground text-sm">
             <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
             Carregando anúncios...
           </TableCell>
@@ -201,7 +189,7 @@ function AdSetRow({
 
       {isExpanded && error && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={14} className="text-center py-3 text-sm text-destructive">
+          <TableCell colSpan={13} className="text-center py-3 text-sm text-destructive">
             {(error as Error).message === 'RATE_LIMIT'
               ? '⏳ Limite de requisições atingido. Aguarde e tente novamente.'
               : `Erro ao carregar anúncios: ${(error as Error).message}`}
@@ -211,7 +199,7 @@ function AdSetRow({
 
       {isExpanded && !isLoading && ads && ads.length === 0 && !error && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={14} className="text-center py-3 text-muted-foreground text-xs">
+          <TableCell colSpan={13} className="text-center py-3 text-muted-foreground text-xs">
             Nenhum anúncio encontrado
           </TableCell>
         </TableRow>
@@ -271,14 +259,6 @@ function CampaignRow({
             )}
           </div>
         </TableCell>
-        <TableCell className="text-xs text-muted-foreground">
-          {campaign.objective?.replace(/_/g, ' ').toLowerCase() || '-'}
-        </TableCell>
-        <TableCell className="text-right">{formatNumber(campaign.impressions || 0)}</TableCell>
-        <TableCell className="text-right">{formatNumber(campaign.clicks || 0)}</TableCell>
-        <TableCell className="text-right">{formatPercent(campaign.ctr || 0)}</TableCell>
-        <TableCell className="text-right">{formatNumber(campaign.reach || 0)}</TableCell>
-        <TableCell className="text-right">{(campaign.frequency || 0) > 0 ? campaign.frequency!.toFixed(2) : '-'}</TableCell>
         <TableCell className="text-right">{formatNumber(campaign.leads)}</TableCell>
         <TableCell className="text-right">{formatCurrency(campaign.investment)}</TableCell>
         <TableCell className="text-right">
@@ -300,7 +280,7 @@ function CampaignRow({
 
       {isExpanded && adSetsLoading && (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={14} className="text-center py-4 text-muted-foreground">
+          <TableCell colSpan={13} className="text-center py-4 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
             Carregando conjuntos de anúncios...
           </TableCell>
@@ -309,7 +289,7 @@ function CampaignRow({
 
       {isExpanded && !adSetsLoading && !hasAdSets && !adSetsError && (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={14} className="text-center py-4 text-muted-foreground text-sm">
+          <TableCell colSpan={13} className="text-center py-4 text-muted-foreground text-sm">
             Nenhum conjunto de anúncio encontrado
           </TableCell>
         </TableRow>
@@ -317,7 +297,7 @@ function CampaignRow({
 
       {isExpanded && adSetsError && (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={14} className="text-center py-4 text-sm text-destructive">
+          <TableCell colSpan={13} className="text-center py-4 text-sm text-destructive">
             {adSetsError.message === 'RATE_LIMIT'
               ? '⏳ Limite de requisições atingido. Aguarde alguns segundos e tente novamente.'
               : `Erro ao carregar conjuntos: ${adSetsError.message}`}
@@ -462,12 +442,6 @@ export function CampaignsTable({ campaigns, campaignFunnels, isLoading, error, s
                         <TableHead className="w-8"></TableHead>
                         <TableHead className="w-14">Preview</TableHead>
                         <TableHead>Nome</TableHead>
-                        <TableHead>Tipo</TableHead>
-                        <TableHead className="text-right">Impressões</TableHead>
-                        <TableHead className="text-right">Cliques</TableHead>
-                        <TableHead className="text-right">CTR</TableHead>
-                        <TableHead className="text-right">Alcance</TableHead>
-                        <TableHead className="text-right">Freq.</TableHead>
                         <TableHead className="text-right">Leads</TableHead>
                         <TableHead className="text-right">Gasto</TableHead>
                         <TableHead className="text-right">CPL</TableHead>
