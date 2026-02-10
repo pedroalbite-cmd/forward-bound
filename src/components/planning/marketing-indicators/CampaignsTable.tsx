@@ -149,17 +149,7 @@ function AdSetRow({
             <ChevronRight className={`h-3 w-3 ml-2 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
           )}
         </TableCell>
-        <TableCell className="w-14 p-2">
-          <Thumbnail
-            url={adSet.thumbnailUrl}
-            name={adSet.name}
-            size="sm"
-            onClick={() => adSet.thumbnailUrl && onPreview({
-              name: adSet.name, thumbnailUrl: adSet.thumbnailUrl, previewUrl: adSet.previewUrl,
-              spend: adSet.spend, impressions: adSet.impressions, clicks: adSet.clicks, leads: adSet.leads, cpl: adSet.cpl, ctr: adSet.ctr,
-            })}
-          />
-        </TableCell>
+        <TableCell className="w-14 p-2"></TableCell>
         <TableCell className="pl-6 font-normal text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <span>├─ {adSet.name}</span>
@@ -237,17 +227,7 @@ function CampaignRow({
             <ChevronRight className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
           )}
         </TableCell>
-        <TableCell className="w-14 p-2">
-          <Thumbnail
-            url={campaign.thumbnailUrl}
-            name={campaign.name}
-            onClick={() => campaign.thumbnailUrl && onPreview({
-              name: campaign.name, thumbnailUrl: campaign.thumbnailUrl!, previewUrl: campaign.previewUrl,
-              spend: campaign.investment, impressions: campaign.impressions, clicks: campaign.clicks,
-              leads: campaign.leads, cpl: campaign.cpl, ctr: campaign.ctr,
-            })}
-          />
-        </TableCell>
+        <TableCell className="w-14 p-2"></TableCell>
         <TableCell className="font-medium">
           <div className="flex items-center gap-2">
             <span>{campaign.name}</span>
