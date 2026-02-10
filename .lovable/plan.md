@@ -1,64 +1,29 @@
 
+# Remover colunas da tabela Campanhas e Anuncios
 
-# Fix: Campanhas antigas sem dados CRM (fallback por nome)
+Remover as colunas **Tipo**, **Impressoes**, **Cliques**, **CTR**, **Alcance** e **Frequencia** de todos os niveis da tabela (campanhas, conjuntos de anuncios e anuncios).
 
-## Problema
+## Arquivo unico afetado
 
-Campanhas antigas no Pipefy armazenam o **nome** da campanha (ex: "inbound", "conversao_forms") em vez do ID numerico. O cruzamento atual funciona assim:
+`src/components/planning/marketing-indicators/CampaignsTable.tsx`
 
-1. `useMarketingAttribution` tenta associar cada campanha do Pipefy com uma campanha Meta por ID ou nome normalizado
-2. `CampaignsTable` usa `funnelMap.get(campaign.id)` para buscar o funil -- mas so funciona se o `campaignId` no funil corresponde ao `id` da campanha Meta
+## Mudancas
 
-O problema e que quando o nome no Pipefy nao corresponde exatamente ao nome da API Meta (apos normalizacao), o funil e criado sem `campaignId`, e portanto nao aparece na tabela.
+### 1. Header da tabela (linhas 465-471)
+Remover os 6 `TableHead`: Tipo, Impressoes, Cliques, CTR, Alcance, Freq. Manter apenas: expand, Preview, Nome, Leads, Gasto, CPL, CPA, Status + colunas CRM.
 
-## Solucao
+### 2. CampaignRow (linhas 274-282)
+Remover as 7 `TableCell` correspondentes: objective/tipo, impressions, clicks, ctr, reach, frequency. Manter apenas a celula de Leads.
 
-Duas mudancas complementares:
+### 3. AdSetRow (linhas 180-186)
+Remover as 7 `TableCell`: tipo "Conjunto", impressions, clicks, ctr, reach, frequency. Manter apenas Leads.
 
-### 1. Melhorar o fallback por nome no `funnelMap` do `CampaignsTable`
+### 4. AdRow (linhas 120-126)
+Remover as 7 `TableCell`: tipo "Anuncio", impressions, clicks, ctr, reach, frequency. Manter apenas Leads.
 
-**Arquivo: `src/components/planning/marketing-indicators/CampaignsTable.tsx`**
+### 5. Atualizar colSpan
+As linhas com `colSpan={14}` (loading/error/empty states nos niveis AdSet e Campaign) devem ser ajustadas para `colSpan={8}` (14 - 6 colunas removidas).
 
-- Alem do lookup por `campaignId`, adicionar lookup por **nome normalizado** da campanha
-- O `funnelMap` passa a ter duas entradas por funil: uma pelo ID e outra pelo nome normalizado
-- Isso garante que mesmo campanhas sem match de ID encontrem seu funil pela correspondencia de nomes
+Colunas finais da tabela:
 
-### 2. Melhorar a normalizacao no `useMarketingAttribution`
-
-**Arquivo: `src/hooks/useMarketingAttribution.ts`**
-
-- Alem de normalizar acentos/caixa/espacos, remover tambem underscores e hifens para matching mais flexivel
-- Exemplo: "NX_CONVERSAO_FORMS" e "nx conversao forms" devem dar match
-- Adicionar lookup reverso: para cada campanha Meta, tentar encontrar se algum funil do Pipefy contem parte do nome como substring
-
-## Detalhes tecnicos
-
-No `CampaignsTable`, o `funnelMap` sera construido assim:
-
-```
-// Lookup por ID (existente)
-map.set(funnel.campaignId, funnel)
-
-// Lookup por nome normalizado (novo)
-map.set(normalize(funnel.campaignName), funnel)
-```
-
-E o lookup na renderizacao:
-
-```
-const funnel = funnelMap.get(campaign.id) || funnelMap.get(normalize(campaign.name))
-```
-
-Na funcao `normalizeName` do hook, adicionar:
-
-```
-.replace(/[_-]/g, ' ')  // underscores e hifens viram espaco
-```
-
-## Arquivos afetados
-
-| Arquivo | Acao |
-|---------|------|
-| `src/components/planning/marketing-indicators/CampaignsTable.tsx` | Editar - adicionar fallback por nome normalizado no funnelMap |
-| `src/hooks/useMarketingAttribution.ts` | Editar - melhorar normalizacao (underscores, hifens) |
-
+| Expand | Preview | Nome | Leads (Meta) | Gasto | CPL | CPA | Status | Leads (CRM) | MQLs | Vendas | Receita | ROI |
