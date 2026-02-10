@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, LogIn, UserPlus, KeyRound, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { O2Logo } from '@/components/O2Logo';
 
 const loginSchema = z.object({
   email: z.string().trim().email('Email inválido').max(255, 'Email muito longo'),
@@ -514,8 +515,11 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+      <div className="mb-8" style={{ filter: 'drop-shadow(0 0 40px rgba(99,241,97,0.15))' }}>
+        <O2Logo height={48} />
+      </div>
+      <Card className="w-full max-w-md border-primary/20 card-glow">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-display text-gradient">
             {getTitle()}

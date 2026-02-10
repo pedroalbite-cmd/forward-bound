@@ -18,6 +18,8 @@ import { useUserPermissions, TabKey } from "@/hooks/useUserPermissions";
 import { MediaMetasProvider } from "@/contexts/MediaMetasContext";
 import { Calendar, BarChart3, LineChart, Megaphone, Lightbulb, Users, Target, Settings, LogOut, User, Loader2, EyeOff, Eye, Activity, TrendingUp } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { O2Logo } from "@/components/O2Logo";
+import { Separator } from "@/components/ui/separator";
 
 const TAB_CONFIG: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: 'context', label: 'Macro 2025', icon: BarChart3 },
@@ -66,9 +68,13 @@ export default function Planning2026() {
         {/* Header */}
         <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex h-16 items-center justify-between">
-            <h1 className="font-display text-xl font-bold text-gradient">
-              Planejamento Estratégico
-            </h1>
+            <div className="flex items-center gap-3">
+              <O2Logo height={28} />
+              <Separator orientation="vertical" className="h-6 bg-primary/30" />
+              <span className="font-display text-sm font-medium text-muted-foreground hidden sm:inline">
+                Planejamento Estratégico
+              </span>
+            </div>
 
             <div className="flex items-center gap-2">
               <ThemeToggle />
@@ -181,8 +187,10 @@ export default function Planning2026() {
         </main>
 
         {/* Footer */}
-        <footer className="border-t py-6 mt-12">
-          <div className="container flex flex-col items-center justify-center gap-2">
+        <footer className="border-t border-primary/10 py-6 mt-12">
+          <div className="container flex items-center justify-center gap-3">
+            <O2Logo height={20} />
+            <Separator orientation="vertical" className="h-4 bg-primary/20" />
             <p className="text-sm text-muted-foreground">
               Planejamento Estratégico 2026
             </p>
