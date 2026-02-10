@@ -198,7 +198,7 @@ Deno.serve(async (req) => {
       }
 
       // Validate searchColumn to prevent SQL injection
-      const allowedColumns = ['Título', 'ID', 'Empresa', 'Nome', 'Fase', 'Fase Atual'];
+      const allowedColumns = ['Título', 'ID', 'Empresa', 'Nome', 'Fase', 'Fase Atual', 'Campanha', 'Conjunto/grupo', 'Fonte', 'Origem do lead'];
       if (!allowedColumns.includes(searchColumn)) {
         await client.end();
         return new Response(
