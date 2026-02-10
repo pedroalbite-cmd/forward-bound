@@ -1,99 +1,92 @@
 
 
-# Novo Filtro de Data estilo Google Ads - Indicadores e Mkt Indicadores
+# Branding O2 Inc. - Melhorias de Design no Dashboard
 
 ## Resumo
 
-Substituir os botoes de atalho de data ("Este Mes", "Mes Anterior", "Q Atual", etc.) e os dois date pickers separados por um unico componente de filtro de data no estilo Google Ads. O componente sera um botao que exibe o periodo selecionado e, ao clicar, abre um popover/dropdown com:
+Aplicar a identidade visual do site o2inc.com.br ao dashboard: adicionar o logo SVG no header e na pagina de login, refinar efeitos visuais nos cards (glow verde no hover), ajustar tipografia para mais impacto, e garantir consistencia visual com o branding da empresa.
 
-- **Coluna esquerda**: lista de presets (Personalizar, Hoje, Ontem, Esta semana, 7 dias atras, Semana passada, 14 dias atras, Este mes, 30 dias atras, Ultimo mes, Todo o periodo) + campos customizados ("X dias ate hoje" / "X dias ate ontem")
-- **Coluna direita**: Dois inputs de data (inicio/fim) + calendario visual com 2-3 meses
+## Mudancas
 
-## Componente novo
+### 1. Adicionar logo SVG ao projeto
 
-### `src/components/planning/DateRangePickerGA.tsx`
+- Copiar `user-uploads://696655fa4a1ef257c894567f_logo_o2.svg` para `src/assets/logo_o2.svg`
+- O SVG usa verde (#63F161) e branco -- perfeito para dark mode
+- Para light mode, as partes brancas (texto "O2 INC.") precisam ser escuras, entao criaremos um componente React que adapta o fill conforme o tema
 
-Componente reutilizavel que encapsula toda a logica do filtro de data:
+### 2. Componente `O2Logo` reutilizavel
 
-**Props:**
-- `startDate: Date`
-- `endDate: Date`
-- `onDateChange: (start: Date, end: Date) => void`
+**Novo arquivo: `src/components/O2Logo.tsx`**
 
-**Presets disponiveis (mesmo em ambas as abas):**
+- Componente que renderiza o SVG inline
+- Aceita props de `className` e `height`
+- Adapta a cor do texto (branco no dark, preto no light) usando `currentColor`
+- O verde (#63F161) permanece fixo em ambos os temas
 
-| Preset | Logica |
-|--------|--------|
-| Personalizar | Selecao livre no calendario |
-| Hoje | Hoje ate hoje |
-| Ontem | Ontem ate ontem |
-| Esta semana (dom. ate Hoje) | Domingo da semana atual ate hoje |
-| 7 dias atras | 7 dias atras ate hoje |
-| Semana passada (dom. a sab.) | Domingo a sabado da semana anterior |
-| 14 dias atras | 14 dias atras ate hoje |
-| Este mes | Primeiro dia do mes ate hoje |
-| 30 dias atras | 30 dias atras ate hoje |
-| Ultimo mes | Primeiro ao ultimo dia do mes anterior |
-| Todo o periodo | 01/01/2026 ate hoje |
+### 3. Header do Dashboard (`src/pages/Planning2026.tsx`)
 
-**Campos customizados:**
-- Input numerico "X dias ate hoje" (calcula: hoje - X ate hoje)
-- Input numerico "X dias ate ontem" (calcula: ontem - X ate ontem)
-
-**Layout visual:**
-```text
-+------------------------------------------+
-| Data de inicio*   |  Data de termino      |
-| 05/01/2026        |  03/02/2026           |
-+-------------------+----------------------+
-| Personalizar      |                      |
-| Hoje              |  DEZ. DE 2025  < >   |
-| Ontem             |  D S T Q Q S S       |
-| Esta semana (...) |  ...                 |
-| 7 dias atras      |                      |
-| Semana passada    |  JAN. DE 2026  < >   |
-| 14 dias atras     |  D S T Q Q S S       |
-| Este mes          |  ...                 |
-| 30 dias atras     |                      |
-| Ultimo mes        |  FEV. DE 2026  < >   |
-| Todo o periodo    |  D S T Q Q S S       |
-|                   |  ...                 |
-| [30] dias ate hoje|                      |
-| [30] dias ate ont.|                      |
-+-------------------+----------------------+
-|              [Aplicar]  [Cancelar]       |
-+------------------------------------------+
+**Antes:**
+```
+<h1 className="font-display text-xl font-bold text-gradient">
+  Planejamento Estrategico
+</h1>
 ```
 
-**Comportamento:**
-- Clicar em um preset atualiza imediatamente a selecao no calendario e os inputs de data
-- O preset ativo fica destacado (fundo azul/primary)
-- Alterar manualmente no calendario muda o preset para "Personalizar"
-- Botao "Aplicar" confirma a selecao e fecha o popover
-- Botao "Cancelar" descarta alteracoes e fecha
+**Depois:**
+- Substituir o h1 por `<O2Logo />` com altura ~32px
+- Ao lado, manter um texto menor "Planejamento Estrategico" como subtitulo
+- Layout: logo + separador vertical + subtitulo
 
-## Alteracoes nos arquivos existentes
+### 4. Pagina de Login (`src/pages/Auth.tsx`)
 
-### `src/components/planning/IndicatorsTab.tsx`
+**Melhorias:**
+- Fundo escuro forcar com gradiente sutil (`bg-[#0A0A0A]` ou `bg-background`)
+- Adicionar `<O2Logo />` acima do card de login (centralizado, tamanho maior ~48px de altura)
+- Card com borda sutil verde no dark mode (`border-primary/20`)
+- Botao de submit com estilo verde solido (ja usa `bg-primary`)
+- Adicionar um glow sutil verde atras do logo (`shadow-[0_0_60px_rgba(99,241,97,0.15)]`)
 
-1. **Remover** os botoes de preset ("Este Mes", "Mes Anterior", "Q Atual", "Q Anterior", "2026") -- linhas 2399-2418
-2. **Remover** os dois date pickers separados ("De:" e "Ate:") -- linhas 2420-2448
-3. **Remover** estado `selectedPresets`, funcoes `togglePreset`, `getDateRangeFromPresets`, `handleStartDateChange`, `handleEndDateChange` -- linhas 366-440
-4. **Substituir** por `<DateRangePickerGA>` com `startDate`, `endDate`, e `onDateChange` que atualiza ambos os estados
+### 5. Efeito de glow nos cards (`src/index.css`)
 
-### `src/components/planning/MarketingIndicatorsTab.tsx`
+**Nova utility class `.card-glow`:**
+```css
+.card-glow {
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.dark .card-glow:hover {
+  border-color: hsl(145 100% 42% / 0.3);
+  box-shadow: 0 0 20px hsl(145 100% 42% / 0.08);
+}
+```
 
-1. **Remover** os botoes de atalho ("Mes Atual", "3M", "6M") -- linhas 108-115
-2. **Remover** o date range picker com calendario de 2 meses -- linhas 118-138
-3. **Substituir** por `<DateRangePickerGA>` com as mesmas props
+- Aplicar ao componente `Card` base (ou usar seletivamente nos cards do dashboard)
 
-## Detalhes tecnicos
+### 6. Tipografia dos titulos
 
-- O componente usa `Popover` do Radix para o dropdown
-- O calendario interno usa `DayPicker` do `react-day-picker` no modo `range`
-- Os inputs de data (inicio/fim) sao campos `input` formatados em dd/MM/yyyy
-- O highlight do range no calendario usa as classes `day_selected` e `day_range_middle` ja existentes
-- Locale `ptBR` do date-fns para nomes de meses e dias
-- `pointer-events-auto` no calendario para funcionar dentro do popover
-- O popover tem `z-50` e background solido para evitar transparencia
+**`src/index.css`:**
+- Aumentar peso dos h1/h2 para `font-weight: 700` (ja esta, confirmar)
+- Adicionar `letter-spacing: -0.02em` nos titulos para visual mais moderno e compacto (igual ao site O2)
+
+### 7. Ajuste fino no footer (`src/pages/Planning2026.tsx`)
+
+- Substituir texto "Planejamento Estrategico 2026" por logo O2 pequeno + texto
+- Adicionar um separador com borda verde sutil
+
+## Arquivos afetados
+
+| Arquivo | Acao |
+|---------|------|
+| `src/assets/logo_o2.svg` | Novo (copia do upload) |
+| `src/components/O2Logo.tsx` | Novo componente |
+| `src/pages/Planning2026.tsx` | Header e footer com logo |
+| `src/pages/Auth.tsx` | Login page redesign |
+| `src/index.css` | Card glow + tipografia |
+
+## Resultado esperado
+
+- Logo O2 Inc. visivel no header do dashboard e na pagina de login
+- Cards com efeito de glow verde sutil no hover (dark mode)
+- Pagina de login com visual premium alinhado ao site o2inc.com.br
+- Tipografia mais impactante nos titulos
+- Identidade visual consistente em todo o dashboard
 
