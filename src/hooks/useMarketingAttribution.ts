@@ -18,7 +18,13 @@ const PHASE_FUNNEL_MAP: Record<string, keyof Pick<CampaignFunnel, 'leads' | 'mql
   'Contrato assinado': 'vendas',
 };
 
+function isMetaCampaignId(value: string): boolean {
+  return /^\d{10,}$/.test(value.trim());
+}
+
 function detectChannel(card: AttributionCard): ChannelId {
+  // If campanha field contains a Meta campaign ID, it's Meta Ads
+  if (card.campanha && isMetaCampaignId(card.campanha)) return 'meta_ads';
   if (card.fbclid) return 'meta_ads';
   if (card.gclid) return 'google_ads';
   
@@ -108,23 +114,38 @@ export function useMarketingAttribution(
       }
     }
     
-    // Build Meta Ads spend lookup
-    const metaSpendByName = new Map<string, number>();
+    // Build Meta Ads lookup by ID and by normalized name
+    const metaById = new Map<string, CampaignData>();
+    const metaByName = new Map<string, CampaignData>();
     if (metaCampaigns) {
       for (const mc of metaCampaigns) {
-        metaSpendByName.set(normalizeName(mc.name), mc.investment);
+        metaById.set(mc.id, mc);
+        metaByName.set(normalizeName(mc.name), mc);
       }
     }
     
     // Convert to array
     const funnels: CampaignFunnel[] = [];
     for (const [name, data] of campaignMap) {
-      const normalizedName = normalizeName(name);
-      const investimento = metaSpendByName.get(normalizedName) || 0;
+      // Try matching by ID first, then by name
+      let metaCampaign: CampaignData | undefined;
+      let campaignId: string | undefined;
+      
+      if (isMetaCampaignId(name)) {
+        metaCampaign = metaById.get(name.trim());
+        campaignId = name.trim();
+      }
+      if (!metaCampaign) {
+        metaCampaign = metaByName.get(normalizeName(name));
+        if (metaCampaign) campaignId = metaCampaign.id;
+      }
+      
+      const investimento = metaCampaign?.investment || 0;
       const receita = data.receita;
       
       funnels.push({
-        campaignName: name,
+        campaignName: metaCampaign?.name || name,
+        campaignId,
         channel: data.channel,
         leads: data.leads.size,
         mqls: data.mqls.size,

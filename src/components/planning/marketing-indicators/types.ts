@@ -224,6 +224,7 @@ export interface AttributionCard {
 
 export interface CampaignFunnel {
   campaignName: string;
+  campaignId?: string;
   channel: ChannelId;
   leads: number;
   mqls: number;
