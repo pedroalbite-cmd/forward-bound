@@ -1,29 +1,28 @@
 
-# Remover colunas da tabela Campanhas e Anuncios
+# Remover preview/thumbnail dos niveis Campanha e Conjunto de Anuncio
 
-Remover as colunas **Tipo**, **Impressoes**, **Cliques**, **CTR**, **Alcance** e **Frequencia** de todos os niveis da tabela (campanhas, conjuntos de anuncios e anuncios).
-
-## Arquivo unico afetado
-
-`src/components/planning/marketing-indicators/CampaignsTable.tsx`
+Manter imagens de preview apenas no nivel de Anuncio (Ad). Nos niveis Campanha e Conjunto de Anuncio, remover a coluna de thumbnail.
 
 ## Mudancas
 
-### 1. Header da tabela (linhas 465-471)
-Remover os 6 `TableHead`: Tipo, Impressoes, Cliques, CTR, Alcance, Freq. Manter apenas: expand, Preview, Nome, Leads, Gasto, CPL, CPA, Status + colunas CRM.
+**Arquivo:** `src/components/planning/marketing-indicators/CampaignsTable.tsx`
 
-### 2. CampaignRow (linhas 274-282)
-Remover as 7 `TableCell` correspondentes: objective/tipo, impressions, clicks, ctr, reach, frequency. Manter apenas a celula de Leads.
+### 1. CampaignRow (linha 240-250)
+Substituir a celula com `Thumbnail` por uma celula vazia para manter o alinhamento da tabela.
 
-### 3. AdSetRow (linhas 180-186)
-Remover as 7 `TableCell`: tipo "Conjunto", impressions, clicks, ctr, reach, frequency. Manter apenas Leads.
+### 2. AdSetRow (linha 152-162)
+Substituir a celula com `Thumbnail` por uma celula vazia.
 
-### 4. AdRow (linhas 120-126)
-Remover as 7 `TableCell`: tipo "Anuncio", impressions, clicks, ctr, reach, frequency. Manter apenas Leads.
+### 3. AdRow (linha 98-107)
+Manter como esta -- continua exibindo a thumbnail normalmente.
 
-### 5. Atualizar colSpan
-As linhas com `colSpan={14}` (loading/error/empty states nos niveis AdSet e Campaign) devem ser ajustadas para `colSpan={8}` (14 - 6 colunas removidas).
+### 4. Header da tabela (linha ~437)
+Manter a coluna "Preview" no header, pois ela ainda e usada no nivel de anuncio.
 
-Colunas finais da tabela:
+## Resultado
 
-| Expand | Preview | Nome | Leads (Meta) | Gasto | CPL | CPA | Status | Leads (CRM) | MQLs | Vendas | Receita | ROI |
+| Nivel | Preview |
+|-------|---------|
+| Campanha | Celula vazia |
+| Conjunto | Celula vazia |
+| Anuncio | Thumbnail com clique para modal |
