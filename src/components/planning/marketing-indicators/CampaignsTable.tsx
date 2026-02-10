@@ -397,12 +397,21 @@ export function CampaignsTable({ campaigns, campaignFunnels, isLoading, error, s
     });
   };
 
-  // Build lookup: campaign ID -> funnel
+  // Build lookup: campaign ID -> funnel, plus normalized name fallback
   const funnelMap = useMemo(() => {
     const map = new Map<string, CampaignFunnel>();
     if (campaignFunnels) {
       for (const f of campaignFunnels) {
         if (f.campaignId) map.set(f.campaignId, f);
+        // Also index by normalized name for old campaigns without ID match
+        const normName = f.campaignName
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[_-]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (!map.has(normName)) map.set(normName, f);
       }
     }
     return map;
@@ -481,7 +490,7 @@ export function CampaignsTable({ campaigns, campaignFunnels, isLoading, error, s
                           startDate={startDate}
                           endDate={endDate}
                           onPreview={setPreviewData}
-                          funnel={funnelMap.get(campaign.id)}
+                          funnel={funnelMap.get(campaign.id) || funnelMap.get(campaign.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim())}
                         />
                       ))}
                     </TableBody>
