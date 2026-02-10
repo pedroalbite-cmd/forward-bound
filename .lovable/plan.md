@@ -1,28 +1,28 @@
 
-# Remover preview/thumbnail dos niveis Campanha e Conjunto de Anuncio
 
-Manter imagens de preview apenas no nivel de Anuncio (Ad). Nos niveis Campanha e Conjunto de Anuncio, remover a coluna de thumbnail.
+# Ocultar campanhas, conjuntos e anuncios pausados
+
+Filtrar itens com status "paused" em todos os 3 niveis da tabela de Campanhas e Anuncios.
+
+## Arquivo afetado
+
+`src/components/planning/marketing-indicators/CampaignsTable.tsx`
 
 ## Mudancas
 
-**Arquivo:** `src/components/planning/marketing-indicators/CampaignsTable.tsx`
+### 1. Filtrar campanhas pausadas (linha ~438)
+Adicionar `.filter(c => c.status !== 'paused')` antes do `.map()` na renderizacao das campanhas. Isso remove campanhas pausadas da listagem principal.
 
-### 1. CampaignRow (linha 240-250)
-Substituir a celula com `Thumbnail` por uma celula vazia para manter o alinhamento da tabela.
+### 2. Filtrar conjuntos de anuncios pausados (linha ~288)
+Adicionar `.filter(a => a.status !== 'paused')` antes do `.map()` na renderizacao dos ad sets dentro de `CampaignRow`.
 
-### 2. AdSetRow (linha 152-162)
-Substituir a celula com `Thumbnail` por uma celula vazia.
+### 3. Filtrar anuncios pausados (linha ~198)
+Adicionar `.filter(a => a.status !== 'paused')` antes do `.map()` na renderizacao dos ads dentro de `AdSetRow`.
 
-### 3. AdRow (linha 98-107)
-Manter como esta -- continua exibindo a thumbnail normalmente.
-
-### 4. Header da tabela (linha ~437)
-Manter a coluna "Preview" no header, pois ela ainda e usada no nivel de anuncio.
+### 4. Atualizar contagem no footer (linha ~454)
+Aplicar o mesmo filtro no calculo de totais do footer (`campaigns.length`, `reduce` de leads e gasto) para que os numeros reflitam apenas itens ativos/encerrados.
 
 ## Resultado
 
-| Nivel | Preview |
-|-------|---------|
-| Campanha | Celula vazia |
-| Conjunto | Celula vazia |
-| Anuncio | Thumbnail com clique para modal |
+Apenas campanhas, conjuntos e anuncios com status **ativo** ou **encerrado** serao exibidos. Itens pausados ficam completamente ocultos.
+
