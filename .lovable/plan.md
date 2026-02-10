@@ -1,131 +1,185 @@
 
 
-# Hierarquia Completa Meta Ads: Campanha > Conjunto > Anuncio
+# Integracao de Atribuicao Pipefy na Aba Mkt Indicadores
 
 ## Resumo
 
-Adicionar o 3o nivel de hierarquia (Anuncios individuais) na tabela de campanhas do Meta Ads, incluir metricas extras (CTR, Alcance, Frequencia, CPA, ROAS, Conversoes) em todos os niveis, e implementar modal de preview dos criativos ao clicar na thumbnail.
+Criar um novo hook que extrai os campos de atribuicao de marketing (Campanha, Conjunto/grupo, Fonte, fbclid, gclid, Origem do lead, etc.) do banco de dados externo (pipefy_moviment_cfos + pipefy_cards_movements), e usar esses dados para construir:
 
-## Estrutura final da hierarquia
+1. **Funil real por campanha** -- cada campanha do Pipefy com seus leads, MQLs, RMs, RRs, Propostas e Vendas
+2. **ROI real por campanha** -- cruzando gasto da API do Meta Ads com receita real do Pipefy
+3. **Atribuicao automatica por canal** -- Meta Ads (fbclid), Google Ads (gclid), Organico, Eventos
+
+## Fontes de Dados
 
 ```text
-Campanha (nivel 1)
-  |-- Conjunto de Anuncios (nivel 2) -- carregado on-demand ao expandir campanha
-       |-- Anuncio individual (nivel 3) -- carregado on-demand ao expandir conjunto
+Dados de CUSTO (investimento):
+  API Meta Ads (fetch-meta-campaigns) --> gasto por campanha
+  Google Sheets (read-marketing-sheet) --> gasto Google Ads
+
+Dados de RESULTADO (leads/vendas):
+  pipefy_moviment_cfos --> Modelo Atual (campos: Campanha, Conjunto/grupo, Fonte, fbclid, gclid)
+  pipefy_cards_movements --> O2 TAX, Oxy Hacker, Franquia (mesmos campos)
+
+CRUZAMENTO:
+  Nome da campanha no Pipefy  <-->  Nome da campanha na API Meta Ads
+  fbclid presente             -->  Canal = Meta Ads
+  gclid presente              -->  Canal = Google Ads
+  Nenhum tracking ID          -->  Canal = Organico/Outros
 ```
 
 ## Mudancas
 
-### 1. Novo tipo `AdData` e metricas extras nos tipos existentes
+### 1. Expandir o parsing dos dados para incluir campos de atribuicao
 
-**Arquivo: `src/components/planning/marketing-indicators/types.ts`**
+**Arquivo: `src/hooks/useModeloAtualAnalytics.ts`**
 
-- Adicionar interface `AdData` com: id, name, status, spend, impressions, clicks, leads, cpl, ctr, reach, frequency, cpa, thumbnailUrl, previewUrl
-- Adicionar campos opcionais em `AdSetData`: ctr, reach, frequency, cpa, ads (AdData[])
-- Adicionar campos opcionais em `CampaignData`: ctr, reach, frequency, cpa, conversions, roas (atualizado para vir da API)
+- Adicionar campos na interface `ModeloAtualCard`:
+  - `campanha?: string` -- campo "Campanha" do banco
+  - `conjuntoGrupo?: string` -- campo "Conjunto/grupo" do banco
+  - `palavraChaveAnuncio?: string` -- campo "Palavra-chave/anúncio" do banco
+  - `fonte?: string` -- campo "Fonte" do banco
+  - `origemLead?: string` -- campo "Origem do lead" do banco
+  - `tipoOrigem?: string` -- campo "Tipo de Origem do lead" do banco
+  - `paginaOrigem?: string` -- campo "Página de origem" do banco
+  - `posicionamento?: string` -- campo "Posicionamento" do banco
+  - `fbclid?: string` -- campo "fbclid" do banco
+  - `gclid?: string` -- campo "gclid" do banco
+- Atualizar `parseCardRow()` para extrair esses campos de cada row
 
-### 2. Nova Edge Function `fetch-adset-ads`
+**Arquivo: `src/hooks/useExpansaoAnalytics.ts`** (similar)
 
-**Novo arquivo: `supabase/functions/fetch-adset-ads/index.ts`**
+- Adicionar os mesmos campos na interface `ExpansaoCard`
+- Atualizar o parsing para extrair atribuicao
 
-- Recebe: `adSetId`, `startDate`, `endDate`
-- Busca todos os anuncios do ad set via `{adSetId}/ads?fields=id,name,status,creative{thumbnail_url,image_url,object_story_spec}`
-- Usa Batch API para buscar insights de cada anuncio: `spend,impressions,clicks,actions,reach,frequency,cpc,cpm,ctr`
-- Cache em `meta_ads_cache` com chave `ads:{adSetId}:{startDate}:{endDate}`
-- Fallback para cache stale em caso de rate limit (mesmo padrao do fetch-campaign-adsets)
+### 2. Novo hook `useMarketingAttribution`
 
-### 3. Atualizar Edge Functions existentes para metricas extras
+**Novo arquivo: `src/hooks/useMarketingAttribution.ts`**
 
-**Arquivo: `supabase/functions/fetch-meta-campaigns/index.ts`**
+Este hook centraliza a logica de atribuicao, recebendo os cards de todas as BUs e produzindo:
 
-- Adicionar `reach,frequency,ctr` ao `insightsFields`
-- Essas metricas ja vem gratuitamente na mesma chamada de insights
+```text
+Interface CampaignFunnel {
+  campaignName: string;
+  channel: 'meta_ads' | 'google_ads' | 'organico' | 'eventos' | 'outros';
+  leads: number;
+  mqls: number;
+  rms: number;
+  rrs: number;
+  propostas: number;
+  vendas: number;
+  receita: number;           // MRR + Setup + Pontual das vendas
+  investimento: number;      // Vem da API Meta Ads (cruzamento por nome)
+  roi: number;               // receita / investimento
+  leadsList: CardRef[];      // IDs dos leads para drill-down
+}
+```
 
-**Arquivo: `supabase/functions/fetch-campaign-adsets/index.ts`**
+Logica de atribuicao de canal:
+- Se `fbclid` preenchido --> `meta_ads`
+- Se `gclid` preenchido --> `google_ads`
+- Se `fonte` contem "facebook" ou "instagram" --> `meta_ads`
+- Se `fonte` contem "google" --> `google_ads`
+- Se `tipoOrigem` contem "Evento" --> `eventos`
+- Demais --> `organico` ou `outros`
 
-- Adicionar `reach,frequency,ctr` ao `insightsFields`
+Logica de funil por campanha:
+- Agrupar cards por `campanha` (campo do Pipefy)
+- Para cada grupo, contar quantos atingiram cada etapa do funil usando a mesma logica de primeira entrada ja existente
+- Somar receita (MRR + Setup + Pontual + Educacao) dos cards que chegaram a "Contrato assinado"
 
-### 4. Novo hook `useAdSetAds`
+Cruzamento com Meta Ads:
+- Receber a lista de `metaCampaigns` (da API Meta Ads) como parametro
+- Fazer match por nome (fuzzy: normalizar acentos, caixa, espacos)
+- Quando match encontrado, preencher `investimento` com o `spend` da campanha Meta
 
-**Novo arquivo: `src/hooks/useAdSetAds.ts`**
+### 3. Novo componente `CampaignFunnelTable`
 
-- Similar ao `useCampaignAdSets` mas invoca `fetch-adset-ads`
-- Transforma a resposta em `AdData[]`
-- Carregamento on-demand (enabled quando adSetId nao e null)
-- Tratamento de rate limit com retry exponencial
+**Novo arquivo: `src/components/planning/marketing-indicators/CampaignFunnelTable.tsx`**
 
-### 5. Atualizar hooks existentes para novas metricas
+Tabela com as colunas:
+| Canal | Campanha | Leads | MQLs | RM | RR | Proposta | Venda | Receita | Investimento | ROI |
 
-**Arquivo: `src/hooks/useMetaCampaigns.ts`**
+Funcionalidades:
+- Ordenavel por qualquer coluna
+- Filtro por canal (Meta, Google, Organico)
+- Linha de totais no rodape
+- Clique em uma campanha abre drill-down com a lista de leads/cards
+- Codigo de cores: ROI > 1 = verde, ROI < 1 = vermelho
 
-- Extrair `reach`, `frequency`, `ctr` do insights response
-- Calcular `cpa` = spend / conversions (se houver)
+### 4. Novo componente `AttributionSankeyChart` (opcional, pode ser segunda fase)
 
-**Arquivo: `src/hooks/useCampaignAdSets.ts`**
+**Novo arquivo: `src/components/planning/marketing-indicators/AttributionSankeyChart.tsx`**
 
-- Extrair `reach`, `frequency`, `ctr` do insights response
+Grafico Sankey mostrando o fluxo:
+```text
+Canal --> Campanha --> Lead --> MQL --> RM --> RR --> Proposta --> Venda
+```
 
-### 6. Refatorar `CampaignsTable.tsx` para 3 niveis
+Na primeira versao, podemos substituir por um grafico de barras empilhadas mais simples mostrando a distribuicao do funil por canal.
 
-**Arquivo: `src/components/planning/marketing-indicators/CampaignsTable.tsx`**
+### 5. Novo componente `ChannelAttributionCards`
 
-Mudancas principais:
+**Novo arquivo: `src/components/planning/marketing-indicators/ChannelAttributionCards.tsx`**
 
-- **Novas colunas no header**: CTR, Alcance, Frequencia (alem das existentes)
-- **Nivel 2 (Ad Set)**: agora e expansivel -- clique no ad set abre os anuncios individuais dentro dele
-- **Nivel 3 (Anuncio)**: nova row com indentacao dupla (`|  |-- Nome do anuncio`), mostra thumbnail, metricas e link para Ads Manager
-- **Componente `AdSetRow`**: novo componente interno que gerencia a expansao do nivel 3 e usa o hook `useAdSetAds`
-- **Thumbnail clicavel**: ao clicar na thumbnail de qualquer nivel, abre um `Dialog` (modal) com a imagem em tamanho grande
+Cards resumo por canal (dados reais do Pipefy):
+- **Meta Ads**: X leads, Y vendas, R$ Z receita, ROI W
+- **Google Ads**: idem
+- **Organico**: idem
+- **Eventos**: idem
 
-### 7. Modal de preview do criativo
+Esses cards substituem ou complementam os `ChannelMetricsCards` atuais (que usam dados da planilha), dando a visao real de resultado por canal.
 
-**Dentro de `CampaignsTable.tsx`** (ou componente separado):
+### 6. Integrar na `MarketingIndicatorsTab`
 
-- Usar `Dialog` do Radix para mostrar a imagem/thumbnail em tamanho completo
-- Exibir nome do anuncio, metricas principais e link para o Ads Manager
-- Fechar ao clicar fora ou no X
+**Arquivo: `src/components/planning/MarketingIndicatorsTab.tsx`**
 
-### 8. Configuracao da nova Edge Function
+- Importar `useModeloAtualAnalytics` (ja usado em outras abas, reutilizar)
+- Importar o novo `useMarketingAttribution`
+- Passar os cards de todas as BUs + metaCampaigns para o hook
+- Adicionar novas secoes no layout:
+  1. **"Atribuicao por Canal (Dados Reais)"** -- `ChannelAttributionCards`
+  2. **"Funil por Campanha"** -- `CampaignFunnelTable`
+  3. Manter as secoes existentes (dados da planilha + Meta API) abaixo
 
-**Arquivo: `supabase/config.toml`**
+### 7. Expandir `query-external-db` para permitir busca de colunas de atribuicao
 
-- Adicionar entrada `[functions.fetch-adset-ads]` com `verify_jwt = false`
+**Arquivo: `supabase/functions/query-external-db/index.ts`**
 
-## Colunas da tabela final
+- Adicionar `allowedColumns` para busca: `'Campanha'`, `'Conjunto/grupo'`, `'Fonte'`, `'Origem do lead'`
+- Isso permite buscas futuras por campanha especifica no drill-down
 
-| Coluna | Campanha | Conjunto | Anuncio |
-|--------|----------|----------|---------|
-| Preview (thumbnail) | Sim | Sim | Sim |
-| Nome | Sim | Sim | Sim |
-| Objetivo/Tipo | Sim | "Conjunto" | "Anuncio" |
-| Impressoes | Sim | Sim | Sim |
-| Cliques | Sim | Sim | Sim |
-| CTR | Sim | Sim | Sim |
-| Alcance | Sim | Sim | Sim |
-| Frequencia | Sim | Sim | Sim |
-| Leads | Sim | Sim | Sim |
-| Gasto | Sim | Sim | Sim |
-| CPL | Sim | Sim | Sim |
-| CPA | Sim | Sim | Sim |
-| Status | Sim | Sim | Sim |
+## Fluxo de Dados
+
+```text
+1. MarketingIndicatorsTab monta com dateRange
+2. useModeloAtualAnalytics(dateRange) --> cards com atribuicao (Modelo Atual)
+3. useExpansaoAnalytics(dateRange, 'O2 TAX') --> cards com atribuicao
+4. useMetaCampaigns(dateRange) --> campanhas Meta com spend
+5. useMarketingAttribution(allCards, metaCampaigns) --> CampaignFunnel[]
+6. Renderiza:
+   - ChannelAttributionCards (resumo por canal real)
+   - CampaignFunnelTable (funil por campanha com ROI)
+   - [existentes] ChannelMetricsCards, CostPerStageGauges, etc.
+```
 
 ## Arquivos afetados
 
 | Arquivo | Acao |
 |---------|------|
-| `src/components/planning/marketing-indicators/types.ts` | Editar - novo tipo AdData + campos extras |
-| `supabase/functions/fetch-adset-ads/index.ts` | Novo - Edge Function para anuncios |
-| `supabase/functions/fetch-meta-campaigns/index.ts` | Editar - metricas extras |
-| `supabase/functions/fetch-campaign-adsets/index.ts` | Editar - metricas extras |
-| `src/hooks/useAdSetAds.ts` | Novo - hook para buscar anuncios |
-| `src/hooks/useMetaCampaigns.ts` | Editar - transformar novas metricas |
-| `src/hooks/useCampaignAdSets.ts` | Editar - transformar novas metricas |
-| `src/components/planning/marketing-indicators/CampaignsTable.tsx` | Editar - 3 niveis + modal + novas colunas |
-| `supabase/config.toml` | Editar - registrar nova function |
+| `src/hooks/useModeloAtualAnalytics.ts` | Editar - adicionar campos de atribuicao no parsing |
+| `src/hooks/useExpansaoAnalytics.ts` | Editar - adicionar campos de atribuicao no parsing |
+| `src/hooks/useMarketingAttribution.ts` | Novo - logica central de atribuicao e cruzamento |
+| `src/components/planning/marketing-indicators/CampaignFunnelTable.tsx` | Novo - tabela de funil por campanha |
+| `src/components/planning/marketing-indicators/ChannelAttributionCards.tsx` | Novo - cards de canal com dados reais |
+| `src/components/planning/MarketingIndicatorsTab.tsx` | Editar - integrar novos componentes e hooks |
+| `supabase/functions/query-external-db/index.ts` | Editar - expandir allowedColumns para busca |
+| `src/components/planning/marketing-indicators/types.ts` | Editar - novos tipos CampaignFunnel, AttributionChannel |
 
 ## Consideracoes tecnicas
 
-- Cada expansao de nivel faz uma chamada API sob demanda (lazy loading) para evitar chamadas desnecessarias
-- Cache de 60 min em todos os niveis para minimizar chamadas a API do Meta
-- Fallback automatico para cache stale em caso de rate limit
-- A Batch API do Meta aceita ate 50 requests por batch, suficiente para a maioria dos ad sets/ads
+- Os dados de atribuicao ja existem no banco e ja sao carregados pelo `useModeloAtualAnalytics` -- so precisamos extrair os campos extras no parsing. Nao ha chamadas API adicionais.
+- O cruzamento Meta Ads por nome de campanha usa normalizacao (lowercase, sem acentos, trim) para lidar com pequenas diferencas entre o nome no Pipefy e na API Meta.
+- Para campanhas Google Ads, o investimento nao esta disponivel por campanha individual (so total da planilha). O ROI por campanha Google sera marcado como "N/D" ate ter integracao com a API do Google Ads.
+- O hook `useMarketingAttribution` e puramente computacional (useMemo), sem chamadas extras ao backend -- recebe os cards ja carregados.
+
