@@ -253,6 +253,7 @@ function CampaignRow({
         <TableCell className="text-right font-medium">{funnel ? funnel.mqls : '-'}</TableCell>
         <TableCell className="text-right font-medium">{funnel ? funnel.vendas : '-'}</TableCell>
         <TableCell className="text-right font-medium">{funnel ? formatCurrency(funnel.receita) : '-'}</TableCell>
+        <TableCell className="text-right font-medium">{funnel && funnel.tcv > 0 ? formatCurrency(funnel.tcv) : '-'}</TableCell>
         <TableCell className={cn("text-right font-medium", funnel && funnel.roi > 0 && (funnel.roi >= 1 ? "text-chart-2" : "text-destructive"))}>
           {funnel && funnel.investimento > 0 ? `${funnel.roi.toFixed(1)}x` : '-'}
         </TableCell>
@@ -431,6 +432,7 @@ export function CampaignsTable({ campaigns, campaignFunnels, isLoading, error, s
                         <TableHead className="text-right">MQLs</TableHead>
                         <TableHead className="text-right">Vendas</TableHead>
                         <TableHead className="text-right">Receita</TableHead>
+                        <TableHead className="text-right">TCV</TableHead>
                         <TableHead className="text-right">ROI</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -467,9 +469,13 @@ export function CampaignsTable({ campaigns, campaignFunnels, isLoading, error, s
                             <span className="text-muted-foreground">Vendas (CRM): </span>
                             <span className="font-medium">{campaignFunnels.reduce((s, f) => s + f.vendas, 0)}</span>
                           </span>
-                          <span>
+                           <span>
                             <span className="text-muted-foreground">Receita: </span>
                             <span className="font-medium">{formatCurrency(campaignFunnels.reduce((s, f) => s + f.receita, 0))}</span>
+                          </span>
+                          <span>
+                            <span className="text-muted-foreground">TCV: </span>
+                            <span className="font-medium">{formatCurrency(campaignFunnels.reduce((s, f) => s + f.tcv, 0))}</span>
                           </span>
                         </>
                       )}
