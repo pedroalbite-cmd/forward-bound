@@ -10,7 +10,7 @@ export interface ExpansaoCard {
   fase: string;
   faseAtual: string;
   dataEntrada: Date;
-  dataSaida: Date | null; // "Saída" from database
+  dataSaida: Date | null;
   valor: number;
   taxaFranquia: number;
   valorMRR: number;
@@ -19,7 +19,18 @@ export interface ExpansaoCard {
   produto: string;
   responsavel: string | null;
   motivoPerda: string | null;
-  duracao: number; // Duration calculated dynamically from Entrada/Saída
+  duracao: number;
+  // Marketing attribution fields
+  campanha?: string;
+  conjuntoGrupo?: string;
+  palavraChaveAnuncio?: string;
+  fonte?: string;
+  origemLead?: string;
+  tipoOrigem?: string;
+  paginaOrigem?: string;
+  posicionamento?: string;
+  fbclid?: string;
+  gclid?: string;
 }
 
 // Map Pipefy phase names to indicator keys
@@ -109,6 +120,17 @@ function parseRawCard(row: any, defaultTicket: number): ExpansaoCard {
     responsavel: row['Closer responsável'] || row['SDR responsável'] || null,
     motivoPerda: row['Motivo da perda'] || null,
     duracao,
+    // Marketing attribution
+    campanha: row['Campanha'] || undefined,
+    conjuntoGrupo: row['Conjunto/grupo'] || undefined,
+    palavraChaveAnuncio: row['Palavra-chave/anúncio'] || undefined,
+    fonte: row['Fonte'] || undefined,
+    origemLead: row['Origem do lead'] || undefined,
+    tipoOrigem: row['Tipo de Origem do lead'] || undefined,
+    paginaOrigem: row['Página de origem'] || undefined,
+    posicionamento: row['Posicionamento'] || undefined,
+    fbclid: row['fbclid'] || undefined,
+    gclid: row['gclid'] || undefined,
   };
 }
 

@@ -10,6 +10,9 @@ import { useMarketingIndicators } from "@/hooks/useMarketingIndicators";
 import { useMetaCampaigns } from "@/hooks/useMetaCampaigns";
 import { useModeloAtualMetas } from "@/hooks/useModeloAtualMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
+import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
+import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
+import { useMarketingAttribution } from "@/hooks/useMarketingAttribution";
 import { PerformanceGauges } from "./marketing-indicators/PerformanceGauges";
 import { InvestmentByChannelChart } from "./marketing-indicators/InvestmentByChannelChart";
 import { AcquisitionFunnelChart } from "./marketing-indicators/AcquisitionFunnelChart";
@@ -18,8 +21,10 @@ import { CampaignsTable } from "./marketing-indicators/CampaignsTable";
 import { ChannelMetricsCards } from "./marketing-indicators/ChannelMetricsCards";
 import { RevenueMetricsCards } from "./marketing-indicators/RevenueMetricsCards";
 import { CostPerStageGauges } from "./marketing-indicators/CostPerStageGauges";
+import { ChannelAttributionCards } from "./marketing-indicators/ChannelAttributionCards";
+import { CampaignFunnelTable } from "./marketing-indicators/CampaignFunnelTable";
 import { DrillDownBarChart } from "./indicators/DrillDownBarChart";
-import { CHANNEL_LABELS, ChannelId, CostPerStage } from "./marketing-indicators/types";
+import { CHANNEL_LABELS, ChannelId, CostPerStage, AttributionCard } from "./marketing-indicators/types";
 
 
 const CHANNEL_OPTIONS = Object.entries(CHANNEL_LABELS)
@@ -114,6 +119,50 @@ export function MarketingIndicatorsTab() {
   }, [dateRange, selectedBUs, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod, getO2TaxMrr, getO2TaxSetup, getO2TaxPontual, data.revenue]);
 
 
+  // Fetch real card data from Pipefy for attribution
+  const { cards: modeloAtualCards, isLoading: isLoadingMACards } = useModeloAtualAnalytics(dateRange.from, dateRange.to);
+  const { cards: o2TaxCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Franquia');
+  const { cards: oxyHackerCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Oxy Hacker');
+
+  // Build attribution cards from all BUs
+  const allAttributionCards = useMemo((): AttributionCard[] => {
+    const result: AttributionCard[] = [];
+    
+    for (const c of modeloAtualCards) {
+      result.push({
+        id: c.id, titulo: c.titulo, campanha: c.campanha, conjuntoGrupo: c.conjuntoGrupo,
+        fonte: c.fonte, fbclid: c.fbclid, gclid: c.gclid, tipoOrigem: c.tipoOrigem,
+        fase: c.fase, dataEntrada: c.dataEntrada, valor: c.valor,
+        valorMRR: c.valorMRR, valorSetup: c.valorSetup, valorPontual: c.valorPontual,
+        valorEducacao: c.valorEducacao, bu: 'Modelo Atual',
+      });
+    }
+    
+    for (const c of o2TaxCards) {
+      result.push({
+        id: c.id, titulo: c.titulo, campanha: c.campanha, conjuntoGrupo: c.conjuntoGrupo,
+        fonte: c.fonte, fbclid: c.fbclid, gclid: c.gclid, tipoOrigem: c.tipoOrigem,
+        fase: c.fase, dataEntrada: c.dataEntrada, valor: c.valor,
+        valorMRR: c.valorMRR, valorSetup: c.valorSetup, valorPontual: c.valorPontual,
+        bu: 'Franquia',
+      });
+    }
+    
+    for (const c of oxyHackerCards) {
+      result.push({
+        id: c.id, titulo: c.titulo, campanha: c.campanha, conjuntoGrupo: c.conjuntoGrupo,
+        fonte: c.fonte, fbclid: c.fbclid, gclid: c.gclid, tipoOrigem: c.tipoOrigem,
+        fase: c.fase, dataEntrada: c.dataEntrada, valor: c.valor,
+        valorMRR: c.valorMRR, valorSetup: c.valorSetup, valorPontual: c.valorPontual,
+        bu: 'Oxy Hacker',
+      });
+    }
+    
+    return result;
+  }, [modeloAtualCards, o2TaxCards, oxyHackerCards]);
+
+  const { campaignFunnels, channelSummaries } = useMarketingAttribution(allAttributionCards, metaCampaigns);
+
   const handleDateRangeChange = (start: Date, end: Date) => {
     setDateRange({ from: start, to: end });
   };
@@ -164,12 +213,18 @@ export function MarketingIndicatorsTab() {
         </div>
       )}
 
-      {/* Channel Metrics Cards */}
+      {/* Channel Metrics Cards (from spreadsheet) */}
       <ChannelMetricsCards
         channels={data.channels}
         totalInvestment={data.totalInvestment}
         totalLeads={data.totalLeads}
       />
+
+      {/* Attribution Cards (real data from Pipefy) */}
+      <ChannelAttributionCards summaries={channelSummaries} />
+
+      {/* Campaign Funnel Table (real data) */}
+      <CampaignFunnelTable funnels={campaignFunnels} />
 
       {/* Revenue Metrics Cards - Integrated with Modelo Atual data */}
       <RevenueMetricsCards

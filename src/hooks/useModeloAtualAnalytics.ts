@@ -26,6 +26,17 @@ export interface ModeloAtualCard {
   closer?: string; // Specifically the "Closer responsável" field for filtering
   faixa?: string;
   duracao: number; // Duration calculated dynamically from Entrada/Saída
+  // Marketing attribution fields
+  campanha?: string;
+  conjuntoGrupo?: string;
+  palavraChaveAnuncio?: string;
+  fonte?: string;
+  origemLead?: string;
+  tipoOrigem?: string;
+  paginaOrigem?: string;
+  posicionamento?: string;
+  fbclid?: string;
+  gclid?: string;
 }
 
 // Map destination phases to indicators (based on pipefy_moviment_cfos table)
@@ -151,6 +162,17 @@ function parseCardRow(row: Record<string, any>, skipPhaseFilter = false): Modelo
     responsavel: String(row['SDR responsável'] || row['Responsável'] || row['responsavel'] || '').trim(),
     faixa: row['Faixa de faturamento mensal'] || row['Faixa'] || row['faixa'] || '',
     duracao,
+    // Marketing attribution
+    campanha: row['Campanha'] || undefined,
+    conjuntoGrupo: row['Conjunto/grupo'] || undefined,
+    palavraChaveAnuncio: row['Palavra-chave/anúncio'] || undefined,
+    fonte: row['Fonte'] || undefined,
+    origemLead: row['Origem do lead'] || undefined,
+    tipoOrigem: row['Tipo de Origem do lead'] || undefined,
+    paginaOrigem: row['Página de origem'] || undefined,
+    posicionamento: row['Posicionamento'] || undefined,
+    fbclid: row['fbclid'] || undefined,
+    gclid: row['gclid'] || undefined,
   };
 }
 

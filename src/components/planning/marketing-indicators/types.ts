@@ -201,3 +201,47 @@ export const CHANNEL_COLORS: Record<ChannelId, string> = {
   organico: 'hsl(var(--chart-4))',
   outros: 'hsl(var(--chart-5))',
 };
+
+// Attribution types
+export interface AttributionCard {
+  id: string;
+  titulo: string;
+  campanha?: string;
+  conjuntoGrupo?: string;
+  fonte?: string;
+  fbclid?: string;
+  gclid?: string;
+  tipoOrigem?: string;
+  fase: string;
+  dataEntrada: Date;
+  valor: number;
+  valorMRR: number;
+  valorSetup: number;
+  valorPontual: number;
+  valorEducacao?: number;
+  bu: string;
+}
+
+export interface CampaignFunnel {
+  campaignName: string;
+  channel: ChannelId;
+  leads: number;
+  mqls: number;
+  rms: number;
+  rrs: number;
+  propostas: number;
+  vendas: number;
+  receita: number;
+  investimento: number;
+  roi: number;
+}
+
+export interface ChannelSummary {
+  channel: ChannelId;
+  leads: number;
+  mqls: number;
+  vendas: number;
+  receita: number;
+  investimento: number;
+  roi: number;
+}
