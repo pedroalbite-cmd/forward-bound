@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.fetch-campaign-adsets]
 verify_jwt = false
+
+[functions.fetch-adset-ads]
+verify_jwt = false

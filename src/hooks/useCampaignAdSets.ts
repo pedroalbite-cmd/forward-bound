@@ -9,6 +9,9 @@ interface MetaInsights {
   actions?: Array<{ action_type: string; value: string }>;
   cpc?: string;
   cpm?: string;
+  reach?: string;
+  frequency?: string;
+  ctr?: string;
 }
 
 interface MetaAdSet {
@@ -54,6 +57,9 @@ function getLeadsFromActions(actions?: Array<{ action_type: string; value: strin
 function transformAdSet(adSet: MetaAdSet): AdSetData {
   const spend = parseFloat(adSet.insights?.spend || '0');
   const leads = getLeadsFromActions(adSet.insights?.actions);
+  const reach = parseInt(adSet.insights?.reach || '0', 10);
+  const frequency = parseFloat(adSet.insights?.frequency || '0');
+  const ctr = parseFloat(adSet.insights?.ctr || '0');
   
   return {
     id: adSet.id,
@@ -65,6 +71,10 @@ function transformAdSet(adSet: MetaAdSet): AdSetData {
     clicks: parseInt(adSet.insights?.clicks || '0', 10),
     leads,
     cpl: leads > 0 ? spend / leads : 0,
+    ctr,
+    reach,
+    frequency,
+    cpa: leads > 0 ? spend / leads : 0,
     previewUrl: adSet.previewUrl,
     thumbnailUrl: adSet.thumbnailUrl,
   };

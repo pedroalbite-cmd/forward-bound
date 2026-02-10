@@ -17,6 +17,23 @@ export interface MarketingChannel {
   cpv?: number;     // Cost per Venda
 }
 
+export interface AdData {
+  id: string;
+  name: string;
+  status: 'active' | 'paused' | 'ended';
+  spend: number;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  cpl: number;
+  ctr: number;
+  reach: number;
+  frequency: number;
+  cpa: number;
+  thumbnailUrl?: string;
+  previewUrl?: string;
+}
+
 export interface AdSetData {
   id: string;
   name: string;
@@ -27,8 +44,13 @@ export interface AdSetData {
   clicks: number;
   leads: number;
   cpl: number;
+  ctr?: number;
+  reach?: number;
+  frequency?: number;
+  cpa?: number;
   previewUrl?: string;
   thumbnailUrl?: string;
+  ads?: AdData[];
 }
 
 export interface CampaignData {
@@ -46,6 +68,11 @@ export interface CampaignData {
   impressions?: number;
   clicks?: number;
   cpl?: number;
+  ctr?: number;
+  reach?: number;
+  frequency?: number;
+  cpa?: number;
+  conversions?: number;
   adSets?: AdSetData[];
   thumbnailUrl?: string;
   previewUrl?: string;
