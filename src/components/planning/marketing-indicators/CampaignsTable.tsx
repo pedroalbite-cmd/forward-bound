@@ -195,7 +195,7 @@ function AdSetRow({
         </TableRow>
       )}
 
-      {isExpanded && ads?.map((ad) => (
+      {isExpanded && ads?.filter(a => a.status !== 'paused').map((ad) => (
         <AdRow key={ad.id} ad={ad} onPreview={onPreview} />
       ))}
     </>
@@ -285,7 +285,7 @@ function CampaignRow({
         </TableRow>
       )}
 
-      {isExpanded && hasAdSets && adSets!.map((adSet) => (
+      {isExpanded && hasAdSets && adSets!.filter(a => a.status !== 'paused').map((adSet) => (
         <AdSetRow key={adSet.id} adSet={adSet} startDate={startDate} endDate={endDate} onPreview={onPreview} />
       ))}
     </>
@@ -435,7 +435,7 @@ export function CampaignsTable({ campaigns, campaignFunnels, isLoading, error, s
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {campaigns.map((campaign) => (
+                      {campaigns.filter(c => c.status !== 'paused').map((campaign) => (
                         <CampaignRow
                           key={campaign.id}
                           campaign={campaign}
@@ -451,15 +451,15 @@ export function CampaignsTable({ campaigns, campaignFunnels, isLoading, error, s
                   </Table>
 
                   <div className="mt-4 pt-4 border-t flex justify-between text-sm">
-                    <span className="text-muted-foreground">Total: {campaigns.length} campanhas</span>
+                    <span className="text-muted-foreground">Total: {campaigns.filter(c => c.status !== 'paused').length} campanhas</span>
                     <div className="flex gap-6">
                       <span>
                         <span className="text-muted-foreground">Leads: </span>
-                        <span className="font-medium">{formatNumber(campaigns.reduce((sum, c) => sum + c.leads, 0))}</span>
+                        <span className="font-medium">{formatNumber(campaigns.filter(c => c.status !== 'paused').reduce((sum, c) => sum + c.leads, 0))}</span>
                       </span>
                       <span>
                         <span className="text-muted-foreground">Gasto: </span>
-                        <span className="font-medium">{formatCurrency(campaigns.reduce((sum, c) => sum + c.investment, 0))}</span>
+                        <span className="font-medium">{formatCurrency(campaigns.filter(c => c.status !== 'paused').reduce((sum, c) => sum + c.investment, 0))}</span>
                       </span>
                       {campaignFunnels && campaignFunnels.length > 0 && (
                         <>
