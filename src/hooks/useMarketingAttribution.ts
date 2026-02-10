@@ -88,6 +88,7 @@ export function useMarketingAttribution(
       propostas: Set<string>;
       vendas: Set<string>;
       receita: number;
+      tcv: number;
     }>();
     
     for (const [cardId, info] of cardBestStage) {
@@ -102,6 +103,7 @@ export function useMarketingAttribution(
           propostas: new Set(),
           vendas: new Set(),
           receita: 0,
+          tcv: 0,
         });
       }
       const entry = campaignMap.get(key)!;
@@ -112,6 +114,7 @@ export function useMarketingAttribution(
       
       if (info.stages.has('vendas')) {
         entry.receita += (info.card.valorMRR || 0) + (info.card.valorSetup || 0) + (info.card.valorPontual || 0) + (info.card.valorEducacao || 0);
+        entry.tcv += ((info.card.valorMRR || 0) * 12) + (info.card.valorSetup || 0) + (info.card.valorPontual || 0);
       }
     }
     
@@ -157,6 +160,7 @@ export function useMarketingAttribution(
         receita,
         investimento,
         roi: investimento > 0 ? receita / investimento : 0,
+        tcv: data.tcv,
       });
     }
     

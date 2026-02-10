@@ -235,6 +235,7 @@ export interface CampaignFunnel {
   receita: number;
   investimento: number;
   roi: number;
+  tcv: number;
 }
 
 export interface ChannelSummary {
