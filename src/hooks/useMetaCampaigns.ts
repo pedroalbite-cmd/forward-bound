@@ -9,6 +9,9 @@ interface MetaInsights {
   actions?: Array<{ action_type: string; value: string }>;
   cpc?: string;
   cpm?: string;
+  reach?: string;
+  frequency?: string;
+  ctr?: string;
 }
 
 interface MetaAdSet {
@@ -83,10 +86,25 @@ function transformAdSet(adSet: MetaAdSet): AdSetData {
   };
 }
 
+function getConversionsFromActions(actions?: Array<{ action_type: string; value: string }>): number {
+  if (!actions) return 0;
+  const convAction = actions.find(a =>
+    a.action_type === 'offsite_conversion' ||
+    a.action_type === 'lead' ||
+    a.action_type === 'onsite_conversion.lead_grouped' ||
+    a.action_type === 'offsite_conversion.fb_pixel_lead'
+  );
+  return convAction ? parseInt(convAction.value, 10) || 0 : 0;
+}
+
 function transformCampaign(campaign: MetaCampaign): CampaignData {
   const spend = parseFloat(campaign.insights?.spend || '0');
   const leads = getLeadsFromActions(campaign.insights?.actions);
+  const conversions = getConversionsFromActions(campaign.insights?.actions);
   const adSets = campaign.adSets?.map(transformAdSet) || [];
+  const reach = parseInt(campaign.insights?.reach || '0', 10);
+  const frequency = parseFloat(campaign.insights?.frequency || '0');
+  const ctr = parseFloat(campaign.insights?.ctr || '0');
   
   return {
     id: campaign.id,
@@ -95,13 +113,18 @@ function transformCampaign(campaign: MetaCampaign): CampaignData {
     status: parseMetaStatus(campaign.status),
     investment: spend,
     leads,
-    mqls: 0, // MQLs come from CRM, not Meta
-    roas: 0, // ROAS needs revenue data
+    mqls: 0,
+    roas: 0,
     startDate: new Date().toISOString(),
     objective: campaign.objective,
     impressions: parseInt(campaign.insights?.impressions || '0', 10),
     clicks: parseInt(campaign.insights?.clicks || '0', 10),
     cpl: leads > 0 ? spend / leads : 0,
+    ctr,
+    reach,
+    frequency,
+    cpa: conversions > 0 ? spend / conversions : 0,
+    conversions,
     adSets,
     thumbnailUrl: campaign.thumbnailUrl,
     previewUrl: campaign.previewUrl,

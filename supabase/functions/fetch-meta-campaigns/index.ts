@@ -77,7 +77,7 @@ async function enrichCampaignsWithBatchAPI(
   formattedAccountId: string
 ): Promise<any[]> {
   const timeRange = JSON.stringify({ since: startDate, until: endDate });
-  const insightsFields = "spend,impressions,clicks,actions,cpc,cpm";
+  const insightsFields = "spend,impressions,clicks,actions,cpc,cpm,reach,frequency,ctr";
   const enrichedCampaigns: any[] = [];
 
   // Process in batches
