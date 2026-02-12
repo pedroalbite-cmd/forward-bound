@@ -124,30 +124,45 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
       const hasDateFilter = startDate && endDate;
       const action = hasDateFilter ? 'query_period' : 'preview';
       
-      console.log(`[useModeloAtualMetas] Fetching data from pipefy_moviment_cfos (action: ${action})`);
+      // Build UTC-pure date strings to avoid timezone offset issues
+      const startDateStr = startDate ? startDate.toISOString().split('T')[0] : '';
+      const endDateStr = endDate ? endDate.toISOString().split('T')[0] : '';
+      const startISO = startDateStr ? startDateStr + 'T00:00:00.000Z' : undefined;
+      const endISO = endDateStr ? endDateStr + 'T23:59:59.999Z' : undefined;
+
+      console.log(`[useModeloAtualMetas] Fetching data from pipefy_moviment_cfos (action: ${action}, start: ${startISO}, end: ${endISO})`);
       
-      // Fetch both period movements AND cards created in period (for MQL)
+      // Fetch period movements, cards created in period (for MQL), and cards signed in period
       const requests: Promise<any>[] = [
         supabase.functions.invoke('query-external-db', {
           body: { 
             table: 'pipefy_moviment_cfos', 
             action,
-            startDate: startDate?.toISOString(),
-            endDate: endDate?.toISOString(),
+            startDate: startISO,
+            endDate: endISO,
             limit: 10000 
           }
         }),
       ];
       
-      // Also fetch by creation date for MQL alignment with Pipefy
+      // Also fetch by creation date for MQL and by signature date for sales
       if (hasDateFilter) {
         requests.push(
           supabase.functions.invoke('query-external-db', {
             body: { 
               table: 'pipefy_moviment_cfos', 
               action: 'query_period_by_creation',
-              startDate: startDate.toISOString(),
-              endDate: endDate.toISOString(),
+              startDate: startISO,
+              endDate: endISO,
+              limit: 10000 
+            }
+          }),
+          supabase.functions.invoke('query-external-db', {
+            body: { 
+              table: 'pipefy_moviment_cfos', 
+              action: 'query_period_by_signature',
+              startDate: startISO,
+              endDate: endISO,
               limit: 10000 
             }
           })
@@ -155,7 +170,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
       }
       
       const responses = await Promise.all(requests);
-      const [periodResponse, creationResponse] = responses;
+      const [periodResponse, creationResponse, signatureResponse] = responses;
 
       if (periodResponse.error) {
         console.error('[useModeloAtualMetas] Error fetching data:', periodResponse.error);
@@ -240,6 +255,46 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
           });
         }
         console.log(`[useModeloAtualMetas] MQL by creation cards: ${mqlByCreation.length}`);
+      }
+
+      // Merge signature-based movements (deduplicate by id + fase)
+      if (signatureResponse?.data?.data) {
+        const existingKeys = new Set(movements.map(m => `${m.id}|${m.fase}`));
+        for (const row of signatureResponse.data.data) {
+          const id = String(row['ID'] || row['id'] || '');
+          const fase = row['Fase'] || row['fase'] || '';
+          if (!id || !fase || !PHASE_TO_INDICATOR[fase]) continue;
+          const key = `${id}|${fase}`;
+          if (existingKeys.has(key)) continue;
+          
+          const dataAssinatura = parseDateOnly(row['Data de assinatura do contrato']);
+          let dataEntrada = parseDate(row['Entrada'] || row['entrada']) || new Date();
+          if (fase === 'Contrato assinado' && dataAssinatura) {
+            dataEntrada = dataAssinatura;
+          }
+          const valorMRR = parseNumericValue(row['Valor MRR'] || 0);
+          const valorPontual = parseNumericValue(row['Valor Pontual'] || 0);
+          const valorEducacao = parseNumericValue(row['Valor Educação'] || row['Valor Educacao'] || 0);
+          const valorSetup = parseNumericValue(row['Valor Setup'] || 0);
+          
+          movements.push({
+            id,
+            titulo: row['Título'] || row['titulo'] || row['Nome'] || '',
+            fase,
+            faseAtual: row['Fase Atual'] || row['fase_atual'] || fase,
+            dataEntrada,
+            dataCriacao: parseDate(row['Data Criação']),
+            dataAssinatura,
+            valorMRR,
+            valorPontual,
+            valorEducacao,
+            valorSetup,
+            valor: valorMRR + valorPontual + valorEducacao + valorSetup,
+            faixaFaturamento: (row['Faixa de faturamento mensal'] || row['Faixa'] || row['faixa'] || '') || undefined,
+          });
+          existingKeys.add(key);
+        }
+        console.log(`[useModeloAtualMetas] After signature merge: ${movements.length} movements`);
       }
 
       console.log(`[useModeloAtualMetas] Parsed ${movements.length} valid movements`);
