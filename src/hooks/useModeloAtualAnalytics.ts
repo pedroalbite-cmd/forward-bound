@@ -72,6 +72,15 @@ function parseDate(dateValue: string | null): Date | null {
   return date;
 }
 
+// Parse date-only (YYYY-MM-DD) to avoid timezone shift
+function parseDateOnly(dateValue: string | null): Date | null {
+  if (!dateValue) return null;
+  const match = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return parseDate(dateValue);
+  const [, y, m, d] = match;
+  return new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
+}
+
 // Parse numeric value - handles both BR (8.570,65) and US/DB (8570.65) formats
 function parseNumericValue(value: any): number {
   if (typeof value === 'number') return value;
@@ -115,7 +124,7 @@ function parseCardRow(row: Record<string, any>, skipPhaseFilter = false): Modelo
   if (!skipPhaseFilter && !PHASE_TO_INDICATOR[fase]) return null;
 
   // Parse additional dates
-  const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
+  const dataAssinatura = parseDateOnly(row['Data de assinatura do contrato']);
   
   // For "Contrato assinado" phase: override dataEntrada with dataAssinatura
   // This ensures sales are counted in the month they were signed, not when moved in Pipefy

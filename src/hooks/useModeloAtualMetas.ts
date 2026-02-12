@@ -75,6 +75,15 @@ function parseDate(dateValue: string | null): Date | null {
   return date;
 }
 
+// Parse date-only (YYYY-MM-DD) to avoid timezone shift
+function parseDateOnly(dateValue: string | null): Date | null {
+  if (!dateValue) return null;
+  const match = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return parseDate(dateValue);
+  const [, y, m, d] = match;
+  return new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
+}
+
 // Parse numeric value - handles both BR (8.570,65) and US/DB (8570.65) formats
 function parseNumericValue(value: any): number {
   if (typeof value === 'number') return value;
@@ -181,7 +190,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
         const valorSetup = parseNumericValue(rawSetup);
         const titulo = row['Título'] || row['titulo'] || row['Nome'] || '';
         const dataCriacao = parseDate(row['Data Criação']);
-        const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
+        const dataAssinatura = parseDateOnly(row['Data de assinatura do contrato']);
 
         // For 'Contrato assinado' phase: prioritize signature date over entry date
         if (fase === 'Contrato assinado' && dataAssinatura) {
@@ -221,7 +230,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
             faseAtual: row['Fase Atual'] || row['fase_atual'] || '',
             dataEntrada: parseDate(row['Entrada'] || row['entrada']) || new Date(),
             dataCriacao,
-            dataAssinatura: parseDate(row['Data de assinatura do contrato']),
+            dataAssinatura: parseDateOnly(row['Data de assinatura do contrato']),
             valorMRR: parseNumericValue(row['Valor MRR'] || 0),
             valorPontual: parseNumericValue(row['Valor Pontual'] || 0),
             valorEducacao: parseNumericValue(row['Valor Educação'] || 0),
