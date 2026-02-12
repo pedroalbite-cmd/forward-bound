@@ -74,12 +74,21 @@ function parseDate(dateValue: string | null): Date | null {
   return isNaN(date.getTime()) ? null : date;
 }
 
+// Parse date-only (YYYY-MM-DD) to avoid timezone shift
+function parseDateOnly(dateValue: string | null): Date | null {
+  if (!dateValue) return null;
+  const match = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return parseDate(dateValue);
+  const [, y, m, d] = match;
+  return new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
+}
+
 function parseRawCard(row: any, defaultTicket: number): ExpansaoCard {
   const id = String(row.ID);
   let dataEntrada = parseDate(row['Entrada']) || new Date();
   const dataSaida = parseDate(row['Saída']);
   const fase = row['Fase'] || '';
-  const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
+  const dataAssinatura = parseDateOnly(row['Data de assinatura do contrato']);
   if (fase === 'Contrato assinado' && dataAssinatura) {
     dataEntrada = dataAssinatura;
   }

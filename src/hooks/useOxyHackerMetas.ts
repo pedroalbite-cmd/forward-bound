@@ -42,6 +42,15 @@ function parseDate(dateValue: string | null): Date | null {
   return isNaN(date.getTime()) ? null : date;
 }
 
+// Parse date-only (YYYY-MM-DD) to avoid timezone shift
+function parseDateOnly(dateValue: string | null): Date | null {
+  if (!dateValue) return null;
+  const match = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return parseDate(dateValue);
+  const [, y, m, d] = match;
+  return new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
+}
+
 export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['oxy-hacker-metas-movements', startDate?.toISOString(), endDate?.toISOString()],
@@ -108,7 +117,7 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
         if (produto !== 'Oxy Hacker') continue;
         
         const fase = row['Fase'] || '';
-        const dataAssinatura = parseDate(row['Data de assinatura do contrato']);
+        const dataAssinatura = parseDateOnly(row['Data de assinatura do contrato']);
         
         // Para vendas (Contrato assinado), priorizar data de assinatura sobre data de entrada
         let dataEntrada = parseDate(row['Entrada']) || new Date();
