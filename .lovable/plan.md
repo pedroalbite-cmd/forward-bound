@@ -1,43 +1,35 @@
 
-# Correcao de Timezone no Campo "Data de assinatura do contrato"
+# Correcao: Valores Monetarios Zerados (Faturamento, MRR, Setup, Pontual)
 
 ## Problema
-O campo "Data de assinatura do contrato" vem do banco como `2026-02-12T00:00:00.000Z` (meia-noite UTC). O `new Date()` do JavaScript converte para fuso local (BRT = UTC-3), resultando em 11/02/2026 21:00 -- mostrando a venda no dia errado.
+
+O hook `useModeloAtualMetas` que calcula os valores monetarios (Faturamento, MRR, Setup, Pontual) tem dois bugs que fazem os valores aparecerem como R$ 0 mesmo com 1 venda registrada:
+
+### Bug 1: Datas enviadas com fuso horario
+O hook envia `startDate.toISOString()` ao servidor, que converte para UTC. Quando o usuario seleciona 12/02/2026, a data enviada e `2026-02-12T03:00:00.000Z` (meia-noite BRT = 3AM UTC). Porem, a "Entrada" do card no banco e `2026-02-12T00:06:10.817Z` (antes das 3AM UTC), entao o filtro server-side EXCLUI o registro.
+
+O hook `useModeloAtualAnalytics` (que calcula os volumes) ja resolve isso enviando `2026-02-12T00:00:00.000Z` e `2026-02-12T23:59:59.999Z` (UTC puro baseado em data-only).
+
+### Bug 2: Falta `query_period_by_signature`
+O hook `useModeloAtualAnalytics` faz 3 queries paralelas: `query_period`, `query_period_by_creation`, e `query_period_by_signature`. Mas o `useModeloAtualMetas` so faz 2 (falta a query por data de assinatura). Cards cujo "Contrato assinado" foi assinado no periodo mas movido em data diferente nao sao capturados para calculo monetario.
 
 ## Solucao
-Criar uma funcao `parseDateOnly` que extrai apenas YYYY-MM-DD da string e cria a data ao meio-dia local, evitando deslocamento de timezone. Aplicar essa funcao em todos os pontos que parseiam "Data de assinatura do contrato".
 
-## Arquivos afetados
+### Arquivo: `src/hooks/useModeloAtualMetas.ts`
 
-### 1. `src/hooks/useModeloAtualAnalytics.ts`
-- Adicionar funcao `parseDateOnly` ao lado da `parseDate` existente (apos linha 73)
-- Linha 118: trocar `parseDate(row['Data de assinatura do contrato'])` por `parseDateOnly(row['Data de assinatura do contrato'])`
+**Mudanca 1**: Corrigir as datas enviadas ao servidor para usar UTC puro (igual ao analytics):
+- Trocar `startDate?.toISOString()` por `startDateStr + 'T00:00:00.000Z'`
+- Trocar `endDate?.toISOString()` por `endDateStr + 'T23:59:59.999Z'`
+- Adicionar calculo de `startDateStr` e `endDateStr` extraindo `YYYY-MM-DD` via `.toISOString().split('T')[0]`
 
-### 2. `src/hooks/useModeloAtualMetas.ts`
-- Adicionar funcao `parseDateOnly`
-- Linhas 184 e 224: trocar `parseDate(row['Data de assinatura do contrato'])` por `parseDateOnly(...)`
+**Mudanca 2**: Adicionar terceira query `query_period_by_signature` (paralela com as outras duas):
+- Buscar cards cujo campo "Data de assinatura do contrato" esta dentro do periodo
+- Mergir esses cards no array `movements`, deduplicando por `id + fase`
 
-### 3. `src/hooks/useOxyHackerMetas.ts`
-- Adicionar funcao `parseDateOnly`
-- Linha 111: trocar `parseDate(row['Data de assinatura do contrato'])` por `parseDateOnly(...)`
+Isso garante que o card RM FERNANDEZ (e qualquer outro com situacao similar) apareca no calculo monetario e exiba os R$ 18.000 de Valor Pontual corretamente.
 
-### 4. `src/hooks/useExpansaoAnalytics.ts`
-- Adicionar funcao `parseDateOnly`
-- Linha 82: trocar `parseDate(row['Data de assinatura do contrato'])` por `parseDateOnly(...)`
+## Resultado Esperado
 
-### Funcao a ser adicionada em cada arquivo
-
-```text
-function parseDateOnly(dateValue: string | null): Date | null {
-  if (!dateValue) return null;
-  const match = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) return parseDate(dateValue);
-  const [, y, m, d] = match;
-  return new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
-}
-```
-
-Essa funcao extrai ano/mes/dia da string ISO e cria o Date ao meio-dia local, eliminando qualquer deslocamento de fuso horario.
-
-## Resultado
-O card RM FERNANDEZ passara a aparecer no dia 12/02/2026 (data correta da assinatura), e todas as demais vendas serao exibidas na data correta.
+- Faturamento: R$ 18.000 (era R$ 0)
+- Pontual: R$ 18.000 (era R$ 0)
+- MRR e Setup: R$ 0 (correto - o card so tem Valor Pontual)
