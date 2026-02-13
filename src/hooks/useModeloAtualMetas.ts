@@ -10,6 +10,7 @@ interface ModeloAtualMovement {
   titulo: string;
   fase: string;
   faseAtual: string;
+  motivoPerda?: string;
   dataEntrada: Date;
   dataCriacao: Date | null;
   dataAssinatura: Date | null;
@@ -34,6 +35,22 @@ export const MQL_QUALIFYING_TIERS = [
 export function isMqlQualified(faixaFaturamento?: string): boolean {
   if (!faixaFaturamento) return false;
   return MQL_QUALIFYING_TIERS.includes(faixaFaturamento);
+}
+
+// Motivos de perda que excluem o card da contagem de MQL
+export const MQL_EXCLUDED_LOSS_REASONS = [
+  'Duplicado',
+  'Pessoa física, fora do ICP',
+  'Não é uma demanda real',
+  'Buscando parceria',
+  'Quer soluções para cliente',
+  'Não é MQL, mas entrou como MQL',
+];
+
+// Verifica se o card deve ser excluído da contagem de MQL por estar perdido com motivo específico
+export function isMqlExcludedByLoss(faseAtual?: string, motivoPerda?: string): boolean {
+  if (!faseAtual || !motivoPerda) return false;
+  return faseAtual === 'Perdido' && MQL_EXCLUDED_LOSS_REASONS.includes(motivoPerda);
 }
 
 interface ModeloAtualMetasResult {
@@ -217,6 +234,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
           titulo,
           fase,
           faseAtual: row['Fase Atual'] || row['fase_atual'] || fase,
+          motivoPerda: row['Motivo da perda'] || row['motivo_perda'] || undefined,
           dataEntrada,
           dataCriacao,
           dataAssinatura,
@@ -243,6 +261,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
             titulo: row['Título'] || row['titulo'] || row['Nome'] || '',
             fase: row['Fase'] || row['fase'] || '',
             faseAtual: row['Fase Atual'] || row['fase_atual'] || '',
+            motivoPerda: row['Motivo da perda'] || row['motivo_perda'] || undefined,
             dataEntrada: parseDate(row['Entrada'] || row['entrada']) || new Date(),
             dataCriacao,
             dataAssinatura: parseDateOnly(row['Data de assinatura do contrato']),
@@ -282,6 +301,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
             titulo: row['Título'] || row['titulo'] || row['Nome'] || '',
             fase,
             faseAtual: row['Fase Atual'] || row['fase_atual'] || fase,
+            motivoPerda: row['Motivo da perda'] || row['motivo_perda'] || undefined,
             dataEntrada,
             dataCriacao: parseDate(row['Data Criação']),
             dataAssinatura,
@@ -321,7 +341,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
       for (const movement of mqlByCreation) {
         if (!movement.dataCriacao) continue;
         const creationTime = movement.dataCriacao.getTime();
-        if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(movement.faixaFaturamento) && !seenIds.has(movement.id)) {
+        if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(movement.faixaFaturamento) && !isMqlExcludedByLoss(movement.faseAtual, movement.motivoPerda) && !seenIds.has(movement.id)) {
           seenIds.add(movement.id);
         }
       }
@@ -407,7 +427,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
       for (const m of mqlByCreation) {
         if (!m.dataCriacao) continue;
         const t = m.dataCriacao.getTime();
-        if (t >= windowStart && t <= windowEnd && isMqlQualified(m.faixaFaturamento) && !seenIds.has(m.id)) {
+        if (t >= windowStart && t <= windowEnd && isMqlQualified(m.faixaFaturamento) && !isMqlExcludedByLoss(m.faseAtual, m.motivoPerda) && !seenIds.has(m.id)) {
           seenIds.add(m.id);
         }
       }

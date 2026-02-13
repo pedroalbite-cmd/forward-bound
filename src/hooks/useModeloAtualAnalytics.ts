@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DetailItem } from "@/components/planning/indicators/DetailSheet";
 import { IndicatorType } from "@/hooks/useFunnelRealized";
-import { isMqlQualified } from "@/hooks/useModeloAtualMetas";
+import { isMqlQualified, isMqlExcludedByLoss } from "@/hooks/useModeloAtualMetas";
 
 export interface ModeloAtualCard {
   id: string;
@@ -37,6 +37,8 @@ export interface ModeloAtualCard {
   posicionamento?: string;
   fbclid?: string;
   gclid?: string;
+  motivoPerda?: string;
+  faseAtual?: string;
 }
 
 // Map destination phases to indicators (based on pipefy_moviment_cfos table)
@@ -182,6 +184,8 @@ function parseCardRow(row: Record<string, any>, skipPhaseFilter = false): Modelo
     posicionamento: row['Posicionamento'] || undefined,
     fbclid: row['fbclid'] || undefined,
     gclid: row['gclid'] || undefined,
+    motivoPerda: row['Motivo da perda'] || row['motivo_perda'] || undefined,
+    faseAtual: row['Fase Atual'] || row['fase_atual'] || undefined,
   };
 }
 
@@ -344,7 +348,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       if (!indicator) continue;
       
       // Special validation for MQL (requires revenue >= 200k)
-      if (indicator === 'mql' && !isMqlQualified(card.faixa)) continue;
+      if (indicator === 'mql' && (!isMqlQualified(card.faixa) || isMqlExcludedByLoss(card.faseAtual, card.motivoPerda))) continue;
       
       if (!firstEntries.has(card.id)) {
         firstEntries.set(card.id, new Map());
@@ -380,9 +384,9 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         // MQL: Use creation date logic (aligned with Pipefy)
         // Card created in the period + faturamento >= R$ 200k
         for (const card of mqlByCreation) {
-          if (!card.dataCriacao) continue;
-          const creationTime = card.dataCriacao.getTime();
-          if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa)) {
+        if (!card.dataCriacao) continue;
+        const creationTime = card.dataCriacao.getTime();
+        if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa) && !isMqlExcludedByLoss(card.faseAtual, card.motivoPerda)) {
             // Deduplicate by card ID - keep first occurrence
             if (!uniqueCards.has(card.id)) {
               uniqueCards.set(card.id, card);
@@ -526,7 +530,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         }
         // MQL = card entered MQLs phase AND has revenue >= R$ 200k
         if (indicator === 'mql') {
-          return cardIndicator === 'mql' && isMqlQualified(m.faixa);
+          return cardIndicator === 'mql' && isMqlQualified(m.faixa) && !isMqlExcludedByLoss(m.faseAtual, m.motivoPerda);
         }
         return cardIndicator === indicator;
       });
