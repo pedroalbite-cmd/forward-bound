@@ -34,9 +34,7 @@ const DEFAULT_TICKETS: Record<BuType, number> = {
 // Get current month index (0-based). Feb 2026 = 1
 function getCurrentMonthIndex(): number {
   const now = new Date();
-  // For 2026, use actual month. Otherwise default to 0 (all editable for testing)
   if (now.getFullYear() === 2026) return now.getMonth();
-  // We're in Feb 2026 context per plan
   return 1; // February
 }
 
@@ -50,8 +48,8 @@ export function MonetaryMetasTab() {
 
   const [selectedBu, setSelectedBu] = useState<BuType>('modelo_atual');
   
-  // Local state: vendas per BU per month
-  const [localVendas, setLocalVendas] = useState<Record<string, Record<string, number>>>({});
+  // Local state: faturamento per BU per month (PRIMARY EDITABLE)
+  const [localFaturamento, setLocalFaturamento] = useState<Record<string, Record<string, number>>>({});
   // Ticket medio per BU
   const [localTickets, setLocalTickets] = useState<Record<string, number>>({});
   const [hasChanges, setHasChanges] = useState(false);
@@ -63,44 +61,47 @@ export function MonetaryMetasTab() {
   // Initialize from DB
   useEffect(() => {
     if (metas.length > 0) {
-      const vendasMap: Record<string, Record<string, number>> = {};
+      const fatMap: Record<string, Record<string, number>> = {};
       const ticketMap: Record<string, number> = {};
 
       BUS.forEach(bu => {
-        vendasMap[bu] = {};
+        fatMap[bu] = {};
         let foundTicket = 0;
         MONTHS.forEach(month => {
           const meta = metas.find(m => m.bu === bu && m.month === month);
           if (meta) {
-            vendasMap[bu][month] = Number(meta.vendas) || 0;
+            fatMap[bu][month] = Number(meta.faturamento) || 0;
             if (Number(meta.ticket_medio) > 0) foundTicket = Number(meta.ticket_medio);
           } else {
-            vendasMap[bu][month] = 0;
+            fatMap[bu][month] = 0;
           }
         });
         ticketMap[bu] = foundTicket > 0 ? foundTicket : DEFAULT_TICKETS[bu];
       });
 
-      setLocalVendas(vendasMap);
+      setLocalFaturamento(fatMap);
       setLocalTickets(ticketMap);
       setHasChanges(false);
     } else {
-      // No data yet, initialize with defaults
-      const vendasMap: Record<string, Record<string, number>> = {};
+      const fatMap: Record<string, Record<string, number>> = {};
       const ticketMap: Record<string, number> = {};
       BUS.forEach(bu => {
-        vendasMap[bu] = {};
-        MONTHS.forEach(month => { vendasMap[bu][month] = 0; });
+        fatMap[bu] = {};
+        MONTHS.forEach(month => { fatMap[bu][month] = 0; });
         ticketMap[bu] = DEFAULT_TICKETS[bu];
       });
-      setLocalVendas(vendasMap);
+      setLocalFaturamento(fatMap);
       setLocalTickets(ticketMap);
     }
   }, [metas]);
 
-  const getVendas = (bu: string, month: string) => localVendas[bu]?.[month] ?? 0;
+  const getFaturamento = (bu: string, month: string) => localFaturamento[bu]?.[month] ?? 0;
   const getTicket = (bu: string) => localTickets[bu] ?? 0;
-  const getFaturamento = (bu: string, month: string) => getVendas(bu, month) * getTicket(bu);
+  const getVendas = (bu: string, month: string) => {
+    const ticket = getTicket(bu);
+    if (ticket <= 0) return 0;
+    return Math.round(getFaturamento(bu, month) / ticket);
+  };
 
   const getBuMonthlyTotal = (bu: string) => MONTHS.reduce((s, m) => s + getFaturamento(bu, m), 0);
   const getBuVendasTotal = (bu: string) => MONTHS.reduce((s, m) => s + getVendas(bu, m), 0);
@@ -108,14 +109,14 @@ export function MonetaryMetasTab() {
   // Consolidated total across all BUs
   const consolidatedTotal = useMemo(() => {
     return BUS.reduce((sum, bu) => sum + getBuMonthlyTotal(bu), 0);
-  }, [localVendas, localTickets]);
+  }, [localFaturamento, localTickets]);
 
   const diff = consolidatedTotal - TARGET_TOTAL;
-  const isOnTarget = Math.abs(diff) < 1000; // tolerance
+  const isOnTarget = Math.abs(diff) < 1000;
   const progressPct = Math.min((consolidatedTotal / TARGET_TOTAL) * 100, 100);
 
-  const updateVendas = (bu: string, month: string, value: number) => {
-    setLocalVendas(prev => ({
+  const updateFaturamento = (bu: string, month: string, value: number) => {
+    setLocalFaturamento(prev => ({
       ...prev,
       [bu]: { ...prev[bu], [month]: value },
     }));
@@ -128,13 +129,12 @@ export function MonetaryMetasTab() {
   };
 
   const handleSave = async () => {
-    // Save ALL BUs at once to keep consistency
     const updates = BUS.flatMap(bu => {
       const ticket = getTicket(bu);
       const pontualOnly = isPontualOnlyBU(bu);
       return MONTHS.map(month => {
-        const vendas = getVendas(bu, month);
-        const fat = vendas * ticket;
+        const fat = getFaturamento(bu, month);
+        const vendas = ticket > 0 ? Math.round(fat / ticket) : 0;
         return {
           bu,
           month,
@@ -186,7 +186,7 @@ export function MonetaryMetasTab() {
           Metas Monetárias por BU
         </h2>
         <p className="text-muted-foreground">
-          Defina a quantidade de vendas e ticket médio por BU. O sistema calcula faturamento e métricas automaticamente.
+          Defina o faturamento (meta) e ticket médio por BU. O sistema calcula vendas e métricas automaticamente.
         </p>
       </div>
 
@@ -301,56 +301,57 @@ export function MonetaryMetasTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {/* Vendas Row - EDITABLE */}
+                {/* Faturamento Row - EDITABLE (primary input) */}
                 <TableRow className="bg-primary/5">
                   <TableCell className="sticky left-0 bg-primary/5 z-10 font-semibold">
-                    🎯 Vendas
+                    🎯 Meta (Fat.)
                   </TableCell>
                   {MONTHS.map((month, i) => {
                     const locked = isMonthLocked(i);
-                    const cellKey = `vendas-${month}`;
-                    const value = getVendas(selectedBu, month);
+                    const cellKey = `fat-${month}`;
+                    const value = getFaturamento(selectedBu, month);
                     return (
                       <TableCell key={cellKey} className={`text-center p-1 ${locked ? 'bg-muted/50' : ''}`}>
                         <Input
                           type="text"
                           disabled={locked}
                           value={
-                            editingCell === cellKey ? editingValue : (value > 0 ? value.toString() : '')
+                            editingCell === cellKey ? editingValue : (value > 0 ? formatCompact(value) : '')
                           }
-                          placeholder={locked ? value.toString() : '0'}
+                          placeholder={locked ? formatCompact(value) : '0'}
                           onFocus={() => {
                             setEditingCell(cellKey);
                             setEditingValue(value > 0 ? value.toString() : '');
                           }}
                           onChange={(e) => setEditingValue(e.target.value)}
                           onBlur={() => {
-                            const parsed = parseInt(editingValue) || 0;
-                            updateVendas(selectedBu, month, parsed);
+                            const cleaned = editingValue.replace(/[^\d]/g, '');
+                            const parsed = parseInt(cleaned) || 0;
+                            updateFaturamento(selectedBu, month, parsed);
                             setEditingCell(null);
                           }}
-                          className={`w-16 h-8 text-center text-sm font-semibold ${locked ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          className={`w-20 h-8 text-center text-sm font-semibold ${locked ? 'opacity-60 cursor-not-allowed' : ''}`}
                         />
                       </TableCell>
                     );
                   })}
                   <TableCell className="text-center font-bold bg-muted/30">
-                    {getBuVendasTotal(selectedBu)}
+                    {formatCurrency(getBuMonthlyTotal(selectedBu))}
                   </TableCell>
                 </TableRow>
 
-                {/* Faturamento Row - CALCULATED */}
+                {/* Vendas Row - CALCULATED (display only) */}
                 <TableRow>
                   <TableCell className="sticky left-0 bg-background z-10 font-medium">
-                    Faturamento
+                    Vendas
                   </TableCell>
                   {MONTHS.map((month, i) => (
-                    <TableCell key={`fat-${month}`} className={`text-center text-sm ${isMonthLocked(i) ? 'bg-muted/50' : ''}`}>
-                      {formatCompact(getFaturamento(selectedBu, month))}
+                    <TableCell key={`vendas-${month}`} className={`text-center text-sm ${isMonthLocked(i) ? 'bg-muted/50' : ''}`}>
+                      {getVendas(selectedBu, month)}
                     </TableCell>
                   ))}
                   <TableCell className="text-center font-semibold bg-muted/30">
-                    {formatCurrency(getBuMonthlyTotal(selectedBu))}
+                    {getBuVendasTotal(selectedBu)}
                   </TableCell>
                 </TableRow>
 
