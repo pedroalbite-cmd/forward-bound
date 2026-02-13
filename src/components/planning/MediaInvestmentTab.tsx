@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Legend, Line } from "recharts";
-import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3, Info, Settings, Filter } from "lucide-react";
+import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3, Info, Settings, Filter, Lock, Pencil } from "lucide-react";
+import { toast } from "sonner";
 import { SalesFunnelVisual } from "./SalesFunnelVisual";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
@@ -332,6 +333,19 @@ interface BUIndicators {
   propToVenda: number;
 }
 
+// Get current month index (0-based, Feb 2026 = 1)
+function getCurrentMonthIndex(): number {
+  const now = new Date();
+  // If we're in 2026, use actual month (0-indexed)
+  if (now.getFullYear() === 2026) {
+    return now.getMonth(); // 0 = Jan, 1 = Feb, etc.
+  }
+  // If before 2026, all months are editable (return -1)
+  if (now.getFullYear() < 2026) return -1;
+  // If after 2026, all months are locked
+  return 12;
+}
+
 interface BUInvestmentTableProps {
   title: string;
   icon: React.ReactNode;
@@ -343,6 +357,9 @@ interface BUInvestmentTableProps {
   churnMensal?: number;
   retencaoVendas?: number;
   mrrFinal?: number;
+  buKey?: string;
+  onAVenderChange?: (month: string, newValue: number) => void;
+  editable?: boolean;
 }
 
 function BUInvestmentTable({ 
@@ -355,8 +372,40 @@ function BUInvestmentTable({
   mrrBase = 0,
   churnMensal = 0.06,
   retencaoVendas = 0.25,
-  mrrFinal = 0
+  mrrFinal = 0,
+  buKey,
+  onAVenderChange,
+  editable = false
 }: BUInvestmentTableProps) {
+  const [editingMonth, setEditingMonth] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const currentMonthIndex = getCurrentMonthIndex();
+
+  const isMonthEditable = (monthIndex: number) => {
+    if (!editable || !onAVenderChange) return false;
+    return monthIndex >= currentMonthIndex;
+  };
+
+  const handleStartEdit = (month: string, currentValue: number) => {
+    setEditingMonth(month);
+    setEditValue(String(Math.round(currentValue)));
+  };
+
+  const handleConfirmEdit = (month: string) => {
+    const newValue = parseFloat(editValue) || 0;
+    if (onAVenderChange && newValue >= 0) {
+      onAVenderChange(month, newValue);
+    }
+    setEditingMonth(null);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, month: string) => {
+    if (e.key === 'Enter') {
+      handleConfirmEdit(month);
+    } else if (e.key === 'Escape') {
+      setEditingMonth(null);
+    }
+  };
   const totalInvestimento = funnelData.reduce((sum, d) => sum + d.investimento, 0);
   const totalFaturamentoMeta = funnelData.reduce((sum, d) => sum + d.faturamentoMeta, 0);
   const totalFaturamentoVender = funnelData.reduce((sum, d) => sum + d.faturamentoVender, 0);
@@ -476,12 +525,70 @@ function BUInvestmentTable({
                     <TableCell>
                       <Badge variant="outline" className="w-12 justify-center">{data.month}</Badge>
                     </TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(data.faturamentoMeta)}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      {!showMrrBase && editable && isMonthEditable(index) ? (
+                        editingMonth === data.month ? (
+                          <Input
+                            type="number"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={() => handleConfirmEdit(data.month)}
+                            onKeyDown={(e) => handleKeyDown(e, data.month)}
+                            className="w-32 text-right font-mono h-8 ml-auto"
+                            autoFocus
+                          />
+                        ) : (
+                          <button
+                            onClick={() => handleStartEdit(data.month, data.faturamentoMeta)}
+                            className="inline-flex items-center gap-1 hover:bg-muted/50 rounded px-2 py-1 transition-colors cursor-pointer"
+                            title="Clique para editar"
+                          >
+                            {formatCurrency(data.faturamentoMeta)}
+                            <Pencil className="h-3 w-3 opacity-50" />
+                          </button>
+                        )
+                      ) : !showMrrBase && editable && !isMonthEditable(index) ? (
+                        <span className="text-muted-foreground/60">
+                          <Lock className="h-3 w-3 inline mr-1 opacity-40" />
+                          {formatCurrency(data.faturamentoMeta)}
+                        </span>
+                      ) : (
+                        formatCurrency(data.faturamentoMeta)
+                      )}
+                    </TableCell>
                     {showMrrBase && (
                       <TableCell className="text-right text-muted-foreground">{formatCurrency(data.mrrBase)}</TableCell>
                     )}
                     {showMrrBase && (
-                      <TableCell className="text-right text-amber-600 font-medium">{formatCurrency(data.faturamentoVender)}</TableCell>
+                      <TableCell className="text-right">
+                        {editable && isMonthEditable(index) ? (
+                          editingMonth === data.month ? (
+                            <Input
+                              type="number"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={() => handleConfirmEdit(data.month)}
+                              onKeyDown={(e) => handleKeyDown(e, data.month)}
+                              className="w-32 text-right font-mono h-8 ml-auto"
+                              autoFocus
+                            />
+                          ) : (
+                            <button
+                              onClick={() => handleStartEdit(data.month, data.faturamentoVender)}
+                              className="inline-flex items-center gap-1 text-amber-600 font-medium hover:bg-amber-500/10 rounded px-2 py-1 transition-colors cursor-pointer"
+                              title="Clique para editar"
+                            >
+                              {formatCurrency(data.faturamentoVender)}
+                              <Pencil className="h-3 w-3 opacity-50" />
+                            </button>
+                          )
+                        ) : (
+                          <span className={`font-medium ${editable && !isMonthEditable(index) ? 'text-muted-foreground/60' : 'text-amber-600'}`}>
+                            {editable && !isMonthEditable(index) && <Lock className="h-3 w-3 inline mr-1 opacity-40" />}
+                            {formatCurrency(data.faturamentoVender)}
+                          </span>
+                        )}
+                      </TableCell>
                     )}
                     <TableCell className="text-right">{data.vendas}</TableCell>
                     <TableCell className="text-right">{data.propostas}</TableCell>
@@ -652,7 +759,7 @@ function BUIndicatorEditor({ indicators, onChange, buName, buIcon }: BUIndicator
 
 export function MediaInvestmentTab() {
   // Fetch monetary metas from database
-  const { metas, isLoading: isLoadingMetas } = useMonetaryMetas();
+  const { metas, isLoading: isLoadingMetas, bulkUpdateMetas, getMeta } = useMonetaryMetas();
   
   // Helper: Get metas from database for a BU
   const getDbMetasForBU = (bu: BuType): Record<string, number> | null => {
@@ -1081,6 +1188,62 @@ export function MediaInvestmentTab() {
   const handleBUIndicatorChange = (bu: 'modeloAtual' | 'o2Tax' | 'oxyHacker' | 'franquia', indicators: BUIndicators) => {
     setIndicadoresPorBU(prev => ({ ...prev, [bu]: indicators }));
   };
+
+  // Handler for A Vender changes from BU detail tables
+  const handleAVenderChange = useCallback(async (buKey: string, month: string, newAVender: number) => {
+    try {
+      // Find the existing meta for this BU/month to get MRR base
+      const buMeta = metas.find(m => m.bu === buKey && m.month === month);
+      const isPontualOnly = isPontualOnlyBU(buKey as BuType);
+      
+      if (isPontualOnly) {
+        // For pontual-only BUs, A Vender IS the pontual value
+        await bulkUpdateMetas.mutateAsync([{
+          bu: buKey,
+          month,
+          year: 2026,
+          faturamento: newAVender,
+          pontual: newAVender,
+          mrr: 0,
+          setup: 0,
+          vendas: buMeta ? buMeta.vendas : Math.round(newAVender / indicadoresPorBU[buKey === 'oxy_hacker' ? 'oxyHacker' : 'franquia'].ticketMedio),
+          ticket_medio: buMeta ? buMeta.ticket_medio : indicadoresPorBU[buKey === 'oxy_hacker' ? 'oxyHacker' : 'franquia'].ticketMedio,
+        }]);
+      } else {
+        // For Modelo Atual / O2 TAX: new faturamento = MRR Base + new A Vender
+        // Get MRR base from funnel data
+        let mrrBaseDoMes = 0;
+        const monthIndex = months.indexOf(month);
+        if (buKey === 'modelo_atual') {
+          mrrBaseDoMes = modeloAtualFunnel[monthIndex]?.mrrBase || 0;
+        } else if (buKey === 'o2_tax') {
+          // O2 TAX doesn't have MRR chain in detail view currently, so A Vender = total meta
+          mrrBaseDoMes = 0;
+        }
+        
+        const newFaturamento = mrrBaseDoMes + newAVender;
+        const ticketMedio = buMeta ? buMeta.ticket_medio : indicadoresPorBU[buKey === 'o2_tax' ? 'o2Tax' : 'modeloAtual'].ticketMedio;
+        const vendas = Math.round(newFaturamento / ticketMedio);
+        
+        await bulkUpdateMetas.mutateAsync([{
+          bu: buKey,
+          month,
+          year: 2026,
+          faturamento: newFaturamento,
+          mrr: Math.round(newFaturamento * 0.25),
+          setup: Math.round(newFaturamento * 0.60),
+          pontual: Math.round(newFaturamento * 0.15),
+          vendas,
+          ticket_medio: ticketMedio,
+        }]);
+      }
+      
+      toast.success(`Meta "${month}" atualizada com sucesso`);
+    } catch (error) {
+      console.error('Error updating A Vender:', error);
+      toast.error('Erro ao atualizar meta');
+    }
+  }, [metas, bulkUpdateMetas, indicadoresPorBU, modeloAtualFunnel]);
 
   return (
     <div className="space-y-10 animate-fade-in">
@@ -1765,6 +1928,9 @@ export function MediaInvestmentTab() {
             churnMensal={churnMensal}
             retencaoVendas={retencaoVendas}
             mrrFinal={mrrDynamic.mrrPorMes["Dez"]}
+            buKey="modelo_atual"
+            editable={true}
+            onAVenderChange={(month, value) => handleAVenderChange('modelo_atual', month, value)}
           />
 
           <BUInvestmentTable
@@ -1773,6 +1939,9 @@ export function MediaInvestmentTab() {
             funnelData={o2TaxFunnel}
             color={funnelMetrics.o2Tax.color}
             metrics={funnelMetrics.o2Tax}
+            buKey="o2_tax"
+            editable={true}
+            onAVenderChange={(month, value) => handleAVenderChange('o2_tax', month, value)}
           />
 
           <BUInvestmentTable
@@ -1781,6 +1950,9 @@ export function MediaInvestmentTab() {
             funnelData={oxyHackerFunnel}
             color={funnelMetrics.oxyHacker.color}
             metrics={funnelMetrics.oxyHacker}
+            buKey="oxy_hacker"
+            editable={true}
+            onAVenderChange={(month, value) => handleAVenderChange('oxy_hacker', month, value)}
           />
 
           <BUInvestmentTable
@@ -1789,6 +1961,9 @@ export function MediaInvestmentTab() {
             funnelData={franquiaFunnel}
             color={funnelMetrics.franquia.color}
             metrics={funnelMetrics.franquia}
+            buKey="franquia"
+            editable={true}
+            onAVenderChange={(month, value) => handleAVenderChange('franquia', month, value)}
           />
         </div>
       </div>
