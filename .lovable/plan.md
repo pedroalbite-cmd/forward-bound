@@ -1,35 +1,50 @@
 
 
-# Reverter monetary_metas do Modelo Atual (Jan-Jun)
+# Ajustar "A Vender" do Modelo Atual (Jan-Jun 2026)
 
-## Problema
-O campo `faturamento` armazena o faturamento TOTAL mensal (MRR Base + Incremento). Ao inserir os valores de "A Vender" (400k, 500k...) diretamente nesse campo, o calculo do Plan Growth resultou em MRR Base = 0, pois:
-- `MRR Base = faturamento - valorVenderInicial (400k)`
-- Com faturamento = 400k: MRR Base = 0
+## Como funciona o calculo
 
-## Solucao
-Reverter os 6 registros de Jan a Jun 2026 para os valores originais, calculados pela distribuicao trimestral (identica ao padrao de Jul-Dez que nao foi alterado).
+O campo `faturamento` no banco representa o **faturamento TOTAL** do mes (MRR Base + Incremento). O sistema calcula o "A Vender" dinamicamente:
 
-### Valores a restaurar
+```text
+MRR Base(Jan) = faturamento(Jan) - 400.000 (valor inicial fixo)
+MRR Base(Fev) = MRR Base(Jan) * 0.94 + vendas(Jan) * 17.000 * 0.25
+A Vender(mes) = faturamento(mes) - MRR Base(mes)
+```
 
-| Mes | Faturamento | MRR (25%) | Setup (60%) | Pontual (15%) |
-|-----|-------------|-----------|-------------|---------------|
-| Jan | 1.125.000   | 281.250   | 675.000     | 168.750       |
-| Fev | 1.237.500   | 309.375   | 742.500     | 185.625       |
-| Mar | 1.387.500   | 346.875   | 832.500     | 208.125       |
-| Abr | 1.350.000   | 337.500   | 810.000     | 202.500       |
-| Mai | 1.485.000   | 371.250   | 891.000     | 222.750       |
-| Jun | 1.665.000   | 416.250   | 999.000     | 249.750       |
+Portanto, para obter os valores desejados de "A Vender", precisamos calcular o `faturamento` correto para cada mes (faturamento = MRR Base + A Vender desejado).
 
-Formula: Q1 (3.750.000) distribuido 30/33/37%, Q2 (4.500.000) distribuido 30/33/37%.
+## Calculo sequencial
 
-### Execucao
-Uma unica operacao UPDATE na tabela `monetary_metas` para os 6 registros (bu='modelo_atual', months Jan-Jun, year=2026).
+Simulando a cadeia de MRR Base com churn de 6% e retencao de 25%:
 
-### Resultado esperado
-- MRR Base volta a ser calculado corretamente: `faturamento(Jan) - 400.000 = 725.000`
-- Os valores de "A Vender" (Incremento) voltam a ser derivados automaticamente pelo Plan Growth
+| Mes | MRR Base calculado | A Vender desejado | Faturamento necessario |
+|-----|-------------------|-------------------|----------------------|
+| Jan | 725.000           | 400.000           | 1.125.000 (manter)   |
+| Fev | 781.500           | 400.000           | 1.181.500            |
+| Mar | 834.610           | 500.000           | 1.334.610            |
+| Abr | 909.533           | 532.975           | 1.442.508            |
+| Mai | 988.205           | 580.000           | 1.568.205            |
+| Jun | 1.073.913         | 614.000           | 1.687.913            |
 
-### Nota importante
-Para futuramente ajustar o "A Vender" de cada mes, a alteracao deve ser feita via Admin Panel (Metas Monetarias), que recalcula o faturamento total automaticamente, ou o campo `faturamento` deve receber o valor TOTAL (MRR Base + Incremento), nao apenas o incremento.
+## Valores a gravar no banco
+
+Para cada mes, o faturamento sera dividido em MRR (25%), Setup (60%) e Pontual (15%):
+
+| Mes | Faturamento | MRR     | Setup     | Pontual |
+|-----|-------------|---------|-----------|---------|
+| Jan | 1.125.000   | 281.250 | 675.000   | 168.750 |
+| Fev | 1.181.500   | 295.375 | 708.900   | 177.225 |
+| Mar | 1.334.610   | 333.653 | 800.766   | 200.192 |
+| Abr | 1.442.508   | 360.627 | 865.505   | 216.376 |
+| Mai | 1.568.205   | 392.051 | 940.923   | 235.231 |
+| Jun | 1.687.913   | 421.978 | 1.012.748 | 253.187 |
+
+## Execucao
+
+Uma operacao UPDATE na tabela `monetary_metas` para os 6 registros (bu='modelo_atual', Jan-Jun, year=2026). Janeiro permanece inalterado (ja esta com 1.125.000).
+
+## Resultado esperado
+
+O Plan Growth exibira os valores de "A Vender" solicitados: 400k, 400k, 500k, 532.975, 580k e 614k.
 
