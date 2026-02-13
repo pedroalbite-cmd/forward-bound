@@ -1,4 +1,7 @@
+import { useState } from "react";
+import { ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 export interface BarChartDataItem {
   label: string;
@@ -11,22 +14,49 @@ interface DrillDownBarChartProps {
   data: BarChartDataItem[];
   formatValue?: (value: number) => string;
   maxItems?: number;
+  sortable?: boolean;
+  sortOrder?: string[];
 }
 
 export function DrillDownBarChart({ 
   title, 
   data, 
   formatValue = String, 
-  maxItems = 5 
+  maxItems = 5,
+  sortable = false,
+  sortOrder = [],
 }: DrillDownBarChartProps) {
+  const [sortByRange, setSortByRange] = useState(false);
+
   if (!data || data.length === 0) return null;
   
-  const maxValue = Math.max(...data.map(d => d.value), 1);
-  const displayData = data.slice(0, maxItems);
+  const sortedData = sortByRange && sortOrder.length > 0
+    ? [...data].sort((a, b) => {
+        const idxA = sortOrder.indexOf(a.label);
+        const idxB = sortOrder.indexOf(b.label);
+        return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
+      })
+    : data;
+
+  const displayData = sortByRange ? sortedData : sortedData.slice(0, maxItems);
+  const maxValue = Math.max(...displayData.map(d => d.value), 1);
 
   return (
     <div className="space-y-3 flex-1 min-w-[200px]">
-      <h4 className="text-sm font-medium text-foreground">{title}</h4>
+      <div className="flex items-center gap-2">
+        <h4 className="text-sm font-medium text-foreground">{title}</h4>
+        {sortable && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => setSortByRange(!sortByRange)}
+            title={sortByRange ? 'Ordenar por quantidade' : 'Ordenar por faixa'}
+          >
+            <ArrowUpDown className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
       <div className="space-y-2">
         {displayData.map((item) => (
           <div key={item.label} className="flex items-center gap-3">
