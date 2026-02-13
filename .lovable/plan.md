@@ -1,35 +1,57 @@
 
-# Correcao: Valores Monetarios Zerados (Faturamento, MRR, Setup, Pontual)
 
-## Problema
+# Reformular Metas Monetarias no Admin: Edicao por Vendas
 
-O hook `useModeloAtualMetas` que calcula os valores monetarios (Faturamento, MRR, Setup, Pontual) tem dois bugs que fazem os valores aparecerem como R$ 0 mesmo com 1 venda registrada:
+## Contexto
+A meta total consolidada (todas as BUs) e R$ 33.306.500. Hoje o admin edita valores monetarios diretamente (faturamento, MRR, etc). A mudanca e: o admin edita apenas **quantidade de vendas** e **ticket medio** por BU, e o sistema calcula tudo automaticamente. Meses passados ficam bloqueados (antes do mes atual).
 
-### Bug 1: Datas enviadas com fuso horario
-O hook envia `startDate.toISOString()` ao servidor, que converte para UTC. Quando o usuario seleciona 12/02/2026, a data enviada e `2026-02-12T03:00:00.000Z` (meia-noite BRT = 3AM UTC). Porem, a "Entrada" do card no banco e `2026-02-12T00:06:10.817Z` (antes das 3AM UTC), entao o filtro server-side EXCLUI o registro.
+## Regra de Negocio
+- **Faturamento** = Vendas x Ticket Medio
+- **Modelo Atual / O2 TAX**: MRR = 25%, Setup = 60%, Pontual = 15% do faturamento
+- **Oxy Hacker / Franquia**: Pontual = 100% do faturamento (sem MRR/Setup)
+- Total de todas as BUs deve ser sempre **R$ 33.306.500**
+- Se reduzir vendas em um mes, precisa compensar em outro
+- Mes atual (Fev 2026) e futuros: editaveis. Meses passados (Jan): somente leitura
 
-O hook `useModeloAtualAnalytics` (que calcula os volumes) ja resolve isso enviando `2026-02-12T00:00:00.000Z` e `2026-02-12T23:59:59.999Z` (UTC puro baseado em data-only).
+## Mudancas
 
-### Bug 2: Falta `query_period_by_signature`
-O hook `useModeloAtualAnalytics` faz 3 queries paralelas: `query_period`, `query_period_by_creation`, e `query_period_by_signature`. Mas o `useModeloAtualMetas` so faz 2 (falta a query por data de assinatura). Cards cujo "Contrato assinado" foi assinado no periodo mas movido em data diferente nao sao capturados para calculo monetario.
+### 1. Banco de Dados - Nova migracao
+Adicionar 2 colunas na tabela `monetary_metas`:
+- `vendas` (integer, default 0) - quantidade de vendas no mes
+- `ticket_medio` (numeric, default 0) - ticket medio da BU
 
-## Solucao
+### 2. Hook `useMonetaryMetas.ts`
+- Adicionar os novos campos `vendas` e `ticket_medio` na tipagem `MonetaryMeta`
+- Incluir esses campos nas queries de leitura e escrita (upsert)
+- Adicionar funcao para calcular faturamento a partir de vendas x ticket
 
-### Arquivo: `src/hooks/useModeloAtualMetas.ts`
+### 3. Componente `MonetaryMetasTab.tsx` - Reformulacao completa da UI
+**Nova interface:**
+- Seletor de BU (mantido)
+- Campo de **Ticket Medio** editavel por BU (um unico input no topo)
+- Tabela com meses como colunas:
+  - Linha "Vendas": inputs editaveis (desabilitados para meses passados, com fundo cinza)
+  - Linha "Faturamento": valor calculado automaticamente (somente leitura)
+  - Para Modelo Atual/O2 TAX: linhas MRR, Setup, Pontual (calculados, somente leitura)
+  - Para Oxy Hacker/Franquia: linha Pontual (calculada, somente leitura)
+- **Totalizador**: mostra total da BU atual e total consolidado de todas as BUs
+- **Validacao visual**: barra mostrando se o total consolidado esta igual a R$ 33.306.500
+  - Verde se igual, vermelho se diferente, com indicacao de quanto falta ou sobra
+- Botao Salvar (grava vendas, ticket_medio, e os valores calculados de faturamento/MRR/Setup/Pontual)
 
-**Mudanca 1**: Corrigir as datas enviadas ao servidor para usar UTC puro (igual ao analytics):
-- Trocar `startDate?.toISOString()` por `startDateStr + 'T00:00:00.000Z'`
-- Trocar `endDate?.toISOString()` por `endDateStr + 'T23:59:59.999Z'`
-- Adicionar calculo de `startDateStr` e `endDateStr` extraindo `YYYY-MM-DD` via `.toISOString().split('T')[0]`
+**Bloqueio temporal:**
+- Mes atual (baseado na data do sistema): editavel
+- Meses futuros: editaveis
+- Meses passados: inputs desabilitados com fundo cinza
 
-**Mudanca 2**: Adicionar terceira query `query_period_by_signature` (paralela com as outras duas):
-- Buscar cards cujo campo "Data de assinatura do contrato" esta dentro do periodo
-- Mergir esses cards no array `movements`, deduplicando por `id + fase`
+**Tickets medios iniciais** (pre-preenchidos com base nos dados atuais):
+- Modelo Atual: calculado a partir dos dados existentes (~R$ 400.000 estimado)
+- O2 TAX: calculado dos dados existentes
+- Oxy Hacker: R$ 54.000
+- Franquia: R$ 140.000
 
-Isso garante que o card RM FERNANDEZ (e qualquer outro com situacao similar) apareca no calculo monetario e exiba os R$ 18.000 de Valor Pontual corretamente.
+### 4. Manter compatibilidade
+Os campos `faturamento`, `mrr`, `setup`, `pontual` continuam sendo gravados no banco ao salvar, garantindo que todos os dashboards (Indicadores, Controle Metas, Plan Growth) continuem funcionando sem alteracao.
 
-## Resultado Esperado
-
-- Faturamento: R$ 18.000 (era R$ 0)
-- Pontual: R$ 18.000 (era R$ 0)
-- MRR e Setup: R$ 0 (correto - o card so tem Valor Pontual)
+## Resultado
+O admin controla apenas vendas e ticket, o sistema calcula tudo. O total consolidado e protegido visualmente para garantir R$ 33.306.500. Meses passados nao podem ser alterados.
