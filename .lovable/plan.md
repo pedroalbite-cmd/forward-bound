@@ -1,27 +1,41 @@
 
 
-# Atualizar "A Vender" do Modelo Atual (Jan-Jun 2026)
+# Alinhar Vendas x Ticket Medio no Modelo Atual
 
-## Situacao atual no banco
-Os valores foram revertidos e estao nos originais. Precisamos atualizar Fev-Jun para que o Plan Growth exiba os valores de "A Vender" desejados.
+## Problema atual
 
-## O que sera feito
-Atualizar 5 registros na tabela `monetary_metas` (bu = 'modelo_atual', year = 2026). Janeiro ja esta correto com faturamento = 1.125.000.
+O "A Vender" e a quantidade de "Vendas" estao inconsistentes. Exemplo: A Vender = R$ 400.000 com 24 vendas, mas 24 x R$ 17.000 = R$ 408.000 (nao R$ 400.000). Isso acontece porque o sistema usa `Math.ceil(aVender / ticketMedio)` para calcular vendas, criando arredondamentos.
 
-### Valores a gravar
+## Solucao proposta
 
-| Mes | Faturamento | MRR (25%) | Setup (60%) | Pontual (15%) | A Vender resultante |
-|-----|-------------|-----------|-------------|---------------|-------------------|
-| Jan | 1.125.000 (manter) | 281.250 | 675.000 | 168.750 | 400.000 |
-| Fev | 1.181.500 | 295.375 | 708.900 | 177.225 | 400.000 |
-| Mar | 1.334.610 | 333.653 | 800.766 | 200.192 | 500.000 |
-| Abr | 1.442.508 | 360.627 | 865.505 | 216.376 | 532.975 |
-| Mai | 1.568.205 | 392.051 | 940.923 | 235.231 | 580.000 |
-| Jun | 1.687.913 | 421.978 | 1.012.748 | 253.187 | 614.000 |
+Tornar "Vendas" o valor principal e derivar "A Vender" a partir dele:
 
-## Execucao
-5 comandos UPDATE na tabela `monetary_metas` para Fev, Mar, Abr, Mai e Jun (bu='modelo_atual', year=2026).
+1. Calcular vendas = `Math.round(aVender / 17.000)` para cada mes
+2. Ajustar faturamento = MRR Base + (vendas x 17.000) para garantir consistencia
+3. Atualizar os campos `vendas` e `ticket_medio` no banco de dados
 
-## Resultado esperado
-O Plan Growth exibira os valores de "A Vender": 400k, 400k, 500k, 532.975, 580k e 614k para o Modelo Atual.
+### Calculo mes a mes
+
+Usando ticket medio = R$ 17.000 e os valores de A Vender desejados:
+
+| Mes | A Vender original | Vendas (arredondado) | A Vender ajustado (vendas x 17k) | MRR Base | Faturamento final |
+|-----|-------------------|---------------------|----------------------------------|----------|-------------------|
+| Jan | 400.000 | 24 | 408.000 | 725.000 | 1.133.000 |
+| Fev | 400.000 | 24 | 408.000 | ~782.720 | ~1.190.720 |
+| Mar | 500.000 | 29 | 493.000 | ~837.557 | ~1.330.557 |
+| Abr | 532.975 | 31 | 527.000 | ~910.505 | ~1.437.505 |
+| Mai | 580.000 | 34 | 578.000 | ~988.175 | ~1.566.175 |
+| Jun | 614.000 | 36 | 612.000 | ~1.073.605 | ~1.685.605 |
+
+Nota: Os valores de MRR Base precisam ser recalculados sequencialmente porque cada mes depende das vendas do mes anterior (retencao de 25%).
+
+## Alternativa
+
+Se preferir manter os valores de "A Vender" exatos (400k, 400k, 500k, etc.), a quantidade de vendas ficara com decimais (ex: 23,53 vendas), o que nao faz sentido operacionalmente.
+
+## Execucao tecnica
+
+1. Recalcular a cadeia MRR Base com os valores de vendas arredondados (churn 6%, retencao 25%, ticket 17k)
+2. Atualizar na tabela `monetary_metas`: campos `faturamento`, `mrr`, `setup`, `pontual`, `vendas` e `ticket_medio` para Jan-Jun 2026 (bu = 'modelo_atual')
+3. O `usePlanGrowthData` ira automaticamente refletir os novos valores no Plan Growth
 
