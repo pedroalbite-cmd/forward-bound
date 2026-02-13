@@ -1,228 +1,173 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useMonetaryMetas, BuType, MonthType, MetricType, BU_LABELS, METRIC_LABELS, isPontualOnlyBU } from '@/hooks/useMonetaryMetas';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMonetaryMetas, BuType, MonthType, BU_LABELS, isPontualOnlyBU } from '@/hooks/useMonetaryMetas';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Calculator, Save, Database } from 'lucide-react';
+import { Loader2, Save } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Progress } from '@/components/ui/progress';
 
-// Format currency for display
+const TARGET_TOTAL = 33_306_500;
+
 const formatCurrency = (value: number): string => {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(2)}M`;
-  } else if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(0)}k`;
-  }
+  if (value >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `R$ ${(value / 1_000).toFixed(0)}k`;
+  return `R$ ${value.toFixed(0)}`;
+};
+
+const formatCompact = (value: number): string => {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(0)}k`;
   return value.toFixed(0);
 };
 
-// Parse currency input with k/m suffix support
-const parseCurrencyInput = (input: string): number => {
-  const cleaned = input.trim().toLowerCase();
-  
-  // Suporta sufixos k (mil) e m (milhão)
-  if (cleaned.endsWith('k')) {
-    const num = parseFloat(cleaned.slice(0, -1).replace(',', '.')) || 0;
-    return Math.round(num * 1000);
-  }
-  if (cleaned.endsWith('m')) {
-    const num = parseFloat(cleaned.slice(0, -1).replace(',', '.')) || 0;
-    return Math.round(num * 1000000);
-  }
-  
-  // Remove caracteres não numéricos exceto ponto e vírgula
-  const numericStr = cleaned.replace(/[^\d.,]/g, '').replace(',', '.');
-  return Math.round(parseFloat(numericStr) || 0);
+const DEFAULT_TICKETS: Record<BuType, number> = {
+  modelo_atual: 400_000,
+  o2_tax: 15_000,
+  oxy_hacker: 54_000,
+  franquia: 140_000,
 };
+
+// Get current month index (0-based). Feb 2026 = 1
+function getCurrentMonthIndex(): number {
+  const now = new Date();
+  // For 2026, use actual month. Otherwise default to 0 (all editable for testing)
+  if (now.getFullYear() === 2026) return now.getMonth();
+  // We're in Feb 2026 context per plan
+  return 1; // February
+}
+
+function isMonthLocked(monthIndex: number): boolean {
+  return monthIndex < getCurrentMonthIndex();
+}
 
 export function MonetaryMetasTab() {
   const { toast } = useToast();
-  const { 
-    metas, 
-    isLoading, 
-    bulkUpdateMetas,
-    BUS,
-    MONTHS,
-    METRICS,
-  } = useMonetaryMetas();
+  const { metas, isLoading, bulkUpdateMetas, BUS, MONTHS } = useMonetaryMetas();
 
   const [selectedBu, setSelectedBu] = useState<BuType>('modelo_atual');
-  const [localMetas, setLocalMetas] = useState<Record<string, Record<MetricType, number>>>({});
+  
+  // Local state: vendas per BU per month
+  const [localVendas, setLocalVendas] = useState<Record<string, Record<string, number>>>({});
+  // Ticket medio per BU
+  const [localTickets, setLocalTickets] = useState<Record<string, number>>({});
   const [hasChanges, setHasChanges] = useState(false);
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
+  const [editingTicket, setEditingTicket] = useState<string | null>(null);
+  const [editingTicketValue, setEditingTicketValue] = useState<string>('');
 
-  // Initialize local metas from fetched data
+  // Initialize from DB
   useEffect(() => {
     if (metas.length > 0) {
-      const metasMap: Record<string, Record<MetricType, number>> = {};
-      metas.forEach(m => {
-        metasMap[`${m.bu}-${m.month}`] = {
-          faturamento: Number(m.faturamento) || 0,
-          mrr: Number(m.mrr) || 0,
-          setup: Number(m.setup) || 0,
-          pontual: Number(m.pontual) || 0,
-        };
+      const vendasMap: Record<string, Record<string, number>> = {};
+      const ticketMap: Record<string, number> = {};
+
+      BUS.forEach(bu => {
+        vendasMap[bu] = {};
+        let foundTicket = 0;
+        MONTHS.forEach(month => {
+          const meta = metas.find(m => m.bu === bu && m.month === month);
+          if (meta) {
+            vendasMap[bu][month] = Number(meta.vendas) || 0;
+            if (Number(meta.ticket_medio) > 0) foundTicket = Number(meta.ticket_medio);
+          } else {
+            vendasMap[bu][month] = 0;
+          }
+        });
+        ticketMap[bu] = foundTicket > 0 ? foundTicket : DEFAULT_TICKETS[bu];
       });
-      setLocalMetas(metasMap);
+
+      setLocalVendas(vendasMap);
+      setLocalTickets(ticketMap);
       setHasChanges(false);
+    } else {
+      // No data yet, initialize with defaults
+      const vendasMap: Record<string, Record<string, number>> = {};
+      const ticketMap: Record<string, number> = {};
+      BUS.forEach(bu => {
+        vendasMap[bu] = {};
+        MONTHS.forEach(month => { vendasMap[bu][month] = 0; });
+        ticketMap[bu] = DEFAULT_TICKETS[bu];
+      });
+      setLocalVendas(vendasMap);
+      setLocalTickets(ticketMap);
     }
   }, [metas]);
 
-  // Get local value
-  const getLocalValue = (bu: string, month: string, metric: MetricType): number => {
-    const key = `${bu}-${month}`;
-    return localMetas[key]?.[metric] ?? 0;
-  };
+  const getVendas = (bu: string, month: string) => localVendas[bu]?.[month] ?? 0;
+  const getTicket = (bu: string) => localTickets[bu] ?? 0;
+  const getFaturamento = (bu: string, month: string) => getVendas(bu, month) * getTicket(bu);
 
-  // Update local value - auto-calculates MRR/Setup/Pontual when faturamento changes
-  const updateLocalValue = (bu: string, month: string, metric: MetricType, value: number) => {
-    const key = `${bu}-${month}`;
-    const isPontualOnly = isPontualOnlyBU(bu as BuType);
-    
-    // Para BUs pontual-only, editar Pontual atualiza faturamento também
-    if (isPontualOnly && metric === 'pontual') {
-      setLocalMetas(prev => ({
-        ...prev,
-        [key]: {
-          faturamento: value,
-          mrr: 0,
-          setup: 0,
-          pontual: value,
-        },
-      }));
-      setHasChanges(true);
-      return;
-    }
-    
-    if (metric === 'faturamento') {
-      if (isPontualOnly) {
-        // Para BUs de expansão: 100% vai para Pontual
-        setLocalMetas(prev => ({
-          ...prev,
-          [key]: {
-            faturamento: value,
-            mrr: 0,
-            setup: 0,
-            pontual: value,
-          },
-        }));
-      } else {
-        // Para Modelo Atual e O2 TAX: split padrão 25/60/15
-        setLocalMetas(prev => ({
-          ...prev,
-          [key]: {
-            faturamento: value,
-            mrr: Math.round(value * 0.25),
-            setup: Math.round(value * 0.6),
-            pontual: Math.round(value * 0.15),
-          },
-        }));
-      }
-    } else {
-      // Para outras métricas, atualiza apenas o campo específico
-      setLocalMetas(prev => ({
-        ...prev,
-        [key]: {
-          ...prev[key] || { faturamento: 0, mrr: 0, setup: 0, pontual: 0 },
-          [metric]: value,
-        },
-      }));
-    }
-    setHasChanges(true);
-  };
+  const getBuMonthlyTotal = (bu: string) => MONTHS.reduce((s, m) => s + getFaturamento(bu, m), 0);
+  const getBuVendasTotal = (bu: string) => MONTHS.reduce((s, m) => s + getVendas(bu, m), 0);
 
-  // Calculate totals for a metric
-  const getMetricTotal = (bu: string, metric: MetricType): number => {
-    return MONTHS.reduce((sum, month) => sum + getLocalValue(bu, month, metric), 0);
-  };
+  // Consolidated total across all BUs
+  const consolidatedTotal = useMemo(() => {
+    return BUS.reduce((sum, bu) => sum + getBuMonthlyTotal(bu), 0);
+  }, [localVendas, localTickets]);
 
-  // Calculate from default percentages (25/60/15)
-  const handleCalculateFromPercentages = () => {
-    const newMetas = { ...localMetas };
-    
-    MONTHS.forEach(month => {
-      const key = `${selectedBu}-${month}`;
-      const faturamento = getLocalValue(selectedBu, month, 'faturamento');
-      
-      newMetas[key] = {
-        faturamento,
-        mrr: Math.round(faturamento * 0.25),
-        setup: Math.round(faturamento * 0.6),
-        pontual: Math.round(faturamento * 0.15),
-      };
-    });
-    
-    setLocalMetas(newMetas);
-    setHasChanges(true);
-    toast({ title: 'Valores calculados com base nos percentuais padrão (MRR 25% / Setup 60% / Pontual 15%)' });
-  };
+  const diff = consolidatedTotal - TARGET_TOTAL;
+  const isOnTarget = Math.abs(diff) < 1000; // tolerance
+  const progressPct = Math.min((consolidatedTotal / TARGET_TOTAL) * 100, 100);
 
-  // Check if current BU has data in database
-  const hasDbData = useMemo(() => {
-    return metas.some(m => 
-      m.bu === selectedBu && 
-      (Number(m.faturamento) > 0 || Number(m.mrr) > 0 || Number(m.setup) > 0 || Number(m.pontual) > 0)
-    );
-  }, [metas, selectedBu]);
-
-  // Save changes
-  const handleSave = async () => {
-    const updates = MONTHS.map(month => ({
-      bu: selectedBu,
-      month,
-      faturamento: getLocalValue(selectedBu, month, 'faturamento'),
-      mrr: getLocalValue(selectedBu, month, 'mrr'),
-      setup: getLocalValue(selectedBu, month, 'setup'),
-      pontual: getLocalValue(selectedBu, month, 'pontual'),
+  const updateVendas = (bu: string, month: string, value: number) => {
+    setLocalVendas(prev => ({
+      ...prev,
+      [bu]: { ...prev[bu], [month]: value },
     }));
+    setHasChanges(true);
+  };
+
+  const updateTicket = (bu: string, value: number) => {
+    setLocalTickets(prev => ({ ...prev, [bu]: value }));
+    setHasChanges(true);
+  };
+
+  const handleSave = async () => {
+    // Save ALL BUs at once to keep consistency
+    const updates = BUS.flatMap(bu => {
+      const ticket = getTicket(bu);
+      const pontualOnly = isPontualOnlyBU(bu);
+      return MONTHS.map(month => {
+        const vendas = getVendas(bu, month);
+        const fat = vendas * ticket;
+        return {
+          bu,
+          month,
+          vendas,
+          ticket_medio: ticket,
+          faturamento: fat,
+          mrr: pontualOnly ? 0 : Math.round(fat * 0.25),
+          setup: pontualOnly ? 0 : Math.round(fat * 0.6),
+          pontual: pontualOnly ? fat : Math.round(fat * 0.15),
+        };
+      });
+    });
 
     try {
       await bulkUpdateMetas.mutateAsync(updates);
       toast({ title: 'Metas salvas com sucesso!' });
       setHasChanges(false);
-    } catch (error) {
-      toast({ 
-        variant: 'destructive', 
-        title: 'Erro ao salvar', 
-        description: 'Não foi possível atualizar as metas' 
-      });
+    } catch {
+      toast({ variant: 'destructive', title: 'Erro ao salvar metas' });
     }
   };
 
-  // Métricas a exibir baseado na BU selecionada
-  const visibleMetrics = useMemo(() => {
-    if (isPontualOnlyBU(selectedBu)) {
-      return ['pontual'] as MetricType[];
-    }
-    return METRICS;
-  }, [selectedBu, METRICS]);
-
-  // Validation: MRR + Setup + Pontual should not exceed Faturamento
-  const validationIssues = useMemo(() => {
-    const issues: string[] = [];
-    
-    // BUs pontual-only não precisam de validação (só tem 1 campo)
-    if (isPontualOnlyBU(selectedBu)) {
-      return issues;
-    }
-    
-    // Validação padrão: soma não excede faturamento
-    MONTHS.forEach(month => {
-      const fat = getLocalValue(selectedBu, month, 'faturamento');
-      const sum = getLocalValue(selectedBu, month, 'mrr') +
-                  getLocalValue(selectedBu, month, 'setup') +
-                  getLocalValue(selectedBu, month, 'pontual');
-      if (fat > 0 && sum > fat) {
-        issues.push(`${month}: MRR + Setup + Pontual (${formatCurrency(sum)}) excede Faturamento (${formatCurrency(fat)})`);
-      }
-    });
-    return issues;
-  }, [localMetas, selectedBu]);
+  // Derived metrics for display
+  const getMetrics = (bu: string, month: string) => {
+    const fat = getFaturamento(bu, month);
+    const pontualOnly = isPontualOnlyBU(bu as BuType);
+    return {
+      faturamento: fat,
+      mrr: pontualOnly ? 0 : Math.round(fat * 0.25),
+      setup: pontualOnly ? 0 : Math.round(fat * 0.6),
+      pontual: pontualOnly ? fat : Math.round(fat * 0.15),
+    };
+  };
 
   if (isLoading) {
     return (
@@ -232,6 +177,8 @@ export function MonetaryMetasTab() {
     );
   }
 
+  const pontualOnly = isPontualOnlyBU(selectedBu);
+
   return (
     <div className="space-y-6">
       <div>
@@ -239,10 +186,39 @@ export function MonetaryMetasTab() {
           Metas Monetárias por BU
         </h2>
         <p className="text-muted-foreground">
-          Configure as metas de Incremento de Faturamento, MRR, Setup e Pontual para cada unidade de negócio
+          Defina a quantidade de vendas e ticket médio por BU. O sistema calcula faturamento e métricas automaticamente.
         </p>
       </div>
 
+      {/* Consolidated Target Validation */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">Meta Consolidada</span>
+            <span className="text-sm font-medium">
+              {formatCurrency(consolidatedTotal)} / {formatCurrency(TARGET_TOTAL)}
+            </span>
+          </div>
+          <Progress 
+            value={progressPct} 
+            className={`h-3 ${isOnTarget ? '[&>div]:bg-green-500' : diff > 0 ? '[&>div]:bg-amber-500' : '[&>div]:bg-destructive'}`}
+          />
+          <div className="flex justify-between mt-1">
+            <span className={`text-xs ${isOnTarget ? 'text-green-600' : 'text-destructive'}`}>
+              {isOnTarget 
+                ? '✅ Meta atingida' 
+                : diff > 0 
+                  ? `⚠️ Excede em ${formatCurrency(diff)}` 
+                  : `❌ Faltam ${formatCurrency(Math.abs(diff))}`}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {BUS.map(bu => `${BU_LABELS[bu]}: ${formatCurrency(getBuMonthlyTotal(bu))}`).join(' | ')}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* BU Selector + Ticket + Save */}
       <Card>
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between flex-wrap gap-4">
@@ -255,51 +231,54 @@ export function MonetaryMetasTab() {
                   </SelectTrigger>
                   <SelectContent>
                     {BUS.map(bu => (
-                      <SelectItem key={bu} value={bu}>
-                        {BU_LABELS[bu]}
-                      </SelectItem>
+                      <SelectItem key={bu} value={bu}>{BU_LABELS[bu]}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              
-              {/* Indicador de fonte de dados */}
-              <div className="flex items-center gap-2">
-                {hasDbData ? (
-                  <Badge variant="secondary" className="gap-1">
-                    <Database className="h-3 w-3" />
-                    Configurado
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-muted-foreground">
-                    Sem dados (usando fallback)
-                  </Badge>
-                )}
+
+              <div>
+                <label className="text-sm font-medium mb-1 block">Ticket Médio</label>
+                <Input
+                  type="text"
+                  value={
+                    editingTicket === selectedBu
+                      ? editingTicketValue
+                      : `R$ ${formatCompact(getTicket(selectedBu))}`
+                  }
+                  onFocus={() => {
+                    setEditingTicket(selectedBu);
+                    const v = getTicket(selectedBu);
+                    setEditingTicketValue(v > 0 ? v.toString() : '');
+                  }}
+                  onChange={(e) => setEditingTicketValue(e.target.value)}
+                  onBlur={() => {
+                    const cleaned = editingTicketValue.replace(/[^\d]/g, '');
+                    updateTicket(selectedBu, parseInt(cleaned) || 0);
+                    setEditingTicket(null);
+                  }}
+                  className="w-[160px] h-9"
+                />
+              </div>
+
+              <div className="text-sm text-muted-foreground pt-5">
+                Total BU: <strong>{formatCurrency(getBuMonthlyTotal(selectedBu))}</strong>
+                {' '}({getBuVendasTotal(selectedBu)} vendas)
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={handleCalculateFromPercentages}
-              >
-                <Calculator className="h-4 w-4 mr-2" />
-                Calcular % Padrão
-              </Button>
-              <Button 
-                size="sm"
-                onClick={handleSave}
-                disabled={!hasChanges || validationIssues.length > 0 || bulkUpdateMetas.isPending}
-              >
-                {bulkUpdateMetas.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <Save className="h-4 w-4 mr-2" />
-                )}
-                Salvar
-              </Button>
-            </div>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={!hasChanges || bulkUpdateMetas.isPending}
+            >
+              {bulkUpdateMetas.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              Salvar Todas as BUs
+            </Button>
           </div>
         </CardHeader>
 
@@ -308,104 +287,125 @@ export function MonetaryMetasTab() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 bg-background z-10 min-w-[100px]">Métrica</TableHead>
-                  {MONTHS.map(month => (
-                    <TableHead key={month} className="text-center min-w-[100px]">
+                  <TableHead className="sticky left-0 bg-background z-10 min-w-[120px]">Métrica</TableHead>
+                  {MONTHS.map((month, i) => (
+                    <TableHead 
+                      key={month} 
+                      className={`text-center min-w-[90px] ${isMonthLocked(i) ? 'bg-muted/50' : ''}`}
+                    >
                       {month}
+                      {isMonthLocked(i) && <span className="block text-[10px] text-muted-foreground">🔒</span>}
                     </TableHead>
                   ))}
-                  <TableHead className="text-center min-w-[120px] bg-muted/30">Total</TableHead>
+                  <TableHead className="text-center min-w-[100px] bg-muted/30">Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {visibleMetrics.map(metric => (
-                  <TableRow key={metric}>
-                    <TableCell className="sticky left-0 bg-background z-10 font-medium">
-                      {METRIC_LABELS[metric]}
+                {/* Vendas Row - EDITABLE */}
+                <TableRow className="bg-primary/5">
+                  <TableCell className="sticky left-0 bg-primary/5 z-10 font-semibold">
+                    🎯 Vendas
+                  </TableCell>
+                  {MONTHS.map((month, i) => {
+                    const locked = isMonthLocked(i);
+                    const cellKey = `vendas-${month}`;
+                    const value = getVendas(selectedBu, month);
+                    return (
+                      <TableCell key={cellKey} className={`text-center p-1 ${locked ? 'bg-muted/50' : ''}`}>
+                        <Input
+                          type="text"
+                          disabled={locked}
+                          value={
+                            editingCell === cellKey ? editingValue : (value > 0 ? value.toString() : '')
+                          }
+                          placeholder={locked ? value.toString() : '0'}
+                          onFocus={() => {
+                            setEditingCell(cellKey);
+                            setEditingValue(value > 0 ? value.toString() : '');
+                          }}
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          onBlur={() => {
+                            const parsed = parseInt(editingValue) || 0;
+                            updateVendas(selectedBu, month, parsed);
+                            setEditingCell(null);
+                          }}
+                          className={`w-16 h-8 text-center text-sm font-semibold ${locked ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        />
+                      </TableCell>
+                    );
+                  })}
+                  <TableCell className="text-center font-bold bg-muted/30">
+                    {getBuVendasTotal(selectedBu)}
+                  </TableCell>
+                </TableRow>
+
+                {/* Faturamento Row - CALCULATED */}
+                <TableRow>
+                  <TableCell className="sticky left-0 bg-background z-10 font-medium">
+                    Faturamento
+                  </TableCell>
+                  {MONTHS.map((month, i) => (
+                    <TableCell key={`fat-${month}`} className={`text-center text-sm ${isMonthLocked(i) ? 'bg-muted/50' : ''}`}>
+                      {formatCompact(getFaturamento(selectedBu, month))}
                     </TableCell>
-                    {MONTHS.map(month => {
-                      const cellKey = `${metric}-${month}`;
-                      const rawValue = getLocalValue(selectedBu, month, metric);
-                      return (
-                        <TableCell key={cellKey} className="text-center p-1">
-                          <Input
-                            type="text"
-                            value={
-                              editingCell === cellKey
-                                ? editingValue
-                                : formatCurrency(rawValue)
-                            }
-                            onChange={(e) => {
-                              setEditingValue(e.target.value);
-                            }}
-                            onFocus={() => {
-                              setEditingCell(cellKey);
-                              setEditingValue(rawValue > 0 ? rawValue.toString() : '');
-                            }}
-                            onBlur={() => {
-                              const value = parseCurrencyInput(editingValue);
-                              updateLocalValue(selectedBu, month, metric, value);
-                              setEditingCell(null);
-                              setEditingValue('');
-                            }}
-                            className="w-20 h-8 text-center text-sm"
-                          />
-                        </TableCell>
-                      );
-                    })}
-                    <TableCell className="text-center font-semibold bg-muted/30">
-                      R$ {formatCurrency(getMetricTotal(selectedBu, metric))}
+                  ))}
+                  <TableCell className="text-center font-semibold bg-muted/30">
+                    {formatCurrency(getBuMonthlyTotal(selectedBu))}
+                  </TableCell>
+                </TableRow>
+
+                {/* MRR Row - only for non-pontual BUs */}
+                {!pontualOnly && (
+                  <TableRow>
+                    <TableCell className="sticky left-0 bg-background z-10 font-medium text-muted-foreground">
+                      MRR (25%)
+                    </TableCell>
+                    {MONTHS.map((month, i) => (
+                      <TableCell key={`mrr-${month}`} className={`text-center text-sm text-muted-foreground ${isMonthLocked(i) ? 'bg-muted/50' : ''}`}>
+                        {formatCompact(getMetrics(selectedBu, month).mrr)}
+                      </TableCell>
+                    ))}
+                    <TableCell className="text-center text-sm font-medium bg-muted/30">
+                      {formatCurrency(MONTHS.reduce((s, m) => s + getMetrics(selectedBu, m).mrr, 0))}
                     </TableCell>
                   </TableRow>
-                ))}
+                )}
+
+                {/* Setup Row - only for non-pontual BUs */}
+                {!pontualOnly && (
+                  <TableRow>
+                    <TableCell className="sticky left-0 bg-background z-10 font-medium text-muted-foreground">
+                      Setup (60%)
+                    </TableCell>
+                    {MONTHS.map((month, i) => (
+                      <TableCell key={`setup-${month}`} className={`text-center text-sm text-muted-foreground ${isMonthLocked(i) ? 'bg-muted/50' : ''}`}>
+                        {formatCompact(getMetrics(selectedBu, month).setup)}
+                      </TableCell>
+                    ))}
+                    <TableCell className="text-center text-sm font-medium bg-muted/30">
+                      {formatCurrency(MONTHS.reduce((s, m) => s + getMetrics(selectedBu, m).setup, 0))}
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {/* Pontual Row */}
+                <TableRow>
+                  <TableCell className="sticky left-0 bg-background z-10 font-medium text-muted-foreground">
+                    Pontual {pontualOnly ? '(100%)' : '(15%)'}
+                  </TableCell>
+                  {MONTHS.map((month, i) => (
+                    <TableCell key={`pont-${month}`} className={`text-center text-sm text-muted-foreground ${isMonthLocked(i) ? 'bg-muted/50' : ''}`}>
+                      {formatCompact(getMetrics(selectedBu, month).pontual)}
+                    </TableCell>
+                  ))}
+                  <TableCell className="text-center text-sm font-medium bg-muted/30">
+                    {formatCurrency(MONTHS.reduce((s, m) => s + getMetrics(selectedBu, m).pontual, 0))}
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
-
-          {validationIssues.length > 0 && (
-            <div className="mt-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md">
-              <p className="text-sm text-destructive font-medium mb-1">⚠️ Validação:</p>
-              <ul className="text-sm text-destructive list-disc list-inside">
-                {validationIssues.map((issue, i) => (
-                  <li key={i}>{issue}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Como funciona</CardTitle>
-        <CardDescription>
-            Os valores definidos aqui serão usados como metas nos indicadores. Ao preencher o Incremento, MRR/Setup/Pontual são calculados automaticamente.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-2">
-          {isPontualOnlyBU(selectedBu) ? (
-            <>
-              <p>
-                <strong>{BU_LABELS[selectedBu]}</strong> opera com ticket único (valor pontual).
-              </p>
-              <p>
-                Preencha o valor de <strong>Pontual</strong> esperado para cada mês.
-              </p>
-              <p>
-                Ticket padrão: <strong>{selectedBu === 'oxy_hacker' ? 'R$ 54.000' : 'R$ 140.000'}</strong>
-              </p>
-            </>
-          ) : (
-            <>
-              <p>
-                <strong>Percentuais padrão:</strong> MRR = 25%, Setup = 60%, Pontual = 15% do Incremento
-              </p>
-              <p>
-                <strong>Dica:</strong> Ao preencher o Incremento, os demais campos são calculados automaticamente. Você pode ajustar manualmente depois.
-              </p>
-            </>
-          )}
         </CardContent>
       </Card>
     </div>
