@@ -160,8 +160,9 @@ function calculateMrrAndRevenueToSell(
     const aVender = Math.max(0, metaDoMes - mrrAtual);
     revenueToSell[month] = aVender;
     
-    const vendasDoMes = aVender / ticketMedio;
+    const vendasDoMes = Math.round(aVender / ticketMedio);
     vendasPorMes[month] = vendasDoMes;
+    revenueToSell[month] = vendasDoMes * ticketMedio;
     vendasMesAnterior = vendasDoMes;
   });
   
@@ -214,7 +215,9 @@ function calculateReverseFunnel(
   const dadosOriginais = months.map(month => {
     const faturamentoVender = netRevenueToSell[month];
     const mrrBaseAtual = mrrComChurn ? mrrComChurn[month] : 0;
-    const faturamentoMeta = metasMensais ? metasMensais[month] : (mrrBaseAtual + faturamentoVender);
+    const faturamentoMeta = mrrComChurn 
+      ? (mrrBaseAtual + faturamentoVender) 
+      : (metasMensais ? metasMensais[month] : faturamentoVender);
     
     const vendas = faturamentoVender / metrics.ticketMedio;
     const propostas = vendas / metrics.propToVenda;
