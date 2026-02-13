@@ -1,55 +1,42 @@
 
+# Corrigir arredondamento na cadeia de MRR (A Vender inconsistente)
 
-# Inverter logica: Meta (Faturamento) como campo editavel
+## Problema
 
-## Contexto atual
+Os valores de "A Vender" estao levemente errados (ex: Fev mostra R$ 398.000 em vez de R$ 400.000). A causa e que a retencao mensal usa **vendas arredondadas x ticket** em vez do valor real de A Vender:
 
-Hoje no Admin "Metas Monetarias", o campo editavel e a **quantidade de vendas**. O sistema calcula faturamento = vendas x ticket. Isso causa inconsistencias porque no Plan Growth o fluxo e inverso (meta financeira gera vendas).
+- Jan: A Vender = 400.000, Vendas = Math.round(400.000/17.000) = **24**
+- Retencao para Fev = 24 x 17.000 x 25% = **102.000** (deveria ser 400.000 x 25% = **100.000**)
+- Esse excesso de R$ 2.000 na retencao infla o MRR Base de Fev, reduzindo A Vender de 400k para 398k
+- O erro se acumula mes a mes
 
-## Nova logica
+## Solucao
 
-Tornar o **Faturamento (meta)** o campo editavel principal. A quantidade de vendas e todos os splits serao derivados automaticamente:
+Usar o valor financeiro real de A Vender (nao o arredondado) para calcular a retencao. Trocar:
 
-- **Vendas** = Math.round(faturamento / ticket_medio)
-- **MRR** = faturamento x 25% (para BUs nao-pontual)
-- **Setup** = faturamento x 60%
-- **Pontual** = faturamento x 15% (ou 100% para Oxy Hacker/Franquia)
+```
+retencaoDoMesAnterior = vendasMesAnterior * ticketMedio * retencaoRate
+```
 
-## Mudancas
+Por:
 
-### 1. MonetaryMetasTab.tsx - Inverter campos editaveis
+```
+retencaoDoMesAnterior = aVenderAnterior * retencaoRate
+```
 
-**Linha de Vendas**: passa de editavel para calculado (display only)
-- Mostrar `Math.round(faturamento / ticket_medio)` como texto
+Isso garante que a cadeia de MRR use valores financeiros exatos.
 
-**Linha de Faturamento**: passa de calculado para editavel
-- Input numerico onde o admin digita o valor de faturamento mensal
-- Formatar com R$ ao perder foco
+## Arquivos a alterar
 
-**State local**: trocar `localVendas` por `localFaturamento`
-- `getFaturamento(bu, month)` retorna o valor do state diretamente
-- `getVendas(bu, month)` = `Math.round(getFaturamento(bu, month) / getTicket(bu))`
+### 1. `src/components/planning/MediaInvestmentTab.tsx` (funcao `calculateMrrAndRevenueToSell`, linhas ~145-165)
+- Substituir variavel `vendasMesAnterior` por `aVenderAnterior` (tipo number, inicia em 0)
+- Linha 154: trocar `vendasMesAnterior * ticketMedio * retencaoRate` por `aVenderAnterior * retencaoRate`
+- Linha 165: trocar `vendasMesAnterior = vendasDoMes` por `aVenderAnterior = aVender`
 
-**handleSave**: derivar vendas do faturamento antes de salvar
-- `vendas = Math.round(faturamento / ticket_medio)`
-- Splits (MRR, Setup, Pontual) calculados sobre o faturamento
-
-### 2. usePlanGrowthData.ts - Sem mudanca
-
-O hook ja le `faturamento` do banco como meta principal. Nenhuma alteracao necessaria.
-
-### 3. MediaInvestmentTab.tsx - Sem mudanca
-
-A UI do Plan Growth ja usa a meta de faturamento como fonte. Nenhuma alteracao necessaria.
-
-### 4. Banco de dados - Sem mudanca
-
-A tabela `monetary_metas` ja tem o campo `faturamento`. So muda qual campo o admin edita na interface.
+### 2. `src/hooks/usePlanGrowthData.ts` (funcao `calculateMrrAndRevenueToSell`, linhas ~199-217)
+- Mesma alteracao: usar `aVenderAnterior * retencaoRate` em vez de `vendasMesAnterior * ticketMedio * retencaoRate`
 
 ## Resultado esperado
-
-- Admin edita **faturamento** (ex: R$ 1.125.000 para Jan)
-- Sistema mostra vendas calculadas: Math.round(1.125.000 / 17.000) = 66
-- Plan Growth usa esse faturamento como meta e calcula MRR Base, A Vender, e funil normalmente
-- Consistencia total: a meta financeira e sempre a fonte de verdade
-
+- A Vender mostrara os valores corretos derivados das metas no banco
+- A cadeia de MRR Base sera precisa sem erros de arredondamento acumulados
+- Vendas continua como indicador arredondado (display only)
