@@ -162,7 +162,6 @@ function calculateMrrAndRevenueToSell(
     
     const vendasDoMes = Math.round(aVender / ticketMedio);
     vendasPorMes[month] = vendasDoMes;
-    revenueToSell[month] = vendasDoMes * ticketMedio;
     vendasMesAnterior = vendasDoMes;
   });
   
