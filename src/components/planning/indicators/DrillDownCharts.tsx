@@ -7,6 +7,8 @@ export interface ChartConfig {
   title: string;
   data: (BarChartDataItem | DistributionDataItem | PieChartDataItem)[];
   formatValue?: (value: number) => string;
+  sortable?: boolean;
+  sortOrder?: string[];
 }
 
 interface DrillDownChartsProps {
@@ -27,6 +29,8 @@ export function DrillDownCharts({ charts }: DrillDownChartsProps) {
                 title={chart.title}
                 data={chart.data as BarChartDataItem[]}
                 formatValue={chart.formatValue}
+                sortable={chart.sortable}
+                sortOrder={chart.sortOrder}
               />
             );
           case 'distribution':
