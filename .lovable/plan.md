@@ -1,57 +1,60 @@
 
+# Excluir MQLs Perdidos com Motivos Especificos
 
-# Reformular Metas Monetarias no Admin: Edicao por Vendas
+## Problema
+Atualmente, a contagem de MQLs do Modelo Atual inclui cards que estao em "Perdido" com motivos de perda que indicam que nao sao leads reais. Esses cards nao deveriam ser contabilizados como MQL.
 
-## Contexto
-A meta total consolidada (todas as BUs) e R$ 33.306.500. Hoje o admin edita valores monetarios diretamente (faturamento, MRR, etc). A mudanca e: o admin edita apenas **quantidade de vendas** e **ticket medio** por BU, e o sistema calcula tudo automaticamente. Meses passados ficam bloqueados (antes do mes atual).
+## Motivos de perda a excluir
+- Duplicado
+- Pessoa fisica, fora do ICP
+- Nao e uma demanda real
+- Buscando parceria
+- Quer solucoes para cliente
+- Nao e MQL, mas entrou como MQL
 
-## Regra de Negocio
-- **Faturamento** = Vendas x Ticket Medio
-- **Modelo Atual / O2 TAX**: MRR = 25%, Setup = 60%, Pontual = 15% do faturamento
-- **Oxy Hacker / Franquia**: Pontual = 100% do faturamento (sem MRR/Setup)
-- Total de todas as BUs deve ser sempre **R$ 33.306.500**
-- Se reduzir vendas em um mes, precisa compensar em outro
-- Mes atual (Fev 2026) e futuros: editaveis. Meses passados (Jan): somente leitura
+## Regra
+Se o card esta com **Fase Atual = "Perdido"** E o **Motivo da perda** e um dos listados acima, ele NAO deve ser contabilizado como MQL.
 
-## Mudancas
+## Onde aplicar
 
-### 1. Banco de Dados - Nova migracao
-Adicionar 2 colunas na tabela `monetary_metas`:
-- `vendas` (integer, default 0) - quantidade de vendas no mes
-- `ticket_medio` (numeric, default 0) - ticket medio da BU
+A logica de MQL do Modelo Atual usa a **Data de Criacao** do card (nao a data de entrada em fase). Os cards sao buscados via `query_period_by_creation` e podem estar em qualquer fase, incluindo "Perdido". A filtragem precisa ser adicionada em 3 lugares:
 
-### 2. Hook `useMonetaryMetas.ts`
-- Adicionar os novos campos `vendas` e `ticket_medio` na tipagem `MonetaryMeta`
-- Incluir esses campos nas queries de leitura e escrita (upsert)
-- Adicionar funcao para calcular faturamento a partir de vendas x ticket
+### 1. `src/hooks/useModeloAtualMetas.ts` (hook de metas/volumes)
+- Adicionar `motivoPerda` e ajustar `faseAtual` no tipo `ModeloAtualMovement`
+- Parsear o campo `Motivo da perda` do banco de dados ao construir os movements e mqlByCreation
+- Criar constante `MQL_EXCLUDED_LOSS_REASONS` com os 6 motivos
+- Criar funcao `isMqlExcludedByLoss(faseAtual, motivoPerda)` que retorna true se Fase Atual = "Perdido" E motivo esta na lista
+- Adicionar filtro nas contagens de MQL: alem de `isMqlQualified(faixa)`, tambem verificar `!isMqlExcludedByLoss(faseAtual, motivoPerda)`
+- Exportar a funcao para uso no hook de analytics
 
-### 3. Componente `MonetaryMetasTab.tsx` - Reformulacao completa da UI
-**Nova interface:**
-- Seletor de BU (mantido)
-- Campo de **Ticket Medio** editavel por BU (um unico input no topo)
-- Tabela com meses como colunas:
-  - Linha "Vendas": inputs editaveis (desabilitados para meses passados, com fundo cinza)
-  - Linha "Faturamento": valor calculado automaticamente (somente leitura)
-  - Para Modelo Atual/O2 TAX: linhas MRR, Setup, Pontual (calculados, somente leitura)
-  - Para Oxy Hacker/Franquia: linha Pontual (calculada, somente leitura)
-- **Totalizador**: mostra total da BU atual e total consolidado de todas as BUs
-- **Validacao visual**: barra mostrando se o total consolidado esta igual a R$ 33.306.500
-  - Verde se igual, vermelho se diferente, com indicacao de quanto falta ou sobra
-- Botao Salvar (grava vendas, ticket_medio, e os valores calculados de faturamento/MRR/Setup/Pontual)
+### 2. `src/hooks/useModeloAtualAnalytics.ts` (hook de analytics/indicadores)
+- Adicionar campos `motivoPerda` e `faseAtual` ao tipo `ModeloAtualCard`
+- Parsear `Motivo da perda` e `Fase Atual` na funcao `parseCardRow`
+- Importar `isMqlExcludedByLoss` do hook de metas
+- Aplicar o filtro em `getCardsForIndicator` quando `indicator === 'mql'`
+- Aplicar o filtro no `firstEntryByCardAndIndicator` quando construindo entradas de MQL
+- Aplicar no `getDetailItemsWithFullHistory` para MQL
 
-**Bloqueio temporal:**
-- Mes atual (baseado na data do sistema): editavel
-- Meses futuros: editaveis
-- Meses passados: inputs desabilitados com fundo cinza
+### 3. Verificar impacto nos outros hooks
+- `useO2TaxAnalytics.ts` e `useExpansaoAnalytics.ts` ja possuem `motivoPerda` parseado, mas a regra solicitada e especifica para o Modelo Atual (pipefy_moviment_cfos). NAO sera aplicada nesses hooks a menos que solicitado.
 
-**Tickets medios iniciais** (pre-preenchidos com base nos dados atuais):
-- Modelo Atual: calculado a partir dos dados existentes (~R$ 400.000 estimado)
-- O2 TAX: calculado dos dados existentes
-- Oxy Hacker: R$ 54.000
-- Franquia: R$ 140.000
+## Detalhe Tecnico
 
-### 4. Manter compatibilidade
-Os campos `faturamento`, `mrr`, `setup`, `pontual` continuam sendo gravados no banco ao salvar, garantindo que todos os dashboards (Indicadores, Controle Metas, Plan Growth) continuem funcionando sem alteracao.
+A constante e funcao de exclusao:
+
+```text
+MQL_EXCLUDED_LOSS_REASONS = [
+  'Duplicado',
+  'Pessoa física, fora do ICP',
+  'Não é uma demanda real',
+  'Buscando parceria',
+  'Quer soluções para cliente',
+  'Não é MQL, mas entrou como MQL',
+]
+
+isMqlExcludedByLoss(faseAtual, motivoPerda):
+  return faseAtual === 'Perdido' AND motivoPerda IN MQL_EXCLUDED_LOSS_REASONS
+```
 
 ## Resultado
-O admin controla apenas vendas e ticket, o sistema calcula tudo. O total consolidado e protegido visualmente para garantir R$ 33.306.500. Meses passados nao podem ser alterados.
+Cards perdidos com esses motivos serao automaticamente excluidos da contagem de MQLs no dashboard, tanto nos indicadores quanto nas metas, mantendo uma contagem mais precisa de leads realmente qualificados.
