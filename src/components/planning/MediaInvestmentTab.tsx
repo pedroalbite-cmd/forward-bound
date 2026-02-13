@@ -142,7 +142,7 @@ function calculateMrrAndRevenueToSell(
     ? metasMensais["Jan"] - valorVenderInicial 
     : mrrInicial;
   
-  let vendasMesAnterior = 0;
+  let aVenderAnterior = 0;
   
   months.forEach((month, index) => {
     if (index > 0) {
@@ -150,8 +150,8 @@ function calculateMrrAndRevenueToSell(
       mrrAtual = mrrAtual * (1 - churnRate);
     }
     
-    // Adiciona retenção das vendas do mês anterior
-    const retencaoDoMesAnterior = vendasMesAnterior * ticketMedio * retencaoRate;
+    // Adiciona retenção baseada no valor financeiro real de A Vender (sem arredondamento)
+    const retencaoDoMesAnterior = aVenderAnterior * retencaoRate;
     mrrAtual = mrrAtual + retencaoDoMesAnterior;
     
     mrrPorMes[month] = mrrAtual;
@@ -162,7 +162,7 @@ function calculateMrrAndRevenueToSell(
     
     const vendasDoMes = Math.round(aVender / ticketMedio);
     vendasPorMes[month] = vendasDoMes;
-    vendasMesAnterior = vendasDoMes;
+    aVenderAnterior = aVender;
   });
   
   return { mrrPorMes, vendasPorMes, revenueToSell };
