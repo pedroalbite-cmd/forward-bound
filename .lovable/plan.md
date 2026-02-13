@@ -1,42 +1,61 @@
 
-# Corrigir arredondamento na cadeia de MRR (A Vender inconsistente)
 
-## Problema
+# Tornar "A Vender" editavel no detalhamento por BU
 
-Os valores de "A Vender" estao levemente errados (ex: Fev mostra R$ 398.000 em vez de R$ 400.000). A causa e que a retencao mensal usa **vendas arredondadas x ticket** em vez do valor real de A Vender:
+## Objetivo
 
-- Jan: A Vender = 400.000, Vendas = Math.round(400.000/17.000) = **24**
-- Retencao para Fev = 24 x 17.000 x 25% = **102.000** (deveria ser 400.000 x 25% = **100.000**)
-- Esse excesso de R$ 2.000 na retencao infla o MRR Base de Fev, reduzindo A Vender de 400k para 398k
-- O erro se acumula mes a mes
+Permitir editar diretamente o valor de "A Vender" na tabela de detalhamento por BU (aba Plan Growth / Media Investment). Somente o mes atual e os proximos serao editaveis; meses anteriores ficam bloqueados.
 
-## Solucao
+## Como funciona
 
-Usar o valor financeiro real de A Vender (nao o arredondado) para calcular a retencao. Trocar:
+Quando o usuario edita "A Vender" de um mes:
+- O sistema recalcula a **Meta (Faturamento)** = MRR Base + novo A Vender
+- Salva o novo faturamento no banco de dados (`monetary_metas`)
+- O funil inteiro (vendas, propostas, MQLs, leads, investimento) recalcula automaticamente
+- Os meses seguintes tambem recalculam pois a cadeia de MRR depende do A Vender anterior
 
-```
-retencaoDoMesAnterior = vendasMesAnterior * ticketMedio * retencaoRate
-```
+## Mudancas tecnicas
 
-Por:
+### 1. `MediaInvestmentTab.tsx` - Componente `BUInvestmentTable`
 
-```
-retencaoDoMesAnterior = aVenderAnterior * retencaoRate
-```
+**Adicionar props para edicao:**
+- `buKey` (string): identificador da BU no banco (modelo_atual, o2_tax, etc.)
+- `onAVenderChange` (callback): funcao chamada ao editar A Vender de um mes
+- `editable` (boolean): se permite edicao
 
-Isso garante que a cadeia de MRR use valores financeiros exatos.
+**Coluna "A Vender" - transformar em Input editavel:**
+- Meses com indice < mes atual: campo bloqueado (locked, fundo cinza, icone de cadeado)
+- Mes atual e futuros: Input numerico editavel com formatacao ao perder foco
+- Ao confirmar (blur), chamar `onAVenderChange(month, novoValor)`
 
-## Arquivos a alterar
+**Logica de bloqueio de meses:**
+- Reutilizar a mesma funcao `getCurrentMonthIndex()` ja usada no MonetaryMetasTab
+- Fev 2026 = indice 1, Mar = 2, etc.
 
-### 1. `src/components/planning/MediaInvestmentTab.tsx` (funcao `calculateMrrAndRevenueToSell`, linhas ~145-165)
-- Substituir variavel `vendasMesAnterior` por `aVenderAnterior` (tipo number, inicia em 0)
-- Linha 154: trocar `vendasMesAnterior * ticketMedio * retencaoRate` por `aVenderAnterior * retencaoRate`
-- Linha 165: trocar `vendasMesAnterior = vendasDoMes` por `aVenderAnterior = aVender`
+### 2. `MediaInvestmentTab.tsx` - Componente principal
 
-### 2. `src/hooks/usePlanGrowthData.ts` (funcao `calculateMrrAndRevenueToSell`, linhas ~199-217)
-- Mesma alteracao: usar `aVenderAnterior * retencaoRate` em vez de `vendasMesAnterior * ticketMedio * retencaoRate`
+**Adicionar handler `handleAVenderChange`:**
+- Recebe (buKey, month, novoAVender)
+- Calcula novo faturamento = MRR Base do mes + novo A Vender
+- Faz upsert na tabela `monetary_metas` via `bulkUpdateMetas`
+- Invalida queries para recalcular o funil automaticamente
 
-## Resultado esperado
-- A Vender mostrara os valores corretos derivados das metas no banco
-- A cadeia de MRR Base sera precisa sem erros de arredondamento acumulados
-- Vendas continua como indicador arredondado (display only)
+**Importar `useMonetaryMetas`** para ter acesso ao `bulkUpdateMetas`
+
+### 3. Fluxo de recalculo
+
+Quando A Vender muda em um mes:
+1. Novo faturamento = MRR Base + A Vender editado
+2. Salva no banco
+3. O `useMemo` que calcula `metasMensaisModeloAtual` detecta a mudanca
+4. `calculateMrrAndRevenueToSell` recalcula toda a cadeia de MRR
+5. O funil reverso recalcula vendas, propostas, leads, investimento
+6. A tabela atualiza automaticamente
+
+### 4. UX da edicao
+
+- Campo A Vender mostra valor formatado (ex: "400k") quando nao esta em edicao
+- Ao clicar, mostra o valor numerico puro para editar
+- Ao sair do campo, formata e salva
+- Feedback via toast de sucesso/erro
+- Meses bloqueados mostram valor com opacidade reduzida
