@@ -1231,16 +1231,9 @@ export function IndicatorsTab() {
     switch (indicator.key) {
       case 'mql': {
         // MQL: "De Onde Vêm Nossos Melhores Leads?"
-        const premiumCount = items.filter(i => {
-          const range = (i.revenueRange || '').toLowerCase();
-          return range.includes('50') || range.includes('100') || range.includes('acima');
-        }).length;
-        const premiumPct = items.length > 0 ? Math.round((premiumCount / items.length) * 100) : 0;
-        
         // KPIs para MQL
         const kpis: KpiItem[] = [
           { icon: '📊', value: items.length, label: 'Total MQLs', highlight: 'neutral' },
-          { icon: '💎', value: `${premiumPct}%`, label: 'Premium', highlight: premiumPct >= 30 ? 'success' : premiumPct >= 15 ? 'neutral' : 'warning' },
         ];
         
         // Charts para MQL - Distribuição por Faixa de Faturamento
@@ -1256,13 +1249,15 @@ export function IndicatorsTab() {
           })
           .sort((a, b) => b.value - a.value);
         
+        const TIER_ORDER = ['Ainda não fatura', '< R$ 100k', 'R$ 100k - 200k', 'R$ 200k - 350k', 'R$ 350k - 500k', 'R$ 500k - 1M', 'R$ 1M - 5M', '> R$ 5M'];
+        
         const charts: ChartConfig[] = [
-          { type: 'bar', title: 'Por Faixa de Faturamento', data: revenueRangeData },
+          { type: 'bar', title: 'Por Faixa de Faturamento', data: revenueRangeData, sortable: true, sortOrder: TIER_ORDER },
         ];
         
         setDetailSheetTitle('MQL - De Onde Vêm Nossos Melhores Leads?');
         setDetailSheetDescription(
-          `${items.length} MQLs captados | ${premiumPct}% faixa premium (>R$50k)`
+          `${items.length} MQLs captados no período`
         );
         setDetailSheetKpis(kpis);
         setDetailSheetCharts(charts);
