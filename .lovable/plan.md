@@ -1,43 +1,55 @@
 
 
-# Restaurar metas originais de A Vender
+# Inverter logica: Meta (Faturamento) como campo editavel
 
-## Problema
+## Contexto atual
 
-O fix anterior priorizou a consistencia matematica (vendas x 17k = A Vender) mas ao fazer isso **alterou os valores de A Vender** que voce definiu. Por exemplo, A Vender de Jan passou de R$ 400.000 para R$ 408.000 (24 x 17k).
+Hoje no Admin "Metas Monetarias", o campo editavel e a **quantidade de vendas**. O sistema calcula faturamento = vendas x ticket. Isso causa inconsistencias porque no Plan Growth o fluxo e inverso (meta financeira gera vendas).
 
-Os valores originais que voce definiu eram:
-- Jan: 400.000 | Fev: 400.000 | Mar: 500.000 | Abr: 532.975 | Mai: 580.000 | Jun: 614.000
+## Nova logica
 
-## Solucao
+Tornar o **Faturamento (meta)** o campo editavel principal. A quantidade de vendas e todos os splits serao derivados automaticamente:
 
-Reverter a logica que sobrescreve A Vender. O valor de A Vender volta a ser a fonte de verdade (meta - MRR Base), e vendas sera apenas um indicador arredondado para referencia.
+- **Vendas** = Math.round(faturamento / ticket_medio)
+- **MRR** = faturamento x 25% (para BUs nao-pontual)
+- **Setup** = faturamento x 60%
+- **Pontual** = faturamento x 15% (ou 100% para Oxy Hacker/Franquia)
 
-### 1. Codigo - `usePlanGrowthData.ts` (linha 218)
-Remover a linha que sobrescreve revenueToSell:
-```
-// REMOVER: revenueToSell[month] = vendasDoMes * ticketMedio;
-```
+## Mudancas
 
-### 2. Codigo - `MediaInvestmentTab.tsx` (linha ~163)
-Mesma remocao da linha que sobrescreve revenueToSell.
+### 1. MonetaryMetasTab.tsx - Inverter campos editaveis
 
-### 3. Banco de dados - Recalcular faturamento
-Restaurar os valores de faturamento do Modelo Atual para refletir as metas originais de A Vender + MRR Base correto. O MRR Base sera recalculado usando a cadeia de churn (6%) e retencao (25% das vendas arredondadas do mes anterior x 17k):
+**Linha de Vendas**: passa de editavel para calculado (display only)
+- Mostrar `Math.round(faturamento / ticket_medio)` como texto
 
-| Mes | A Vender (restaurado) | Vendas (display) | MRR Base | Faturamento |
-|-----|----------------------|-----------------|----------|-------------|
-| Jan | 400.000 | 24 | 725.000 | 1.125.000 |
-| Fev | 400.000 | 24 | 781.500 | 1.181.500 |
-| Mar | 500.000 | 29 | 836.610 | 1.336.610 |
-| Abr | 532.975 | 31 | 910.533 | 1.443.508 |
-| Mai | 580.000 | 34 | 988.201 | 1.568.201 |
-| Jun | 614.000 | 36 | 1.072.889 | 1.686.889 |
+**Linha de Faturamento**: passa de calculado para editavel
+- Input numerico onde o admin digita o valor de faturamento mensal
+- Formatar com R$ ao perder foco
 
-Nota: os splits (MRR 25%, Setup 60%, Pontual 15%) serao aplicados sobre o faturamento total.
+**State local**: trocar `localVendas` por `localFaturamento`
+- `getFaturamento(bu, month)` retorna o valor do state diretamente
+- `getVendas(bu, month)` = `Math.round(getFaturamento(bu, month) / getTicket(bu))`
+
+**handleSave**: derivar vendas do faturamento antes de salvar
+- `vendas = Math.round(faturamento / ticket_medio)`
+- Splits (MRR, Setup, Pontual) calculados sobre o faturamento
+
+### 2. usePlanGrowthData.ts - Sem mudanca
+
+O hook ja le `faturamento` do banco como meta principal. Nenhuma alteracao necessaria.
+
+### 3. MediaInvestmentTab.tsx - Sem mudanca
+
+A UI do Plan Growth ja usa a meta de faturamento como fonte. Nenhuma alteracao necessaria.
+
+### 4. Banco de dados - Sem mudanca
+
+A tabela `monetary_metas` ja tem o campo `faturamento`. So muda qual campo o admin edita na interface.
 
 ## Resultado esperado
-- A Vender mostrara exatamente 400k, 400k, 500k, 532.975k, 580k, 614k
-- Vendas mostrara o valor arredondado (24, 24, 29, 31, 34, 36) como referencia
-- Aceita-se que vendas x 17k nao sera exatamente igual a A Vender (diferenca de arredondamento)
+
+- Admin edita **faturamento** (ex: R$ 1.125.000 para Jan)
+- Sistema mostra vendas calculadas: Math.round(1.125.000 / 17.000) = 66
+- Plan Growth usa esse faturamento como meta e calcula MRR Base, A Vender, e funil normalmente
+- Consistencia total: a meta financeira e sempre a fonte de verdade
 
