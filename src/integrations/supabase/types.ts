@@ -117,7 +117,9 @@ export type Database = {
           mrr: number | null
           pontual: number | null
           setup: number | null
+          ticket_medio: number
           updated_at: string
+          vendas: number
           year: number
         }
         Insert: {
@@ -129,7 +131,9 @@ export type Database = {
           mrr?: number | null
           pontual?: number | null
           setup?: number | null
+          ticket_medio?: number
           updated_at?: string
+          vendas?: number
           year?: number
         }
         Update: {
@@ -141,7 +145,9 @@ export type Database = {
           mrr?: number | null
           pontual?: number | null
           setup?: number | null
+          ticket_medio?: number
           updated_at?: string
+          vendas?: number
           year?: number
         }
         Relationships: []

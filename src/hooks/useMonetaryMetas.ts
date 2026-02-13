@@ -14,6 +14,8 @@ export interface MonetaryMeta {
   mrr: number;
   setup: number;
   pontual: number;
+  vendas: number;
+  ticket_medio: number;
   created_at: string;
   updated_at: string;
 }
@@ -26,6 +28,8 @@ export interface MonetaryMetaUpdate {
   mrr?: number;
   setup?: number;
   pontual?: number;
+  vendas?: number;
+  ticket_medio?: number;
 }
 
 export const BUS: BuType[] = ['modelo_atual', 'o2_tax', 'oxy_hacker', 'franquia'];
@@ -100,6 +104,8 @@ export function useMonetaryMetas(year = 2026) {
         mrr: u.mrr ?? 0,
         setup: u.setup ?? 0,
         pontual: u.pontual ?? 0,
+        vendas: u.vendas ?? 0,
+        ticket_medio: u.ticket_medio ?? 0,
         updated_at: new Date().toISOString(),
       }));
 
