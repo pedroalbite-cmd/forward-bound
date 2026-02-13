@@ -1,42 +1,35 @@
 
 
-# Remover Premium MQL e Adicionar Ordenacao por Range no Grafico de Faixas
+# Reverter monetary_metas do Modelo Atual (Jan-Jun)
 
-## O que muda
+## Problema
+O campo `faturamento` armazena o faturamento TOTAL mensal (MRR Base + Incremento). Ao inserir os valores de "A Vender" (400k, 500k...) diretamente nesse campo, o calculo do Plan Growth resultou em MRR Base = 0, pois:
+- `MRR Base = faturamento - valorVenderInicial (400k)`
+- Com faturamento = 400k: MRR Base = 0
 
-### 1. Remover "Premium" do drill-down de MQL
-No arquivo `src/components/planning/IndicatorsTab.tsx`, no case `'mql'`:
-- Remover o calculo de `premiumCount` e `premiumPct` (linhas 1234-1238)
-- Remover o KPI "Premium" do array `kpis` (manter apenas "Total MQLs")
-- Remover a mencao a "premium" na descricao do sheet (`premiumPct}% faixa premium (>R$50k)`)
+## Solucao
+Reverter os 6 registros de Jan a Jun 2026 para os valores originais, calculados pela distribuicao trimestral (identica ao padrao de Jul-Dez que nao foi alterado).
 
-### 2. Adicionar botao de ordenacao no grafico "Por Faixa de Faturamento"
-O grafico de barras horizontais hoje ordena por quantidade (maior para menor). A solicitacao e adicionar um botao para alternar entre:
-- **Por Quantidade** (padrao atual): maior para menor
-- **Por Range**: ordem natural das faixas de faturamento (do menor para o maior)
+### Valores a restaurar
 
-**Implementacao:**
-- Adicionar propriedade `sortable?: boolean` ao `ChartConfig` em `DrillDownCharts.tsx`
-- Adicionar propriedade `sortOrder?: string[]` ao `ChartConfig` para definir a ordem alternativa (TIER_ORDER)
-- No componente `DrillDownBarChart.tsx`:
-  - Adicionar prop `sortable` e `sortOrder`
-  - Adicionar estado local de toggle (quantidade vs range)
-  - Renderizar um botao pequeno (icone ArrowUpDown) ao lado do titulo
-  - Quando em modo "range", ordenar os dados pela posicao no array `sortOrder`
-  - Remover o `maxItems` para mostrar todas as faixas quando em modo range
-- No `IndicatorsTab.tsx`, ao configurar o chart de MQL:
-  - Passar `sortable: true` e `sortOrder` com a ordem correta das faixas
+| Mes | Faturamento | MRR (25%) | Setup (60%) | Pontual (15%) |
+|-----|-------------|-----------|-------------|---------------|
+| Jan | 1.125.000   | 281.250   | 675.000     | 168.750       |
+| Fev | 1.237.500   | 309.375   | 742.500     | 185.625       |
+| Mar | 1.387.500   | 346.875   | 832.500     | 208.125       |
+| Abr | 1.350.000   | 337.500   | 810.000     | 202.500       |
+| Mai | 1.485.000   | 371.250   | 891.000     | 222.750       |
+| Jun | 1.665.000   | 416.250   | 999.000     | 249.750       |
 
-## Detalhes Tecnicos
+Formula: Q1 (3.750.000) distribuido 30/33/37%, Q2 (4.500.000) distribuido 30/33/37%.
 
-**TIER_ORDER para sortOrder:**
-```text
-['Ainda não fatura', '< R$ 100k', 'R$ 100k - 200k', 'R$ 200k - 350k', 
- 'R$ 350k - 500k', 'R$ 500k - 1M', 'R$ 1M - 5M', '> R$ 5M']
-```
+### Execucao
+Uma unica operacao UPDATE na tabela `monetary_metas` para os 6 registros (bu='modelo_atual', months Jan-Jun, year=2026).
 
-**Arquivos editados:**
-- `src/components/planning/IndicatorsTab.tsx` - remover premium, adicionar sortOrder ao chart config
-- `src/components/planning/indicators/DrillDownBarChart.tsx` - adicionar toggle de ordenacao
-- `src/components/planning/indicators/DrillDownCharts.tsx` - propagar props sortable/sortOrder no ChartConfig
+### Resultado esperado
+- MRR Base volta a ser calculado corretamente: `faturamento(Jan) - 400.000 = 725.000`
+- Os valores de "A Vender" (Incremento) voltam a ser derivados automaticamente pelo Plan Growth
+
+### Nota importante
+Para futuramente ajustar o "A Vender" de cada mes, a alteracao deve ser feita via Admin Panel (Metas Monetarias), que recalcula o faturamento total automaticamente, ou o campo `faturamento` deve receber o valor TOTAL (MRR Base + Incremento), nao apenas o incremento.
 
