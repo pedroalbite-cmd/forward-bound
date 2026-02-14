@@ -1,87 +1,78 @@
 
 
-# Mover Controle de Metas para dentro do Plan Growth (cascata por mes)
+# Cascata: comparar com A Vender e mostrar todos os indicadores realizados
 
-## Resumo
+## Problema atual
 
-Remover a aba "Controle Metas" como aba separada e integrar os dados de realizado (previsto vs realizado, variacao, status) diretamente nas tabelas de detalhamento por BU do Plan Growth. Cada linha de mes na tabela tera um botao expansivel (collapsible) que abre uma cascata mostrando o resultado realizado daquele mes.
+A cascata expandida compara o realizado com a **Meta total** (faturamento), mas deveria comparar com o **A Vender** (incremento). Alem disso, so mostra o valor monetario realizado, sem as demais metricas do funil (vendas, propostas, RRs, RMs, MQLs, leads).
 
-## O que muda para o usuario
+## O que vai mudar
 
-- A aba "Controle Metas" some do menu principal
-- No Plan Growth, na secao "Detalhamento por BU", cada mes tem um icone clicavel (chevron)
-- Ao clicar, abre uma linha expandida abaixo mostrando:
-  - Valor Realizado do mes
-  - Variacao % (realizado vs meta)
-  - Status (icone verde/amarelo/vermelho)
-  - Barra de progresso visual
-- O hero section com KPIs consolidados (meta anual, realizado, taxa de atingimento, gap) sera adicionado no topo do Plan Growth
+Ao expandir um mes, a cascata mostrara:
+
+1. **Atingimento vs A Vender** (nao vs Meta) - porque o A Vender e o que precisa ser conquistado de novo
+2. **Todas as metricas do funil realizadas**: Vendas (qtd), Propostas, RRs, RMs, MQLs, Leads - comparando meta vs realizado em cada uma
+3. Barra de progresso e status baseados no A Vender
+
+## Layout da cascata expandida
+
+```text
+Linha do mes normal: | Jan | R$ 1.1M | R$ 700k | R$ 400k | 24 | 39 | ... |
+
+Cascata expandida:
++---------------------------------------------------------------+
+| [icone status]                                                 |
+|                                                                |
+| Incremento (A Vender)                                          |
+| Meta: R$ 400.000  |  Realizado: R$ 85.000  |  21.3%  |  ████  |
+|                                                                |
+| Funil Realizado                                                |
+|  Vendas   Propostas   RRs   RMs   MQLs   Leads                |
+|  Meta: 24    39        44    61    125    291                   |
+|  Real:  5    12        15    22     48    110                   |
++---------------------------------------------------------------+
+```
 
 ## Mudancas tecnicas
 
-### 1. `BUInvestmentTable` - Adicionar cascata de realizado por mes
+### 1. `useIndicatorsRealized.ts` - Expandir para retornar funil completo
 
-**Novas props:**
-- `realizedByMonth`: `Record<string, number>` - dados realizados por mes para esta BU
-- `isLoadingRealized`: boolean
+Atualmente retorna apenas vendas (valor monetario). Precisa retornar tambem as quantidades de cada etapa do funil por BU e por mes.
 
-**Cada linha de mes ganha:**
-- Um `ChevronDown`/`ChevronUp` clicavel na primeira coluna
-- Ao clicar, expande uma `TableRow` extra abaixo com:
-  - Realizado: valor em R$
-  - Meta: valor previsto (ja disponivel no `funnelData`)
-  - Variacao: badge colorido com %
-  - Progresso: barra visual
-  - Status: icone check/x
-
-**State local:** `expandedMonths: Set<string>` para controlar quais meses estao abertos
-
-### 2. `MediaInvestmentTab` - Integrar dados realizados
-
-**Importar `useIndicatorsRealized`** para obter os dados realizados por BU.
-
-**Passar `realizedByMonth` para cada `BUInvestmentTable`:**
-- Modelo Atual: `realizedByBU.modelo_atual`
-- O2 TAX: `realizedByBU.o2_tax`
-- Oxy Hacker: `realizedByBU.oxy_hacker`
-- Franquia: `realizedByBU.franquia`
-
-**Adicionar um bloco de KPIs resumo** (similar ao hero do SalesGoalsTab) no topo do Plan Growth ou na secao de detalhamento, mostrando:
-- Meta Anual consolidada
-- Total Realizado
-- Taxa de Atingimento
-- Gap para meta
-
-### 3. `Planning2026.tsx` - Remover aba "Controle Metas"
-
-- Remover `SalesGoalsTab` do import e do render
-- Remover `sales` da lista de abas visibles no `TAB_CONFIG`
-- Remover o `TabsContent value="sales"`
-
-### 4. `useUserPermissions.ts` - Remover permissao `sales`
-
-- Remover `'sales'` do tipo `TabKey`
-- Remover da lista de abas do admin
-
-### 5. Arquivos que podem ser mantidos (sem deletar)
-
-Os componentes `SalesGoalsTab`, `SalesGoalsCards`, `SalesGoalsTable`, `SalesGoalsCharts`, `ExpansaoBreakdown` continuam existindo no codigo mas nao serao mais referenciados. Podem ser removidos em uma limpeza futura.
-
-### 6. `AdminTab.tsx` - Remover `sales` das opcoes de permissao
-
-Remover a entrada `{ key: 'sales', label: 'Controle Metas' }` do array `TAB_OPTIONS`.
-
-## Detalhes da cascata expandida
-
-A linha expandida por mes mostrara algo como:
-
-```text
-| Jan | R$ 1.100.000 | R$ 700.000 | R$ 400.000 | 24 | 39 | ... |
-|     [Realizado: R$ 85.000  |  Meta: R$ 1.100.000  |  7.7%  |  ████░░░░  |  Gap: R$ 1.015.000]  |
+**Novo retorno** - `realizedFunnelByBU`:
+```ts
+{
+  modelo_atual: {
+    Jan: { vendas: 5, propostas: 12, rrs: 15, rms: 22, mqls: 48, leads: 110, valor: 85000 },
+    Fev: { ... },
+  },
+  o2_tax: { ... },
+  ...
+}
 ```
 
-- A linha expandida ocupa toda a largura da tabela (colspan total)
-- Fundo levemente diferente (muted/30) para diferenciar visualmente
-- Mostra: Realizado, Meta, % Atingimento, barra de progresso, gap
-- Icone de status colorido (check verde >= 80%, amarelo >= 50%, vermelho < 50%)
+Para cada mes, chamar `getQtyForPeriod` com cada indicador ('venda', 'proposta', 'rr', 'rm', 'mql', 'leads') dos hooks ja existentes (useModeloAtualMetas, useO2TaxMetas, useOxyHackerMetas, useExpansaoMetas).
 
+### 2. `MediaInvestmentTab.tsx` - Atualizar BUInvestmentTable
+
+**Novas props:**
+- `realizedFunnelByMonth`: dados completos do funil realizado por mes (nao so valor)
+
+**Cascata expandida - mudar logica:**
+- O `pctAtingimento` passa a comparar `realized.valor` vs `data.faturamentoVender` (A Vender), nao vs `data.faturamentoMeta`
+- O gap passa a ser `data.faturamentoVender - realized.valor`
+- Adicionar uma secao "Funil Realizado" com grid mostrando cada indicador:
+  - Linha "Meta": valores do funnelData (vendas, propostas, rrs, rms, mqls, leads)
+  - Linha "Real": valores do realizedFunnelByMonth
+  - Cada indicador com cor verde se >= 80% da meta, amarelo >= 50%, vermelho < 50%
+
+### 3. `MediaInvestmentTab.tsx` - Componente principal
+
+- Passar `realizedFunnelByMonth` para cada BUInvestmentTable em vez de `realizedByMonth` simples
+- Adaptar o KPI hero para tambem usar A Vender como referencia
+
+## Resultado
+
+- O atingimento mostra o progresso real vs o que precisa ser conquistado (A Vender)
+- Todas as metricas do funil ficam visiveis na cascata para acompanhamento completo
+- O usuario ve de relance se esta gerando leads, MQLs, propostas e vendas suficientes para cada mes
