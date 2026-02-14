@@ -19,6 +19,7 @@ const BU_OPTIONS = [
 const ACTION_LABELS: Record<string, string> = {
   monetary_meta: 'Meta Monetária',
   closer_meta: 'Meta Closer',
+  plan_growth_meta: 'Plan Growth',
 };
 
 export function AdminLogsTab() {
@@ -113,6 +114,7 @@ export function AdminLogsTab() {
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="monetary_meta">Meta Monetária</SelectItem>
                   <SelectItem value="closer_meta">Meta Closer</SelectItem>
+                  <SelectItem value="plan_growth_meta">Plan Growth</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -189,6 +191,8 @@ export function AdminLogsTab() {
                           className={
                             log.action_type === 'monetary_meta'
                               ? 'border-blue-500/50 text-blue-600'
+                              : log.action_type === 'plan_growth_meta'
+                              ? 'border-amber-500/50 text-amber-600'
                               : 'border-green-500/50 text-green-600'
                           }
                         >
