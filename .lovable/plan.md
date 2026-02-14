@@ -1,83 +1,51 @@
 
-# Correcoes no Plan Growth: Logs, Validacao de Vendas e Salvar em Lote
 
-## Problemas identificados
+# Correcao da Validacao: A Vender (nao vendas) + UX de edicao livre
 
-1. **Logs nao aparecem ao editar no Plan Growth**: O `handleAVenderChange` no `MediaInvestmentTab.tsx` salva diretamente no banco sem chamar `logAction()`. Os logs so foram integrados no `MonetaryMetasTab` (aba Admin), nao no Plan Growth.
+## Problemas atuais
 
-2. **Vendas precisam bater o total**: Se o admin tira 2 vendas de um mes, precisa distribuir essas 2 em outros meses antes de poder salvar. O total de vendas anual (ou por BU) deve permanecer constante.
+1. **Mensagens falam em "vendas" mas deveria ser "A Vender" (valor financeiro)**: O banner mostra "+3 vendas" quando deveria mostrar "+R$ 50k no A Vender". A validacao ja calcula o diff em R$, mas o display traduz para "vendas" o que confunde.
 
-3. **Salvar individualmente vs em lote**: Atualmente cada edicao de "A Vender" salva imediatamente no banco. O admin quer editar varios meses, ver o saldo, e so salvar quando tudo estiver correto.
+2. **Sensacao de bloqueio**: Embora a edicao de celulas individuais funcione, o banner vermelho com "Distribua as vendas" e botao desabilitado da a impressao de que algo esta bloqueado. O usuario quer editar livremente, ver um contador de saldo, e so no final salvar.
 
-## Solucao
+3. **Banner precisa acompanhar a tela**: O banner ja eh `sticky top-0`, mas pode melhorar a visibilidade.
 
-### 1. Mudar de "salvar imediato" para "salvar em lote"
+## Mudancas
 
-Hoje: editar um mes -> salva no banco imediatamente (`handleAVenderChange` chama `bulkUpdateMetas.mutateAsync`)
+### 1. Banner de validacao - Reformular mensagens
 
-Novo fluxo:
-- Editar um mes -> salva apenas no **estado local** (pendingChanges)
-- Um banner fixo aparece mostrando: "X alteracoes pendentes | Total vendas: Y (meta: Z) | Diferenca: +/-N"
-- Se a diferenca for 0 (vendas batem), o botao "Salvar Todas" fica habilitado
-- Se a diferenca for diferente de 0, o botao fica desabilitado com aviso: "Distribua as N vendas restantes antes de salvar"
-- Ao clicar "Salvar Todas", salva tudo de uma vez no banco e registra os logs
+**De:**
+- "+3 vendas (R$ 50k)" / "Distribua as vendas restantes"
+- Badge "Balanceado" / Badge destructive com contagem de vendas
 
-### 2. Integrar audit logs no Plan Growth
+**Para:**
+- "Modelo Atual: +R$ 50k no A Vender" ou "Modelo Atual: -R$ 50k no A Vender"
+- Quando balanceado: "Modelo Atual: A Vender balanceado"
+- Mensagem inferior: "O total de A Vender por BU deve permanecer igual ao original. Redistribua o valor entre os meses."
+- Remover toda referencia a "vendas" do banner
 
-Ao salvar em lote, para cada BU/mes alterado:
-- Registrar log: "Plan Growth - Modelo Atual Fev: A Vender de R$ 400k para R$ 450k"
-- Metadata inclui: bu, month, old_value, new_value, source: 'plan_growth'
+### 2. Validacao baseada no total de A Vender
 
-### 3. Validacao de vendas por BU
+- A validacao `isAllBalanced` ja usa `Math.abs(val.diff) < 100` em R$ - isso esta correto
+- Remover o calculo de `diffVendas` do `pendingValidation` pois nao sera mais usado
+- Manter a tolerancia de R$ 100
 
-Para cada BU, calcular o total de vendas original (antes das edicoes) e o total apos as edicoes. So permitir salvar quando forem iguais.
+### 3. Botao Salvar - comportamento
 
-## Mudancas tecnicas
+- Manter o botao desabilitado quando nao balanceado (usuario confirmou "nao deve ser possivel salvar")
+- Melhorar o tooltip: "O total de A Vender deve ser igual ao original para salvar"
+- Quando balanceado, botao fica verde/habilitado
 
-### `MediaInvestmentTab.tsx`
+### 4. Indicador visual nas celulas editadas
 
-1. **Estado local para alteracoes pendentes**:
-   - `pendingAVenderChanges: Record<string, Record<string, number>>` (bu -> month -> newAVender)
-   - `handleAVenderChange` deixa de salvar no banco e apenas atualiza o estado local
-   - Os dados de funnel sao recalculados usando os valores pendentes (merge com DB)
+- Manter o fundo amarelo nas linhas pendentes (ja existe via `pendingMonths`)
+- Sem bloqueio ao editar - o usuario pode mudar qualquer mes editavel livremente
 
-2. **Banner de validacao**:
-   - Componente fixo no topo da area de BU tables
-   - Mostra por BU: total vendas original vs total vendas com alteracoes
-   - Badge verde se bate, vermelho se nao bate
-   - Botao "Salvar Todas as Alteracoes" (desabilitado se nao bater)
-   - Botao "Descartar Alteracoes"
+## Arquivo editado
 
-3. **Funcao `handleSaveAll`**:
-   - Valida que vendas batem para todas as BUs alteradas
-   - Salva todas as alteracoes de uma vez via `bulkUpdateMetas.mutateAsync`
-   - Registra audit logs para cada alteracao
-   - Limpa `pendingAVenderChanges`
+- `src/components/planning/MediaInvestmentTab.tsx`:
+  - `pendingValidation`: remover `diffVendas`, manter apenas `diff` em R$
+  - Banner: trocar todas as mensagens de "vendas" para "A Vender" com valores em R$
+  - Mensagem de erro: "Redistribua o A Vender entre os meses" em vez de "Distribua as vendas"
+  - Toast de erro no `handleSaveAll`: "O A Vender nao esta balanceado" em vez de "Distribua as vendas"
 
-4. **Recalculo local dos funnels**:
-   - Quando ha alteracoes pendentes, os `metasMensais` sao recalculados com os valores pendentes
-   - A tabela mostra os valores "pendentes" com indicacao visual (ex: fundo amarelo)
-
-### `BUInvestmentTable` (dentro do mesmo arquivo)
-
-- Meses com alteracoes pendentes mostram um indicador visual (dot amarelo ou borda)
-- O valor editado mostra o novo valor, nao o do banco
-
-### `useAuditLogs.ts`
-
-- Adicionar `action_type: 'plan_growth_meta'` como novo tipo (ou reutilizar 'monetary_meta' com metadata.source = 'plan_growth')
-
-### `AdminLogsTab.tsx`
-
-- Nenhuma alteracao necessaria - os novos logs aparecerao automaticamente
-
-## Fluxo do usuario
-
-1. Admin abre Plan Growth
-2. Edita "A Vender" de Fev de R$ 400k para R$ 350k (tira R$ 50k / ~3 vendas)
-3. Banner aparece: "Modelo Atual: 3 vendas a distribuir | Salvar desabilitado"
-4. Admin edita Mar de R$ 500k para R$ 550k (adiciona R$ 50k / ~3 vendas)
-5. Banner atualiza: "Modelo Atual: vendas balanceadas | Salvar habilitado"
-6. Admin clica "Salvar Todas"
-7. Sistema salva ambas alteracoes, registra 2 logs no audit
-8. Toast de sucesso: "2 metas atualizadas com sucesso"
