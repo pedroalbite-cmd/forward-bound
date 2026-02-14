@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useMonetaryMetas, BuType, MonthType, BU_LABELS, isPontualOnlyBU } from '@/hooks/useMonetaryMetas';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,6 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
+import { useAuditLogs } from '@/hooks/useAuditLogs';
+import { BU_LABELS as BU_LABEL_MAP } from '@/hooks/useMonetaryMetas';
 
 const TARGET_TOTAL = 33_306_500;
 
@@ -45,6 +47,7 @@ function isMonthLocked(monthIndex: number): boolean {
 export function MonetaryMetasTab() {
   const { toast } = useToast();
   const { metas, isLoading, bulkUpdateMetas, BUS, MONTHS } = useMonetaryMetas();
+  const { logAction } = useAuditLogs();
 
   const [selectedBu, setSelectedBu] = useState<BuType>('modelo_atual');
   
@@ -57,6 +60,9 @@ export function MonetaryMetasTab() {
   const [editingValue, setEditingValue] = useState<string>('');
   const [editingTicket, setEditingTicket] = useState<string | null>(null);
   const [editingTicketValue, setEditingTicketValue] = useState<string>('');
+  
+  // Snapshot of DB values for diff logging
+  const dbSnapshot = useRef<{ fat: Record<string, Record<string, number>>; tickets: Record<string, number> }>({ fat: {}, tickets: {} });
 
   // Initialize from DB
   useEffect(() => {
@@ -81,6 +87,7 @@ export function MonetaryMetasTab() {
 
       setLocalFaturamento(fatMap);
       setLocalTickets(ticketMap);
+      dbSnapshot.current = { fat: JSON.parse(JSON.stringify(fatMap)), tickets: { ...ticketMap } };
       setHasChanges(false);
     } else {
       const fatMap: Record<string, Record<string, number>> = {};
@@ -150,6 +157,34 @@ export function MonetaryMetasTab() {
 
     try {
       await bulkUpdateMetas.mutateAsync(updates);
+      
+      // Log changes
+      const oldFat = dbSnapshot.current.fat;
+      const oldTickets = dbSnapshot.current.tickets;
+      for (const bu of BUS) {
+        const buLabel = BU_LABEL_MAP[bu] || bu;
+        // Check ticket change
+        const oldT = oldTickets[bu] ?? 0;
+        const newT = getTicket(bu);
+        if (oldT !== newT) {
+          await logAction('monetary_meta', `${buLabel}: ticket médio de R$ ${formatCompact(oldT)} para R$ ${formatCompact(newT)}`, { bu, old_value: oldT, new_value: newT });
+        }
+        // Check faturamento per month
+        for (const month of MONTHS) {
+          const oldV = oldFat[bu]?.[month] ?? 0;
+          const newV = getFaturamento(bu, month);
+          if (oldV !== newV) {
+            await logAction('monetary_meta', `${buLabel} ${month}: faturamento de ${formatCurrency(oldV)} para ${formatCurrency(newV)}`, { bu, month, old_value: oldV, new_value: newV });
+          }
+        }
+      }
+      
+      // Update snapshot
+      dbSnapshot.current = {
+        fat: JSON.parse(JSON.stringify(localFaturamento)),
+        tickets: { ...localTickets },
+      };
+      
       toast({ title: 'Metas salvas com sucesso!' });
       setHasChanges(false);
     } catch {

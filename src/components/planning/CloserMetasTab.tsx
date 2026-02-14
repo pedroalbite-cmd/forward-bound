@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useCloserMetas, BuType, MonthType, CloserType, BU_CLOSERS, getClosersForBU } from '@/hooks/useCloserMetas';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, RotateCcw, Save } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { useAuditLogs } from '@/hooks/useAuditLogs';
 
 const BU_LABELS: Record<BuType, string> = {
   modelo_atual: 'Modelo Atual',
@@ -19,7 +20,8 @@ const BU_LABELS: Record<BuType, string> = {
 
 export function CloserMetasTab() {
   const { toast } = useToast();
-  const { 
+  const { logAction } = useAuditLogs();
+  const {
     metas, 
     isLoading, 
     getPercentage, 
@@ -33,6 +35,7 @@ export function CloserMetasTab() {
   const [selectedBu, setSelectedBu] = useState<BuType>('modelo_atual');
   const [localMetas, setLocalMetas] = useState<Record<string, number>>({});
   const [hasChanges, setHasChanges] = useState(false);
+  const dbMetasSnapshot = useRef<Record<string, number>>({});
 
   // Initialize local metas from fetched data
   useEffect(() => {
@@ -43,6 +46,7 @@ export function CloserMetasTab() {
         metasMap[key] = m.percentage;
       });
       setLocalMetas(metasMap);
+      dbMetasSnapshot.current = { ...metasMap };
       setHasChanges(false);
     }
   }, [metas]);
@@ -116,6 +120,26 @@ export function CloserMetasTab() {
 
     try {
       await bulkUpdateMetas.mutateAsync(updates);
+      
+      // Log changes
+      const buLabel = BU_LABELS[selectedBu] || selectedBu;
+      for (const month of MONTHS) {
+        for (const closer of validClosers) {
+          const key = `${selectedBu}-${month}-${closer}`;
+          const oldVal = dbMetasSnapshot.current[key] ?? 50;
+          const newVal = getLocalPercentage(selectedBu, month, closer);
+          if (oldVal !== newVal) {
+            const closerName = closer.split(' ')[0];
+            await logAction('closer_meta', `${buLabel} ${month}: ${closerName} de ${oldVal}% para ${newVal}%`, { bu: selectedBu, month, closer, old_value: oldVal, new_value: newVal });
+          }
+        }
+      }
+      
+      // Update snapshot
+      const newSnapshot: Record<string, number> = {};
+      updates.forEach(u => { newSnapshot[`${u.bu}-${u.month}-${u.closer}`] = u.percentage; });
+      dbMetasSnapshot.current = { ...dbMetasSnapshot.current, ...newSnapshot };
+      
       toast({ title: 'Metas salvas com sucesso!' });
       setHasChanges(false);
     } catch (error) {
