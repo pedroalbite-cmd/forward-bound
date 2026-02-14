@@ -1,10 +1,10 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Legend, Line } from "recharts";
-import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3, Info, Settings, Filter, Lock, Pencil, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3, Info, Settings, Filter, Lock, Pencil, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertCircle, Save, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { SalesFunnelVisual } from "./SalesFunnelVisual";
 import { Slider } from "@/components/ui/slider";
@@ -17,6 +17,7 @@ import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { useMonetaryMetas, BuType, isPontualOnlyBU } from "@/hooks/useMonetaryMetas";
 import { useIndicatorsRealized, FunnelRealized } from "@/hooks/useIndicatorsRealized";
 import { Progress } from "@/components/ui/progress";
+import { useAuditLogs } from "@/hooks/useAuditLogs";
 
 // Indicadores de 2025 (base para projeção)
 const indicators2025 = {
@@ -365,6 +366,7 @@ interface BUInvestmentTableProps {
   realizedByMonth?: Record<string, number>;
   realizedFunnelByMonth?: Record<string, FunnelRealized>;
   isLoadingRealized?: boolean;
+  pendingMonths?: Set<string>;
 }
 
 function BUInvestmentTable({ 
@@ -383,7 +385,8 @@ function BUInvestmentTable({
   editable = false,
   realizedByMonth = {},
   realizedFunnelByMonth = {},
-  isLoadingRealized = false
+  isLoadingRealized = false,
+  pendingMonths = new Set()
 }: BUInvestmentTableProps) {
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -549,7 +552,7 @@ function BUInvestmentTable({
                 
                 return (
                   <>
-                    <TableRow key={data.month} className={`${isQuarterEnd ? "border-b-2 border-border" : ""} ${isExpanded ? "bg-muted/20" : ""}`}>
+                    <TableRow key={data.month} className={`${isQuarterEnd ? "border-b-2 border-border" : ""} ${isExpanded ? "bg-muted/20" : ""} ${pendingMonths.has(data.month) ? "bg-amber-500/5" : ""}`}>
                       <TableCell className="p-1 w-8">
                         <button
                           onClick={() => toggleMonth(data.month)}
@@ -963,6 +966,13 @@ export function MediaInvestmentTab() {
   const [configOpen, setConfigOpen] = useState(false);
   const [selectedBUTab, setSelectedBUTab] = useState("modeloAtual");
 
+  // Pending A Vender changes: bu -> month -> newAVenderValue
+  const [pendingChanges, setPendingChanges] = useState<Record<string, Record<string, number>>>({});
+  // Snapshot of original values when editing starts (bu -> month -> originalAVender)
+  const originalValuesRef = useRef<Record<string, Record<string, number>>>({});
+  
+  const { logAction } = useAuditLogs();
+
   // Quarterly totals para outras BUs (fallback when DB is empty)
   const quarterlyTotalsOutrasBUs = useMemo(() => ({
     o2Tax: { Q1: 412224, Q2: 587220.48, Q3: 781590.46, Q4: 1040296.90 },
@@ -1313,64 +1323,205 @@ export function MediaInvestmentTab() {
     setIndicadoresPorBU(prev => ({ ...prev, [bu]: indicators }));
   };
 
-  // Handler for A Vender changes from BU detail tables
-  const handleAVenderChange = useCallback(async (buKey: string, month: string, newAVender: number) => {
-    try {
-      // Find the existing meta for this BU/month to get MRR base
-      const buMeta = metas.find(m => m.bu === buKey && m.month === month);
-      const isPontualOnly = isPontualOnlyBU(buKey as BuType);
+  // Handler for A Vender changes - stores locally instead of saving to DB
+  const handleAVenderChange = useCallback((buKey: string, month: string, newAVender: number) => {
+    // Capture original value on first edit for this BU/month
+    if (!originalValuesRef.current[buKey]?.[month]) {
+      // Get original A Vender from current funnel data
+      const monthIndex = months.indexOf(month);
+      let originalAVender = 0;
+      if (buKey === 'modelo_atual') originalAVender = modeloAtualFunnel[monthIndex]?.faturamentoVender || 0;
+      else if (buKey === 'o2_tax') originalAVender = o2TaxFunnel[monthIndex]?.faturamentoVender || 0;
+      else if (buKey === 'oxy_hacker') originalAVender = oxyHackerFunnel[monthIndex]?.faturamentoVender || 0;
+      else if (buKey === 'franquia') originalAVender = franquiaFunnel[monthIndex]?.faturamentoVender || 0;
       
-      if (isPontualOnly) {
-        // For pontual-only BUs, A Vender IS the pontual value
-        await bulkUpdateMetas.mutateAsync([{
-          bu: buKey,
-          month,
-          year: 2026,
-          faturamento: newAVender,
-          pontual: newAVender,
-          mrr: 0,
-          setup: 0,
-          vendas: buMeta ? buMeta.vendas : Math.round(newAVender / indicadoresPorBU[buKey === 'oxy_hacker' ? 'oxyHacker' : 'franquia'].ticketMedio),
-          ticket_medio: buMeta ? buMeta.ticket_medio : indicadoresPorBU[buKey === 'oxy_hacker' ? 'oxyHacker' : 'franquia'].ticketMedio,
-        }]);
-      } else {
-        // For Modelo Atual / O2 TAX: new faturamento = MRR Base + new A Vender
-        // Get MRR base from funnel data
-        let mrrBaseDoMes = 0;
-        const monthIndex = months.indexOf(month);
-        if (buKey === 'modelo_atual') {
-          mrrBaseDoMes = modeloAtualFunnel[monthIndex]?.mrrBase || 0;
-        } else if (buKey === 'o2_tax') {
-          // O2 TAX doesn't have MRR chain in detail view currently, so A Vender = total meta
-          mrrBaseDoMes = 0;
+      // Check if there's no pending change yet for this BU
+      if (!originalValuesRef.current[buKey]) originalValuesRef.current[buKey] = {};
+      originalValuesRef.current[buKey][month] = originalAVender;
+    }
+    
+    setPendingChanges(prev => ({
+      ...prev,
+      [buKey]: {
+        ...(prev[buKey] || {}),
+        [month]: newAVender,
+      },
+    }));
+  }, [modeloAtualFunnel, o2TaxFunnel, oxyHackerFunnel, franquiaFunnel]);
+
+  // Calculate validation status per BU
+  const pendingValidation = useMemo(() => {
+    const result: Record<string, { originalTotal: number; newTotal: number; diff: number; diffVendas: number; changeCount: number }> = {};
+    
+    for (const [bu, monthChanges] of Object.entries(pendingChanges)) {
+      if (Object.keys(monthChanges).length === 0) continue;
+      
+      const buKey = bu === 'modelo_atual' ? 'modeloAtual' : bu === 'o2_tax' ? 'o2Tax' : bu === 'oxy_hacker' ? 'oxyHacker' : 'franquia';
+      const ticketMedio = indicadoresPorBU[buKey as keyof typeof indicadoresPorBU].ticketMedio;
+      
+      let originalTotal = 0;
+      let newTotal = 0;
+      let changeCount = 0;
+      
+      for (const [month, newValue] of Object.entries(monthChanges)) {
+        const origValue = originalValuesRef.current[bu]?.[month] || 0;
+        // Only count if actually changed
+        if (Math.round(origValue) !== Math.round(newValue)) {
+          originalTotal += origValue;
+          newTotal += newValue;
+          changeCount++;
         }
-        
-        const newFaturamento = mrrBaseDoMes + newAVender;
-        const ticketMedio = buMeta ? buMeta.ticket_medio : indicadoresPorBU[buKey === 'o2_tax' ? 'o2Tax' : 'modeloAtual'].ticketMedio;
-        const vendas = Math.round(newFaturamento / ticketMedio);
-        
-        await bulkUpdateMetas.mutateAsync([{
-          bu: buKey,
-          month,
-          year: 2026,
-          faturamento: newFaturamento,
-          mrr: Math.round(newFaturamento * 0.25),
-          setup: Math.round(newFaturamento * 0.60),
-          pontual: Math.round(newFaturamento * 0.15),
-          vendas,
-          ticket_medio: ticketMedio,
-        }]);
       }
       
-      toast.success(`Meta "${month}" atualizada com sucesso`);
-    } catch (error) {
-      console.error('Error updating A Vender:', error);
-      toast.error('Erro ao atualizar meta');
+      if (changeCount > 0) {
+        const diff = newTotal - originalTotal;
+        const diffVendas = Math.round(diff / ticketMedio);
+        result[bu] = { originalTotal, newTotal, diff, diffVendas, changeCount };
+      }
     }
-  }, [metas, bulkUpdateMetas, indicadoresPorBU, modeloAtualFunnel]);
+    
+    return result;
+  }, [pendingChanges, indicadoresPorBU]);
+
+  const hasPendingChanges = Object.keys(pendingValidation).length > 0;
+  const totalChangeCount = Object.values(pendingValidation).reduce((s, v) => s + v.changeCount, 0);
+  const isAllBalanced = Object.values(pendingValidation).every(v => Math.abs(v.diff) < 100); // tolerance of R$100
+
+  // Batch save all pending changes
+  const handleSaveAll = useCallback(async () => {
+    if (!isAllBalanced) {
+      toast.error('Distribua as vendas antes de salvar');
+      return;
+    }
+    
+    try {
+      const updates: any[] = [];
+      
+      for (const [bu, monthChanges] of Object.entries(pendingChanges)) {
+        for (const [month, newAVender] of Object.entries(monthChanges)) {
+          const origValue = originalValuesRef.current[bu]?.[month] || 0;
+          if (Math.round(origValue) === Math.round(newAVender)) continue; // skip unchanged
+          
+          const buMeta = metas.find(m => m.bu === bu && m.month === month);
+          const isPontualOnly = isPontualOnlyBU(bu as BuType);
+          const buKeyForIndicators = bu === 'oxy_hacker' ? 'oxyHacker' : bu === 'o2_tax' ? 'o2Tax' : bu === 'franquia' ? 'franquia' : 'modeloAtual';
+          
+          if (isPontualOnly) {
+            updates.push({
+              bu, month, year: 2026,
+              faturamento: newAVender, pontual: newAVender,
+              mrr: 0, setup: 0,
+              vendas: buMeta ? buMeta.vendas : Math.round(newAVender / indicadoresPorBU[buKeyForIndicators as keyof typeof indicadoresPorBU].ticketMedio),
+              ticket_medio: buMeta ? buMeta.ticket_medio : indicadoresPorBU[buKeyForIndicators as keyof typeof indicadoresPorBU].ticketMedio,
+            });
+          } else {
+            let mrrBaseDoMes = 0;
+            const monthIndex = months.indexOf(month);
+            if (bu === 'modelo_atual') mrrBaseDoMes = modeloAtualFunnel[monthIndex]?.mrrBase || 0;
+            
+            const newFaturamento = mrrBaseDoMes + newAVender;
+            const ticketMedio = buMeta ? buMeta.ticket_medio : indicadoresPorBU[buKeyForIndicators as keyof typeof indicadoresPorBU].ticketMedio;
+            const vendas = Math.round(newFaturamento / ticketMedio);
+            
+            updates.push({
+              bu, month, year: 2026,
+              faturamento: newFaturamento,
+              mrr: Math.round(newFaturamento * 0.25),
+              setup: Math.round(newFaturamento * 0.60),
+              pontual: Math.round(newFaturamento * 0.15),
+              vendas, ticket_medio: ticketMedio,
+            });
+          }
+          
+          // Log the change
+          const buLabel = bu === 'modelo_atual' ? 'Modelo Atual' : bu === 'o2_tax' ? 'O2 TAX' : bu === 'oxy_hacker' ? 'Oxy Hacker' : 'Franquia';
+          await logAction('monetary_meta', `Plan Growth - ${buLabel} ${month}: A Vender de ${formatCurrency(origValue)} para ${formatCurrency(newAVender)}`, {
+            bu, month, old_value: origValue, new_value: newAVender, source: 'plan_growth',
+          });
+        }
+      }
+      
+      if (updates.length > 0) {
+        await bulkUpdateMetas.mutateAsync(updates);
+        toast.success(`${updates.length} meta${updates.length > 1 ? 's' : ''} atualizada${updates.length > 1 ? 's' : ''} com sucesso`);
+      }
+      
+      // Clear pending
+      setPendingChanges({});
+      originalValuesRef.current = {};
+    } catch (error) {
+      console.error('Error saving changes:', error);
+      toast.error('Erro ao salvar alterações');
+    }
+  }, [pendingChanges, isAllBalanced, metas, bulkUpdateMetas, indicadoresPorBU, modeloAtualFunnel, logAction]);
+
+  const handleDiscardAll = useCallback(() => {
+    setPendingChanges({});
+    originalValuesRef.current = {};
+    toast.info('Alterações descartadas');
+  }, []);
+
+  // Get pending months for a BU (for visual indicators)
+  const getPendingMonths = (bu: string): Set<string> => {
+    const changes = pendingChanges[bu];
+    if (!changes) return new Set();
+    const result = new Set<string>();
+    for (const [month, newValue] of Object.entries(changes)) {
+      const origValue = originalValuesRef.current[bu]?.[month] || 0;
+      if (Math.round(origValue) !== Math.round(newValue)) result.add(month);
+    }
+    return result;
+  };
 
   return (
     <div className="space-y-10 animate-fade-in">
+      {/* Pending Changes Validation Banner */}
+      {hasPendingChanges && (
+        <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border border-border rounded-xl p-4 shadow-lg">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              <span className="font-semibold">{totalChangeCount} alteraç{totalChangeCount > 1 ? 'ões' : 'ão'} pendente{totalChangeCount > 1 ? 's' : ''}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(pendingValidation).map(([bu, val]) => {
+                const buLabel = bu === 'modelo_atual' ? 'Modelo Atual' : bu === 'o2_tax' ? 'O2 TAX' : bu === 'oxy_hacker' ? 'Oxy Hacker' : 'Franquia';
+                const balanced = Math.abs(val.diff) < 100;
+                return (
+                  <Badge key={bu} variant={balanced ? "default" : "destructive"} className="text-xs">
+                    {buLabel}: {balanced ? (
+                      <><CheckCircle2 className="h-3 w-3 ml-1 mr-1" /> Balanceado</>
+                    ) : (
+                      <>{val.diffVendas > 0 ? `+${val.diffVendas}` : val.diffVendas} vendas ({val.diff > 0 ? '+' : ''}{formatCompact(val.diff)})</>
+                    )}
+                  </Badge>
+                );
+              })}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleDiscardAll}>
+                <Undo2 className="h-4 w-4 mr-1" />
+                Descartar
+              </Button>
+              <Button 
+                size="sm" 
+                onClick={handleSaveAll} 
+                disabled={!isAllBalanced}
+                title={!isAllBalanced ? 'Distribua as vendas antes de salvar' : 'Salvar todas as alterações'}
+              >
+                <Save className="h-4 w-4 mr-1" />
+                Salvar Todas
+              </Button>
+            </div>
+          </div>
+          {!isAllBalanced && (
+            <p className="text-xs text-destructive mt-2">
+              ⚠ Distribua as vendas restantes em outros meses antes de salvar. O total de vendas por BU deve permanecer o mesmo.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Hero Section */}
       <div className="relative overflow-hidden rounded-2xl gradient-primary p-8 text-primary-foreground">
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-30" />
@@ -2093,6 +2244,7 @@ export function MediaInvestmentTab() {
             realizedByMonth={realizedByBU.modelo_atual || {}}
             realizedFunnelByMonth={realizedFunnelByBU.modelo_atual || {}}
             isLoadingRealized={isLoadingRealized}
+            pendingMonths={getPendingMonths('modelo_atual')}
           />
 
           <BUInvestmentTable
@@ -2107,6 +2259,7 @@ export function MediaInvestmentTab() {
             realizedByMonth={realizedByBU.o2_tax || {}}
             realizedFunnelByMonth={realizedFunnelByBU.o2_tax || {}}
             isLoadingRealized={isLoadingRealized}
+            pendingMonths={getPendingMonths('o2_tax')}
           />
 
           <BUInvestmentTable
@@ -2121,6 +2274,7 @@ export function MediaInvestmentTab() {
             realizedByMonth={realizedByBU.oxy_hacker || {}}
             realizedFunnelByMonth={realizedFunnelByBU.oxy_hacker || {}}
             isLoadingRealized={isLoadingRealized}
+            pendingMonths={getPendingMonths('oxy_hacker')}
           />
 
           <BUInvestmentTable
@@ -2135,6 +2289,7 @@ export function MediaInvestmentTab() {
             realizedByMonth={realizedByBU.franquia || {}}
             realizedFunnelByMonth={realizedFunnelByBU.franquia || {}}
             isLoadingRealized={isLoadingRealized}
+            pendingMonths={getPendingMonths('franquia')}
           />
         </div>
       </div>
