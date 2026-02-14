@@ -1119,6 +1119,66 @@ export function MediaInvestmentTab() {
     [franquiaMonthly, funnelMetrics.franquia]
   );
 
+  // Effective funnel data: merge pendingChanges so edits don't revert visually
+  const applyPendingToFunnel = useCallback((
+    originalFunnel: FunnelData[],
+    buKey: string,
+    metrics: FunnelMetrics,
+    cpvValue: number,
+    mrrComChurn: Record<string, number> | null = null,
+  ): FunnelData[] => {
+    const buPending = pendingChanges[buKey];
+    if (!buPending || Object.keys(buPending).length === 0) return originalFunnel;
+    
+    return originalFunnel.map(d => {
+      const pending = buPending[d.month];
+      if (pending === undefined) return d;
+      
+      const newVender = pending;
+      const vendas = newVender / metrics.ticketMedio;
+      const propostas = vendas / metrics.propToVenda;
+      const rrs = propostas / metrics.rrToProp;
+      const rms = rrs / metrics.rmToRr;
+      const mqls = rms / metrics.mqlToRm;
+      const leads = mqls / metrics.leadToMql;
+      const investimento = vendas * cpvValue;
+      const faturamentoMeta = mrrComChurn ? (d.mrrBase + newVender) : newVender;
+      
+      return {
+        ...d,
+        faturamentoVender: newVender,
+        faturamentoMeta,
+        vendas: Math.ceil(vendas),
+        propostas: Math.ceil(propostas),
+        rrs: Math.ceil(rrs),
+        rms: Math.ceil(rms),
+        mqls: Math.ceil(mqls),
+        leads: Math.ceil(leads),
+        investimento: Math.round(investimento),
+      };
+    });
+  }, [pendingChanges]);
+
+  const effectiveModeloAtualFunnel = useMemo(() => 
+    applyPendingToFunnel(modeloAtualFunnel, 'modelo_atual', funnelMetrics.modeloAtual, indicadoresPorBU.modeloAtual.cpv, mrrDynamic.mrrPorMes),
+    [modeloAtualFunnel, applyPendingToFunnel, funnelMetrics.modeloAtual, indicadoresPorBU.modeloAtual.cpv, mrrDynamic.mrrPorMes]
+  );
+
+  const effectiveO2TaxFunnel = useMemo(() => 
+    applyPendingToFunnel(o2TaxFunnel, 'o2_tax', funnelMetrics.o2Tax, funnelMetrics.o2Tax.cpv || indicadoresPorBU.o2Tax.cpv),
+    [o2TaxFunnel, applyPendingToFunnel, funnelMetrics.o2Tax, indicadoresPorBU.o2Tax.cpv]
+  );
+
+  const effectiveOxyHackerFunnel = useMemo(() => 
+    applyPendingToFunnel(oxyHackerFunnel, 'oxy_hacker', funnelMetrics.oxyHacker, funnelMetrics.oxyHacker.cpv || indicadoresPorBU.oxyHacker.cpv),
+    [oxyHackerFunnel, applyPendingToFunnel, funnelMetrics.oxyHacker, indicadoresPorBU.oxyHacker.cpv]
+  );
+
+  const effectiveFranquiaFunnel = useMemo(() => 
+    applyPendingToFunnel(franquiaFunnel, 'franquia', funnelMetrics.franquia, funnelMetrics.franquia.cpv || indicadoresPorBU.franquia.cpv),
+    [franquiaFunnel, applyPendingToFunnel, funnelMetrics.franquia, indicadoresPorBU.franquia.cpv]
+  );
+
   // Consolidated funnel for 2026 visual
   const consolidatedFunnelTotals = useMemo(() => {
     const totalLeads = modeloAtualFunnel.reduce((s, d) => s + d.leads, 0) +
@@ -1470,35 +1530,33 @@ export function MediaInvestmentTab() {
   };
 
   return (
-    <div className="space-y-10 animate-fade-in">
-      {/* Pending Changes Validation Banner */}
+    <div className={`space-y-10 animate-fade-in ${hasPendingChanges ? 'pb-24' : ''}`}>
+      {/* Floating Bottom Action Bar for Pending Changes */}
       {hasPendingChanges && (
-        <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border border-border rounded-xl p-4 shadow-lg">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-3">
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-4xl w-[calc(100%-2rem)] bg-background/95 backdrop-blur border border-border rounded-xl p-4 shadow-2xl">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               {isAllBalanced ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
               ) : (
-                <Info className="h-5 w-5 text-blue-500" />
+                <Info className="h-5 w-5 text-blue-500 shrink-0" />
               )}
-              <span className="font-semibold">{totalChangeCount} alteraç{totalChangeCount > 1 ? 'ões' : 'ão'} pendente{totalChangeCount > 1 ? 's' : ''}</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
+              <span className="font-semibold text-sm">{totalChangeCount} alteraç{totalChangeCount > 1 ? 'ões' : 'ão'}</span>
               {Object.entries(pendingValidation).map(([bu, val]) => {
                 const buLabel = bu === 'modelo_atual' ? 'Modelo Atual' : bu === 'o2_tax' ? 'O2 TAX' : bu === 'oxy_hacker' ? 'Oxy Hacker' : 'Franquia';
                 const balanced = Math.abs(val.diff) < 100;
                 return (
                   <Badge key={bu} variant={balanced ? "default" : "destructive"} className="text-xs">
                     {buLabel}: {balanced ? (
-                      <><CheckCircle2 className="h-3 w-3 ml-1 mr-1" /> A Vender balanceado</>
+                      <><CheckCircle2 className="h-3 w-3 ml-1 mr-1" /> Balanceado</>
                     ) : (
-                      <>{val.diff > 0 ? '+' : ''}{formatCurrency(val.diff)} no A Vender</>
+                      <>{val.diff > 0 ? '+' : ''}{formatCurrency(val.diff)}</>
                     )}
                   </Badge>
                 );
               })}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 shrink-0">
               <Button variant="outline" size="sm" onClick={handleDiscardAll}>
                 <Undo2 className="h-4 w-4 mr-1" />
                 Descartar
@@ -1514,11 +1572,6 @@ export function MediaInvestmentTab() {
               </Button>
             </div>
           </div>
-          {!isAllBalanced && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Equilibre o A Vender entre os meses para poder salvar.
-            </p>
-          )}
         </div>
       )}
 
@@ -2230,7 +2283,7 @@ export function MediaInvestmentTab() {
           <BUInvestmentTable
             title="Modelo Atual"
             icon={funnelMetrics.modeloAtual.icon}
-            funnelData={modeloAtualFunnel}
+            funnelData={effectiveModeloAtualFunnel}
             color={funnelMetrics.modeloAtual.color}
             metrics={funnelMetrics.modeloAtual}
             showMrrBase={true}
@@ -2250,7 +2303,7 @@ export function MediaInvestmentTab() {
           <BUInvestmentTable
             title="O2 TAX"
             icon={funnelMetrics.o2Tax.icon}
-            funnelData={o2TaxFunnel}
+            funnelData={effectiveO2TaxFunnel}
             color={funnelMetrics.o2Tax.color}
             metrics={funnelMetrics.o2Tax}
             buKey="o2_tax"
@@ -2265,7 +2318,7 @@ export function MediaInvestmentTab() {
           <BUInvestmentTable
             title="Oxy Hacker"
             icon={funnelMetrics.oxyHacker.icon}
-            funnelData={oxyHackerFunnel}
+            funnelData={effectiveOxyHackerFunnel}
             color={funnelMetrics.oxyHacker.color}
             metrics={funnelMetrics.oxyHacker}
             buKey="oxy_hacker"
@@ -2280,7 +2333,7 @@ export function MediaInvestmentTab() {
           <BUInvestmentTable
             title="Franquia"
             icon={funnelMetrics.franquia.icon}
-            funnelData={franquiaFunnel}
+            funnelData={effectiveFranquiaFunnel}
             color={funnelMetrics.franquia.color}
             metrics={funnelMetrics.franquia}
             buKey="franquia"
