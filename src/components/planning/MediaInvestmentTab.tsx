@@ -1351,13 +1351,10 @@ export function MediaInvestmentTab() {
 
   // Calculate validation status per BU
   const pendingValidation = useMemo(() => {
-    const result: Record<string, { originalTotal: number; newTotal: number; diff: number; diffVendas: number; changeCount: number }> = {};
+    const result: Record<string, { originalTotal: number; newTotal: number; diff: number; changeCount: number }> = {};
     
     for (const [bu, monthChanges] of Object.entries(pendingChanges)) {
       if (Object.keys(monthChanges).length === 0) continue;
-      
-      const buKey = bu === 'modelo_atual' ? 'modeloAtual' : bu === 'o2_tax' ? 'o2Tax' : bu === 'oxy_hacker' ? 'oxyHacker' : 'franquia';
-      const ticketMedio = indicadoresPorBU[buKey as keyof typeof indicadoresPorBU].ticketMedio;
       
       let originalTotal = 0;
       let newTotal = 0;
@@ -1375,8 +1372,7 @@ export function MediaInvestmentTab() {
       
       if (changeCount > 0) {
         const diff = newTotal - originalTotal;
-        const diffVendas = Math.round(diff / ticketMedio);
-        result[bu] = { originalTotal, newTotal, diff, diffVendas, changeCount };
+        result[bu] = { originalTotal, newTotal, diff, changeCount };
       }
     }
     
@@ -1390,7 +1386,7 @@ export function MediaInvestmentTab() {
   // Batch save all pending changes
   const handleSaveAll = useCallback(async () => {
     if (!isAllBalanced) {
-      toast.error('Distribua as vendas antes de salvar');
+      toast.error('O total de A Vender não está balanceado. Redistribua o valor entre os meses.');
       return;
     }
     
@@ -1490,9 +1486,9 @@ export function MediaInvestmentTab() {
                 return (
                   <Badge key={bu} variant={balanced ? "default" : "destructive"} className="text-xs">
                     {buLabel}: {balanced ? (
-                      <><CheckCircle2 className="h-3 w-3 ml-1 mr-1" /> Balanceado</>
+                      <><CheckCircle2 className="h-3 w-3 ml-1 mr-1" /> A Vender balanceado</>
                     ) : (
-                      <>{val.diffVendas > 0 ? `+${val.diffVendas}` : val.diffVendas} vendas ({val.diff > 0 ? '+' : ''}{formatCompact(val.diff)})</>
+                      <>{val.diff > 0 ? '+' : ''}{formatCurrency(val.diff)} no A Vender</>
                     )}
                   </Badge>
                 );
@@ -1507,7 +1503,8 @@ export function MediaInvestmentTab() {
                 size="sm" 
                 onClick={handleSaveAll} 
                 disabled={!isAllBalanced}
-                title={!isAllBalanced ? 'Distribua as vendas antes de salvar' : 'Salvar todas as alterações'}
+                className={isAllBalanced ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+                title={!isAllBalanced ? 'O total de A Vender deve ser igual ao original para salvar' : 'Salvar todas as alterações'}
               >
                 <Save className="h-4 w-4 mr-1" />
                 Salvar Todas
@@ -1516,7 +1513,7 @@ export function MediaInvestmentTab() {
           </div>
           {!isAllBalanced && (
             <p className="text-xs text-destructive mt-2">
-              ⚠ Distribua as vendas restantes em outros meses antes de salvar. O total de vendas por BU deve permanecer o mesmo.
+              ⚠ O total de A Vender por BU deve permanecer igual ao original. Redistribua o valor entre os meses.
             </p>
           )}
         </div>
