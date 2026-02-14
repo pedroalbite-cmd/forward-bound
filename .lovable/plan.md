@@ -1,61 +1,87 @@
 
 
-# Tornar "A Vender" editavel no detalhamento por BU
+# Mover Controle de Metas para dentro do Plan Growth (cascata por mes)
 
-## Objetivo
+## Resumo
 
-Permitir editar diretamente o valor de "A Vender" na tabela de detalhamento por BU (aba Plan Growth / Media Investment). Somente o mes atual e os proximos serao editaveis; meses anteriores ficam bloqueados.
+Remover a aba "Controle Metas" como aba separada e integrar os dados de realizado (previsto vs realizado, variacao, status) diretamente nas tabelas de detalhamento por BU do Plan Growth. Cada linha de mes na tabela tera um botao expansivel (collapsible) que abre uma cascata mostrando o resultado realizado daquele mes.
 
-## Como funciona
+## O que muda para o usuario
 
-Quando o usuario edita "A Vender" de um mes:
-- O sistema recalcula a **Meta (Faturamento)** = MRR Base + novo A Vender
-- Salva o novo faturamento no banco de dados (`monetary_metas`)
-- O funil inteiro (vendas, propostas, MQLs, leads, investimento) recalcula automaticamente
-- Os meses seguintes tambem recalculam pois a cadeia de MRR depende do A Vender anterior
+- A aba "Controle Metas" some do menu principal
+- No Plan Growth, na secao "Detalhamento por BU", cada mes tem um icone clicavel (chevron)
+- Ao clicar, abre uma linha expandida abaixo mostrando:
+  - Valor Realizado do mes
+  - Variacao % (realizado vs meta)
+  - Status (icone verde/amarelo/vermelho)
+  - Barra de progresso visual
+- O hero section com KPIs consolidados (meta anual, realizado, taxa de atingimento, gap) sera adicionado no topo do Plan Growth
 
 ## Mudancas tecnicas
 
-### 1. `MediaInvestmentTab.tsx` - Componente `BUInvestmentTable`
+### 1. `BUInvestmentTable` - Adicionar cascata de realizado por mes
 
-**Adicionar props para edicao:**
-- `buKey` (string): identificador da BU no banco (modelo_atual, o2_tax, etc.)
-- `onAVenderChange` (callback): funcao chamada ao editar A Vender de um mes
-- `editable` (boolean): se permite edicao
+**Novas props:**
+- `realizedByMonth`: `Record<string, number>` - dados realizados por mes para esta BU
+- `isLoadingRealized`: boolean
 
-**Coluna "A Vender" - transformar em Input editavel:**
-- Meses com indice < mes atual: campo bloqueado (locked, fundo cinza, icone de cadeado)
-- Mes atual e futuros: Input numerico editavel com formatacao ao perder foco
-- Ao confirmar (blur), chamar `onAVenderChange(month, novoValor)`
+**Cada linha de mes ganha:**
+- Um `ChevronDown`/`ChevronUp` clicavel na primeira coluna
+- Ao clicar, expande uma `TableRow` extra abaixo com:
+  - Realizado: valor em R$
+  - Meta: valor previsto (ja disponivel no `funnelData`)
+  - Variacao: badge colorido com %
+  - Progresso: barra visual
+  - Status: icone check/x
 
-**Logica de bloqueio de meses:**
-- Reutilizar a mesma funcao `getCurrentMonthIndex()` ja usada no MonetaryMetasTab
-- Fev 2026 = indice 1, Mar = 2, etc.
+**State local:** `expandedMonths: Set<string>` para controlar quais meses estao abertos
 
-### 2. `MediaInvestmentTab.tsx` - Componente principal
+### 2. `MediaInvestmentTab` - Integrar dados realizados
 
-**Adicionar handler `handleAVenderChange`:**
-- Recebe (buKey, month, novoAVender)
-- Calcula novo faturamento = MRR Base do mes + novo A Vender
-- Faz upsert na tabela `monetary_metas` via `bulkUpdateMetas`
-- Invalida queries para recalcular o funil automaticamente
+**Importar `useIndicatorsRealized`** para obter os dados realizados por BU.
 
-**Importar `useMonetaryMetas`** para ter acesso ao `bulkUpdateMetas`
+**Passar `realizedByMonth` para cada `BUInvestmentTable`:**
+- Modelo Atual: `realizedByBU.modelo_atual`
+- O2 TAX: `realizedByBU.o2_tax`
+- Oxy Hacker: `realizedByBU.oxy_hacker`
+- Franquia: `realizedByBU.franquia`
 
-### 3. Fluxo de recalculo
+**Adicionar um bloco de KPIs resumo** (similar ao hero do SalesGoalsTab) no topo do Plan Growth ou na secao de detalhamento, mostrando:
+- Meta Anual consolidada
+- Total Realizado
+- Taxa de Atingimento
+- Gap para meta
 
-Quando A Vender muda em um mes:
-1. Novo faturamento = MRR Base + A Vender editado
-2. Salva no banco
-3. O `useMemo` que calcula `metasMensaisModeloAtual` detecta a mudanca
-4. `calculateMrrAndRevenueToSell` recalcula toda a cadeia de MRR
-5. O funil reverso recalcula vendas, propostas, leads, investimento
-6. A tabela atualiza automaticamente
+### 3. `Planning2026.tsx` - Remover aba "Controle Metas"
 
-### 4. UX da edicao
+- Remover `SalesGoalsTab` do import e do render
+- Remover `sales` da lista de abas visibles no `TAB_CONFIG`
+- Remover o `TabsContent value="sales"`
 
-- Campo A Vender mostra valor formatado (ex: "400k") quando nao esta em edicao
-- Ao clicar, mostra o valor numerico puro para editar
-- Ao sair do campo, formata e salva
-- Feedback via toast de sucesso/erro
-- Meses bloqueados mostram valor com opacidade reduzida
+### 4. `useUserPermissions.ts` - Remover permissao `sales`
+
+- Remover `'sales'` do tipo `TabKey`
+- Remover da lista de abas do admin
+
+### 5. Arquivos que podem ser mantidos (sem deletar)
+
+Os componentes `SalesGoalsTab`, `SalesGoalsCards`, `SalesGoalsTable`, `SalesGoalsCharts`, `ExpansaoBreakdown` continuam existindo no codigo mas nao serao mais referenciados. Podem ser removidos em uma limpeza futura.
+
+### 6. `AdminTab.tsx` - Remover `sales` das opcoes de permissao
+
+Remover a entrada `{ key: 'sales', label: 'Controle Metas' }` do array `TAB_OPTIONS`.
+
+## Detalhes da cascata expandida
+
+A linha expandida por mes mostrara algo como:
+
+```text
+| Jan | R$ 1.100.000 | R$ 700.000 | R$ 400.000 | 24 | 39 | ... |
+|     [Realizado: R$ 85.000  |  Meta: R$ 1.100.000  |  7.7%  |  ████░░░░  |  Gap: R$ 1.015.000]  |
+```
+
+- A linha expandida ocupa toda a largura da tabela (colspan total)
+- Fundo levemente diferente (muted/30) para diferenciar visualmente
+- Mostra: Realizado, Meta, % Atingimento, barra de progresso, gap
+- Icone de status colorido (check verde >= 80%, amarelo >= 50%, vermelho < 50%)
+
