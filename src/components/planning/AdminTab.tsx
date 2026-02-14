@@ -9,13 +9,14 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Pencil, Save, Shield, Trash2, User, Target, DollarSign } from 'lucide-react';
+import { Loader2, Pencil, Save, Shield, Trash2, User, Target, DollarSign, History } from 'lucide-react';
 import { CreateUserForm } from './CreateUserForm';
 import { EditUserDialog } from './EditUserDialog';
 import { DeleteUserDialog } from './DeleteUserDialog';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { CloserMetasTab } from './CloserMetasTab';
 import { MonetaryMetasTab } from './MonetaryMetasTab';
+import { AdminLogsTab } from './AdminLogsTab';
 
 const TAB_OPTIONS: { key: TabKey; label: string }[] = [
   { key: 'context', label: 'Macro 2025' },
@@ -141,6 +142,10 @@ export function AdminTab() {
         <TabsTrigger value="monetary-metas" className="gap-2">
           <DollarSign className="h-4 w-4" />
           Metas Monetárias
+        </TabsTrigger>
+        <TabsTrigger value="logs" className="gap-2">
+          <History className="h-4 w-4" />
+          Logs
         </TabsTrigger>
       </TabsList>
 
@@ -317,6 +322,10 @@ export function AdminTab() {
 
       <TabsContent value="monetary-metas">
         <MonetaryMetasTab />
+      </TabsContent>
+
+      <TabsContent value="logs">
+        <AdminLogsTab />
       </TabsContent>
     </Tabs>
   );
