@@ -1476,7 +1476,11 @@ export function MediaInvestmentTab() {
         <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border border-border rounded-xl p-4 shadow-lg">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-amber-500" />
+              {isAllBalanced ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+              ) : (
+                <Info className="h-5 w-5 text-blue-500" />
+              )}
               <span className="font-semibold">{totalChangeCount} alteraç{totalChangeCount > 1 ? 'ões' : 'ão'} pendente{totalChangeCount > 1 ? 's' : ''}</span>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1502,9 +1506,8 @@ export function MediaInvestmentTab() {
               <Button 
                 size="sm" 
                 onClick={handleSaveAll} 
-                disabled={!isAllBalanced}
                 className={isAllBalanced ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
-                title={!isAllBalanced ? 'O total de A Vender deve ser igual ao original para salvar' : 'Salvar todas as alterações'}
+                title={!isAllBalanced ? 'Equilibre o A Vender para poder salvar' : 'Salvar todas as alterações'}
               >
                 <Save className="h-4 w-4 mr-1" />
                 Salvar Todas
@@ -1512,8 +1515,8 @@ export function MediaInvestmentTab() {
             </div>
           </div>
           {!isAllBalanced && (
-            <p className="text-xs text-destructive mt-2">
-              ⚠ O total de A Vender por BU deve permanecer igual ao original. Redistribua o valor entre os meses.
+            <p className="text-xs text-muted-foreground mt-2">
+              Equilibre o A Vender entre os meses para poder salvar.
             </p>
           )}
         </div>
