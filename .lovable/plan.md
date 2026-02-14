@@ -1,51 +1,62 @@
 
 
-# Correcao da Validacao: A Vender (nao vendas) + UX de edicao livre
+# UX de Edicao Livre: Botao Salvar sempre clicavel
 
-## Problemas atuais
+## Problema
 
-1. **Mensagens falam em "vendas" mas deveria ser "A Vender" (valor financeiro)**: O banner mostra "+3 vendas" quando deveria mostrar "+R$ 50k no A Vender". A validacao ja calcula o diff em R$, mas o display traduz para "vendas" o que confunde.
+Quando o usuario diminui o A Vender de um mes, o banner vermelho aparece imediatamente com "Redistribua o valor" e o botao "Salvar Todas" fica desabilitado (`disabled`). Isso da a sensacao de bloqueio — o usuario nao consegue nem clicar no botao para entender o que falta. Ele quer editar livremente e so receber o aviso quando tentar salvar.
 
-2. **Sensacao de bloqueio**: Embora a edicao de celulas individuais funcione, o banner vermelho com "Distribua as vendas" e botao desabilitado da a impressao de que algo esta bloqueado. O usuario quer editar livremente, ver um contador de saldo, e so no final salvar.
+## Solucao
 
-3. **Banner precisa acompanhar a tela**: O banner ja eh `sticky top-0`, mas pode melhorar a visibilidade.
+Trocar o comportamento do botao de `disabled` para **sempre habilitado**, mas ao clicar quando nao esta balanceado, exibir um toast explicativo em vez de salvar.
 
-## Mudancas
+## Mudancas no arquivo `MediaInvestmentTab.tsx`
 
-### 1. Banner de validacao - Reformular mensagens
+### 1. Botao "Salvar Todas" - remover `disabled`
 
-**De:**
-- "+3 vendas (R$ 50k)" / "Distribua as vendas restantes"
-- Badge "Balanceado" / Badge destructive com contagem de vendas
+- Remover `disabled={!isAllBalanced}` do botao
+- O botao fica sempre clicavel
+- Quando balanceado: fundo verde (emerald) como esta hoje
+- Quando nao balanceado: fundo normal (sem verde), mas clicavel
 
-**Para:**
-- "Modelo Atual: +R$ 50k no A Vender" ou "Modelo Atual: -R$ 50k no A Vender"
-- Quando balanceado: "Modelo Atual: A Vender balanceado"
-- Mensagem inferior: "O total de A Vender por BU deve permanecer igual ao original. Redistribua o valor entre os meses."
-- Remover toda referencia a "vendas" do banner
+### 2. `handleSaveAll` - ja tem o toast de erro
 
-### 2. Validacao baseada no total de A Vender
+A funcao `handleSaveAll` ja tem a verificacao:
+```
+if (!isAllBalanced) {
+  toast.error('O total de A Vender nao esta balanceado...');
+  return;
+}
+```
+Isso ja funciona — ao clicar com saldo pendente, o toast aparece e nada eh salvo.
 
-- A validacao `isAllBalanced` ja usa `Math.abs(val.diff) < 100` em R$ - isso esta correto
-- Remover o calculo de `diffVendas` do `pendingValidation` pois nao sera mais usado
-- Manter a tolerancia de R$ 100
+### 3. Banner - tom informativo em vez de alarmista
 
-### 3. Botao Salvar - comportamento
+- Trocar o icone `AlertCircle` (amarelo/vermelho) por `Info` quando nao balanceado
+- Manter o texto informativo mas sem o tom de "voce esta bloqueado"
+- Remover a mensagem vermelha de rodape `⚠ O total de A Vender por BU deve permanecer igual ao original...`
+- O badge destructive continua mostrando o saldo pendente (ex: "+R$ 50k no A Vender") para o usuario acompanhar
+- Adicionar uma linha sutil: "Equilibre o A Vender para poder salvar" — tom de orientacao, nao de erro
 
-- Manter o botao desabilitado quando nao balanceado (usuario confirmou "nao deve ser possivel salvar")
-- Melhorar o tooltip: "O total de A Vender deve ser igual ao original para salvar"
-- Quando balanceado, botao fica verde/habilitado
+### 4. Estilo do botao conforme estado
 
-### 4. Indicador visual nas celulas editadas
+- Balanceado: `bg-emerald-600` (verde) — sinal claro de "pode salvar"
+- Nao balanceado: estilo default — sem verde, mas clicavel. Ao clicar, toast explica o que falta
 
-- Manter o fundo amarelo nas linhas pendentes (ja existe via `pendingMonths`)
-- Sem bloqueio ao editar - o usuario pode mudar qualquer mes editavel livremente
+## Resumo visual
+
+```text
+Antes:
+[Banner vermelho] [Botao DESABILITADO cinza]
+⚠ Redistribua o valor...
+
+Depois:
+[Banner informativo] [Botao CLICAVEL normal]
+Equilibre o A Vender para salvar
+(ao clicar sem equilibrar -> toast de aviso)
+(ao equilibrar -> botao fica verde -> salva)
+```
 
 ## Arquivo editado
 
-- `src/components/planning/MediaInvestmentTab.tsx`:
-  - `pendingValidation`: remover `diffVendas`, manter apenas `diff` em R$
-  - Banner: trocar todas as mensagens de "vendas" para "A Vender" com valores em R$
-  - Mensagem de erro: "Redistribua o A Vender entre os meses" em vez de "Distribua as vendas"
-  - Toast de erro no `handleSaveAll`: "O A Vender nao esta balanceado" em vez de "Distribua as vendas"
-
+- `src/components/planning/MediaInvestmentTab.tsx`: remover `disabled`, ajustar banner e estilos
