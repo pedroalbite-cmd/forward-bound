@@ -21,7 +21,7 @@ const TAB_OPTIONS: { key: TabKey; label: string }[] = [
   { key: 'context', label: 'Macro 2025' },
   { key: 'goals', label: 'Macro 2026' },
   { key: 'monthly', label: 'Meta por BU' },
-  { key: 'sales', label: 'Controle Metas' },
+  
   { key: 'media', label: 'Plan Growth' },
   { key: 'marketing', label: 'Marketing' },
   { key: 'structure', label: 'Estrutura' },
