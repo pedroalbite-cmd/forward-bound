@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Legend, Line } from "recharts";
-import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3, Info, Settings, Filter, Lock, Pencil } from "lucide-react";
+import { Building2, DollarSign, Rocket, Users, TrendingUp, Target, Megaphone, BarChart3, Info, Settings, Filter, Lock, Pencil, ChevronDown, ChevronUp, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { SalesFunnelVisual } from "./SalesFunnelVisual";
 import { Slider } from "@/components/ui/slider";
@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { useMonetaryMetas, BuType, isPontualOnlyBU } from "@/hooks/useMonetaryMetas";
+import { useIndicatorsRealized } from "@/hooks/useIndicatorsRealized";
+import { Progress } from "@/components/ui/progress";
 
 // Indicadores de 2025 (base para projeção)
 const indicators2025 = {
@@ -360,6 +362,8 @@ interface BUInvestmentTableProps {
   buKey?: string;
   onAVenderChange?: (month: string, newValue: number) => void;
   editable?: boolean;
+  realizedByMonth?: Record<string, number>;
+  isLoadingRealized?: boolean;
 }
 
 function BUInvestmentTable({ 
@@ -375,11 +379,23 @@ function BUInvestmentTable({
   mrrFinal = 0,
   buKey,
   onAVenderChange,
-  editable = false
+  editable = false,
+  realizedByMonth = {},
+  isLoadingRealized = false
 }: BUInvestmentTableProps) {
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const currentMonthIndex = getCurrentMonthIndex();
+
+  const toggleMonth = (month: string) => {
+    setExpandedMonths(prev => {
+      const next = new Set(prev);
+      if (next.has(month)) next.delete(month);
+      else next.add(month);
+      return next;
+    });
+  };
 
   const isMonthEditable = (monthIndex: number) => {
     if (!editable || !onAVenderChange) return false;
@@ -504,6 +520,7 @@ function BUInvestmentTable({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8"></TableHead>
                 <TableHead className="w-14">Mês</TableHead>
                 <TableHead className="text-right min-w-[130px]">Meta</TableHead>
                 {showMrrBase && <TableHead className="text-right min-w-[130px]">MRR Base</TableHead>}
@@ -520,48 +537,34 @@ function BUInvestmentTable({
             <TableBody>
               {funnelData.map((data, index) => {
                 const isQuarterEnd = [2, 5, 8, 11].includes(index);
+                const isExpanded = expandedMonths.has(data.month);
+                const realized = realizedByMonth[data.month] || 0;
+                const meta = data.faturamentoMeta;
+                const pctAtingimento = meta > 0 ? (realized / meta) * 100 : 0;
+                const gap = meta - realized;
+                const colCount = 10 + (showMrrBase ? 2 : 0);
+                
                 return (
-                  <TableRow key={data.month} className={isQuarterEnd ? "border-b-2 border-border" : ""}>
-                    <TableCell>
-                      <Badge variant="outline" className="w-12 justify-center">{data.month}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {!showMrrBase && editable && isMonthEditable(index) ? (
-                        editingMonth === data.month ? (
-                          <Input
-                            type="number"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onBlur={() => handleConfirmEdit(data.month)}
-                            onKeyDown={(e) => handleKeyDown(e, data.month)}
-                            className="w-32 text-right font-mono h-8 ml-auto"
-                            autoFocus
-                          />
-                        ) : (
-                          <button
-                            onClick={() => handleStartEdit(data.month, data.faturamentoMeta)}
-                            className="inline-flex items-center gap-1 hover:bg-muted/50 rounded px-2 py-1 transition-colors cursor-pointer"
-                            title="Clique para editar"
-                          >
-                            {formatCurrency(data.faturamentoMeta)}
-                            <Pencil className="h-3 w-3 opacity-50" />
-                          </button>
-                        )
-                      ) : !showMrrBase && editable && !isMonthEditable(index) ? (
-                        <span className="text-muted-foreground/60">
-                          <Lock className="h-3 w-3 inline mr-1 opacity-40" />
-                          {formatCurrency(data.faturamentoMeta)}
-                        </span>
-                      ) : (
-                        formatCurrency(data.faturamentoMeta)
-                      )}
-                    </TableCell>
-                    {showMrrBase && (
-                      <TableCell className="text-right text-muted-foreground">{formatCurrency(data.mrrBase)}</TableCell>
-                    )}
-                    {showMrrBase && (
-                      <TableCell className="text-right">
-                        {editable && isMonthEditable(index) ? (
+                  <>
+                    <TableRow key={data.month} className={`${isQuarterEnd ? "border-b-2 border-border" : ""} ${isExpanded ? "bg-muted/20" : ""}`}>
+                      <TableCell className="p-1 w-8">
+                        <button
+                          onClick={() => toggleMonth(data.month)}
+                          className="p-1 hover:bg-muted rounded transition-colors"
+                          title={isExpanded ? "Ocultar realizado" : "Ver realizado"}
+                        >
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </button>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="w-12 justify-center">{data.month}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {!showMrrBase && editable && isMonthEditable(index) ? (
                           editingMonth === data.month ? (
                             <Input
                               type="number"
@@ -574,33 +577,111 @@ function BUInvestmentTable({
                             />
                           ) : (
                             <button
-                              onClick={() => handleStartEdit(data.month, data.faturamentoVender)}
-                              className="inline-flex items-center gap-1 text-amber-600 font-medium hover:bg-amber-500/10 rounded px-2 py-1 transition-colors cursor-pointer"
+                              onClick={() => handleStartEdit(data.month, data.faturamentoMeta)}
+                              className="inline-flex items-center gap-1 hover:bg-muted/50 rounded px-2 py-1 transition-colors cursor-pointer"
                               title="Clique para editar"
                             >
-                              {formatCurrency(data.faturamentoVender)}
+                              {formatCurrency(data.faturamentoMeta)}
                               <Pencil className="h-3 w-3 opacity-50" />
                             </button>
                           )
-                        ) : (
-                          <span className={`font-medium ${editable && !isMonthEditable(index) ? 'text-muted-foreground/60' : 'text-amber-600'}`}>
-                            {editable && !isMonthEditable(index) && <Lock className="h-3 w-3 inline mr-1 opacity-40" />}
-                            {formatCurrency(data.faturamentoVender)}
+                        ) : !showMrrBase && editable && !isMonthEditable(index) ? (
+                          <span className="text-muted-foreground/60">
+                            <Lock className="h-3 w-3 inline mr-1 opacity-40" />
+                            {formatCurrency(data.faturamentoMeta)}
                           </span>
+                        ) : (
+                          formatCurrency(data.faturamentoMeta)
                         )}
                       </TableCell>
+                      {showMrrBase && (
+                        <TableCell className="text-right text-muted-foreground">{formatCurrency(data.mrrBase)}</TableCell>
+                      )}
+                      {showMrrBase && (
+                        <TableCell className="text-right">
+                          {editable && isMonthEditable(index) ? (
+                            editingMonth === data.month ? (
+                              <Input
+                                type="number"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onBlur={() => handleConfirmEdit(data.month)}
+                                onKeyDown={(e) => handleKeyDown(e, data.month)}
+                                className="w-32 text-right font-mono h-8 ml-auto"
+                                autoFocus
+                              />
+                            ) : (
+                              <button
+                                onClick={() => handleStartEdit(data.month, data.faturamentoVender)}
+                                className="inline-flex items-center gap-1 text-amber-600 font-medium hover:bg-amber-500/10 rounded px-2 py-1 transition-colors cursor-pointer"
+                                title="Clique para editar"
+                              >
+                                {formatCurrency(data.faturamentoVender)}
+                                <Pencil className="h-3 w-3 opacity-50" />
+                              </button>
+                            )
+                          ) : (
+                            <span className={`font-medium ${editable && !isMonthEditable(index) ? 'text-muted-foreground/60' : 'text-amber-600'}`}>
+                              {editable && !isMonthEditable(index) && <Lock className="h-3 w-3 inline mr-1 opacity-40" />}
+                              {formatCurrency(data.faturamentoVender)}
+                            </span>
+                          )}
+                        </TableCell>
+                      )}
+                      <TableCell className="text-right">{data.vendas}</TableCell>
+                      <TableCell className="text-right">{data.propostas}</TableCell>
+                      <TableCell className="text-right">{data.rrs}</TableCell>
+                      <TableCell className="text-right">{data.rms}</TableCell>
+                      <TableCell className="text-right">{data.mqls}</TableCell>
+                      <TableCell className="text-right">{formatNumber(data.leads)}</TableCell>
+                      <TableCell className="text-right font-semibold text-primary">{formatCurrency(data.investimento)}</TableCell>
+                    </TableRow>
+                    {isExpanded && (
+                      <TableRow key={`${data.month}-realized`} className="bg-muted/30 border-b-0">
+                        <TableCell colSpan={colCount} className="py-3 px-6">
+                          <div className="flex items-center gap-6 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              {pctAtingimento >= 80 ? (
+                                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                              ) : pctAtingimento >= 50 ? (
+                                <AlertCircle className="h-5 w-5 text-amber-500" />
+                              ) : (
+                                <XCircle className="h-5 w-5 text-destructive" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Realizado</p>
+                              <p className="font-semibold text-emerald-600">{formatCurrency(realized)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Meta</p>
+                              <p className="font-semibold">{formatCurrency(meta)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Atingimento</p>
+                              <Badge variant={pctAtingimento >= 80 ? "default" : pctAtingimento >= 50 ? "secondary" : "destructive"} className="text-xs">
+                                {pctAtingimento.toFixed(1)}%
+                              </Badge>
+                            </div>
+                            <div className="flex-1 min-w-[120px] max-w-[200px]">
+                              <p className="text-xs text-muted-foreground mb-1">Progresso</p>
+                              <Progress value={Math.min(pctAtingimento, 100)} className="h-2" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Gap</p>
+                              <p className={`font-semibold ${gap > 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+                                {gap > 0 ? `-${formatCurrency(gap)}` : `+${formatCurrency(Math.abs(gap))}`}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
                     )}
-                    <TableCell className="text-right">{data.vendas}</TableCell>
-                    <TableCell className="text-right">{data.propostas}</TableCell>
-                    <TableCell className="text-right">{data.rrs}</TableCell>
-                    <TableCell className="text-right">{data.rms}</TableCell>
-                    <TableCell className="text-right">{data.mqls}</TableCell>
-                    <TableCell className="text-right">{formatNumber(data.leads)}</TableCell>
-                    <TableCell className="text-right font-semibold text-primary">{formatCurrency(data.investimento)}</TableCell>
-                  </TableRow>
+                  </>
                 );
               })}
               <TableRow className="bg-muted/50 font-bold">
+                <TableCell></TableCell>
                 <TableCell>Total</TableCell>
                 <TableCell className="text-right">{formatCurrency(totalFaturamentoMeta)}</TableCell>
                 {showMrrBase && <TableCell className="text-right text-muted-foreground">—</TableCell>}
@@ -760,6 +841,9 @@ function BUIndicatorEditor({ indicators, onChange, buName, buIcon }: BUIndicator
 export function MediaInvestmentTab() {
   // Fetch monetary metas from database
   const { metas, isLoading: isLoadingMetas, bulkUpdateMetas, getMeta } = useMonetaryMetas();
+  
+  // Fetch realized data from indicators
+  const { realizedByBU, totalRealized, isLoading: isLoadingRealized } = useIndicatorsRealized(2026);
   
   // Helper: Get metas from database for a BU
   const getDbMetasForBU = (bu: BuType): Record<string, number> | null => {
@@ -1909,6 +1993,37 @@ export function MediaInvestmentTab() {
         </div>
       </div>
 
+      {/* KPI Resumo Realizado */}
+      <Card className="glass-card border-emerald-500/30">
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-1">Meta Anual</p>
+              <p className="text-2xl font-display font-bold">{formatCompact(totalFaturamento)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-1">Total Realizado</p>
+              <p className="text-2xl font-display font-bold text-emerald-600">{formatCompact(totalRealized)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-1">Taxa de Atingimento</p>
+              <p className="text-2xl font-display font-bold text-primary">
+                {totalFaturamento > 0 ? ((totalRealized / totalFaturamento) * 100).toFixed(1) : 0}%
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-1">Gap para Meta</p>
+              <p className={`text-2xl font-display font-bold ${totalFaturamento - totalRealized > 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+                {formatCompact(Math.abs(totalFaturamento - totalRealized))}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4">
+            <Progress value={totalFaturamento > 0 ? Math.min((totalRealized / totalFaturamento) * 100, 100) : 0} className="h-3" />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* BU Detail Tables */}
       <div>
         <h3 className="font-display text-2xl font-bold mb-6 flex items-center gap-2">
@@ -1931,6 +2046,8 @@ export function MediaInvestmentTab() {
             buKey="modelo_atual"
             editable={true}
             onAVenderChange={(month, value) => handleAVenderChange('modelo_atual', month, value)}
+            realizedByMonth={realizedByBU.modelo_atual || {}}
+            isLoadingRealized={isLoadingRealized}
           />
 
           <BUInvestmentTable
@@ -1942,6 +2059,8 @@ export function MediaInvestmentTab() {
             buKey="o2_tax"
             editable={true}
             onAVenderChange={(month, value) => handleAVenderChange('o2_tax', month, value)}
+            realizedByMonth={realizedByBU.o2_tax || {}}
+            isLoadingRealized={isLoadingRealized}
           />
 
           <BUInvestmentTable
@@ -1953,6 +2072,8 @@ export function MediaInvestmentTab() {
             buKey="oxy_hacker"
             editable={true}
             onAVenderChange={(month, value) => handleAVenderChange('oxy_hacker', month, value)}
+            realizedByMonth={realizedByBU.oxy_hacker || {}}
+            isLoadingRealized={isLoadingRealized}
           />
 
           <BUInvestmentTable
@@ -1964,6 +2085,8 @@ export function MediaInvestmentTab() {
             buKey="franquia"
             editable={true}
             onAVenderChange={(month, value) => handleAVenderChange('franquia', month, value)}
+            realizedByMonth={realizedByBU.franquia || {}}
+            isLoadingRealized={isLoadingRealized}
           />
         </div>
       </div>

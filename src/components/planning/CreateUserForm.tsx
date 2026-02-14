@@ -29,7 +29,7 @@ const TAB_OPTIONS: { key: TabKey; label: string }[] = [
   { key: 'context', label: 'Contexto 2025' },
   { key: 'goals', label: 'Objetivos 2026' },
   { key: 'monthly', label: 'Receita Mensal' },
-  { key: 'sales', label: 'Metas de Vendas' },
+  
   { key: 'media', label: 'Investimento em Mídia' },
   { key: 'marketing', label: 'Plano de Marketing' },
   { key: 'structure', label: 'Estrutura' },

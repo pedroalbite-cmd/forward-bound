@@ -8,7 +8,7 @@ import { MonthlyRevenueTab } from "@/components/planning/MonthlyRevenueTab";
 import { MediaInvestmentTab } from "@/components/planning/MediaInvestmentTab";
 import { MarketingPlanTab } from "@/components/planning/MarketingPlanTab";
 import { StructureTab } from "@/components/planning/StructureTab";
-import { SalesGoalsTab } from "@/components/planning/SalesGoalsTab";
+
 import { AdminTab } from "@/components/planning/AdminTab";
 import { IndicatorsTab } from "@/components/planning/IndicatorsTab";
 import { MarketingIndicatorsTab } from "@/components/planning/MarketingIndicatorsTab";
@@ -25,7 +25,7 @@ const TAB_CONFIG: { key: TabKey; label: string; icon: React.ComponentType<{ clas
   { key: 'context', label: 'Macro 2025', icon: BarChart3 },
   { key: 'goals', label: 'Macro 2026', icon: Calendar },
   { key: 'monthly', label: 'Meta por BU', icon: LineChart },
-  { key: 'sales', label: 'Controle Metas', icon: Target },
+  
   { key: 'media', label: 'Plan Growth', icon: Megaphone },
   { key: 'indicators', label: 'Indicadores', icon: Activity },
   { key: 'marketing_indicators', label: 'Mkt Indicadores', icon: TrendingUp },
@@ -153,9 +153,8 @@ export default function Planning2026() {
                 <MonthlyRevenueTab />
               </TabsContent>
 
-              <TabsContent value="sales" className="mt-0">
-                <SalesGoalsTab />
-              </TabsContent>
+
+
 
               <TabsContent value="media" className="mt-0">
                 <MediaInvestmentTab />
