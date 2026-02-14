@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { useMonetaryMetas, BuType, isPontualOnlyBU } from "@/hooks/useMonetaryMetas";
-import { useIndicatorsRealized } from "@/hooks/useIndicatorsRealized";
+import { useIndicatorsRealized, FunnelRealized } from "@/hooks/useIndicatorsRealized";
 import { Progress } from "@/components/ui/progress";
 
 // Indicadores de 2025 (base para projeção)
@@ -363,6 +363,7 @@ interface BUInvestmentTableProps {
   onAVenderChange?: (month: string, newValue: number) => void;
   editable?: boolean;
   realizedByMonth?: Record<string, number>;
+  realizedFunnelByMonth?: Record<string, FunnelRealized>;
   isLoadingRealized?: boolean;
 }
 
@@ -381,6 +382,7 @@ function BUInvestmentTable({
   onAVenderChange,
   editable = false,
   realizedByMonth = {},
+  realizedFunnelByMonth = {},
   isLoadingRealized = false
 }: BUInvestmentTableProps) {
   const [editingMonth, setEditingMonth] = useState<string | null>(null);
@@ -539,10 +541,11 @@ function BUInvestmentTable({
                 const isQuarterEnd = [2, 5, 8, 11].includes(index);
                 const isExpanded = expandedMonths.has(data.month);
                 const realized = realizedByMonth[data.month] || 0;
-                const meta = data.faturamentoMeta;
-                const pctAtingimento = meta > 0 ? (realized / meta) * 100 : 0;
-                const gap = meta - realized;
+                const aVender = data.faturamentoVender;
+                const pctAtingimento = aVender > 0 ? (realized / aVender) * 100 : 0;
+                const gap = aVender - realized;
                 const colCount = 10 + (showMrrBase ? 2 : 0);
+                const funnelReal = realizedFunnelByMonth[data.month];
                 
                 return (
                   <>
@@ -639,40 +642,71 @@ function BUInvestmentTable({
                     {isExpanded && (
                       <TableRow key={`${data.month}-realized`} className="bg-muted/30 border-b-0">
                         <TableCell colSpan={colCount} className="py-3 px-6">
-                          <div className="flex items-center gap-6 flex-wrap">
-                            <div className="flex items-center gap-2">
-                              {pctAtingimento >= 80 ? (
-                                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                              ) : pctAtingimento >= 50 ? (
-                                <AlertCircle className="h-5 w-5 text-amber-500" />
-                              ) : (
-                                <XCircle className="h-5 w-5 text-destructive" />
-                              )}
+                          <div className="space-y-4">
+                            {/* Incremento (A Vender) */}
+                            <div className="flex items-center gap-6 flex-wrap">
+                              <div className="flex items-center gap-2">
+                                {pctAtingimento >= 80 ? (
+                                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                                ) : pctAtingimento >= 50 ? (
+                                  <AlertCircle className="h-5 w-5 text-amber-500" />
+                                ) : (
+                                  <XCircle className="h-5 w-5 text-destructive" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">A Vender (Meta)</p>
+                                <p className="font-semibold">{formatCurrency(aVender)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Realizado</p>
+                                <p className="font-semibold text-emerald-600">{formatCurrency(realized)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Atingimento</p>
+                                <Badge variant={pctAtingimento >= 80 ? "default" : pctAtingimento >= 50 ? "secondary" : "destructive"} className="text-xs">
+                                  {pctAtingimento.toFixed(1)}%
+                                </Badge>
+                              </div>
+                              <div className="flex-1 min-w-[120px] max-w-[200px]">
+                                <p className="text-xs text-muted-foreground mb-1">Progresso</p>
+                                <Progress value={Math.min(pctAtingimento, 100)} className="h-2" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Gap</p>
+                                <p className={`font-semibold ${gap > 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+                                  {gap > 0 ? `-${formatCurrency(gap)}` : `+${formatCurrency(Math.abs(gap))}`}
+                                </p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">Realizado</p>
-                              <p className="font-semibold text-emerald-600">{formatCurrency(realized)}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">Meta</p>
-                              <p className="font-semibold">{formatCurrency(meta)}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">Atingimento</p>
-                              <Badge variant={pctAtingimento >= 80 ? "default" : pctAtingimento >= 50 ? "secondary" : "destructive"} className="text-xs">
-                                {pctAtingimento.toFixed(1)}%
-                              </Badge>
-                            </div>
-                            <div className="flex-1 min-w-[120px] max-w-[200px]">
-                              <p className="text-xs text-muted-foreground mb-1">Progresso</p>
-                              <Progress value={Math.min(pctAtingimento, 100)} className="h-2" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-muted-foreground">Gap</p>
-                              <p className={`font-semibold ${gap > 0 ? 'text-destructive' : 'text-emerald-600'}`}>
-                                {gap > 0 ? `-${formatCurrency(gap)}` : `+${formatCurrency(Math.abs(gap))}`}
-                              </p>
-                            </div>
+
+                            {/* Funil Realizado */}
+                            {funnelReal && (
+                              <div className="border-t border-border/50 pt-3">
+                                <p className="text-xs font-medium text-muted-foreground mb-2">Funil Realizado</p>
+                                <div className="grid grid-cols-6 gap-3">
+                                  {([
+                                    { label: 'Vendas', metaVal: data.vendas, realVal: funnelReal.vendas },
+                                    { label: 'Propostas', metaVal: data.propostas, realVal: funnelReal.propostas },
+                                    { label: 'RRs', metaVal: data.rrs, realVal: funnelReal.rrs },
+                                    { label: 'RMs', metaVal: data.rms, realVal: funnelReal.rms },
+                                    { label: 'MQLs', metaVal: data.mqls, realVal: funnelReal.mqls },
+                                    { label: 'Leads', metaVal: data.leads, realVal: funnelReal.leads },
+                                  ]).map(({ label, metaVal, realVal }) => {
+                                    const pct = metaVal > 0 ? (realVal / metaVal) * 100 : 0;
+                                    const colorClass = pct >= 80 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-destructive';
+                                    return (
+                                      <div key={label} className="text-center bg-background/50 rounded-lg p-2">
+                                        <p className="text-xs text-muted-foreground font-medium">{label}</p>
+                                        <p className="text-xs text-muted-foreground">Meta: {metaVal}</p>
+                                        <p className={`text-sm font-bold ${colorClass}`}>{realVal}</p>
+                                        <p className={`text-xs ${colorClass}`}>{pct.toFixed(0)}%</p>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -843,7 +877,7 @@ export function MediaInvestmentTab() {
   const { metas, isLoading: isLoadingMetas, bulkUpdateMetas, getMeta } = useMonetaryMetas();
   
   // Fetch realized data from indicators
-  const { realizedByBU, totalRealized, isLoading: isLoadingRealized } = useIndicatorsRealized(2026);
+  const { realizedByBU, realizedFunnelByBU, totalRealized, isLoading: isLoadingRealized } = useIndicatorsRealized(2026);
   
   // Helper: Get metas from database for a BU
   const getDbMetasForBU = (bu: BuType): Record<string, number> | null => {
@@ -1155,6 +1189,12 @@ export function MediaInvestmentTab() {
     o2TaxFunnel.reduce((s, d) => s + d.faturamentoMeta, 0) +
     oxyHackerFunnel.reduce((s, d) => s + d.faturamentoMeta, 0) +
     franquiaFunnel.reduce((s, d) => s + d.faturamentoMeta, 0);
+
+  const totalAVender = 
+    modeloAtualFunnel.reduce((s, d) => s + d.faturamentoVender, 0) +
+    o2TaxFunnel.reduce((s, d) => s + d.faturamentoVender, 0) +
+    oxyHackerFunnel.reduce((s, d) => s + d.faturamentoVender, 0) +
+    franquiaFunnel.reduce((s, d) => s + d.faturamentoVender, 0);
 
   const metaAnualTotal = metasTrimestrais.Q1 + metasTrimestrais.Q2 + metasTrimestrais.Q3 + metasTrimestrais.Q4;
 
@@ -1996,30 +2036,34 @@ export function MediaInvestmentTab() {
       {/* KPI Resumo Realizado */}
       <Card className="glass-card border-emerald-500/30">
         <CardContent className="pt-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
             <div className="text-center">
               <p className="text-sm text-muted-foreground mb-1">Meta Anual</p>
               <p className="text-2xl font-display font-bold">{formatCompact(totalFaturamento)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-1">A Vender Total</p>
+              <p className="text-2xl font-display font-bold text-amber-600">{formatCompact(totalAVender)}</p>
             </div>
             <div className="text-center">
               <p className="text-sm text-muted-foreground mb-1">Total Realizado</p>
               <p className="text-2xl font-display font-bold text-emerald-600">{formatCompact(totalRealized)}</p>
             </div>
             <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-1">Taxa de Atingimento</p>
+              <p className="text-sm text-muted-foreground mb-1">Atingimento vs A Vender</p>
               <p className="text-2xl font-display font-bold text-primary">
-                {totalFaturamento > 0 ? ((totalRealized / totalFaturamento) * 100).toFixed(1) : 0}%
+                {totalAVender > 0 ? ((totalRealized / totalAVender) * 100).toFixed(1) : 0}%
               </p>
             </div>
             <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-1">Gap para Meta</p>
-              <p className={`text-2xl font-display font-bold ${totalFaturamento - totalRealized > 0 ? 'text-destructive' : 'text-emerald-600'}`}>
-                {formatCompact(Math.abs(totalFaturamento - totalRealized))}
+              <p className="text-sm text-muted-foreground mb-1">Gap</p>
+              <p className={`text-2xl font-display font-bold ${totalAVender - totalRealized > 0 ? 'text-destructive' : 'text-emerald-600'}`}>
+                {formatCompact(Math.abs(totalAVender - totalRealized))}
               </p>
             </div>
           </div>
           <div className="mt-4">
-            <Progress value={totalFaturamento > 0 ? Math.min((totalRealized / totalFaturamento) * 100, 100) : 0} className="h-3" />
+            <Progress value={totalAVender > 0 ? Math.min((totalRealized / totalAVender) * 100, 100) : 0} className="h-3" />
           </div>
         </CardContent>
       </Card>
@@ -2047,6 +2091,7 @@ export function MediaInvestmentTab() {
             editable={true}
             onAVenderChange={(month, value) => handleAVenderChange('modelo_atual', month, value)}
             realizedByMonth={realizedByBU.modelo_atual || {}}
+            realizedFunnelByMonth={realizedFunnelByBU.modelo_atual || {}}
             isLoadingRealized={isLoadingRealized}
           />
 
@@ -2060,6 +2105,7 @@ export function MediaInvestmentTab() {
             editable={true}
             onAVenderChange={(month, value) => handleAVenderChange('o2_tax', month, value)}
             realizedByMonth={realizedByBU.o2_tax || {}}
+            realizedFunnelByMonth={realizedFunnelByBU.o2_tax || {}}
             isLoadingRealized={isLoadingRealized}
           />
 
@@ -2073,6 +2119,7 @@ export function MediaInvestmentTab() {
             editable={true}
             onAVenderChange={(month, value) => handleAVenderChange('oxy_hacker', month, value)}
             realizedByMonth={realizedByBU.oxy_hacker || {}}
+            realizedFunnelByMonth={realizedFunnelByBU.oxy_hacker || {}}
             isLoadingRealized={isLoadingRealized}
           />
 
@@ -2086,6 +2133,7 @@ export function MediaInvestmentTab() {
             editable={true}
             onAVenderChange={(month, value) => handleAVenderChange('franquia', month, value)}
             realizedByMonth={realizedByBU.franquia || {}}
+            realizedFunnelByMonth={realizedFunnelByBU.franquia || {}}
             isLoadingRealized={isLoadingRealized}
           />
         </div>
