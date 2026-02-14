@@ -1,67 +1,83 @@
 
+# Correcoes no Plan Growth: Logs, Validacao de Vendas e Salvar em Lote
 
-# Logs de Alteracoes de Metas de Vendas
+## Problemas identificados
 
-## Objetivo
+1. **Logs nao aparecem ao editar no Plan Growth**: O `handleAVenderChange` no `MediaInvestmentTab.tsx` salva diretamente no banco sem chamar `logAction()`. Os logs so foram integrados no `MonetaryMetasTab` (aba Admin), nao no Plan Growth.
 
-Registrar automaticamente toda vez que um admin altera numeros de metas (faturamento, ticket medio, percentuais de closer) e mostrar um historico dessas alteracoes para o admin saber quando e quantas vezes precisou ajustar.
+2. **Vendas precisam bater o total**: Se o admin tira 2 vendas de um mes, precisa distribuir essas 2 em outros meses antes de poder salvar. O total de vendas anual (ou por BU) deve permanecer constante.
 
-## O que o admin vera
+3. **Salvar individualmente vs em lote**: Atualmente cada edicao de "A Vender" salva imediatamente no banco. O admin quer editar varios meses, ver o saldo, e so salvar quando tudo estiver correto.
 
-Nova sub-aba "Logs" no Admin com:
+## Solucao
 
-- **Cards de resumo**: total de ajustes no mes, na semana, por tipo (Monetaria vs Closer)
-- **Tabela cronologica** com:
-  - Data/hora do ajuste
-  - Quem ajustou (email)
-  - Tipo: Meta Monetaria ou Meta Closer
-  - BU afetada
-  - Descricao (ex: "Modelo Atual Jan: faturamento de R$ 1.1M para R$ 1.2M")
-- **Filtros**: por tipo, por BU, por periodo
+### 1. Mudar de "salvar imediato" para "salvar em lote"
+
+Hoje: editar um mes -> salva no banco imediatamente (`handleAVenderChange` chama `bulkUpdateMetas.mutateAsync`)
+
+Novo fluxo:
+- Editar um mes -> salva apenas no **estado local** (pendingChanges)
+- Um banner fixo aparece mostrando: "X alteracoes pendentes | Total vendas: Y (meta: Z) | Diferenca: +/-N"
+- Se a diferenca for 0 (vendas batem), o botao "Salvar Todas" fica habilitado
+- Se a diferenca for diferente de 0, o botao fica desabilitado com aviso: "Distribua as N vendas restantes antes de salvar"
+- Ao clicar "Salvar Todas", salva tudo de uma vez no banco e registra os logs
+
+### 2. Integrar audit logs no Plan Growth
+
+Ao salvar em lote, para cada BU/mes alterado:
+- Registrar log: "Plan Growth - Modelo Atual Fev: A Vender de R$ 400k para R$ 450k"
+- Metadata inclui: bu, month, old_value, new_value, source: 'plan_growth'
+
+### 3. Validacao de vendas por BU
+
+Para cada BU, calcular o total de vendas original (antes das edicoes) e o total apos as edicoes. So permitir salvar quando forem iguais.
 
 ## Mudancas tecnicas
 
-### 1. Nova tabela `admin_audit_logs`
+### `MediaInvestmentTab.tsx`
 
-Tabela para armazenar os logs com RLS restrito a admins (leitura e escrita). Indices por data e tipo de acao para consultas rapidas.
+1. **Estado local para alteracoes pendentes**:
+   - `pendingAVenderChanges: Record<string, Record<string, number>>` (bu -> month -> newAVender)
+   - `handleAVenderChange` deixa de salvar no banco e apenas atualiza o estado local
+   - Os dados de funnel sao recalculados usando os valores pendentes (merge com DB)
 
-Campos: user_id, user_email, action_type ('monetary_meta' ou 'closer_meta'), description, metadata (JSON com bu, month, valores antigos e novos), created_at.
+2. **Banner de validacao**:
+   - Componente fixo no topo da area de BU tables
+   - Mostra por BU: total vendas original vs total vendas com alteracoes
+   - Badge verde se bate, vermelho se nao bate
+   - Botao "Salvar Todas as Alteracoes" (desabilitado se nao bater)
+   - Botao "Descartar Alteracoes"
 
-### 2. Hook `useAuditLogs.ts`
+3. **Funcao `handleSaveAll`**:
+   - Valida que vendas batem para todas as BUs alteradas
+   - Salva todas as alteracoes de uma vez via `bulkUpdateMetas.mutateAsync`
+   - Registra audit logs para cada alteracao
+   - Limpa `pendingAVenderChanges`
 
-- `logAction(actionType, description, metadata)` - grava um log no banco
-- `useLogs(filters)` - busca logs com filtros (tipo, BU, periodo) paginados
-- `useLogStats()` - contagem de ajustes por semana/mes/tipo para os cards de resumo
+4. **Recalculo local dos funnels**:
+   - Quando ha alteracoes pendentes, os `metasMensais` sao recalculados com os valores pendentes
+   - A tabela mostra os valores "pendentes" com indicacao visual (ex: fundo amarelo)
 
-### 3. Instrumentar os pontos de salvamento
+### `BUInvestmentTable` (dentro do mesmo arquivo)
 
-**`MonetaryMetasTab.tsx`** - no `handleSave`:
-- Antes de salvar, comparar valores antigos (do DB) com novos (local)
-- Para cada BU/mes que mudou, gravar log: "Modelo Atual Jan: faturamento de R\$ 1.1M para R\$ 1.2M"
-- Se o ticket medio mudou, gravar: "Modelo Atual: ticket medio de R\$ 400k para R\$ 450k"
+- Meses com alteracoes pendentes mostram um indicador visual (dot amarelo ou borda)
+- O valor editado mostra o novo valor, nao o do banco
 
-**`CloserMetasTab.tsx`** - no `handleSave`:
-- Comparar percentuais antigos com novos
-- Para cada closer/mes que mudou, gravar: "Modelo Atual Jan: Pedro de 60% para 70%"
+### `useAuditLogs.ts`
 
-### 4. Componente `AdminLogsTab.tsx`
+- Adicionar `action_type: 'plan_growth_meta'` como novo tipo (ou reutilizar 'monetary_meta' com metadata.source = 'plan_growth')
 
-- Cards de resumo no topo (ajustes esta semana, este mes, por tipo)
-- Filtros por tipo (Monetaria/Closer), por BU, por periodo (date pickers)
-- Tabela paginada com os logs
-- Badges coloridos por tipo (azul = monetaria, verde = closer)
-- Botao "Carregar mais" para paginacao
+### `AdminLogsTab.tsx`
 
-### 5. `AdminTab.tsx` - Adicionar aba
+- Nenhuma alteracao necessaria - os novos logs aparecerao automaticamente
 
-Nova `TabsTrigger` "Logs" com icone History, e `TabsContent` renderizando `AdminLogsTab`.
+## Fluxo do usuario
 
-## Arquivos modificados/criados
-
-- **Criar**: migration SQL para tabela `admin_audit_logs`
-- **Criar**: `src/hooks/useAuditLogs.ts`
-- **Criar**: `src/components/planning/AdminLogsTab.tsx`
-- **Editar**: `src/components/planning/MonetaryMetasTab.tsx` (adicionar log no save)
-- **Editar**: `src/components/planning/CloserMetasTab.tsx` (adicionar log no save)
-- **Editar**: `src/components/planning/AdminTab.tsx` (adicionar aba Logs)
-
+1. Admin abre Plan Growth
+2. Edita "A Vender" de Fev de R$ 400k para R$ 350k (tira R$ 50k / ~3 vendas)
+3. Banner aparece: "Modelo Atual: 3 vendas a distribuir | Salvar desabilitado"
+4. Admin edita Mar de R$ 500k para R$ 550k (adiciona R$ 50k / ~3 vendas)
+5. Banner atualiza: "Modelo Atual: vendas balanceadas | Salvar habilitado"
+6. Admin clica "Salvar Todas"
+7. Sistema salva ambas alteracoes, registra 2 logs no audit
+8. Toast de sucesso: "2 metas atualizadas com sucesso"
