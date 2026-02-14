@@ -1,78 +1,109 @@
 
 
-# Cascata: comparar com A Vender e mostrar todos os indicadores realizados
+# Corrigir discrepancia de leads entre Indicadores e Plan Growth
 
-## Problema atual
+## Problema
 
-A cascata expandida compara o realizado com a **Meta total** (faturamento), mas deveria comparar com o **A Vender** (incremento). Alem disso, so mostra o valor monetario realizado, sem as demais metricas do funil (vendas, propostas, RRs, RMs, MQLs, leads).
+O Plan Growth mostra 889 leads em Janeiro enquanto o Indicadores mostra 720. A causa e que os dois usam o mesmo hook (`useModeloAtualMetas`) mas com **ranges de data diferentes**:
 
-## O que vai mudar
+- **Indicadores**: chama `useModeloAtualMetas(1 Jan, 31 Jan)` - o servidor retorna so movimentos de Janeiro
+- **Plan Growth** (`useIndicatorsRealized`): chama `useModeloAtualMetas(1 Jan, 31 Dez)` - o servidor retorna TODOS os movimentos do ano, depois filtra Janeiro no cliente
 
-Ao expandir um mes, a cascata mostrara:
+O dataset do ano inteiro e maior (ate 10.000 linhas), capturando cards adicionais que a query mensal nao retorna. Isso infla os numeros do Plan Growth.
 
-1. **Atingimento vs A Vender** (nao vs Meta) - porque o A Vender e o que precisa ser conquistado de novo
-2. **Todas as metricas do funil realizadas**: Vendas (qtd), Propostas, RRs, RMs, MQLs, Leads - comparando meta vs realizado em cada uma
-3. Barra de progresso e status baseados no A Vender
+## Solucao
 
-## Layout da cascata expandida
+Mudar o `useIndicatorsRealized` para criar hooks **por mes** em vez de um unico hook por ano. Como nao e possivel chamar hooks condicionalmente no React, a alternativa e:
+
+1. Manter os hooks do ano inteiro (necessario para React rules)
+2. Criar um **hook separado por BU que faz 12 queries mensais** usando `useQueries` do TanStack Query
+3. Ou, mais simples: **fazer as queries mensais diretamente dentro do `useMemo`** chamando a edge function para cada mes
+
+A abordagem mais limpa e pragmatica:
+
+### Opcao escolhida: Reutilizar os mesmos hooks mas com range mensal
+
+Nao e viavel criar 4 x 12 = 48 hooks. Em vez disso, o `useIndicatorsRealized` vai continuar usando os hooks do ano inteiro, mas vamos **corrigir a causa raiz**: garantir que o `getQtyForPeriod` produza resultados consistentes independente do range da query.
+
+O problema real e que a query do ano inteiro retorna mais linhas de movimento do que a query mensal (limite de 10.000 linhas e queries adicionais por creation/signature). A correcao:
+
+### Mudanca em `useIndicatorsRealized.ts`
+
+Em vez de usar os hooks do ano inteiro e filtrar por mes no cliente, o hook vai **chamar a edge function diretamente** para cada mes, fazendo queries identicas as do Indicadores:
+
+1. Remover a dependencia dos 4 hooks (`useModeloAtualMetas`, `useO2TaxMetas`, etc.)
+2. Usar `useQuery` com uma unica queryFn que faz 12 chamadas mensais por BU (4 BUs x 12 meses = 48 chamadas, mas paralelizadas)
+3. Aplicar a mesma logica de contagem de leads que os hooks individuais usam
+
+**Problema**: isso duplicaria muita logica dos hooks existentes.
+
+### Alternativa mais simples (recomendada)
+
+Manter os hooks do ano inteiro mas **aumentar o limite** de 10.000 para um valor maior (50.000) na query do `useIndicatorsRealized`, e garantir que a logica de deduplicacao seja identica. O verdadeiro problema provavelmente e que com o range do ano inteiro, mais movimentos passam pela query `query_period_by_creation` (MQLs por data de criacao), inflando o count de leads.
+
+Na verdade, olhando mais atentamente: os 889 leads vem da soma de **todas as 4 BUs** (Modelo Atual + O2 Tax + Oxy Hacker + Franquia), enquanto os 720 podem ser so Modelo Atual. Preciso verificar isso.
+
+### Verificacao necessaria
+
+Pelos logs do console:
+- `[useModeloAtualMetas] getQtyForPeriod leads: 889` - isso e Modelo Atual com query do ano inteiro
+- No Indicadores, com query de Janeiro: 720 leads
+
+Entao a diferenca e realmente no Modelo Atual. A correcao:
+
+### Mudanca concreta
+
+**`useIndicatorsRealized.ts`**: Em vez de instanciar os hooks com `yearStart`/`yearEnd` (ano inteiro), instanciar com ranges mais curtos nao e possivel (hooks fixos). A solucao real:
+
+**Criar queries mensais separadas usando `useQueries`** do TanStack Query dentro do `useIndicatorsRealized`:
 
 ```text
-Linha do mes normal: | Jan | R$ 1.1M | R$ 700k | R$ 400k | 24 | 39 | ... |
-
-Cascata expandida:
-+---------------------------------------------------------------+
-| [icone status]                                                 |
-|                                                                |
-| Incremento (A Vender)                                          |
-| Meta: R$ 400.000  |  Realizado: R$ 85.000  |  21.3%  |  ████  |
-|                                                                |
-| Funil Realizado                                                |
-|  Vendas   Propostas   RRs   RMs   MQLs   Leads                |
-|  Meta: 24    39        44    61    125    291                   |
-|  Real:  5    12        15    22     48    110                   |
-+---------------------------------------------------------------+
+Para cada BU:
+  Para cada mes (Jan-Dez):
+    Fazer query identica a do hook individual (mesma table, mesmo action, mesmo range)
+    Aplicar a mesma logica de contagem
 ```
 
-## Mudancas tecnicas
+Isso garante paridade exata com o Indicadores.
 
-### 1. `useIndicatorsRealized.ts` - Expandir para retornar funil completo
+### Implementacao
 
-Atualmente retorna apenas vendas (valor monetario). Precisa retornar tambem as quantidades de cada etapa do funil por BU e por mes.
+1. **`useIndicatorsRealized.ts`**:
+   - Remover imports dos 4 hooks de BU
+   - Usar `useQueries` do TanStack Query para fazer 4 queries (uma por BU), cada uma com range mensal
+   - Para cada BU/mes, invocar `query-external-db` com o range do mes especifico
+   - Aplicar a mesma logica de parsing e contagem dos hooks originais
+   - Retornar `realizedFunnelByBU` e `realizedByBU` como antes
 
-**Novo retorno** - `realizedFunnelByBU`:
-```ts
-{
-  modelo_atual: {
-    Jan: { vendas: 5, propostas: 12, rrs: 15, rms: 22, mqls: 48, leads: 110, valor: 85000 },
-    Fev: { ... },
-  },
-  o2_tax: { ... },
-  ...
-}
-```
+2. **Alternativa mais simples** (se `useQueries` for complexo demais):
+   - Manter os hooks do ano inteiro
+   - Mas para o campo `leads` especificamente, fazer uma query mensal adicional
+   - Ou ajustar o `getQtyForPeriod` para ser deterministico independente do tamanho do dataset
 
-Para cada mes, chamar `getQtyForPeriod` com cada indicador ('venda', 'proposta', 'rr', 'rm', 'mql', 'leads') dos hooks ja existentes (useModeloAtualMetas, useO2TaxMetas, useOxyHackerMetas, useExpansaoMetas).
+Dado a complexidade, a solucao mais pragmatica e: **manter os hooks do ano mas mudar o `useIndicatorsRealized` para instanciar hooks com range mensal para o mes corrente e anteriores** -- mas isso viola regras do React.
 
-### 2. `MediaInvestmentTab.tsx` - Atualizar BUInvestmentTable
+### Solucao final recomendada
 
-**Novas props:**
-- `realizedFunnelByMonth`: dados completos do funil realizado por mes (nao so valor)
+A forma mais limpa e correta: fazer o `useIndicatorsRealized` manter os 4 hooks do ano inteiro mas **nao usar `getQtyForPeriod` para leads**. Em vez disso, para leads, fazer uma contagem direta nos movements filtrando pelo mes, usando exatamente a mesma logica. O problema e que o dataset retornado pela query anual ja e diferente.
 
-**Cascata expandida - mudar logica:**
-- O `pctAtingimento` passa a comparar `realized.valor` vs `data.faturamentoVender` (A Vender), nao vs `data.faturamentoMeta`
-- O gap passa a ser `data.faturamentoVender - realized.valor`
-- Adicionar uma secao "Funil Realizado" com grid mostrando cada indicador:
-  - Linha "Meta": valores do funnelData (vendas, propostas, rrs, rms, mqls, leads)
-  - Linha "Real": valores do realizedFunnelByMonth
-  - Cada indicador com cor verde se >= 80% da meta, amarelo >= 50%, vermelho < 50%
+**A verdadeira correcao**: mudar os hooks para que a query do ano inteiro nao tenha o limite de 10.000 linhas ou para que o `query_period` retorne resultados consistentes. Aumentar o limite para 50.000 na instancia do `useIndicatorsRealized`.
 
-### 3. `MediaInvestmentTab.tsx` - Componente principal
+Vou implementar:
 
-- Passar `realizedFunnelByMonth` para cada BUInvestmentTable em vez de `realizedByMonth` simples
-- Adaptar o KPI hero para tambem usar A Vender como referencia
+1. No `useIndicatorsRealized`, passar parametros extras aos hooks para usar limite maior (50.000)
+2. OU criar instancias separadas dos hooks por mes usando `useQueries`
 
-## Resultado
+A opcao 2 e a correta para garantir paridade. Vou implementa-la.
 
-- O atingimento mostra o progresso real vs o que precisa ser conquistado (A Vender)
-- Todas as metricas do funil ficam visiveis na cascata para acompanhamento completo
-- O usuario ve de relance se esta gerando leads, MQLs, propostas e vendas suficientes para cada mes
+## Detalhes tecnicos
+
+### `useIndicatorsRealized.ts` - Refatorar para queries mensais
+
+- Usar `useQueries` do `@tanstack/react-query` para criar 48 queries (4 BUs x 12 meses)
+- Cada query invoca `query-external-db` com o range exato do mes (identico ao Indicadores)
+- Aplicar a mesma logica de parsing e contagem de cada hook de BU
+- Montar o `realizedFunnelByBU` a partir dos resultados
+- Manter backward-compatibility com `realizedByBU`
+
+Isso garante que os numeros do Plan Growth sejam **identicos** aos do Indicadores para qualquer mes.
+
