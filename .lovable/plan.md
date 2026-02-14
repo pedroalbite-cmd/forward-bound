@@ -1,62 +1,79 @@
 
+# Correcao: Valor revertendo + Botao Salvar flutuante
 
-# UX de Edicao Livre: Botao Salvar sempre clicavel
+## Problema 1: Valor editado reverte imediatamente
 
-## Problema
+Quando o usuario edita o "A Vender" de 400k para 350k, o valor e gravado no estado local (`pendingChanges`), porem a tabela exibe os dados do `funnelData` que e recalculado a partir dos valores do banco de dados (nao dos pendentes). Resultado: o valor volta para 400k na tela.
 
-Quando o usuario diminui o A Vender de um mes, o banner vermelho aparece imediatamente com "Redistribua o valor" e o botao "Salvar Todas" fica desabilitado (`disabled`). Isso da a sensacao de bloqueio — o usuario nao consegue nem clicar no botao para entender o que falta. Ele quer editar livremente e so receber o aviso quando tentar salvar.
+### Solucao
 
-## Solucao
+Criar versoes "efetivas" dos dados de funnel que mesclam os valores pendentes com os dados do banco. Para cada BU:
 
-Trocar o comportamento do botao de `disabled` para **sempre habilitado**, mas ao clicar quando nao esta balanceado, exibir um toast explicativo em vez de salvar.
+1. Antes de passar o `funnelData` para `BUInvestmentTable`, aplicar um merge:
+   - Se existe `pendingChanges[bu][month]`, substituir o `faturamentoVender` daquele mes pelo valor pendente
+   - Recalcular o funil reverso (vendas, propostas, leads, investimento) com o novo valor
+2. Os dados originais do banco continuam intactos para comparacao no banner de validacao
+3. A tabela mostra os valores editados em tempo real
 
-## Mudancas no arquivo `MediaInvestmentTab.tsx`
+Tecnicamente, criar um `useMemo` para cada BU que:
+- Pega o funnel original (ex: `modeloAtualFunnel`)
+- Verifica se ha `pendingChanges['modelo_atual']`
+- Se sim, faz `.map()` nos dados substituindo `faturamentoVender` nos meses alterados e recalculando as metricas derivadas (vendas, leads, investimento)
+- Passa esse funnel "efetivo" para o `BUInvestmentTable`
 
-### 1. Botao "Salvar Todas" - remover `disabled`
+## Problema 2: Botao Salvar longe do usuario
 
-- Remover `disabled={!isAllBalanced}` do botao
-- O botao fica sempre clicavel
-- Quando balanceado: fundo verde (emerald) como esta hoje
-- Quando nao balanceado: fundo normal (sem verde), mas clicavel
+O banner com "Salvar Todas" fica no topo da pagina (sticky top-0), mas o usuario esta editando tabelas la embaixo. Precisa rolar toda a tela para salvar.
 
-### 2. `handleSaveAll` - ja tem o toast de erro
+### Solucao
 
-A funcao `handleSaveAll` ja tem a verificacao:
+Mover o banner de validacao para um **footer flutuante fixo na parte inferior da tela** (`fixed bottom-0`), estilo barra de acoes. Assim:
+
+- O banner aparece fixo na parte de baixo da viewport quando ha alteracoes pendentes
+- O usuario ve os badges de saldo e os botoes "Descartar" e "Salvar Todas" sem precisar rolar
+- O banner fica visivel independente de onde o usuario esteja na pagina
+- Padding inferior no conteudo para que o banner nao sobreponha a ultima tabela
+
+## Detalhes tecnicos
+
+### Arquivo: `src/components/planning/MediaInvestmentTab.tsx`
+
+**1. Funnel data com merge de pendentes (4 useMemos novos)**:
 ```
-if (!isAllBalanced) {
-  toast.error('O total de A Vender nao esta balanceado...');
-  return;
-}
-```
-Isso ja funciona — ao clicar com saldo pendente, o toast aparece e nada eh salvo.
-
-### 3. Banner - tom informativo em vez de alarmista
-
-- Trocar o icone `AlertCircle` (amarelo/vermelho) por `Info` quando nao balanceado
-- Manter o texto informativo mas sem o tom de "voce esta bloqueado"
-- Remover a mensagem vermelha de rodape `⚠ O total de A Vender por BU deve permanecer igual ao original...`
-- O badge destructive continua mostrando o saldo pendente (ex: "+R$ 50k no A Vender") para o usuario acompanhar
-- Adicionar uma linha sutil: "Equilibre o A Vender para poder salvar" — tom de orientacao, nao de erro
-
-### 4. Estilo do botao conforme estado
-
-- Balanceado: `bg-emerald-600` (verde) — sinal claro de "pode salvar"
-- Nao balanceado: estilo default — sem verde, mas clicavel. Ao clicar, toast explica o que falta
-
-## Resumo visual
-
-```text
-Antes:
-[Banner vermelho] [Botao DESABILITADO cinza]
-⚠ Redistribua o valor...
-
-Depois:
-[Banner informativo] [Botao CLICAVEL normal]
-Equilibre o A Vender para salvar
-(ao clicar sem equilibrar -> toast de aviso)
-(ao equilibrar -> botao fica verde -> salva)
+const effectiveModeloAtualFunnel = useMemo(() => {
+  if (!pendingChanges['modelo_atual']) return modeloAtualFunnel;
+  return modeloAtualFunnel.map(d => {
+    const pending = pendingChanges['modelo_atual'][d.month];
+    if (pending === undefined) return d;
+    // Substituir faturamentoVender e recalcular metricas derivadas
+    const newVender = pending;
+    const vendas = newVender / metrics.ticketMedio;
+    const propostas = vendas / metrics.propToVenda;
+    // ... etc
+    return { ...d, faturamentoVender: newVender, vendas, propostas, ... };
+  });
+}, [modeloAtualFunnel, pendingChanges]);
 ```
 
-## Arquivo editado
+Repetir para `o2Tax`, `oxyHacker`, `franquia`.
 
-- `src/components/planning/MediaInvestmentTab.tsx`: remover `disabled`, ajustar banner e estilos
+Passar os `effective*Funnel` para os `BUInvestmentTable` em vez dos originais.
+
+**2. Banner reposicionado para bottom fixo**:
+- Trocar `sticky top-0` por `fixed bottom-4 left-1/2 -translate-x-1/2 max-w-4xl w-full`
+- Adicionar `z-50` e sombra forte para destacar
+- Adicionar padding-bottom no container principal quando ha pendencias para evitar sobreposicao
+- Layout compacto em uma linha: badges + botoes lado a lado
+
+**3. Garantir que `originalValuesRef` capture o valor correto**:
+- Verificar que na primeira edicao de um mes, o `originalValuesRef` capture o `faturamentoVender` do funnel original (nao do efetivo), para que a validacao compare corretamente
+
+## Resultado esperado
+
+1. Usuario edita "A Vender" de Fev de 400k para 350k
+2. A celula mostra 350k imediatamente (nao reverte)
+3. O funil recalcula localmente (vendas, leads, investimento mudam)
+4. Na parte de baixo da tela, barra flutuante mostra: "Modelo Atual: -R$ 50.000 no A Vender | [Descartar] [Salvar Todas]"
+5. Usuario edita Mar adicionando 50k
+6. Barra atualiza: "Modelo Atual: A Vender balanceado | [Descartar] [Salvar Todas (verde)]"
+7. Clica em Salvar - tudo salva no banco com logs
