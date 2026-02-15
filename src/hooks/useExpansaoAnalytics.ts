@@ -275,7 +275,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
       const uniqueCards = new Map<string, ExpansaoCard>();
       
       // For LEADS indicator: union of leads + mql phases
-      const indicatorsToCheck = indicator === 'leads' 
+      const indicatorsToCheck = (indicator === 'leads' || indicator === 'mql')
         ? ['leads', 'mql'] as IndicatorType[]
         : [indicator];
       
