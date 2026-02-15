@@ -490,7 +490,7 @@ export function usePlanGrowthData() {
         investimento: Math.round(franquiaFunnel[index]?.investimento || 0),
       })),
     });
-  }, [modeloAtualFunnel, o2TaxFunnel, oxyHackerFunnel, franquiaFunnel, setMetasPorBU, setFunnelData, isLoaded]);
+  }, [modeloAtualFunnel, o2TaxFunnel, oxyHackerFunnel, franquiaFunnel]);
 
   return {
     modeloAtualFunnel,
