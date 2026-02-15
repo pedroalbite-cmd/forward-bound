@@ -26,6 +26,7 @@ interface ExpansaoMetasResult {
 // Map Pipefy phase names to indicator keys
 const PHASE_TO_INDICATOR: Record<string, ExpansaoIndicator> = {
   'Start form': 'leads',
+  'Lead': 'leads',
   'MQL': 'mql',
   'Reunião agendada / Qualificado': 'rm',
   'Reunião Realizada': 'rr',
