@@ -1530,50 +1530,8 @@ export function MediaInvestmentTab() {
   };
 
   return (
+    <>
     <div className={`space-y-10 animate-fade-in ${hasPendingChanges ? 'pb-24' : ''}`}>
-      {/* Floating Bottom Action Bar for Pending Changes */}
-      {hasPendingChanges && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-4xl w-[calc(100%-2rem)] bg-background/95 backdrop-blur border border-border rounded-xl p-4 shadow-2xl">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3 flex-wrap">
-              {isAllBalanced ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
-              ) : (
-                <Info className="h-5 w-5 text-blue-500 shrink-0" />
-              )}
-              <span className="font-semibold text-sm">{totalChangeCount} alteraç{totalChangeCount > 1 ? 'ões' : 'ão'}</span>
-              {Object.entries(pendingValidation).map(([bu, val]) => {
-                const buLabel = bu === 'modelo_atual' ? 'Modelo Atual' : bu === 'o2_tax' ? 'O2 TAX' : bu === 'oxy_hacker' ? 'Oxy Hacker' : 'Franquia';
-                const balanced = Math.abs(val.diff) < 100;
-                return (
-                  <Badge key={bu} variant={balanced ? "default" : "destructive"} className="text-xs">
-                    {buLabel}: {balanced ? (
-                      <><CheckCircle2 className="h-3 w-3 ml-1 mr-1" /> Balanceado</>
-                    ) : (
-                      <>{val.diff > 0 ? '+' : ''}{formatCurrency(val.diff)}</>
-                    )}
-                  </Badge>
-                );
-              })}
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Button variant="outline" size="sm" onClick={handleDiscardAll}>
-                <Undo2 className="h-4 w-4 mr-1" />
-                Descartar
-              </Button>
-              <Button 
-                size="sm" 
-                onClick={handleSaveAll} 
-                className={isAllBalanced ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
-                title={!isAllBalanced ? 'Equilibre o A Vender para poder salvar' : 'Salvar todas as alterações'}
-              >
-                <Save className="h-4 w-4 mr-1" />
-                Salvar Todas
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Hero Section */}
       <div className="relative overflow-hidden rounded-2xl gradient-primary p-8 text-primary-foreground">
@@ -2347,5 +2305,48 @@ export function MediaInvestmentTab() {
         </div>
       </div>
     </div>
+    {hasPendingChanges && (
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-4xl w-[calc(100%-2rem)] bg-background/95 backdrop-blur border border-border rounded-xl p-4 shadow-2xl">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            {isAllBalanced ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+            ) : (
+              <Info className="h-5 w-5 text-blue-500 shrink-0" />
+            )}
+            <span className="font-semibold text-sm">{totalChangeCount} alteraç{totalChangeCount > 1 ? 'ões' : 'ão'}</span>
+            {Object.entries(pendingValidation).map(([bu, val]) => {
+              const buLabel = bu === 'modelo_atual' ? 'Modelo Atual' : bu === 'o2_tax' ? 'O2 TAX' : bu === 'oxy_hacker' ? 'Oxy Hacker' : 'Franquia';
+              const balanced = Math.abs(val.diff) < 100;
+              return (
+                <Badge key={bu} variant={balanced ? "default" : "destructive"} className="text-xs">
+                  {buLabel}: {balanced ? (
+                    <><CheckCircle2 className="h-3 w-3 ml-1 mr-1" /> Balanceado</>
+                  ) : (
+                    <>{val.diff > 0 ? '+' : ''}{formatCurrency(val.diff)}</>
+                  )}
+                </Badge>
+              );
+            })}
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" size="sm" onClick={handleDiscardAll}>
+              <Undo2 className="h-4 w-4 mr-1" />
+              Descartar
+            </Button>
+            <Button 
+              size="sm" 
+              onClick={handleSaveAll} 
+              className={isAllBalanced ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+              title={!isAllBalanced ? 'Equilibre o A Vender para poder salvar' : 'Salvar todas as alterações'}
+            >
+              <Save className="h-4 w-4 mr-1" />
+              Salvar Todas
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
