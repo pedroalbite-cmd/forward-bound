@@ -178,17 +178,14 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
         if (shouldCount && !cardValues.has(movement.id)) {
           // Usar "Taxa de franquia" se disponível, senão usar valor padrão de R$ 140.000 para Franquia
           const taxaFranquia = movement.taxaFranquia || 0;
-          const defaultTicket = 140000; // R$ 140.000 para Franquia
           
           if (taxaFranquia > 0) {
             cardValues.set(movement.id, taxaFranquia);
           } else {
-            // Tentar campos antigos, senão usar ticket padrão
             const pontual = movement.valorPontual || 0;
             const setup = movement.valorSetup || 0;
             const mrr = movement.valorMRR || 0;
-            const sumValues = pontual + setup + mrr;
-            cardValues.set(movement.id, sumValues > 0 ? sumValues : defaultTicket);
+            cardValues.set(movement.id, pontual + setup + mrr);
           }
         }
       }
