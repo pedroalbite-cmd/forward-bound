@@ -1,58 +1,64 @@
 
-# Correcao: Barra flutuante nao fica fixa na tela
+# Igualar MQL a Leads para Franquia e Oxy Hacker
 
-## Problema
+## Contexto
 
-A barra flutuante com "Salvar Todas" tem `fixed bottom-4` no CSS, mas nao funciona como fixa. Ela fica posicionada no final do conteudo, nao acompanha o scroll.
+Franquia e Oxy Hacker nao possuem criterio separado de MQL. Os leads chegam pela fase "Start form" no Pipefy e hoje sao contados apenas como "leads". A fase "MQL" raramente (ou nunca) eh usada nesses pipes, resultando em MQL = 0 ou muito baixo.
 
-### Causa raiz
+## O que muda
 
-O container pai tem a classe `animate-fade-in`, que aplica `transform: translateY(10px)` durante a animacao. Em CSS, qualquer elemento pai com `transform` cria um novo "containing block", o que faz `position: fixed` se comportar como `position: absolute` — relativo ao pai, nao a viewport.
+Para essas duas BUs, todo card contado como Lead sera automaticamente contado tambem como MQL. Isso reflete a realidade operacional: se entrou no pipe, ja eh qualificado.
 
-## Solucao
+## Mudancas tecnicas
 
-Mover a barra flutuante para **fora** do `div` com `animate-fade-in`, usando um React Fragment para retornar ambos os elementos no mesmo nivel.
+### Arquivo 1: `src/hooks/useExpansaoMetas.ts` (Franquia)
 
-### Arquivo: `src/components/planning/MediaInvestmentTab.tsx`
+Na funcao `getQtyForPeriod`, adicionar logica para que quando `indicator === 'mql'`, tambem considere cards da fase `Start form` (alem da fase `MQL` existente). O mesmo para `getValueForPeriod` e `getGroupedData`.
 
-Estrutura atual:
-```text
-return (
-  <div class="animate-fade-in ...">       <-- tem transform, quebra fixed
-    {hasPendingChanges && (
-      <div class="fixed bottom-4 ...">     <-- fixed nao funciona aqui dentro
-        ...barra...
-      </div>
-    )}
-    ...conteudo das tabelas...
-  </div>
-)
+Abordagem: alterar o mapeamento ou a logica de contagem para que o indicador `mql` inclua tanto a fase `MQL` quanto a fase `Start form`.
+
+```
+// Antes (linha 28):
+'Start form': 'leads',
+'MQL': 'mql',
+
+// Depois - adicionar logica especial nos metodos getQtyForPeriod, getValueForPeriod, getGroupedData:
+// Quando indicator === 'mql', contar cards de 'Start form' E 'MQL'
 ```
 
-Estrutura corrigida:
-```text
-return (
-  <>
-    <div class="animate-fade-in ...">
-      ...conteudo das tabelas...
-    </div>
-    {hasPendingChanges && (
-      <div class="fixed bottom-4 ...">     <-- agora fora do transform, fixed funciona
-        ...barra...
-      </div>
-    )}
-  </>
-)
+Concretamente, nos 3 metodos que fazem contagem (getQtyForPeriod, getValueForPeriod, getGroupedData), onde hoje temos:
+
+```
+if (movementIndicator === indicator) {
+  uniqueCards.add(movement.id);
+}
 ```
 
-Mudancas especificas:
-1. Envolver o return em um Fragment (`<>...</>`)
-2. Mover o bloco `{hasPendingChanges && (...)}` para depois do `</div>` principal, fora do container animado
-3. Nenhuma outra mudanca necessaria — o CSS da barra ja esta correto (`fixed bottom-4 left-1/2 -translate-x-1/2 z-50`)
+Adicionar condicao:
+
+```
+if (movementIndicator === indicator) {
+  uniqueCards.add(movement.id);
+} else if (indicator === 'mql' && movementIndicator === 'leads') {
+  // Para Franquia, todo lead eh MQL (sem criterio separado)
+  uniqueCards.add(movement.id);
+}
+```
+
+### Arquivo 2: `src/hooks/useOxyHackerMetas.ts` (Oxy Hacker)
+
+Mesma mudanca: nos metodos de contagem, quando o indicador solicitado for `mql`, incluir tambem os cards da fase `Start form` (mapeada como `leads`).
+
+### Arquivo 3: Metas anuais (dentro dos mesmos hooks)
+
+Ajustar a meta anual de MQL para ser igual a de Leads em ambos os hooks, ja que agora MQL = Leads:
+
+- Franquia: `mql: 432` (igual a leads)
+- Oxy Hacker: verificar e igualar ao valor de leads
 
 ## Resultado esperado
 
-1. Usuario edita um valor de "A Vender"
-2. A barra flutuante aparece fixada na parte inferior da tela
-3. Ao rolar para cima ou para baixo, a barra acompanha e permanece visivel
-4. Botoes "Descartar" e "Salvar Todas" acessiveis a qualquer momento
+- O indicador MQL de Franquia e Oxy Hacker passara a exibir o mesmo numero que Leads
+- Os graficos de funil mostrarao conversao 100% de Leads para MQL nessas BUs
+- O drill-down de MQL listara os mesmos cards do drill-down de Leads
+- Nenhuma mudanca nas demais BUs (Modelo Atual e O2 TAX)
