@@ -1,64 +1,52 @@
 
-# Igualar MQL a Leads para Franquia e Oxy Hacker
+# Corrigir MQL zerado para Franquia e Oxy Hacker nos acelerometros
 
-## Contexto
+## Problema
 
-Franquia e Oxy Hacker nao possuem criterio separado de MQL. Os leads chegam pela fase "Start form" no Pipefy e hoje sao contados apenas como "leads". A fase "MQL" raramente (ou nunca) eh usada nesses pipes, resultando em MQL = 0 ou muito baixo.
+Os radial cards (acelerometros) de MQL para Franquia e Oxy Hacker continuam mostrando 0, mesmo apos as alteracoes nos hooks de metas. Isso acontece porque o dashboard usa `useExpansaoAnalytics.getCardsForIndicator()` como fonte de verdade para o "realizado", e essa funcao nao foi atualizada para incluir leads como MQL.
 
-## O que muda
+## Causa raiz
 
-Para essas duas BUs, todo card contado como Lead sera automaticamente contado tambem como MQL. Isso reflete a realidade operacional: se entrou no pipe, ja eh qualificado.
+No arquivo `src/hooks/useExpansaoAnalytics.ts`, linha 278:
 
-## Mudancas tecnicas
-
-### Arquivo 1: `src/hooks/useExpansaoMetas.ts` (Franquia)
-
-Na funcao `getQtyForPeriod`, adicionar logica para que quando `indicator === 'mql'`, tambem considere cards da fase `Start form` (alem da fase `MQL` existente). O mesmo para `getValueForPeriod` e `getGroupedData`.
-
-Abordagem: alterar o mapeamento ou a logica de contagem para que o indicador `mql` inclua tanto a fase `MQL` quanto a fase `Start form`.
-
-```
-// Antes (linha 28):
-'Start form': 'leads',
-'MQL': 'mql',
-
-// Depois - adicionar logica especial nos metodos getQtyForPeriod, getValueForPeriod, getGroupedData:
-// Quando indicator === 'mql', contar cards de 'Start form' E 'MQL'
+```typescript
+const indicatorsToCheck = indicator === 'leads' 
+  ? ['leads', 'mql'] as IndicatorType[]
+  : [indicator];
 ```
 
-Concretamente, nos 3 metodos que fazem contagem (getQtyForPeriod, getValueForPeriod, getGroupedData), onde hoje temos:
+Quando `indicator === 'mql'`, o codigo so busca cards na fase `'mql'` do Pipefy. Como Franquia e Oxy Hacker raramente usam essa fase, o resultado e 0. Precisa incluir `'leads'` tambem quando o indicador for `'mql'`.
 
+## Solucao
+
+### Arquivo: `src/hooks/useExpansaoAnalytics.ts`
+
+Alterar a logica de `getCardsForIndicator` (linha 278) para tambem unir leads + mql quando o indicador solicitado for `'mql'`:
+
+```typescript
+// Antes:
+const indicatorsToCheck = indicator === 'leads' 
+  ? ['leads', 'mql'] as IndicatorType[]
+  : [indicator];
+
+// Depois:
+const indicatorsToCheck = (indicator === 'leads' || indicator === 'mql')
+  ? ['leads', 'mql'] as IndicatorType[]
+  : [indicator];
 ```
-if (movementIndicator === indicator) {
-  uniqueCards.add(movement.id);
-}
-```
 
-Adicionar condicao:
-
-```
-if (movementIndicator === indicator) {
-  uniqueCards.add(movement.id);
-} else if (indicator === 'mql' && movementIndicator === 'leads') {
-  // Para Franquia, todo lead eh MQL (sem criterio separado)
-  uniqueCards.add(movement.id);
-}
-```
-
-### Arquivo 2: `src/hooks/useOxyHackerMetas.ts` (Oxy Hacker)
-
-Mesma mudanca: nos metodos de contagem, quando o indicador solicitado for `mql`, incluir tambem os cards da fase `Start form` (mapeada como `leads`).
-
-### Arquivo 3: Metas anuais (dentro dos mesmos hooks)
-
-Ajustar a meta anual de MQL para ser igual a de Leads em ambos os hooks, ja que agora MQL = Leads:
-
-- Franquia: `mql: 432` (igual a leads)
-- Oxy Hacker: verificar e igualar ao valor de leads
+Isso faz com que, para Franquia e Oxy Hacker, o indicador MQL inclua todos os cards que passaram pela fase "Start form" (leads) e pela fase "MQL", garantindo que MQL = Leads nessas BUs.
 
 ## Resultado esperado
 
-- O indicador MQL de Franquia e Oxy Hacker passara a exibir o mesmo numero que Leads
-- Os graficos de funil mostrarao conversao 100% de Leads para MQL nessas BUs
-- O drill-down de MQL listara os mesmos cards do drill-down de Leads
-- Nenhuma mudanca nas demais BUs (Modelo Atual e O2 TAX)
+- Franquia: MQL passara de 1 para 22 (mesmo valor de Leads)
+- Oxy Hacker: MQL passara de 0 para 20 (mesmo valor de Leads)
+- Os graficos "Qtd MQLs" e "Funil do Periodo" tambem refletirao os novos valores
+- Nenhuma alteracao nas BUs Modelo Atual e O2 TAX (que possuem criterio separado de MQL)
+
+## Impacto
+
+Apenas 1 linha alterada em 1 arquivo. A mudanca e segura pois:
+- Para Modelo Atual e O2 TAX, o hook `useExpansaoAnalytics` nao e usado (usam `useModeloAtualAnalytics` e `useO2TaxAnalytics`)
+- O hook `useExpansaoAnalytics` e instanciado duas vezes no IndicatorsTab: uma para Franquia e outra para Oxy Hacker
+- Ambas as BUs nao possuem criterio separado de MQL, entao igualar a Leads e o comportamento correto
