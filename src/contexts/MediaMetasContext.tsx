@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, ReactNode } from "react";
 
 // BU keys that match the MediaInvestmentTab BUs
 export type MediaBUKey = 'modelo_atual' | 'o2_tax' | 'oxy_hacker' | 'franquia';
@@ -50,10 +50,10 @@ export function MediaMetasProvider({ children }: { children: ReactNode }) {
   const [funnelData, setFunnelData] = useState<FunnelDataByBU | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  const handleSetMetas = (metas: MediaMetasState) => {
+  const handleSetMetas = useCallback((metas: MediaMetasState) => {
     setMetasPorBU(metas);
     setIsLoaded(true);
-  };
+  }, []);
 
   return (
     <MediaMetasContext.Provider value={{ 
