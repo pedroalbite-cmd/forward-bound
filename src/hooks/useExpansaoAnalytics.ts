@@ -107,7 +107,7 @@ function parseRawCard(row: any, defaultTicket: number): ExpansaoCard {
   const valorPontual = row['Valor Pontual'] ? parseFloat(row['Valor Pontual']) : 0;
   const valorSetup = row['Valor Setup'] ? parseFloat(row['Valor Setup']) : 0;
   
-  // Calculate value: prioritize taxaFranquia, then sum of values, then default
+  // Calculate value: prioritize taxaFranquia, then sum of other values, then defaultTicket
   let valor = taxaFranquia;
   if (valor <= 0) {
     const sumValues = valorPontual + valorSetup + valorMRR;
@@ -157,7 +157,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
     [endDate.getTime()]
   );
 
-  const defaultTicket = produto === 'Franquia' ? 140000 : 54000;
+  const defaultTicket = produto === 'Franquia' ? 0 : 54000;
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['expansao-movements-analytics', produto, startDateStr, endDateStr],
