@@ -1,70 +1,60 @@
 
-# Corrigir contagem de Leads/MQL para Franquia e Oxy Hacker
+# Remover valor mockup da Franquia - usar Taxa de franquia real
 
-## Problema identificado
+## Problema
+Quando um card de Franquia nao tem o campo "Taxa de franquia" preenchido, o sistema usa um valor padrao ficticio de R$ 140.000. O correto eh usar zero quando o campo nao estiver preenchido.
 
-Ao consultar o banco externo, descobri que o pipe de expansao (Franquia/Oxy Hacker) usa fases diferentes do que o codigo espera:
+## Mudancas
 
-- Fases reais no banco: **"Start form"** → **"Lead"** → "Reuniao agendada / Qualificado" → ...
-- Fases mapeadas no codigo: `'Start form': 'leads'`, `'MQL': 'mql'`
+### Arquivo 1: `src/hooks/useExpansaoMetas.ts`
 
-A fase **"Lead"** (que eh a fase real onde os leads ficam) nao esta mapeada. Alem disso, a fase "MQL" praticamente nao existe nesse pipe.
+Na funcao `getValueForPeriod` (linha ~179-191), remover o fallback para `defaultTicket`:
 
-## Dados reais de fevereiro 2026
+```
+// Antes (linhas 179-191):
+const taxaFranquia = movement.taxaFranquia || 0;
+const defaultTicket = 140000;
+if (taxaFranquia > 0) {
+  cardValues.set(movement.id, taxaFranquia);
+} else {
+  const sumValues = pontual + setup + mrr;
+  cardValues.set(movement.id, sumValues > 0 ? sumValues : defaultTicket);
+}
 
-- Total de movimentos no banco: **274 registros**
-- Cards unicos Franquia: **~23** (com movimentos no periodo)
-- Cards unicos Oxy Hacker: **~30** (com movimentos no periodo)
-- MQL exibido atualmente: Franquia = 1, Oxy Hacker = 0
+// Depois:
+const taxaFranquia = movement.taxaFranquia || 0;
+if (taxaFranquia > 0) {
+  cardValues.set(movement.id, taxaFranquia);
+} else {
+  const sumValues = pontual + setup + mrr;
+  cardValues.set(movement.id, sumValues); // zero se nao tiver valores
+}
+```
 
-## Solucao
+### Arquivo 2: `src/hooks/useExpansaoAnalytics.ts`
 
-### Arquivo 1: `src/hooks/useExpansaoAnalytics.ts`
-
-Adicionar a fase "Lead" ao mapeamento `PHASE_TO_INDICATOR`:
+Na funcao `parseRawCard` (linhas 110-115), remover o fallback para `defaultTicket`:
 
 ```
 // Antes:
-'Start form': 'leads',
-'MQL': 'mql',
+let valor = taxaFranquia;
+if (valor <= 0) {
+  const sumValues = valorPontual + valorSetup + valorMRR;
+  valor = sumValues > 0 ? sumValues : defaultTicket;
+}
 
 // Depois:
-'Start form': 'leads',
-'Lead': 'leads',
-'MQL': 'mql',
+let valor = taxaFranquia;
+if (valor <= 0) {
+  valor = valorPontual + valorSetup + valorMRR; // zero se nao tiver valores
+}
 ```
 
-Isso garante que cards na fase "Lead" sejam contados como leads (e consequentemente como MQL, pela logica ja implementada de mql = leads).
+Tambem remover a variavel `defaultTicket` da linha 160 (nao sera mais usada para Franquia). Nota: Oxy Hacker mantem o ticket padrao de R$ 54k? Ou tambem deve zerar? O plano assume que a mudanca se aplica apenas a Franquia, mantendo Oxy Hacker com seu ticket padrao. Se quiser zerar Oxy Hacker tambem, a mesma logica se aplica.
 
-### Arquivo 2: `src/hooks/useExpansaoMetas.ts`
-
-Mesmo ajuste no mapeamento:
-
-```
-'Start form': 'leads',
-'Lead': 'leads',
-'MQL': 'mql',
-```
-
-### Arquivo 3: `src/hooks/useOxyHackerMetas.ts`
-
-Mesmo ajuste no mapeamento:
-
-```
-'Start form': 'leads',
-'Lead': 'leads',
-'MQL': 'mql',
-```
+**Atencao**: Como o `parseRawCard` eh compartilhado entre Franquia e Oxy Hacker (via parametro `produto`), a mudanca pode ser condicional ao produto, ou aplicada igualmente para ambos.
 
 ## Resultado esperado
-
-- Franquia: Leads e MQL mostrarao o total real de cards que entraram no pipe (~23 no periodo)
-- Oxy Hacker: Leads e MQL mostrarao o total real de cards que entraram no pipe (~30 no periodo)
-- Os drill-downs e funis tambem refletirao os numeros corretos
-- Nenhuma alteracao nas BUs Modelo Atual e O2 TAX (usam hooks separados)
-
-## Detalhes tecnicos
-
-A mudanca eh de 1 linha adicionada em 3 arquivos. O impacto eh:
-- Cards que estao na fase "Lead" (a maioria dos leads ativos) passam a ser reconhecidos pelo sistema
-- Como o codigo usa `Set` para contar cards unicos, nao ha risco de duplicacao entre "Start form" e "Lead" do mesmo card
+- Cards de Franquia sem "Taxa de franquia" preenchida mostrarao valor R$ 0
+- Cards com "Taxa de franquia" preenchida continuarao mostrando o valor real
+- Os totais monetarios refletirao apenas valores reais do Pipefy
