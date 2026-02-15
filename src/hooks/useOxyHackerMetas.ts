@@ -185,6 +185,9 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
           // For other indicators, count unique cards that passed through the phase
           if (movementIndicator === indicator) {
             uniqueCards.add(movement.id);
+          } else if (indicator === 'mql' && movementIndicator === 'leads') {
+            // Para Oxy Hacker, todo lead é MQL (sem critério separado)
+            uniqueCards.add(movement.id);
           }
         }
       }
@@ -221,6 +224,8 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
           }
         } else {
           if (movementIndicator === indicator) {
+            shouldCount = true;
+          } else if (indicator === 'mql' && movementIndicator === 'leads') {
             shouldCount = true;
           }
         }
@@ -259,7 +264,7 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
     // Annual metas based on planning (updated to match real targets)
     const annualMetas: Record<OxyHackerIndicator, number> = {
       leads: 360,     // 30/month
-      mql: 300,       // 25/month
+      mql: 360,       // Igual a leads (sem critério separado de MQL para Oxy Hacker)
       rm: 120,        // 10/month
       rr: 60,         // 5/month
       proposta: 36,   // 3/month
@@ -279,7 +284,7 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
     const daysInYear = 365;
     const annualMetas: Record<OxyHackerIndicator, number> = {
       leads: 360,
-      mql: 300,
+      mql: 360,
       rm: 120,
       rr: 60,
       proposta: 36,
@@ -306,6 +311,8 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
             }
           } else {
             if (movementIndicator === indicator) {
+              uniqueCards.add(movement.id);
+            } else if (indicator === 'mql' && movementIndicator === 'leads') {
               uniqueCards.add(movement.id);
             }
           }

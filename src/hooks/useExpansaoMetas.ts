@@ -129,6 +129,9 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
           // For other indicators, count unique cards that passed through the phase
           if (movementIndicator === indicator) {
             uniqueCards.add(movement.id);
+          } else if (indicator === 'mql' && movementIndicator === 'leads') {
+            // Para Franquia, todo lead é MQL (sem critério separado)
+            uniqueCards.add(movement.id);
           }
         }
       }
@@ -165,6 +168,8 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
           }
         } else {
           if (movementIndicator === indicator) {
+            shouldCount = true;
+          } else if (indicator === 'mql' && movementIndicator === 'leads') {
             shouldCount = true;
           }
         }
@@ -203,7 +208,7 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
     // Annual metas based on planning (updated to match real targets)
     const annualMetas: Record<ExpansaoIndicator, number> = {
       leads: 432,     // 36/month
-      mql: 360,       // 30/month
+      mql: 432,       // Igual a leads (sem critério separado de MQL para Franquia)
       rm: 144,        // 12/month
       rr: 72,         // 6/month
       proposta: 48,   // 4/month
@@ -223,7 +228,7 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
     const daysInYear = 365;
     const annualMetas: Record<ExpansaoIndicator, number> = {
       leads: 432,
-      mql: 360,
+      mql: 432,
       rm: 144,
       rr: 72,
       proposta: 48,
@@ -250,6 +255,8 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
             }
           } else {
             if (movementIndicator === indicator) {
+              uniqueCards.add(movement.id);
+            } else if (indicator === 'mql' && movementIndicator === 'leads') {
               uniqueCards.add(movement.id);
             }
           }
