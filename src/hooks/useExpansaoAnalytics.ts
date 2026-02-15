@@ -387,7 +387,10 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
           } else if (indicator === 'proposta') {
             return movementIndicator === 'proposta';
           }
-          return movementIndicator === indicator;
+          if (movementIndicator === indicator) return true;
+          // Para Oxy Hacker e Franquia, todo lead é MQL
+          if (indicator === 'mql' && movementIndicator === 'leads') return true;
+          return false;
         });
         
         if (matchingMovement) {
