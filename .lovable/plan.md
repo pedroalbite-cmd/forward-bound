@@ -1,60 +1,62 @@
 
-# Remover valor mockup da Franquia - usar Taxa de franquia real
+# Corrigir MQL para excluir fase "Start form"
 
 ## Problema
-Quando um card de Franquia nao tem o campo "Taxa de franquia" preenchido, o sistema usa um valor padrao ficticio de R$ 140.000. O correto eh usar zero quando o campo nao estiver preenchido.
+Atualmente, o indicador MQL inclui cards da fase "Start form" porque:
+1. O mapeamento `PHASE_TO_INDICATOR` mapeia "Start form" e "Lead" ambos para `'leads'`
+2. A logica de MQL faz uniao de `'leads' + 'mql'`, incluindo "Start form" indevidamente
 
-## Mudancas
+O correto: MQL deve contar apenas cards que passaram pelas fases "Lead" ou "MQL", nunca "Start form".
 
-### Arquivo 1: `src/hooks/useExpansaoMetas.ts`
+## Solucao
 
-Na funcao `getValueForPeriod` (linha ~179-191), remover o fallback para `defaultTicket`:
+Separar o mapeamento de "Start form" para que o MQL possa diferenciar.
 
-```
-// Antes (linhas 179-191):
-const taxaFranquia = movement.taxaFranquia || 0;
-const defaultTicket = 140000;
-if (taxaFranquia > 0) {
-  cardValues.set(movement.id, taxaFranquia);
-} else {
-  const sumValues = pontual + setup + mrr;
-  cardValues.set(movement.id, sumValues > 0 ? sumValues : defaultTicket);
-}
+### Arquivo 1: `src/hooks/useExpansaoAnalytics.ts`
 
-// Depois:
-const taxaFranquia = movement.taxaFranquia || 0;
-if (taxaFranquia > 0) {
-  cardValues.set(movement.id, taxaFranquia);
-} else {
-  const sumValues = pontual + setup + mrr;
-  cardValues.set(movement.id, sumValues); // zero se nao tiver valores
-}
-```
-
-### Arquivo 2: `src/hooks/useExpansaoAnalytics.ts`
-
-Na funcao `parseRawCard` (linhas 110-115), remover o fallback para `defaultTicket`:
+Alterar a logica de `getCardsForIndicator` (linha ~278-281) para nao usar a uniao generica quando o indicador for 'mql'. Em vez disso, verificar diretamente as fases do card:
 
 ```
 // Antes:
-let valor = taxaFranquia;
-if (valor <= 0) {
-  const sumValues = valorPontual + valorSetup + valorMRR;
-  valor = sumValues > 0 ? sumValues : defaultTicket;
+const indicatorsToCheck = (indicator === 'leads' || indicator === 'mql')
+  ? ['leads', 'mql'] as IndicatorType[]
+  : [indicator];
+
+// Depois: para MQL, filtrar apenas fases "Lead" e "MQL" (excluir "Start form")
+// para Leads, manter o comportamento atual (todas as fases de lead)
+```
+
+Na pratica, o `firstEntryByCardAndIndicator` agrupa "Start form" e "Lead" ambos sob 'leads'. Para diferenciar, a solucao mais limpa eh adicionar uma verificacao extra: quando o indicador for 'mql', percorrer os cards e verificar se a fase original eh "Lead" ou "MQL" (nunca "Start form").
+
+Implementacao:
+- Quando `indicator === 'mql'`: iterar cards com indicador 'leads' ou 'mql', mas so incluir se `card.fase !== 'Start form'`
+- Quando `indicator === 'leads'`: manter comportamento atual (uniao de leads + mql)
+
+### Arquivo 2: `src/hooks/useExpansaoMetas.ts`
+
+Na funcao `getQtyForPeriod` (linha ~130-136):
+
+```
+// Antes:
+} else if (indicator === 'mql' && movementIndicator === 'leads') {
+  uniqueCards.add(movement.id);
 }
 
-// Depois:
-let valor = taxaFranquia;
-if (valor <= 0) {
-  valor = valorPontual + valorSetup + valorMRR; // zero se nao tiver valores
+// Depois: so incluir se fase for "Lead" ou "MQL", nao "Start form"
+} else if (indicator === 'mql' && (movement.fase === 'Lead' || movement.fase === 'MQL')) {
+  uniqueCards.add(movement.id);
 }
 ```
 
-Tambem remover a variavel `defaultTicket` da linha 160 (nao sera mais usada para Franquia). Nota: Oxy Hacker mantem o ticket padrao de R$ 54k? Ou tambem deve zerar? O plano assume que a mudanca se aplica apenas a Franquia, mantendo Oxy Hacker com seu ticket padrao. Se quiser zerar Oxy Hacker tambem, a mesma logica se aplica.
+Mesma alteracao em `getValueForPeriod` e `countUniqueCardsInPeriod`.
 
-**Atencao**: Como o `parseRawCard` eh compartilhado entre Franquia e Oxy Hacker (via parametro `produto`), a mudanca pode ser condicional ao produto, ou aplicada igualmente para ambos.
+### Arquivo 3: `src/hooks/useOxyHackerMetas.ts`
+
+Mesma logica aplicada nas funcoes equivalentes de `getQtyForPeriod`, `getValueForPeriod` e `countUniqueCardsInPeriod`.
 
 ## Resultado esperado
-- Cards de Franquia sem "Taxa de franquia" preenchida mostrarao valor R$ 0
-- Cards com "Taxa de franquia" preenchida continuarao mostrando o valor real
-- Os totais monetarios refletirao apenas valores reais do Pipefy
+
+- MQL para Oxy Hacker e Franquia: mostra apenas cards que entraram na fase "Lead" ou "MQL" (exclui "Start form")
+- Leads continua mostrando todos os cards ("Start form" + "Lead" + "MQL")
+- O filtro por produto ("Oxy Hacker" ou "Franquia") continua funcionando como antes
+- Sem duplicatas (unicidade por card ID mantida)
