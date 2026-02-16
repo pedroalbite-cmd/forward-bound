@@ -319,7 +319,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
     product: card.produto, // Franquia or Oxy Hacker
     mrr: card.valorMRR,
     setup: card.valorSetup,
-    pontual: card.valorPontual,
+    pontual: card.taxaFranquia > 0 ? card.taxaFranquia : card.valorPontual,
   });
 
   // Get detail items for an indicator (uses same FIRST ENTRY logic)
