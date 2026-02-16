@@ -1,56 +1,77 @@
 
-# Fix: 3 cards Oxy Hacker faltando nos MQLs (21 vs 24)
+# Fix: MQL Oxy Hacker mostrando 27 em vez de 24
 
 ## Problema
 
-O sistema mostra 21 MQLs para Oxy Hacker, mas o Pipefy mostra 24. Os 3 cards faltantes sao:
+A logica cumulativa adicionada na ultima alteracao verifica TODOS os indicadores (leads, mql, rm, rr, proposta, venda) para contar leads/MQLs. Isso faz com que cards que entraram como lead em janeiro, mas tiveram um movimento de RM ou Proposta em fevereiro, sejam contados novamente como lead/MQL em fevereiro.
 
-1. **Cards importados direto em "Contrato assinado"** (ex: Adilson) - so tem movimento para "Contrato assinado" (mapeado para 'venda'), nunca passou por "Start form" ou "Lead"
-2. **"One Check"** - so tem movimento para "Reuniao agendada / Qualificado" (mapeado para 'rm'), sem Start form
-3. **"Ivan da Silva Soares"** - so tem fase "Tentativas de contato" que NAO esta mapeada para nenhum indicador
-
-## Causa raiz
-
-O `getCardsForIndicator('mql')` so verifica os indicadores `['leads', 'mql']`. Cards que so tem movimentos mapeados para 'rm', 'rr', 'proposta' ou 'venda' nao sao contados como leads/MQLs, mesmo estando no pipe.
-
-Alem disso, a fase "Tentativas de contato" nao tem mapeamento algum, entao o card do Ivan nem entra no mapa de indicadores.
+Resultado: 3 cards extras que ja foram contados em meses anteriores estao aparecendo novamente.
 
 ## Solucao
 
 ### Arquivo: `src/hooks/useExpansaoAnalytics.ts`
 
-**Alteracao 1** - Adicionar fases faltantes no PHASE_TO_INDICATOR:
+Alterar a logica dentro do loop de `getCardsForIndicator` para que, ao verificar indicadores avancados (rm, rr, proposta, venda), so inclua o card se ele NAO tem nenhuma entrada 'leads' ou 'mql' no historico. Se ele tem, significa que ja foi contado no periodo correto e nao deve ser puxado via indicador avancado.
 
+**Antes** (linhas 282-301):
 ```typescript
-const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
-  'Start form': 'leads',
-  'Lead': 'mql',
-  'MQL': 'mql',
-  'Tentativas de contato': 'leads',   // NOVO
-  'Reunião agendada / Qualificado': 'rm',
-  'Reunião Realizada': 'rr',
-  'Proposta enviada / Follow Up': 'proposta',
-  'Enviar proposta': 'proposta',
-  'Enviar para assinatura': 'proposta',
-  'Contrato assinado': 'venda',
-  'Ganho': 'venda',                    // NOVO
-};
-```
-
-**Alteracao 2** - Aplicar logica de funil cumulativo para leads/mql: qualquer card com QUALQUER indicador no periodo conta como lead/MQL. No `getCardsForIndicator`, mudar os `indicatorsToCheck` para leads e mql:
-
-```typescript
-// Para leads/mql: funil cumulativo - qualquer card no pipe e um lead
 const indicatorsToCheck = (indicator === 'leads' || indicator === 'mql')
   ? ['leads', 'mql', 'rm', 'rr', 'proposta', 'venda'] as IndicatorType[]
   : [indicator];
+
+for (const ind of indicatorsToCheck) {
+  for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
+    const firstEntry = indicatorMap.get(ind);
+    if (!firstEntry) continue;
+    const entryTime = firstEntry.dataEntrada.getTime();
+    if (entryTime >= startTime && entryTime <= endTime) {
+      const existing = uniqueCards.get(cardId);
+      if (!existing || firstEntry.dataEntrada < existing.dataEntrada) {
+        uniqueCards.set(cardId, firstEntry);
+      }
+    }
+  }
+}
 ```
 
-Isso garante que cards que entraram direto em "Contrato assinado" (sem passar por Start form) sejam contados como leads/MQLs.
+**Depois**:
+```typescript
+const isLeadOrMql = indicator === 'leads' || indicator === 'mql';
+const indicatorsToCheck = isLeadOrMql
+  ? ['leads', 'mql', 'rm', 'rr', 'proposta', 'venda'] as IndicatorType[]
+  : [indicator];
+
+for (const ind of indicatorsToCheck) {
+  const isAdvancedIndicator = ind !== 'leads' && ind !== 'mql';
+
+  for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
+    // Para indicadores avancados no contexto leads/mql:
+    // so incluir se o card NAO tem entrada 'leads' nem 'mql' no historico
+    // (ou seja, foi importado direto numa fase avancada)
+    if (isLeadOrMql && isAdvancedIndicator) {
+      if (indicatorMap.has('leads') || indicatorMap.has('mql')) continue;
+    }
+
+    const firstEntry = indicatorMap.get(ind);
+    if (!firstEntry) continue;
+    const entryTime = firstEntry.dataEntrada.getTime();
+    if (entryTime >= startTime && entryTime <= endTime) {
+      const existing = uniqueCards.get(cardId);
+      if (!existing || firstEntry.dataEntrada < existing.dataEntrada) {
+        uniqueCards.set(cardId, firstEntry);
+      }
+    }
+  }
+}
+```
+
+## Por que funciona
+
+- Cards normais (Start form -> Lead -> MQL -> ...): contados via 'leads' ou 'mql', no periodo da primeira entrada. Nao sao puxados por RM/Proposta de meses futuros.
+- Cards importados direto (sem Start form/Lead): nao tem entrada 'leads' nem 'mql' no historico, entao sao puxados via o indicador avancado onde entraram (ex: 'venda').
 
 ## Resultado esperado
 
-- **Leads Oxy Hacker**: 24 (todos os cards do XLSX)
-- **MQLs Oxy Hacker**: 24 (iguais aos leads)
-- Cards que so tem fases avancadas (Contrato assinado, RM) agora sao contados
-- Franquia tambem se beneficia da mesma correcao
+- **MQLs Oxy Hacker**: 24 (exatamente o XLSX)
+- **Leads Oxy Hacker**: 24
+- Cards de meses anteriores nao sao contados novamente
