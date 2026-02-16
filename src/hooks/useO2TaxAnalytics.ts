@@ -65,6 +65,7 @@ const PHASE_DISPLAY_MAP: Record<string, string> = {
   'MQL': 'MQL',
   'Reunião agendada / Qualificado': 'RM',
   '1° Reunião Realizada - Apresentação': 'RR',
+  'Enviar proposta': 'Enviar Proposta',
   'Proposta enviada / Follow Up': 'Proposta',
   'Enviar para assinatura': 'Assinatura',
   'Contrato assinado': 'Contrato Assinado',
@@ -79,6 +80,7 @@ const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
   'MQL': 'mql',
   'Reunião agendada / Qualificado': 'rm',
   '1° Reunião Realizada - Apresentação': 'rr',
+  'Enviar proposta': 'proposta',
   'Proposta enviada / Follow Up': 'proposta',
   'Enviar para assinatura': 'proposta',
   'Contrato assinado': 'venda',
@@ -88,6 +90,7 @@ const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
 const ACTIVE_PHASES = [
   'Reunião agendada / Qualificado',
   '1° Reunião Realizada - Apresentação',
+  'Enviar proposta',
   'Proposta enviada / Follow Up',
   'Enviar para assinatura',
 ];
