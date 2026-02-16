@@ -286,9 +286,6 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
           const firstEntry = indicatorMap.get(ind);
           if (!firstEntry) continue;
           
-          // For MQL, exclude cards whose phase is "Start form"
-          if (indicator === 'mql' && firstEntry.fase === 'Start form') continue;
-          
           const entryTime = firstEntry.dataEntrada.getTime();
           
           // Only include if FIRST entry was in selected period
@@ -397,8 +394,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
             return movementIndicator === 'proposta';
           }
           if (movementIndicator === indicator) return true;
-          // MQL: apenas "Lead" ou "MQL", excluindo "Start form"
-          if (indicator === 'mql' && (m.fase === 'Lead' || m.fase === 'MQL')) return true;
+          if (indicator === 'mql') return true;
           return false;
         });
         
