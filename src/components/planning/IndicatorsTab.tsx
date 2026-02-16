@@ -1285,27 +1285,27 @@ export function IndicatorsTab() {
         const avgDias = itemsWithCalcs.length > 0 
           ? Math.round(itemsWithCalcs.reduce((sum, i) => sum + (i.diasComoMQL || 0), 0) / itemsWithCalcs.length)
           : 0;
-        const topCloser = findTopPerformer(items, 'closer');
+        const topSdr = findTopPerformer(items, 'sdr');
         
         // KPIs para RM
         const kpis: KpiItem[] = [
           { icon: '📅', value: items.length, label: 'Reuniões', highlight: 'neutral' },
           { icon: '🎯', value: `${taxaMqlRm}%`, label: 'Taxa MQL→RM', highlight: taxaMqlRm >= 50 ? 'success' : taxaMqlRm >= 30 ? 'neutral' : 'warning' },
           { icon: '⏱️', value: `${avgDias}d`, label: 'Tempo Médio', highlight: avgDias <= 7 ? 'success' : avgDias <= 14 ? 'neutral' : 'warning' },
-          { icon: '🏆', value: topCloser.name.split(' ')[0], label: `Top (${topCloser.count})`, highlight: 'neutral' },
+          { icon: '🏆', value: topSdr.name.split(' ')[0], label: `Top (${topSdr.count})`, highlight: 'neutral' },
         ];
         
         // Charts para RM
-        // 1. Ranking de Closers por quantidade
-        const closerCounts = new Map<string, number>();
+        // 1. Ranking de SDRs por quantidade
+        const sdrCounts = new Map<string, number>();
         items.forEach(i => {
-          const closer = i.responsible || i.closer || 'Sem Closer';
-          closerCounts.set(closer, (closerCounts.get(closer) || 0) + 1);
+          const sdr = i.sdr || 'Sem SDR';
+          sdrCounts.set(sdr, (sdrCounts.get(sdr) || 0) + 1);
         });
-        const closerRankingData = Array.from(closerCounts.entries())
+        const sdrRankingData = Array.from(sdrCounts.entries())
           .map(([label, value]) => ({ label: label.split(' ')[0], value }))
           .sort((a, b) => b.value - a.value);
-        
+
         // 2. Tempo como MQL antes de agendar
         const tempoDistribution = [
           { label: '1-7 dias', value: itemsWithCalcs.filter(i => (i.diasComoMQL || 0) <= 7).length, highlight: 'success' as const },
@@ -1313,22 +1313,22 @@ export function IndicatorsTab() {
           { label: '15-30 dias', value: itemsWithCalcs.filter(i => (i.diasComoMQL || 0) > 14 && (i.diasComoMQL || 0) <= 30).length, highlight: 'warning' as const },
           { label: '30+ dias', value: itemsWithCalcs.filter(i => (i.diasComoMQL || 0) > 30).length, highlight: 'danger' as const },
         ];
-        
+
         const charts: ChartConfig[] = [
-          { type: 'bar', title: 'Ranking por Closer', data: closerRankingData },
+          { type: 'bar', title: 'Ranking por SDR', data: sdrRankingData },
           { type: 'distribution', title: 'Tempo como MQL', data: tempoDistribution },
         ];
         
         setDetailSheetTitle('RM - Estamos Convertendo MQLs em Reuniões?');
         setDetailSheetDescription(
-          `${items.length} reuniões agendadas | Taxa MQL→RM: ${taxaMqlRm}% | Tempo médio: ${avgDias}d | Top: ${topCloser.name} (${topCloser.count})`
+          `${items.length} reuniões agendadas | Taxa MQL→RM: ${taxaMqlRm}% | Tempo médio: ${avgDias}d | Top: ${topSdr.name} (${topSdr.count})`
         );
         setDetailSheetKpis(kpis);
         setDetailSheetCharts(charts);
         setDetailSheetColumns([
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
-          { key: 'responsible', label: 'Closer' },
+          { key: 'sdr', label: 'SDR' },
           { key: 'diasComoMQL', label: 'Dias como MQL', format: columnFormatters.diasAteAgendar },
           { key: 'revenueRange', label: 'Faixa Faturamento', format: columnFormatters.revenueRange },
           { key: 'date', label: 'Data', format: columnFormatters.date },

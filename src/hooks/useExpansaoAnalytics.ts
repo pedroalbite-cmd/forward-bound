@@ -18,6 +18,8 @@ export interface ExpansaoCard {
   valorSetup: number;
   produto: string;
   responsavel: string | null;
+  sdr: string | null;
+  closer: string | null;
   motivoPerda: string | null;
   duracao: number;
   // Marketing attribution fields
@@ -131,6 +133,8 @@ function parseRawCard(row: any, defaultTicket: number): ExpansaoCard {
     valorSetup,
     produto: row['Produtos'] || '',
     responsavel: row['Closer responsável'] || row['SDR responsável'] || null,
+    sdr: row['SDR responsável'] || null,
+    closer: row['Closer responsável'] || null,
     motivoPerda: row['Motivo da perda'] || null,
     duracao,
     // Marketing attribution
@@ -325,6 +329,8 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
     value: card.valor,
     reason: card.motivoPerda || undefined,
     responsible: card.responsavel || undefined,
+    sdr: card.sdr || undefined,
+    closer: card.closer || undefined,
     duration: card.duracao,
     product: card.produto, // Franquia or Oxy Hacker
     mrr: card.valorMRR,
