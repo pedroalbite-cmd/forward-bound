@@ -1404,21 +1404,27 @@ export function IndicatorsTab() {
       
       case 'proposta': {
         // Proposta: "Onde o Pipeline Está Travando?"
+        const isExpansaoBU = selectedBUs.length === 1 && 
+          (selectedBUs[0] === 'franquia' || selectedBUs[0] === 'oxy_hacker');
+        const getItemValue = (item: DetailItem) => 
+          isExpansaoBU ? (item.pontual || 0) : (item.value || 0);
+
         const itemsWithAging = items.map(item => {
           const entryDate = item.date ? new Date(item.date) : now;
           const diasEmProposta = Math.floor((now.getTime() - entryDate.getTime()) / 86400000);
           return { ...item, diasEmProposta };
         });
         
-        const pipeline = items.reduce((sum, i) => sum + (i.value || 0), 0);
+        const pipeline = items.reduce((sum, i) => sum + getItemValue(i), 0);
         const ticketMedio = items.length > 0 ? pipeline / items.length : 0;
         const propostasAntigas = itemsWithAging.filter(i => (i.diasEmProposta || 0) > 14);
-        const valorEmRisco = propostasAntigas.reduce((sum, i) => sum + (i.value || 0), 0);
+        const valorEmRisco = propostasAntigas.reduce((sum, i) => sum + getItemValue(i), 0);
         
         // KPIs para Proposta
+        const pipelineLabel = isExpansaoBU ? 'Valor Pontual' : 'Pipeline';
         const kpis: KpiItem[] = [
           { icon: '📊', value: items.length, label: 'Propostas', highlight: 'neutral' },
-          { icon: '💰', value: formatCompactCurrency(pipeline), label: 'Pipeline', highlight: 'neutral' },
+          { icon: '💰', value: formatCompactCurrency(pipeline), label: pipelineLabel, highlight: 'neutral' },
           { icon: '🎯', value: formatCompactCurrency(ticketMedio), label: 'Ticket Médio', highlight: 'neutral' },
           { icon: '⚠️', value: propostasAntigas.length, label: 'Envelhecidas', highlight: propostasAntigas.length > 0 ? 'warning' : 'success' },
           { icon: '🔴', value: formatCompactCurrency(valorEmRisco), label: 'em Risco', highlight: valorEmRisco > 0 ? 'danger' : 'success' },
@@ -1429,7 +1435,7 @@ export function IndicatorsTab() {
         const closerTotals = new Map<string, number>();
         itemsWithAging.forEach(i => {
           const closer = i.responsible || i.closer || 'Sem Closer';
-          closerTotals.set(closer, (closerTotals.get(closer) || 0) + (i.value || 0));
+          closerTotals.set(closer, (closerTotals.get(closer) || 0) + getItemValue(i));
         });
         const pipelineByCloserData = Array.from(closerTotals.entries())
           .map(([label, value]) => ({ label: label.split(' ')[0], value }))
@@ -1448,7 +1454,7 @@ export function IndicatorsTab() {
           { type: 'distribution', title: 'Aging das Propostas', data: agingDistribution },
         ];
         
-        const descricao = `${items.length} propostas | Pipeline: ${formatCompactCurrency(pipeline)} | Ticket médio: ${formatCompactCurrency(ticketMedio)}` +
+        const descricao = `${items.length} propostas | ${pipelineLabel}: ${formatCompactCurrency(pipeline)} | Ticket médio: ${formatCompactCurrency(ticketMedio)}` +
           (propostasAntigas.length > 0 
             ? ` | ⚠️ ${propostasAntigas.length} com mais de 14 dias (${formatCompactCurrency(valorEmRisco)} em risco)` 
             : ' | ✅ Nenhuma envelhecida');
@@ -1457,7 +1463,14 @@ export function IndicatorsTab() {
         setDetailSheetDescription(descricao);
         setDetailSheetKpis(kpis);
         setDetailSheetCharts(charts);
-        setDetailSheetColumns([
+        setDetailSheetColumns(isExpansaoBU ? [
+          { key: 'product', label: 'Produto', format: columnFormatters.product },
+          { key: 'company', label: 'Empresa' },
+          { key: 'pontual', label: 'Valor Pontual', format: columnFormatters.currency },
+          { key: 'responsible', label: 'Closer' },
+          { key: 'diasEmProposta', label: 'Dias em Proposta', format: columnFormatters.agingWithAlert },
+          { key: 'date', label: 'Data Envio', format: columnFormatters.date },
+        ] : [
           { key: 'product', label: 'Produto', format: columnFormatters.product },
           { key: 'company', label: 'Empresa' },
           { key: 'value', label: 'Valor Total', format: columnFormatters.currency },
