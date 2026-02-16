@@ -189,21 +189,26 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
       // Step 2: Get unique card IDs from period
       const uniqueCardIds = [...new Set(cards.map((c: O2TaxCard) => c.id))];
       
-      // Step 3: Fetch full history for these cards
+      // Step 3: Fetch full history for these cards (in batches of 500 to avoid truncation)
       let fullHistory: O2TaxCard[] = [];
       if (uniqueCardIds.length > 0) {
-        const { data: historyData, error: historyError } = await supabase.functions.invoke('query-external-db', {
-          body: { 
-            table: 'pipefy_cards_movements', 
-            action: 'query_card_history',
-            cardIds: uniqueCardIds
+        const BATCH_SIZE = 500;
+        for (let i = 0; i < uniqueCardIds.length; i += BATCH_SIZE) {
+          const batch = uniqueCardIds.slice(i, i + BATCH_SIZE);
+          console.log(`[O2 TAX Analytics] Fetching history batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(uniqueCardIds.length / BATCH_SIZE)} (${batch.length} IDs)`);
+          const { data: historyData, error: historyError } = await supabase.functions.invoke('query-external-db', {
+            body: { 
+              table: 'pipefy_cards_movements', 
+              action: 'query_card_history',
+              cardIds: batch
+            }
+          });
+          
+          if (!historyError && historyData?.data) {
+            fullHistory.push(...historyData.data.map(parseRawCard));
           }
-        });
-        
-        if (!historyError && historyData?.data) {
-          fullHistory = historyData.data.map(parseRawCard);
-          console.log(`[O2 TAX Analytics] Full history: ${fullHistory.length} movements for ${uniqueCardIds.length} cards`);
         }
+        console.log(`[O2 TAX Analytics] Full history: ${fullHistory.length} movements for ${uniqueCardIds.length} cards`);
       }
 
       // Step 4: Fetch MQL by creation date for the period
