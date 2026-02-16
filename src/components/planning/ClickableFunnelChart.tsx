@@ -308,25 +308,29 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
       return { ...item, diasEmProposta };
     });
     
-    const pipeline = items.reduce((sum, i) => sum + (i.value || 0), 0);
+    // For Oxy Hacker / Franquia, use pontual (Taxa de franquia) instead of value
+    const isExpansaoBU = useExpansaoData || useOxyHackerData;
+    const getItemValue = (item: DetailItem) => isExpansaoBU ? (item.pontual || 0) : (item.value || 0);
+    
+    const pipeline = items.reduce((sum, i) => sum + getItemValue(i), 0);
     const ticketMedio = items.length > 0 ? pipeline / items.length : 0;
     const propostasAntigas = itemsWithAging.filter(i => (i.diasEmProposta || 0) > 14);
-    const valorEmRisco = propostasAntigas.reduce((sum, i) => sum + (i.value || 0), 0);
+    const valorEmRisco = propostasAntigas.reduce((sum, i) => sum + getItemValue(i), 0);
     
-    // KPIs
+    // KPIs - for expansion BUs, show "Valor Pontual" instead of "Pipeline"
     const kpis: KpiItem[] = [
       { icon: '📊', value: items.length, label: 'Propostas', highlight: 'neutral' },
-      { icon: '💰', value: formatCompactCurrency(pipeline), label: 'Pipeline', highlight: 'neutral' },
+      { icon: '💰', value: formatCompactCurrency(pipeline), label: isExpansaoBU ? 'Valor Pontual' : 'Pipeline', highlight: 'neutral' },
       { icon: '🎯', value: formatCompactCurrency(ticketMedio), label: 'Ticket Médio', highlight: 'neutral' },
       { icon: '⚠️', value: propostasAntigas.length, label: 'Envelhecidas', highlight: propostasAntigas.length > 0 ? 'warning' : 'success' },
       { icon: '🔴', value: formatCompactCurrency(valorEmRisco), label: 'em Risco', highlight: valorEmRisco > 0 ? 'danger' : 'success' },
     ];
     
-    // Charts - Pipeline por Closer
+    // Charts - Pipeline por Closer (use pontual for expansion BUs)
     const closerTotals = new Map<string, number>();
     itemsWithAging.forEach(i => {
       const closer = i.responsible || i.closer || 'Sem Closer';
-      closerTotals.set(closer, (closerTotals.get(closer) || 0) + (i.value || 0));
+      closerTotals.set(closer, (closerTotals.get(closer) || 0) + getItemValue(i));
     });
     const pipelineByCloserData = Array.from(closerTotals.entries())
       .map(([label, value]) => ({ label: label.split(' ')[0], value }))
@@ -354,15 +358,26 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
         ? ` | ⚠️ ${propostasAntigas.length} com mais de 14 dias (${formatCompactCurrency(valorEmRisco)} em risco)` 
         : ' | ✅ Nenhuma envelhecida')
     );
-    setSheetColumns([
-      { key: 'product', label: 'Produto', format: columnFormatters.product },
-      { key: 'company', label: 'Empresa' },
-      { key: 'value', label: 'Valor Total', format: columnFormatters.currency },
-      { key: 'mrr', label: 'MRR', format: columnFormatters.currency },
-      { key: 'responsible', label: 'Closer' },
-      { key: 'diasEmProposta', label: 'Dias em Proposta', format: columnFormatters.agingWithAlert },
-      { key: 'date', label: 'Data Envio', format: columnFormatters.date },
-    ]);
+    // Columns - for expansion BUs, remove MRR and rename "Valor Total" to "Valor Pontual"
+    const propostaColumns = isExpansaoBU
+      ? [
+          { key: 'product' as keyof DetailItem, label: 'Produto', format: columnFormatters.product },
+          { key: 'company' as keyof DetailItem, label: 'Empresa' },
+          { key: 'pontual' as keyof DetailItem, label: 'Valor Pontual', format: columnFormatters.currency },
+          { key: 'responsible' as keyof DetailItem, label: 'Closer' },
+          { key: 'diasEmProposta' as keyof DetailItem, label: 'Dias em Proposta', format: columnFormatters.agingWithAlert },
+          { key: 'date' as keyof DetailItem, label: 'Data Envio', format: columnFormatters.date },
+        ]
+      : [
+          { key: 'product' as keyof DetailItem, label: 'Produto', format: columnFormatters.product },
+          { key: 'company' as keyof DetailItem, label: 'Empresa' },
+          { key: 'value' as keyof DetailItem, label: 'Valor Total', format: columnFormatters.currency },
+          { key: 'mrr' as keyof DetailItem, label: 'MRR', format: columnFormatters.currency },
+          { key: 'responsible' as keyof DetailItem, label: 'Closer' },
+          { key: 'diasEmProposta' as keyof DetailItem, label: 'Dias em Proposta', format: columnFormatters.agingWithAlert },
+          { key: 'date' as keyof DetailItem, label: 'Data Envio', format: columnFormatters.date },
+        ];
+    setSheetColumns(propostaColumns);
     setSheetItems(itemsWithAging.sort((a, b) => (b.diasEmProposta || 0) - (a.diasEmProposta || 0)));
     setSheetOpen(true);
   };
