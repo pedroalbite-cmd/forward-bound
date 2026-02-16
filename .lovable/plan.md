@@ -1,62 +1,49 @@
 
-# Corrigir MQL para excluir fase "Start form"
+# Adicionar fase "Enviar proposta" ao indicador de Proposta na O2 TAX
 
-## Problema
-Atualmente, o indicador MQL inclui cards da fase "Start form" porque:
-1. O mapeamento `PHASE_TO_INDICATOR` mapeia "Start form" e "Lead" ambos para `'leads'`
-2. A logica de MQL faz uniao de `'leads' + 'mql'`, incluindo "Start form" indevidamente
+## Contexto
 
-O correto: MQL deve contar apenas cards que passaram pelas fases "Lead" ou "MQL", nunca "Start form".
+Atualmente, apenas 2 fases contam como "Proposta" na O2 TAX:
+- "Proposta enviada / Follow Up"
+- "Enviar para assinatura"
 
-## Solucao
+A fase **"Enviar proposta"** (fase preparatoria, antes do envio) nao esta mapeada, o que faz com que 3 dos 4 cards de proposta do periodo nao aparecam no dashboard.
 
-Separar o mapeamento de "Start form" para que o MQL possa diferenciar.
+## Mudancas
 
-### Arquivo 1: `src/hooks/useExpansaoAnalytics.ts`
+### Arquivo 1: `src/hooks/useO2TaxAnalytics.ts`
 
-Alterar a logica de `getCardsForIndicator` (linha ~278-281) para nao usar a uniao generica quando o indicador for 'mql'. Em vez disso, verificar diretamente as fases do card:
-
-```
-// Antes:
-const indicatorsToCheck = (indicator === 'leads' || indicator === 'mql')
-  ? ['leads', 'mql'] as IndicatorType[]
-  : [indicator];
-
-// Depois: para MQL, filtrar apenas fases "Lead" e "MQL" (excluir "Start form")
-// para Leads, manter o comportamento atual (todas as fases de lead)
-```
-
-Na pratica, o `firstEntryByCardAndIndicator` agrupa "Start form" e "Lead" ambos sob 'leads'. Para diferenciar, a solucao mais limpa eh adicionar uma verificacao extra: quando o indicador for 'mql', percorrer os cards e verificar se a fase original eh "Lead" ou "MQL" (nunca "Start form").
-
-Implementacao:
-- Quando `indicator === 'mql'`: iterar cards com indicador 'leads' ou 'mql', mas so incluir se `card.fase !== 'Start form'`
-- Quando `indicator === 'leads'`: manter comportamento atual (uniao de leads + mql)
-
-### Arquivo 2: `src/hooks/useExpansaoMetas.ts`
-
-Na funcao `getQtyForPeriod` (linha ~130-136):
+Adicionar "Enviar proposta" ao mapeamento:
 
 ```
 // Antes:
-} else if (indicator === 'mql' && movementIndicator === 'leads') {
-  uniqueCards.add(movement.id);
-}
+'Proposta enviada / Follow Up': 'proposta',
+'Enviar para assinatura': 'proposta',
 
-// Depois: so incluir se fase for "Lead" ou "MQL", nao "Start form"
-} else if (indicator === 'mql' && (movement.fase === 'Lead' || movement.fase === 'MQL')) {
-  uniqueCards.add(movement.id);
-}
+// Depois:
+'Enviar proposta': 'proposta',
+'Proposta enviada / Follow Up': 'proposta',
+'Enviar para assinatura': 'proposta',
 ```
 
-Mesma alteracao em `getValueForPeriod` e `countUniqueCardsInPeriod`.
+### Arquivo 2: `src/hooks/useO2TaxMetas.ts`
 
-### Arquivo 3: `src/hooks/useOxyHackerMetas.ts`
+Mesma alteracao no mapeamento:
 
-Mesma logica aplicada nas funcoes equivalentes de `getQtyForPeriod`, `getValueForPeriod` e `countUniqueCardsInPeriod`.
+```
+// Antes:
+'Proposta enviada / Follow Up': 'proposta',
+'Enviar para assinatura': 'proposta',
+
+// Depois:
+'Enviar proposta': 'proposta',
+'Proposta enviada / Follow Up': 'proposta',
+'Enviar para assinatura': 'proposta',
+```
 
 ## Resultado esperado
 
-- MQL para Oxy Hacker e Franquia: mostra apenas cards que entraram na fase "Lead" ou "MQL" (exclui "Start form")
-- Leads continua mostrando todos os cards ("Start form" + "Lead" + "MQL")
-- O filtro por produto ("Oxy Hacker" ou "Franquia") continua funcionando como antes
-- Sem duplicatas (unicidade por card ID mantida)
+- Os 3 cards em "Enviar proposta" (Sabia, M3 Tecnologia, Bhio Supply) passarao a aparecer no indicador de Proposta
+- O card ROBSUS79 (ja em "Proposta enviada / Follow Up") continuara aparecendo
+- Total de propostas unicas: 4 cards no periodo
+- A logica de primeira entrada garante que cada card seja contado apenas uma vez, mesmo que passe por "Enviar proposta" e depois "Proposta enviada / Follow Up"
