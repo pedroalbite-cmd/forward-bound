@@ -1,44 +1,52 @@
 
-# Corrigir limite de 500 IDs no query_card_history para O2 TAX Analytics
+# Ajustar acelerometro de Propostas Enviadas para Oxy Hacker e Franquia
 
 ## Problema
 
-O hook `useO2TaxAnalytics` busca o historico completo dos cards via `query_card_history`, mas essa acao tem um limite de 500 IDs. Em fevereiro, existem mais de 500 cards unicos no periodo, entao cards como o ROBSUS79 ficam de fora do historico e nao aparecem nos indicadores.
-
-**Evidencia**: O log do console mostra `"Built first entry map for 500 cards"` - exatamente 500, confirmando o truncamento.
-
-## Solucao
-
-Enviar os IDs em lotes (batches) de 500 para o `query_card_history`, e depois combinar todos os resultados. Isso garante que TODOS os cards do periodo tenham seu historico completo carregado.
+No drill-down de "Propostas Enviadas" do funil, as BUs Oxy Hacker e Franquia mostram KPIs de Pipeline e Ticket Medio usando o campo `valor` (que pode incluir MRR, Setup, Pontual misturados) e exibem a coluna "MRR" na tabela. Para essas BUs, o unico valor relevante e o "Valor Pontual" que vem do campo "Taxa de franquia".
 
 ## Mudanca
 
-### Arquivo: `src/hooks/useO2TaxAnalytics.ts`
+### Arquivo: `src/components/planning/ClickableFunnelChart.tsx`
 
-Na funcao `queryFn` (linhas ~194-207), substituir a chamada unica de `query_card_history` por um loop que envia lotes de 500 IDs:
+Na funcao `buildPropostaMiniDashboard` (linhas ~301-368):
 
-```typescript
-// Antes: uma unica chamada com todos os IDs (truncada em 500)
-const { data: historyData } = await supabase.functions.invoke('query-external-db', {
-  body: { table: 'pipefy_cards_movements', action: 'query_card_history', cardIds: uniqueCardIds }
-});
+**1. KPIs condicionais** - Quando a BU selecionada for Oxy Hacker ou Franquia:
+- Pipeline = soma de `item.pontual` (ou `item.value` como fallback se pontual nao existe)
+- Ticket Medio = Pipeline / qtd propostas
+- Remover KPIs que nao fazem sentido (MRR)
+- Manter: Propostas (qtd), Valor Pontual (pipeline), Ticket Medio, Envelhecidas, em Risco
 
-// Depois: enviar em lotes de 500
-const BATCH_SIZE = 500;
-let fullHistory = [];
-for (let i = 0; i < uniqueCardIds.length; i += BATCH_SIZE) {
-  const batch = uniqueCardIds.slice(i, i + BATCH_SIZE);
-  const { data: historyData } = await supabase.functions.invoke('query-external-db', {
-    body: { table: 'pipefy_cards_movements', action: 'query_card_history', cardIds: batch }
-  });
-  if (historyData?.data) {
-    fullHistory.push(...historyData.data.map(parseRawCard));
-  }
-}
+**2. Colunas condicionais na tabela** - Quando BU for Oxy Hacker ou Franquia:
+- Remover coluna "MRR"
+- Renomear coluna "Valor Total" para "Valor Pontual"
+- Manter: Produto, Empresa, Valor Pontual, Closer, Dias em Proposta, Data Envio
+
+**3. Pipeline por Closer (grafico de barras)** - Usar `item.pontual` em vez de `item.value` para calcular o pipeline quando BU for expansao
+
+### Detalhes tecnicos
+
+A funcao `buildPropostaMiniDashboard` sera atualizada para verificar as flags `useExpansaoData` e `useOxyHackerData` (ja existentes no componente) e ajustar:
+
 ```
+const isExpansaoBU = useExpansaoData || useOxyHackerData;
+
+// Para BUs de expansao, usar pontual; para demais, usar value
+const getItemValue = (item) => isExpansaoBU ? (item.pontual || 0) : (item.value || 0);
+
+// Pipeline e Ticket Medio recalculados
+const pipeline = items.reduce((sum, i) => sum + getItemValue(i), 0);
+
+// Colunas sem MRR para expansao
+const columns = isExpansaoBU 
+  ? [Produto, Empresa, 'Valor Pontual', Closer, Dias em Proposta, Data Envio]
+  : [Produto, Empresa, 'Valor Total', 'MRR', Closer, Dias em Proposta, Data Envio]
+```
+
+Para o modo consolidado (multiplas BUs), o comportamento atual sera mantido pois mistura BUs com logicas diferentes.
 
 ## Resultado esperado
 
-- Todos os cards do periodo terao seu historico completo carregado, independente da quantidade
-- O ROBSUS79 aparecera corretamente no indicador de Proposta da O2 TAX
-- O log mostrara mais de 500 cards no first entry map
+- Oxy Hacker e Franquia: KPIs mostram apenas valor pontual (Taxa de franquia), sem MRR
+- Modelo Atual e O2 TAX: comportamento inalterado (Pipeline = valor total, coluna MRR visivel)
+- Consolidado: comportamento inalterado
