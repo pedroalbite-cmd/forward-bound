@@ -1,44 +1,29 @@
 
 
-# Aplicar mesma logica de BU expansao no drill-down de Propostas do IndicatorsTab
+# Fix: Fallback de valor pontual para Franquia e Oxy Hacker
 
 ## Problema
 
-O ajuste feito anteriormente no `ClickableFunnelChart.tsx` (funil) funcionou corretamente: quando Franquia ou Oxy Hacker esta selecionada, o drill-down de propostas mostra "Valor Pontual" sem MRR. Porem, o **acelerometro** (radial cards) no `IndicatorsTab.tsx` tem sua propria implementacao duplicada do drill-down de propostas (linhas 1405-1472) que **nunca foi atualizada**. Essa versao continua mostrando MRR e Valor Total para todas as BUs.
+Mesmo com a logica `card.taxaFranquia > 0 ? card.taxaFranquia : card.valorPontual`, quando ambos os campos vem zerados do banco de dados, o valor pontual fica R$ 0.
 
 ## Solucao
 
-### Arquivo: `src/components/planning/IndicatorsTab.tsx` (linhas 1405-1472)
+### Arquivo: `src/hooks/useExpansaoAnalytics.ts`
 
-Aplicar a mesma logica condicional que ja existe no `ClickableFunnelChart.tsx`:
-
-1. **Detectar BU de expansao**: Verificar se apenas Franquia ou apenas Oxy Hacker esta selecionada (usando `selectedBUs`)
-2. **KPIs**: Usar `item.pontual` em vez de `item.value` para Pipeline e Ticket Medio; renomear label para "Valor Pontual"
-3. **Pipeline por Closer (grafico)**: Usar `item.pontual` em vez de `item.value`
-4. **Colunas da tabela**: Remover coluna "MRR" e renomear "Valor Total" para "Valor Pontual" usando `pontual` como key
-
-### Detalhes tecnicos
-
-No `case 'proposta'` (linha 1405):
+Na funcao `toDetailItem` (linha 322), adicionar fallback por produto quando `taxaFranquia` e `valorPontual` estiverem zerados:
 
 ```typescript
-// Adicionar no inicio do case:
-const isExpansaoBU = selectedBUs.length === 1 && 
-  (selectedBUs[0] === 'franquia' || selectedBUs[0] === 'oxy_hacker');
-const getItemValue = (item: DetailItem) => 
-  isExpansaoBU ? (item.pontual || 0) : (item.value || 0);
-
-// Substituir i.value por getItemValue(i) em:
-// - pipeline calculation (linha 1413)
-// - valorEmRisco calculation (linha 1416)
-// - closerTotals calculation (linha 1432)
-
-// KPI label condicional (linha 1421):
-// 'Pipeline' -> isExpansaoBU ? 'Valor Pontual' : 'Pipeline'
-
-// Colunas condicionais (linhas 1460-1468):
-// Se isExpansaoBU: remover MRR, usar key 'pontual' com label 'Valor Pontual'
-// Senao: manter 'value'/'Valor Total' e 'mrr'/'MRR'
+pontual: card.taxaFranquia > 0 
+  ? card.taxaFranquia 
+  : card.valorPontual > 0 
+    ? card.valorPontual 
+    : (card.produto === 'Franquia' ? 140000 : 54000),
 ```
 
-Nenhum outro arquivo precisa ser alterado. A correcao do `toDetailItem` no `useExpansaoAnalytics.ts` (que ja prioriza `taxaFranquia`) garante que os valores estarao corretos.
+Isso garante:
+- Se `taxaFranquia` > 0: usa esse valor (caso ideal)
+- Se `valorPontual` > 0: usa como segundo fallback
+- Se ambos zerados: Franquia = R$ 140.000, Oxy Hacker = R$ 54.000 (tickets padrao)
+
+Nenhum outro arquivo precisa ser alterado.
+
