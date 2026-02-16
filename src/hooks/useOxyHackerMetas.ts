@@ -27,11 +27,12 @@ interface OxyHackerMetasResult {
 // Map Pipefy phase names to indicator keys
 const PHASE_TO_INDICATOR: Record<string, OxyHackerIndicator> = {
   'Start form': 'leads',
-  'Lead': 'leads',
+  'Lead': 'mql',
   'MQL': 'mql',
   'Reunião agendada / Qualificado': 'rm',
   'Reunião Realizada': 'rr',
   'Proposta enviada / Follow Up': 'proposta',
+  'Enviar proposta': 'proposta',
   'Enviar para assinatura': 'proposta',
   'Contrato assinado': 'venda',
 };
@@ -182,12 +183,19 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
           if (movementIndicator === 'proposta') {
             uniqueCards.add(movement.id);
           }
-        } else {
-          // For other indicators, count unique cards that passed through the phase
-          if (movementIndicator === indicator) {
+        } else if (indicator === 'leads') {
+          // For leads: capture both 'leads' and 'mql' indicators (since 'Lead' now maps to 'mql')
+          if (movementIndicator === 'leads' || movementIndicator === 'mql') {
             uniqueCards.add(movement.id);
-          } else if (indicator === 'mql' && (movement.fase === 'Lead' || movement.fase === 'MQL')) {
-            // MQL: apenas cards que passaram por "Lead" ou "MQL", excluindo "Start form"
+          }
+        } else if (indicator === 'mql') {
+          // MQL: apenas cards que passaram por "Lead" ou "MQL", excluindo "Start form"
+          if (movementIndicator === 'mql') {
+            uniqueCards.add(movement.id);
+          }
+        } else {
+          // For other indicators (rm, rr), count by direct mapping
+          if (movementIndicator === indicator) {
             uniqueCards.add(movement.id);
           }
         }
@@ -223,10 +231,16 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
           if (movementIndicator === 'proposta') {
             shouldCount = true;
           }
+        } else if (indicator === 'leads') {
+          if (movementIndicator === 'leads' || movementIndicator === 'mql') {
+            shouldCount = true;
+          }
+        } else if (indicator === 'mql') {
+          if (movementIndicator === 'mql') {
+            shouldCount = true;
+          }
         } else {
           if (movementIndicator === indicator) {
-            shouldCount = true;
-          } else if (indicator === 'mql' && (movement.fase === 'Lead' || movement.fase === 'MQL')) {
             shouldCount = true;
           }
         }
@@ -310,10 +324,16 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
             if (movementIndicator === 'proposta') {
               uniqueCards.add(movement.id);
             }
+          } else if (indicator === 'leads') {
+            if (movementIndicator === 'leads' || movementIndicator === 'mql') {
+              uniqueCards.add(movement.id);
+            }
+          } else if (indicator === 'mql') {
+            if (movementIndicator === 'mql') {
+              uniqueCards.add(movement.id);
+            }
           } else {
             if (movementIndicator === indicator) {
-              uniqueCards.add(movement.id);
-            } else if (indicator === 'mql' && (movement.fase === 'Lead' || movement.fase === 'MQL')) {
               uniqueCards.add(movement.id);
             }
           }

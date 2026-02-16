@@ -36,11 +36,12 @@ export interface ExpansaoCard {
 // Map Pipefy phase names to indicator keys
 const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
   'Start form': 'leads',
-  'Lead': 'leads',
+  'Lead': 'mql',
   'MQL': 'mql',
   'Reunião agendada / Qualificado': 'rm',
   'Reunião Realizada': 'rr',
   'Proposta enviada / Follow Up': 'proposta',
+  'Enviar proposta': 'proposta',
   'Enviar para assinatura': 'proposta',
   'Contrato assinado': 'venda',
 };
