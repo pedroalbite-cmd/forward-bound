@@ -279,12 +279,22 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
       const uniqueCards = new Map<string, ExpansaoCard>();
       
       // Para leads/mql: funil cumulativo - qualquer card no pipe é um lead
-      const indicatorsToCheck = (indicator === 'leads' || indicator === 'mql')
+      const isLeadOrMql = indicator === 'leads' || indicator === 'mql';
+      const indicatorsToCheck = isLeadOrMql
         ? ['leads', 'mql', 'rm', 'rr', 'proposta', 'venda'] as IndicatorType[]
         : [indicator];
       
       for (const ind of indicatorsToCheck) {
+        const isAdvancedIndicator = ind !== 'leads' && ind !== 'mql';
+
         for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
+          // Para indicadores avançados no contexto leads/mql:
+          // só incluir se o card NÃO tem entrada 'leads' nem 'mql' no histórico
+          // (ou seja, foi importado direto numa fase avançada)
+          if (isLeadOrMql && isAdvancedIndicator) {
+            if (indicatorMap.has('leads') || indicatorMap.has('mql')) continue;
+          }
+
           const firstEntry = indicatorMap.get(ind);
           if (!firstEntry) continue;
           
