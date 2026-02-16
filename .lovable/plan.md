@@ -1,53 +1,44 @@
 
-
-# Corrigir indicador de Proposta na O2 TAX - apenas "Proposta enviada / Follow Up"
+# Corrigir limite de 500 IDs no query_card_history para O2 TAX Analytics
 
 ## Problema
 
-Atualmente, 3 fases estao mapeadas como "proposta":
-- "Enviar proposta"
-- "Proposta enviada / Follow Up"
-- "Enviar para assinatura"
+O hook `useO2TaxAnalytics` busca o historico completo dos cards via `query_card_history`, mas essa acao tem um limite de 500 IDs. Em fevereiro, existem mais de 500 cards unicos no periodo, entao cards como o ROBSUS79 ficam de fora do historico e nao aparecem nos indicadores.
 
-O correto: apenas **"Proposta enviada / Follow Up"** deve contar como proposta.
+**Evidencia**: O log do console mostra `"Built first entry map for 500 cards"` - exatamente 500, confirmando o truncamento.
 
-## Mudancas
+## Solucao
 
-### Arquivo 1: `src/hooks/useO2TaxAnalytics.ts`
+Enviar os IDs em lotes (batches) de 500 para o `query_card_history`, e depois combinar todos os resultados. Isso garante que TODOS os cards do periodo tenham seu historico completo carregado.
 
-Remover "Enviar proposta" e "Enviar para assinatura" do mapeamento de proposta:
+## Mudanca
 
-```
-// Antes:
-'Enviar proposta': 'proposta',
-'Proposta enviada / Follow Up': 'proposta',
-'Enviar para assinatura': 'proposta',
+### Arquivo: `src/hooks/useO2TaxAnalytics.ts`
 
-// Depois:
-'Proposta enviada / Follow Up': 'proposta',
-```
+Na funcao `queryFn` (linhas ~194-207), substituir a chamada unica de `query_card_history` por um loop que envia lotes de 500 IDs:
 
-"Enviar proposta" e "Enviar para assinatura" deixarao de ter mapeamento para indicador (nao contarao em nenhum KPI).
+```typescript
+// Antes: uma unica chamada com todos os IDs (truncada em 500)
+const { data: historyData } = await supabase.functions.invoke('query-external-db', {
+  body: { table: 'pipefy_cards_movements', action: 'query_card_history', cardIds: uniqueCardIds }
+});
 
-Tambem remover "Enviar proposta" da lista `ACTIVE_PHASES` e do mapeamento de labels de exibicao.
-
-### Arquivo 2: `src/hooks/useO2TaxMetas.ts`
-
-Mesma alteracao no `PHASE_TO_INDICATOR`:
-
-```
-// Antes:
-'Enviar proposta': 'proposta',
-'Proposta enviada / Follow Up': 'proposta',
-'Enviar para assinatura': 'proposta',
-
-// Depois:
-'Proposta enviada / Follow Up': 'proposta',
+// Depois: enviar em lotes de 500
+const BATCH_SIZE = 500;
+let fullHistory = [];
+for (let i = 0; i < uniqueCardIds.length; i += BATCH_SIZE) {
+  const batch = uniqueCardIds.slice(i, i + BATCH_SIZE);
+  const { data: historyData } = await supabase.functions.invoke('query-external-db', {
+    body: { table: 'pipefy_cards_movements', action: 'query_card_history', cardIds: batch }
+  });
+  if (historyData?.data) {
+    fullHistory.push(...historyData.data.map(parseRawCard));
+  }
+}
 ```
 
 ## Resultado esperado
 
-- Apenas cards que chegaram a "Proposta enviada / Follow Up" contarao como proposta
-- Cards em "Enviar proposta" (fase preparatoria) nao serao contados
-- Cards em "Enviar para assinatura" (fase pos-proposta) nao serao contados como proposta
-
+- Todos os cards do periodo terao seu historico completo carregado, independente da quantidade
+- O ROBSUS79 aparecera corretamente no indicador de Proposta da O2 TAX
+- O log mostrara mais de 500 cards no first entry map
