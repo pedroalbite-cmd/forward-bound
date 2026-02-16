@@ -275,7 +275,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
       
       const uniqueCards = new Map<string, ExpansaoCard>();
       
-      // For LEADS indicator: union of leads + mql phases
+      // For LEADS and MQL: union of leads + mql indicator keys
       const indicatorsToCheck = (indicator === 'leads' || indicator === 'mql')
         ? ['leads', 'mql'] as IndicatorType[]
         : [indicator];
@@ -284,6 +284,9 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
         for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
           const firstEntry = indicatorMap.get(ind);
           if (!firstEntry) continue;
+          
+          // For MQL, exclude cards whose phase is "Start form"
+          if (indicator === 'mql' && firstEntry.fase === 'Start form') continue;
           
           const entryTime = firstEntry.dataEntrada.getTime();
           
@@ -389,8 +392,8 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
             return movementIndicator === 'proposta';
           }
           if (movementIndicator === indicator) return true;
-          // Para Oxy Hacker e Franquia, todo lead é MQL
-          if (indicator === 'mql' && movementIndicator === 'leads') return true;
+          // MQL: apenas "Lead" ou "MQL", excluindo "Start form"
+          if (indicator === 'mql' && (m.fase === 'Lead' || m.fase === 'MQL')) return true;
           return false;
         });
         
