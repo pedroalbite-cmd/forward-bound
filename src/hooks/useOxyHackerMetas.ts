@@ -186,8 +186,8 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
           // For other indicators, count unique cards that passed through the phase
           if (movementIndicator === indicator) {
             uniqueCards.add(movement.id);
-          } else if (indicator === 'mql' && movementIndicator === 'leads') {
-            // Para Oxy Hacker, todo lead é MQL (sem critério separado)
+          } else if (indicator === 'mql' && (movement.fase === 'Lead' || movement.fase === 'MQL')) {
+            // MQL: apenas cards que passaram por "Lead" ou "MQL", excluindo "Start form"
             uniqueCards.add(movement.id);
           }
         }
@@ -226,7 +226,7 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
         } else {
           if (movementIndicator === indicator) {
             shouldCount = true;
-          } else if (indicator === 'mql' && movementIndicator === 'leads') {
+          } else if (indicator === 'mql' && (movement.fase === 'Lead' || movement.fase === 'MQL')) {
             shouldCount = true;
           }
         }
@@ -313,7 +313,7 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
           } else {
             if (movementIndicator === indicator) {
               uniqueCards.add(movement.id);
-            } else if (indicator === 'mql' && movementIndicator === 'leads') {
+            } else if (indicator === 'mql' && (movement.fase === 'Lead' || movement.fase === 'MQL')) {
               uniqueCards.add(movement.id);
             }
           }
