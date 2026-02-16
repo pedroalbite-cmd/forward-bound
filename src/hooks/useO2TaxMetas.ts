@@ -33,6 +33,7 @@ const PHASE_TO_INDICATOR: Record<string, O2TaxIndicator> = {
   'MQL': 'mql',
   'Reunião agendada / Qualificado': 'rm',
   '1° Reunião Realizada - Apresentação': 'rr',
+  'Enviar proposta': 'proposta',
   'Proposta enviada / Follow Up': 'proposta',
   'Enviar para assinatura': 'proposta',
   'Contrato assinado': 'venda',
