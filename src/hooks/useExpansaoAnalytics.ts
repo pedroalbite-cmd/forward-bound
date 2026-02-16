@@ -38,12 +38,14 @@ const PHASE_TO_INDICATOR: Record<string, IndicatorType> = {
   'Start form': 'leads',
   'Lead': 'mql',
   'MQL': 'mql',
+  'Tentativas de contato': 'leads',
   'Reunião agendada / Qualificado': 'rm',
   'Reunião Realizada': 'rr',
   'Proposta enviada / Follow Up': 'proposta',
   'Enviar proposta': 'proposta',
   'Enviar para assinatura': 'proposta',
   'Contrato assinado': 'venda',
+  'Ganho': 'venda',
 };
 
 // Map indicator to phase display name
@@ -276,9 +278,9 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
       
       const uniqueCards = new Map<string, ExpansaoCard>();
       
-      // For LEADS and MQL: union of leads + mql indicator keys
+      // Para leads/mql: funil cumulativo - qualquer card no pipe é um lead
       const indicatorsToCheck = (indicator === 'leads' || indicator === 'mql')
-        ? ['leads', 'mql'] as IndicatorType[]
+        ? ['leads', 'mql', 'rm', 'rr', 'proposta', 'venda'] as IndicatorType[]
         : [indicator];
       
       for (const ind of indicatorsToCheck) {
