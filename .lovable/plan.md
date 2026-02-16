@@ -1,77 +1,45 @@
 
-# Fix: MQL Oxy Hacker mostrando 27 em vez de 24
+# Fix: Mostrar SDRs (nao Closers) no drill-down de Reuniao Agendada
 
 ## Problema
 
-A logica cumulativa adicionada na ultima alteracao verifica TODOS os indicadores (leads, mql, rm, rr, proposta, venda) para contar leads/MQLs. Isso faz com que cards que entraram como lead em janeiro, mas tiveram um movimento de RM ou Proposta em fevereiro, sejam contados novamente como lead/MQL em fevereiro.
+Ao clicar no acelerometro de "Reuniao Agendada" (RM), o drill-down mostra "Ranking por Closer" e a coluna da tabela diz "Closer". Porem, quem agenda reunioes sao os SDRs, nao os Closers.
 
-Resultado: 3 cards extras que ja foram contados em meses anteriores estao aparecendo novamente.
+Alem disso, no `useExpansaoAnalytics.ts`, o campo `responsavel` prioriza "Closer responsavel" sobre "SDR responsavel", e nao ha campo `sdr` separado no `ExpansaoCard` nem no `toDetailItem`.
 
-## Solucao
+## Alteracoes
 
-### Arquivo: `src/hooks/useExpansaoAnalytics.ts`
+### 1. `src/hooks/useExpansaoAnalytics.ts`
 
-Alterar a logica dentro do loop de `getCardsForIndicator` para que, ao verificar indicadores avancados (rm, rr, proposta, venda), so inclua o card se ele NAO tem nenhuma entrada 'leads' ou 'mql' no historico. Se ele tem, significa que ja foi contado no periodo correto e nao deve ser puxado via indicador avancado.
+- Adicionar campo `sdr` e `closer` separados no `ExpansaoCard` interface
+- No `parseRawCard`, popular ambos os campos independentemente
+- No `toDetailItem`, mapear o campo `sdr` para o `DetailItem`
 
-**Antes** (linhas 282-301):
-```typescript
-const indicatorsToCheck = (indicator === 'leads' || indicator === 'mql')
-  ? ['leads', 'mql', 'rm', 'rr', 'proposta', 'venda'] as IndicatorType[]
-  : [indicator];
+```
+// Interface
+sdr?: string;
+closer?: string;
 
-for (const ind of indicatorsToCheck) {
-  for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
-    const firstEntry = indicatorMap.get(ind);
-    if (!firstEntry) continue;
-    const entryTime = firstEntry.dataEntrada.getTime();
-    if (entryTime >= startTime && entryTime <= endTime) {
-      const existing = uniqueCards.get(cardId);
-      if (!existing || firstEntry.dataEntrada < existing.dataEntrada) {
-        uniqueCards.set(cardId, firstEntry);
-      }
-    }
-  }
-}
+// parseRawCard  
+sdr: row['SDR responsável'] || null,
+closer: row['Closer responsável'] || null,
+
+// toDetailItem
+sdr: card.sdr || undefined,
+closer: card.closer || undefined,
 ```
 
-**Depois**:
-```typescript
-const isLeadOrMql = indicator === 'leads' || indicator === 'mql';
-const indicatorsToCheck = isLeadOrMql
-  ? ['leads', 'mql', 'rm', 'rr', 'proposta', 'venda'] as IndicatorType[]
-  : [indicator];
+### 2. `src/components/planning/IndicatorsTab.tsx`
 
-for (const ind of indicatorsToCheck) {
-  const isAdvancedIndicator = ind !== 'leads' && ind !== 'mql';
+No bloco `case 'rm'` (linhas 1275-1338):
 
-  for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
-    // Para indicadores avancados no contexto leads/mql:
-    // so incluir se o card NAO tem entrada 'leads' nem 'mql' no historico
-    // (ou seja, foi importado direto numa fase avancada)
-    if (isLeadOrMql && isAdvancedIndicator) {
-      if (indicatorMap.has('leads') || indicatorMap.has('mql')) continue;
-    }
-
-    const firstEntry = indicatorMap.get(ind);
-    if (!firstEntry) continue;
-    const entryTime = firstEntry.dataEntrada.getTime();
-    if (entryTime >= startTime && entryTime <= endTime) {
-      const existing = uniqueCards.get(cardId);
-      if (!existing || firstEntry.dataEntrada < existing.dataEntrada) {
-        uniqueCards.set(cardId, firstEntry);
-      }
-    }
-  }
-}
-```
-
-## Por que funciona
-
-- Cards normais (Start form -> Lead -> MQL -> ...): contados via 'leads' ou 'mql', no periodo da primeira entrada. Nao sao puxados por RM/Proposta de meses futuros.
-- Cards importados direto (sem Start form/Lead): nao tem entrada 'leads' nem 'mql' no historico, entao sao puxados via o indicador avancado onde entraram (ex: 'venda').
+- Trocar `findTopPerformer(items, 'closer')` por `findTopPerformer(items, 'sdr')`
+- Trocar chart title "Ranking por Closer" por "Ranking por SDR"
+- Trocar a coluna `{ key: 'responsible', label: 'Closer' }` por `{ key: 'sdr', label: 'SDR' }`
+- No ranking chart, usar campo `sdr` em vez de `responsible`/`closer`
 
 ## Resultado esperado
 
-- **MQLs Oxy Hacker**: 24 (exatamente o XLSX)
-- **Leads Oxy Hacker**: 24
-- Cards de meses anteriores nao sao contados novamente
+- Ao clicar no acelerometro de RM, o KPI "Top" mostra o SDR com mais reunioes agendadas
+- O grafico de barras mostra "Ranking por SDR" com Amanda, Carol, Carlos
+- A tabela mostra coluna "SDR" em vez de "Closer"
