@@ -1,45 +1,51 @@
 
-# Fix: Mostrar SDRs (nao Closers) no drill-down de Reuniao Agendada
+# Fix: MRR, Setup e Pontual mostrando meta do faturamento TOTAL em vez do INCREMENTO
 
 ## Problema
 
-Ao clicar no acelerometro de "Reuniao Agendada" (RM), o drill-down mostra "Ranking por Closer" e a coluna da tabela diz "Closer". Porem, quem agenda reunioes sao os SDRs, nao os Closers.
+Os 3 acelerometros monetarios (MRR, Setup, Pontual) para o Modelo Atual estao puxando metas do banco de dados baseadas no **faturamento total** (ex: R$ 1.181.500 em Fev), quando deveriam usar o **incremento** (R$ 400.000 em Fev).
 
-Alem disso, no `useExpansaoAnalytics.ts`, o campo `responsavel` prioriza "Closer responsavel" sobre "SDR responsavel", e nao ha campo `sdr` separado no `ExpansaoCard` nem no `toDetailItem`.
+Valores atuais (errados) para Fev:
+- MRR: R$ 295k (25% de 1.18M)
+- Setup: R$ 709k (60% de 1.18M)
+- Pontual: R$ 177k (15% de 1.18M)
 
-## Alteracoes
+Valores corretos (baseados no incremento de 400k):
+- MRR: R$ 100k (25% de 400k)
+- Setup: R$ 240k (60% de 400k)
+- Pontual: R$ 60k (15% de 400k)
 
-### 1. `src/hooks/useExpansaoAnalytics.ts`
+## Causa raiz
 
-- Adicionar campo `sdr` e `closer` separados no `ExpansaoCard` interface
-- No `parseRawCard`, popular ambos os campos independentemente
-- No `toDetailItem`, mapear o campo `sdr` para o `DetailItem`
+No `useConsolidatedMetas.ts`, a logica `skipDbForFaturamento` so pula o banco para a metrica `faturamento` do Modelo Atual. Para `mrr`, `setup` e `pontual`, o sistema continua buscando do banco, onde os valores sao calculados sobre o faturamento TOTAL.
 
+## Solucao
+
+### Arquivo: `src/hooks/useConsolidatedMetas.ts`
+
+Expandir a logica de skip para incluir MRR, Setup e Pontual do Modelo Atual. Quando a BU for `modelo_atual`, TODAS as metricas monetarias devem vir do Plan Growth (que calcula com base no incremento), nao do banco.
+
+**Antes** (linha 99):
+```typescript
+const skipDbForFaturamento = bu === 'modelo_atual' && metric === 'faturamento';
 ```
-// Interface
-sdr?: string;
-closer?: string;
 
-// parseRawCard  
-sdr: row['SDR responsável'] || null,
-closer: row['Closer responsável'] || null,
-
-// toDetailItem
-sdr: card.sdr || undefined,
-closer: card.closer || undefined,
+**Depois**:
+```typescript
+// Para modelo_atual, todas as métricas monetárias devem usar Plan Growth
+// O DB armazena valores baseados no faturamento TOTAL, mas os acelerômetros
+// precisam do INCREMENTO (A Vender = Total - MRR Base)
+const skipDb = bu === 'modelo_atual';
 ```
 
-### 2. `src/components/planning/IndicatorsTab.tsx`
-
-No bloco `case 'rm'` (linhas 1275-1338):
-
-- Trocar `findTopPerformer(items, 'closer')` por `findTopPerformer(items, 'sdr')`
-- Trocar chart title "Ranking por Closer" por "Ranking por SDR"
-- Trocar a coluna `{ key: 'responsible', label: 'Closer' }` por `{ key: 'sdr', label: 'SDR' }`
-- No ranking chart, usar campo `sdr` em vez de `responsible`/`closer`
+E na linha 102, trocar `skipDbForFaturamento` por `skipDb`.
 
 ## Resultado esperado
 
-- Ao clicar no acelerometro de RM, o KPI "Top" mostra o SDR com mais reunioes agendadas
-- O grafico de barras mostra "Ranking por SDR" com Amanda, Carol, Carlos
-- A tabela mostra coluna "SDR" em vez de "Closer"
+Para Modelo Atual em Fevereiro (incremento = R$ 400k):
+- Faturamento: Meta R$ 400k (ja funcionava)
+- MRR: Meta ~R$ 100k (25% do incremento)
+- Setup: Meta ~R$ 240k (60% do incremento)
+- Pontual: Meta ~R$ 60k (15% do incremento)
+
+As outras BUs (O2 TAX, Oxy Hacker, Franquia) continuam buscando do banco normalmente.
