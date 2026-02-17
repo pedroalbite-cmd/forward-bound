@@ -94,12 +94,13 @@ export function useConsolidatedMetas() {
     month: MonthType,
     metric: ConsolidatedMetricType
   ): ConsolidatedMetaResult => {
-    // Para modelo_atual + faturamento, usar Plan Growth (que calcula Incremento = Total - MRR Base)
-    // O DB armazena o faturamento TOTAL, mas o acelerômetro precisa do INCREMENTO
-    const skipDbForFaturamento = bu === 'modelo_atual' && metric === 'faturamento';
+    // Para modelo_atual, todas as métricas monetárias devem usar Plan Growth
+    // O DB armazena valores baseados no faturamento TOTAL, mas os acelerômetros
+    // precisam do INCREMENTO (A Vender = Total - MRR Base)
+    const skipDb = bu === 'modelo_atual';
 
-    // 1. Tentar banco de dados primeiro (exceto modelo_atual faturamento)
-    if (!skipDbForFaturamento) {
+    // 1. Tentar banco de dados primeiro (exceto modelo_atual)
+    if (!skipDb) {
       const dbValue = getMeta(bu, month, metric as MetricType);
       if (dbValue > 0) {
         return { value: dbValue, source: 'database' };
