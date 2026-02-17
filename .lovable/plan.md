@@ -1,51 +1,52 @@
 
-# Fix: MRR, Setup e Pontual mostrando meta do faturamento TOTAL em vez do INCREMENTO
+# Fix: Meta de Faturamento 408k vs 400k (erro de arredondamento)
 
 ## Problema
 
-Os 3 acelerometros monetarios (MRR, Setup, Pontual) para o Modelo Atual estao puxando metas do banco de dados baseadas no **faturamento total** (ex: R$ 1.181.500 em Fev), quando deveriam usar o **incremento** (R$ 400.000 em Fev).
-
-Valores atuais (errados) para Fev:
-- MRR: R$ 295k (25% de 1.18M)
-- Setup: R$ 709k (60% de 1.18M)
-- Pontual: R$ 177k (15% de 1.18M)
-
-Valores corretos (baseados no incremento de 400k):
-- MRR: R$ 100k (25% de 400k)
-- Setup: R$ 240k (60% de 400k)
-- Pontual: R$ 60k (15% de 400k)
+No hook `useConsolidatedMetas.ts`, a meta de faturamento do Plan Growth e calculada como:
+```
+vendas * ticket_medio = 24 * 17.000 = 408.000
+```
+Mas `vendas` ja foi arredondado com `Math.ceil(400.000 / 17.000) = Math.ceil(23.53) = 24`. O valor correto deveria ser R$ 400.000 (o incremento exato calculado no Plan Growth).
 
 ## Causa raiz
 
-No `useConsolidatedMetas.ts`, a logica `skipDbForFaturamento` so pula o banco para a metrica `faturamento` do Modelo Atual. Para `mrr`, `setup` e `pontual`, o sistema continua buscando do banco, onde os valores sao calculados sobre o faturamento TOTAL.
+O `FunnelDataItem` no contexto nao armazena o valor financeiro original — so armazena `vendas` (quantidade arredondada). Quando o `useConsolidatedMetas` tenta reconstruir o faturamento multiplicando `vendas * ticket`, o arredondamento causa a discrepancia.
 
 ## Solucao
 
-### Arquivo: `src/hooks/useConsolidatedMetas.ts`
-
-Expandir a logica de skip para incluir MRR, Setup e Pontual do Modelo Atual. Quando a BU for `modelo_atual`, TODAS as metricas monetarias devem vir do Plan Growth (que calcula com base no incremento), nao do banco.
-
-**Antes** (linha 99):
+### 1. `src/contexts/MediaMetasContext.tsx`
+Adicionar campo `faturamento` ao `FunnelDataItem`:
 ```typescript
-const skipDbForFaturamento = bu === 'modelo_atual' && metric === 'faturamento';
+export interface FunnelDataItem {
+  month: string;
+  leads: number;
+  mqls: number;
+  rms: number;
+  rrs: number;
+  propostas: number;
+  vendas: number;
+  investimento: number;
+  faturamento?: number; // valor financeiro exato (incremento)
+}
 ```
 
-**Depois**:
-```typescript
-// Para modelo_atual, todas as métricas monetárias devem usar Plan Growth
-// O DB armazena valores baseados no faturamento TOTAL, mas os acelerômetros
-// precisam do INCREMENTO (A Vender = Total - MRR Base)
-const skipDb = bu === 'modelo_atual';
-```
+### 2. `src/hooks/usePlanGrowthData.ts`
+Ao publicar funnelData no contexto, incluir o valor de faturamento exato:
+- Para Modelo Atual: usar `faturamentoVender` (incremento)
+- Para outras BUs: usar o valor mensal direto (o2TaxMonthly, oxyHackerMonthly, franquiaMonthly)
 
-E na linha 102, trocar `skipDbForFaturamento` por `skipDb`.
+### 3. `src/hooks/useConsolidatedMetas.ts`
+Alterar `getPlanGrowthMeta` para usar o campo `faturamento` do funnelData quando disponivel, em vez de recalcular via `vendas * ticket`:
+
+```
+Antes:  const faturamento = (monthData.vendas || 0) * BU_TICKETS[bu];
+Depois: const faturamento = monthData.faturamento ?? ((monthData.vendas || 0) * BU_TICKETS[bu]);
+```
 
 ## Resultado esperado
 
-Para Modelo Atual em Fevereiro (incremento = R$ 400k):
-- Faturamento: Meta R$ 400k (ja funcionava)
-- MRR: Meta ~R$ 100k (25% do incremento)
-- Setup: Meta ~R$ 240k (60% do incremento)
-- Pontual: Meta ~R$ 60k (15% do incremento)
-
-As outras BUs (O2 TAX, Oxy Hacker, Franquia) continuam buscando do banco normalmente.
+- Indicadores Fev Modelo Atual: Meta = R$ 400.000 (exato, igual ao Plan Growth)
+- MRR = R$ 100.000 (25% de 400k)
+- Setup = R$ 240.000 (60% de 400k)
+- Pontual = R$ 60.000 (15% de 400k)
