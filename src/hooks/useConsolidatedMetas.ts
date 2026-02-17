@@ -68,7 +68,7 @@ export function useConsolidatedMetas() {
     const monthData = buData?.find((d: FunnelDataItem) => d.month === month);
     if (!monthData) return 0;
 
-    const faturamento = (monthData.vendas || 0) * BU_TICKETS[bu];
+    const faturamento = monthData.faturamento ?? ((monthData.vendas || 0) * BU_TICKETS[bu]);
     const isPontualOnly = PONTUAL_ONLY_BUS.includes(bu);
 
     switch (metric) {

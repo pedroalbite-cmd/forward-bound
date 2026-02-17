@@ -455,6 +455,7 @@ export function usePlanGrowthData() {
         propostas: Math.round(d.propostas),
         vendas: Math.round(d.vendas),
         investimento: Math.round(d.investimento),
+        faturamento: Math.round(d.faturamentoVender),
       })),
       // Use operational targets for O2 TAX (42 MQL/mo, 15 RM/mo, etc.)
       o2Tax: o2TaxOperationalMetas.map((metas, index) => ({
@@ -466,6 +467,7 @@ export function usePlanGrowthData() {
         propostas: metas.propostas,
         vendas: metas.vendas,
         investimento: Math.round(o2TaxFunnel[index]?.investimento || 0),
+        faturamento: Math.round(o2TaxMonthly[metas.month] || 0),
       })),
       // Use operational targets for Oxy Hacker (25 MQL/mo, 10 RM/mo, etc.)
       oxyHacker: oxyHackerOperationalMetas.map((metas, index) => ({
@@ -477,6 +479,7 @@ export function usePlanGrowthData() {
         propostas: metas.propostas,
         vendas: metas.vendas,
         investimento: Math.round(oxyHackerFunnel[index]?.investimento || 0),
+        faturamento: Math.round(oxyHackerMonthly[metas.month] || 0),
       })),
       // Use operational targets for Franquia (30 MQL/mo, 12 RM/mo, etc.)
       franquia: franquiaOperationalMetas.map((metas, index) => ({
@@ -488,6 +491,7 @@ export function usePlanGrowthData() {
         propostas: metas.propostas,
         vendas: metas.vendas,
         investimento: Math.round(franquiaFunnel[index]?.investimento || 0),
+        faturamento: Math.round(franquiaMonthly[metas.month] || 0),
       })),
     });
   }, [modeloAtualFunnel, o2TaxFunnel, oxyHackerFunnel, franquiaFunnel]);

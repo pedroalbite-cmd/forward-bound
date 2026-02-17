@@ -19,6 +19,7 @@ export interface FunnelDataItem {
   propostas: number;
   vendas: number;
   investimento: number;
+  faturamento?: number; // valor financeiro exato (incremento)
 }
 
 export interface FunnelDataByBU {
