@@ -1,66 +1,51 @@
 
 
-# Correcao: Eventos na tabela "Conversao por Canal" + validacao da Atribuicao
+# Correcao: Eventos classificados como Meta Ads pela ordem de prioridade
 
-## Problemas identificados
+## Problema raiz
 
-### 1. "Conversao por Canal" nunca mostra Eventos
-A tabela "Conversao por Canal" usa `data.channels` do hook `useMarketingIndicators`, que constroi apenas dois canais (linhas 96-137 do arquivo):
-- Meta Ads
-- Google Ads
+Na funcao `detectChannel()` em `useMarketingAttribution.ts`, a verificacao de eventos (linha 39) acontece DEPOIS das verificacoes de Meta Ads (linhas 27-28, 33). Cards de eventos que possuem:
+- `Fonte: "Evento"` 
+- MAS tambem `Campanha: "120212747408800418"` (ID numerico do Meta preenchido automaticamente pelo Pipefy)
 
-Nao existe um canal "Eventos" nesse array. Os dados de eventos nao vem da planilha do Google Sheets (que so tem Meta e Google), entao precisamos adicionar os dados de eventos a partir da atribuicao real (dados do Pipefy).
-
-### 2. "Atribuicao por Canal" - validacao
-A logica de `detectChannel` ja inclui `fonte.includes('evento')` apos a ultima correcao. Se os dados demoram para carregar (~60s para periodos longos), o card de Eventos so aparece apos o carregamento completo dos dados do Pipefy. Nao ha bug de codigo aqui - e questao de timing de carregamento.
+Sao capturados pela linha 27 (`isMetaCampaignId`) e classificados como `meta_ads` antes de chegarem na verificacao de evento.
 
 ## Solucao
 
-### Arquivo 1: `src/components/planning/MarketingIndicatorsTab.tsx`
+Mover a deteccao de eventos para ANTES das verificacoes de Meta/Google. A logica deve ser:
 
-Enriquecer o array `data.channels` com dados de eventos vindos da atribuicao real (Pipefy). Criar um `useMemo` que:
+1. Primeiro, checar se e evento (pelo campo `fonte`, `tipoOrigem` ou `origemLead`)
+2. Depois, checar se e Meta Ads ou Google Ads
 
-1. Pega os `channelSummaries` da atribuicao
-2. Encontra o summary do canal `eventos`
-3. Se existir, adiciona um `MarketingChannel` com id `eventos` ao array de channels
-4. Passa esse array enriquecido para o componente `ConversionsByChannelChart`
+## Arquivo alterado
+
+`src/hooks/useMarketingAttribution.ts` - funcao `detectChannel` (linhas 25-42)
+
+Nova ordem:
 
 ```typescript
-const enrichedChannels = useMemo(() => {
-  const channels = [...data.channels];
-  const eventosSummary = channelSummaries.find(s => s.channel === 'eventos');
-  if (eventosSummary && eventosSummary.leads > 0) {
-    channels.push({
-      id: 'eventos',
-      name: 'Eventos',
-      investment: 0, // Eventos nao tem investimento de midia
-      leads: eventosSummary.leads,
-      mqls: eventosSummary.mqls,
-      rms: 0,
-      rrs: 0,
-      cpl: 0,
-      cpmql: 0,
-      conversionRate: eventosSummary.leads > 0
-        ? Math.round((eventosSummary.mqls / eventosSummary.leads) * 100)
-        : 0,
-    });
-  }
-  return channels;
-}, [data.channels, channelSummaries]);
+function detectChannel(card: AttributionCard): ChannelId {
+  const fonte = (card.fonte || '').toLowerCase().trim();
+  const tipo = (card.tipoOrigem || '').toLowerCase();
+  const origem = (card.origemLead || '').toLowerCase();
+
+  // Eventos tem prioridade - detectar ANTES de Meta/Google
+  if (fonte.includes('evento') || tipo.includes('evento') || origem.includes('evento')) return 'eventos';
+
+  // Meta Ads
+  if (card.campanha && isMetaCampaignId(card.campanha)) return 'meta_ads';
+  if (card.fbclid) return 'meta_ads';
+  if (fonte === 'ig' || fonte === 'fb' || fonte.includes('facebook') || fonte.includes('instagram') || fonte.includes('meta')) return 'meta_ads';
+
+  // Google Ads
+  if (card.gclid) return 'google_ads';
+  if (fonte === 'googleads' || fonte.includes('google')) return 'google_ads';
+
+  return 'organico';
+}
 ```
-
-Depois, substituir `data.channels` por `enrichedChannels` nos seguintes componentes:
-- `<ChannelMetricsCards channels={enrichedChannels} ...>`
-- `<InvestmentByChannelChart channels={enrichedChannels} />`
-- `<ConversionsByChannelChart channels={enrichedChannels} />`
-
-### Arquivo 2: `src/components/planning/marketing-indicators/ConversionsByChannelChart.tsx`
-
-Nenhuma mudanca necessaria - o componente ja renderiza qualquer canal que receba no array `channels`. Basta passar o array enriquecido.
 
 ## Resultado esperado
 
-- A tabela "Conversao por Canal" mostrara uma linha de "Eventos" com leads, MQLs e taxa de conversao
-- O card "Eventos" na "Atribuicao por Canal" continuara aparecendo (ja funciona apos a correcao anterior, desde que os dados terminem de carregar)
-- Os demais canais (Meta Ads, Google Ads) nao serao afetados
+Cards com `Fonte: "Evento"` serao corretamente classificados como canal "Eventos", mesmo que possuam um ID de campanha Meta no campo Campanha. Isso fara o card de Eventos aparecer tanto na "Atribuicao por Canal" quanto na tabela "Conversao por Canal".
 
