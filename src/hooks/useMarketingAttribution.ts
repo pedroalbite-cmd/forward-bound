@@ -28,12 +28,15 @@ function detectChannel(card: AttributionCard): ChannelId {
   if (card.fbclid) return 'meta_ads';
   if (card.gclid) return 'google_ads';
   
-  const fonte = (card.fonte || '').toLowerCase();
-  if (fonte.includes('facebook') || fonte.includes('instagram') || fonte.includes('meta')) return 'meta_ads';
-  if (fonte.includes('google')) return 'google_ads';
+  const fonte = (card.fonte || '').toLowerCase().trim();
+  // Abreviacoes reais do banco: 'ig', 'fb', 'googleads'
+  if (fonte === 'ig' || fonte === 'fb' || fonte.includes('facebook') || fonte.includes('instagram') || fonte.includes('meta')) return 'meta_ads';
+  if (fonte === 'googleads' || fonte.includes('google')) return 'google_ads';
   
+  // Detectar eventos pelo tipoOrigem OU pelo campo origem do lead
   const tipo = (card.tipoOrigem || '').toLowerCase();
-  if (tipo.includes('evento')) return 'eventos';
+  const origem = ((card as any).origemLead || '').toLowerCase();
+  if (tipo.includes('evento') || origem.includes('evento') || origem.includes('g4')) return 'eventos';
   
   return 'organico';
 }
