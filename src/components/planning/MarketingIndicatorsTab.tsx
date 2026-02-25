@@ -162,6 +162,35 @@ export function MarketingIndicatorsTab() {
 
   const { campaignFunnels, channelSummaries } = useMarketingAttribution(allAttributionCards, metaCampaigns);
 
+  // Enrich channels with Eventos data from Pipefy attribution
+  const enrichedChannels = useMemo(() => {
+    const channels = [...data.channels];
+    const eventosSummary = channelSummaries.find(s => s.channel === 'eventos');
+    if (eventosSummary && eventosSummary.leads > 0) {
+      channels.push({
+        id: 'eventos',
+        name: 'Eventos',
+        investment: 0,
+        leads: eventosSummary.leads,
+        mqls: eventosSummary.mqls,
+        rms: 0,
+        rrs: 0,
+        cpl: 0,
+        cpmql: 0,
+        conversionRate: eventosSummary.leads > 0
+          ? Math.round((eventosSummary.mqls / eventosSummary.leads) * 100)
+          : 0,
+        propostas: 0,
+        vendas: 0,
+        cprm: 0,
+        cprr: 0,
+        cpp: 0,
+        cpv: 0,
+      });
+    }
+    return channels;
+  }, [data.channels, channelSummaries]);
+
   const handleDateRangeChange = (start: Date, end: Date) => {
     setDateRange({ from: start, to: end });
   };
@@ -214,7 +243,7 @@ export function MarketingIndicatorsTab() {
 
       {/* Channel Metrics Cards (from spreadsheet) */}
       <ChannelMetricsCards
-        channels={data.channels}
+        channels={enrichedChannels}
         totalInvestment={data.totalInvestment}
         totalLeads={data.totalLeads}
       />
@@ -367,7 +396,7 @@ export function MarketingIndicatorsTab() {
 
       {/* Investment & Funnel Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <InvestmentByChannelChart channels={data.channels} />
+        <InvestmentByChannelChart channels={enrichedChannels} />
         <AcquisitionFunnelChart
           leads={data.totalLeads}
           mqls={data.totalMqls}
@@ -377,7 +406,7 @@ export function MarketingIndicatorsTab() {
       </div>
 
       {/* Conversions by Channel Table */}
-      <ConversionsByChannelChart channels={data.channels} />
+      <ConversionsByChannelChart channels={enrichedChannels} />
 
       {/* Campaigns Table - Meta Ads Integration */}
       <CampaignsTable 
