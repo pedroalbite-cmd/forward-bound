@@ -1,29 +1,66 @@
 
-# Correcao: Eventos nao aparecem na atribuicao
 
-## Problema
+# Correcao: Eventos na tabela "Conversao por Canal" + validacao da Atribuicao
 
-A funcao `detectChannel()` em `useMarketingAttribution.ts` verifica o campo `fonte` para identificar Meta Ads e Google Ads, mas nao verifica se `fonte` contem "evento". Confirmei no banco que existem cards com:
+## Problemas identificados
 
-- `Fonte = "Evento"` (com Posicionamento = "Presencial")
-- `Origem do lead = "G4 Eventos"`
+### 1. "Conversao por Canal" nunca mostra Eventos
+A tabela "Conversao por Canal" usa `data.channels` do hook `useMarketingIndicators`, que constroi apenas dois canais (linhas 96-137 do arquivo):
+- Meta Ads
+- Google Ads
 
-O segundo caso ja e tratado na linha 39 (`origem.includes('evento')`), mas o primeiro caso nao e tratado. Cards com `Fonte = "Evento"` passam pelos checks de Meta/Google sem match e caem direto em `return 'organico'` na linha 41, sem nunca verificar se `fonte` contem "evento".
+Nao existe um canal "Eventos" nesse array. Os dados de eventos nao vem da planilha do Google Sheets (que so tem Meta e Google), entao precisamos adicionar os dados de eventos a partir da atribuicao real (dados do Pipefy).
+
+### 2. "Atribuicao por Canal" - validacao
+A logica de `detectChannel` ja inclui `fonte.includes('evento')` apos a ultima correcao. Se os dados demoram para carregar (~60s para periodos longos), o card de Eventos so aparece apos o carregamento completo dos dados do Pipefy. Nao ha bug de codigo aqui - e questao de timing de carregamento.
 
 ## Solucao
 
-Adicionar `fonte.includes('evento')` na verificacao de eventos na linha 39:
+### Arquivo 1: `src/components/planning/MarketingIndicatorsTab.tsx`
+
+Enriquecer o array `data.channels` com dados de eventos vindos da atribuicao real (Pipefy). Criar um `useMemo` que:
+
+1. Pega os `channelSummaries` da atribuicao
+2. Encontra o summary do canal `eventos`
+3. Se existir, adiciona um `MarketingChannel` com id `eventos` ao array de channels
+4. Passa esse array enriquecido para o componente `ConversionsByChannelChart`
 
 ```typescript
-if (tipo.includes('evento') || origem.includes('evento') || fonte.includes('evento')) return 'eventos';
+const enrichedChannels = useMemo(() => {
+  const channels = [...data.channels];
+  const eventosSummary = channelSummaries.find(s => s.channel === 'eventos');
+  if (eventosSummary && eventosSummary.leads > 0) {
+    channels.push({
+      id: 'eventos',
+      name: 'Eventos',
+      investment: 0, // Eventos nao tem investimento de midia
+      leads: eventosSummary.leads,
+      mqls: eventosSummary.mqls,
+      rms: 0,
+      rrs: 0,
+      cpl: 0,
+      cpmql: 0,
+      conversionRate: eventosSummary.leads > 0
+        ? Math.round((eventosSummary.mqls / eventosSummary.leads) * 100)
+        : 0,
+    });
+  }
+  return channels;
+}, [data.channels, channelSummaries]);
 ```
 
-Isso deve ser inserido ANTES do `return 'organico'` e DEPOIS dos checks de Meta/Google (para nao classificar erroneamente cards que sao de Meta com fonte "evento").
+Depois, substituir `data.channels` por `enrichedChannels` nos seguintes componentes:
+- `<ChannelMetricsCards channels={enrichedChannels} ...>`
+- `<InvestmentByChannelChart channels={enrichedChannels} />`
+- `<ConversionsByChannelChart channels={enrichedChannels} />`
 
-## Arquivo alterado
+### Arquivo 2: `src/components/planning/marketing-indicators/ConversionsByChannelChart.tsx`
 
-- `src/hooks/useMarketingAttribution.ts` - linha 39: adicionar `fonte.includes('evento')` na condicao
+Nenhuma mudanca necessaria - o componente ja renderiza qualquer canal que receba no array `channels`. Basta passar o array enriquecido.
 
 ## Resultado esperado
 
-Cards com qualquer um dos tres campos contendo "evento" (`Fonte`, `Tipo de Origem do lead`, `Origem do lead`) serao classificados como canal "Eventos".
+- A tabela "Conversao por Canal" mostrara uma linha de "Eventos" com leads, MQLs e taxa de conversao
+- O card "Eventos" na "Atribuicao por Canal" continuara aparecendo (ja funciona apos a correcao anterior, desde que os dados terminem de carregar)
+- Os demais canais (Meta Ads, Google Ads) nao serao afetados
+
