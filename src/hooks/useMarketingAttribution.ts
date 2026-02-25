@@ -63,8 +63,7 @@ export function useMarketingAttribution(
     const cardBestStage = new Map<string, { campaign: string; channel: ChannelId; stages: Set<string>; card: AttributionCard }>();
     
     for (const card of allCards) {
-      const stage = PHASE_FUNNEL_MAP[card.fase];
-      if (!stage) continue;
+      const stage = PHASE_FUNNEL_MAP[card.fase] || 'leads'; // Default to leads for unmapped phases
       
       const campaign = card.campanha || '(Sem campanha)';
       const key = `${card.id}`;
