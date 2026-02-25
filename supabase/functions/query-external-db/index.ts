@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
   try {
     // Parse request body
     const body = await req.json();
-    const { table, action = 'preview', limit = 100 } = body;
+    const { table, action = 'preview', limit = 100, offset = 0 } = body;
     
     // Verify user is authenticated (any authenticated user can read expansão data)
     const authHeader = req.headers.get('Authorization');
@@ -162,9 +162,9 @@ Deno.serve(async (req) => {
         WHERE "Entrada" >= $1::timestamp 
         AND "Entrada" <= $2::timestamp 
         ORDER BY "Entrada" DESC 
-        LIMIT $3
+        LIMIT $3 OFFSET $4
       `;
-      const dataResult = await client.queryObject(dataQuery, [startDate, endDate, limit]);
+      const dataResult = await client.queryObject(dataQuery, [startDate, endDate, limit, offset]);
       
       // Count in period
       const countQuery = `
@@ -334,9 +334,9 @@ Deno.serve(async (req) => {
         WHERE "Data de assinatura do contrato" >= $1::timestamp 
         AND "Data de assinatura do contrato" <= $2::timestamp 
         ORDER BY "Data de assinatura do contrato" DESC 
-        LIMIT $3
+        LIMIT $3 OFFSET $4
       `;
-      const dataResult = await client.queryObject(dataQuery, [startDate, endDate, limit]);
+      const dataResult = await client.queryObject(dataQuery, [startDate, endDate, limit, offset]);
       
       const countQuery = `
         SELECT COUNT(*) as total FROM ${table} 
@@ -376,9 +376,9 @@ Deno.serve(async (req) => {
         WHERE "Data Criação" >= $1::timestamp 
         AND "Data Criação" <= $2::timestamp 
         ORDER BY "Data Criação" DESC 
-        LIMIT $3
+        LIMIT $3 OFFSET $4
       `;
-      const dataResult = await client.queryObject(dataQuery, [startDate, endDate, limit]);
+      const dataResult = await client.queryObject(dataQuery, [startDate, endDate, limit, offset]);
       
       const countQuery = `
         SELECT COUNT(*) as total FROM ${table} 

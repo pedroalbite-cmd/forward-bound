@@ -218,43 +218,48 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     queryFn: async () => {
       console.log(`[useModeloAtualAnalytics] Fetching data from pipefy_moviment_cfos with server-side date filter`);
       
-      // CRITICAL: Build UTC date strings at midnight to ensure we don't miss records
       const startDateUtc = `${startDateStr}T00:00:00.000Z`;
       const endDateUtc = `${endDateStr}T23:59:59.999Z`;
       
       console.log(`[useModeloAtualAnalytics] Query period: ${startDateUtc} to ${endDateUtc}`);
       
-      // Step 1: Fetch movements in the selected period (by Entrada)
-      // Step 1b: Fetch cards CREATED in the period (for MQL by creation date)
-      const [periodResponse, creationResponse, signatureResponse] = await Promise.all([
-        supabase.functions.invoke('query-external-db', {
-          body: { 
-            table: 'pipefy_moviment_cfos', 
-            action: 'query_period',
-            startDate: startDateUtc,
-            endDate: endDateUtc,
-            limit: 50000 
-          }
-        }),
-        supabase.functions.invoke('query-external-db', {
-          body: { 
-            table: 'pipefy_moviment_cfos', 
-            action: 'query_period_by_creation',
-            startDate: startDateUtc,
-            endDate: endDateUtc,
-            limit: 50000 
-          }
-        }),
-        supabase.functions.invoke('query-external-db', {
-          body: { 
-            table: 'pipefy_moviment_cfos', 
-            action: 'query_period_by_signature',
-            startDate: startDateUtc,
-            endDate: endDateUtc,
-            limit: 50000 
-          }
-        }),
+      // Paginated fetch helper - fetches in batches of PAGE_SIZE to avoid edge function CPU/memory limits
+      const PAGE_SIZE = 5000;
+      const fetchAllPages = async (action: string) => {
+        const allRows: any[] = [];
+        let offset = 0;
+        while (true) {
+          const { data: resp, error: err } = await supabase.functions.invoke('query-external-db', {
+            body: { 
+              table: 'pipefy_moviment_cfos', 
+              action,
+              startDate: startDateUtc,
+              endDate: endDateUtc,
+              limit: PAGE_SIZE,
+              offset
+            }
+          });
+          if (err) throw err;
+          const rows = resp?.data || [];
+          allRows.push(...rows);
+          console.log(`[useModeloAtualAnalytics] ${action} page offset=${offset}: ${rows.length} rows`);
+          if (rows.length < PAGE_SIZE) break;
+          offset += PAGE_SIZE;
+        }
+        return allRows;
+      };
+
+      // Fetch all three queries with pagination (signature is small, but use same pattern for safety)
+      const [periodRows, creationRows, signatureRows] = await Promise.all([
+        fetchAllPages('query_period'),
+        fetchAllPages('query_period_by_creation'),
+        fetchAllPages('query_period_by_signature'),
       ]);
+
+      // Wrap in the format expected by the rest of the code
+      const periodResponse = { data: { data: periodRows }, error: null };
+      const creationResponse = { data: { data: creationRows }, error: null };
+      const signatureResponse = { data: { data: signatureRows }, error: null };
 
       if (periodResponse.error) {
         console.error('[useModeloAtualAnalytics] Error fetching period data:', periodResponse.error);
