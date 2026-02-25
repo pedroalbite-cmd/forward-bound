@@ -23,21 +23,22 @@ function isMetaCampaignId(value: string): boolean {
 }
 
 function detectChannel(card: AttributionCard): ChannelId {
-  // If campanha field contains a Meta campaign ID, it's Meta Ads
-  if (card.campanha && isMetaCampaignId(card.campanha)) return 'meta_ads';
-  if (card.fbclid) return 'meta_ads';
-  if (card.gclid) return 'google_ads';
-  
   const fonte = (card.fonte || '').toLowerCase().trim();
-  // Abreviacoes reais do banco: 'ig', 'fb', 'googleads'
-  if (fonte === 'ig' || fonte === 'fb' || fonte.includes('facebook') || fonte.includes('instagram') || fonte.includes('meta')) return 'meta_ads';
-  if (fonte === 'googleads' || fonte.includes('google')) return 'google_ads';
-  
-  // Detectar eventos pelo tipoOrigem OU pelo campo origem do lead
   const tipo = (card.tipoOrigem || '').toLowerCase();
   const origem = (card.origemLead || '').toLowerCase();
-  if (tipo.includes('evento') || origem.includes('evento') || fonte.includes('evento')) return 'eventos';
-  
+
+  // Eventos tem prioridade - detectar ANTES de Meta/Google
+  if (fonte.includes('evento') || tipo.includes('evento') || origem.includes('evento')) return 'eventos';
+
+  // Meta Ads
+  if (card.campanha && isMetaCampaignId(card.campanha)) return 'meta_ads';
+  if (card.fbclid) return 'meta_ads';
+  if (fonte === 'ig' || fonte === 'fb' || fonte.includes('facebook') || fonte.includes('instagram') || fonte.includes('meta')) return 'meta_ads';
+
+  // Google Ads
+  if (card.gclid) return 'google_ads';
+  if (fonte === 'googleads' || fonte.includes('google')) return 'google_ads';
+
   return 'organico';
 }
 
