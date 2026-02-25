@@ -273,6 +273,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
 
       console.log(`[useModeloAtualAnalytics] Raw period data rows: ${periodResponse.data.data.length}`);
       const cards = parseCards(periodResponse.data.data);
+      const allCardsUnfiltered = parseCards(periodResponse.data.data, true); // skipPhaseFilter for marketing attribution
       console.log(`[useModeloAtualAnalytics] Parsed ${cards.length} card movements`);
       
       // Parse MQL-by-creation cards (skip phase filter - these can be in any phase including "Perdido")
@@ -330,13 +331,14 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         }
       }
 
-      return { cards, fullHistory, mqlByCreation };
+      return { cards, allCardsUnfiltered, fullHistory, mqlByCreation };
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
 
   const cards = data?.cards ?? [];
+  const allCards = data?.allCardsUnfiltered ?? [];
   const fullHistory = data?.fullHistory ?? [];
   const mqlByCreation = data?.mqlByCreation ?? [];
 
@@ -554,6 +556,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     isLoading,
     error,
     cards,
+    allCards,
     getCardsForIndicator,
     getLeadsCards,
     toDetailItem,
