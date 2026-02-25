@@ -119,7 +119,7 @@ export function MarketingIndicatorsTab() {
 
 
   // Fetch real card data from Pipefy for attribution
-  const { cards: modeloAtualCards, isLoading: isLoadingMACards } = useModeloAtualAnalytics(dateRange.from, dateRange.to);
+  const { allCards: modeloAtualAllCards, isLoading: isLoadingMACards } = useModeloAtualAnalytics(dateRange.from, dateRange.to);
   const { cards: o2TaxCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Franquia');
   const { cards: oxyHackerCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Oxy Hacker');
 
@@ -127,7 +127,7 @@ export function MarketingIndicatorsTab() {
   const allAttributionCards = useMemo((): AttributionCard[] => {
     const result: AttributionCard[] = [];
     
-    for (const c of modeloAtualCards) {
+    for (const c of modeloAtualAllCards) {
       result.push({
         id: c.id, titulo: c.titulo, campanha: c.campanha, conjuntoGrupo: c.conjuntoGrupo,
         fonte: c.fonte, fbclid: c.fbclid, gclid: c.gclid, tipoOrigem: c.tipoOrigem,
@@ -158,7 +158,7 @@ export function MarketingIndicatorsTab() {
     }
     
     return result;
-  }, [modeloAtualCards, o2TaxCards, oxyHackerCards]);
+  }, [modeloAtualAllCards, o2TaxCards, oxyHackerCards]);
 
   const { campaignFunnels, channelSummaries } = useMarketingAttribution(allAttributionCards, metaCampaigns);
 
