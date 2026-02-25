@@ -1,52 +1,49 @@
 
-# Fix: Meta de Faturamento 408k vs 400k (erro de arredondamento)
 
-## Problema
+# Correcao da deteccao de canal no Marketing Attribution
 
-No hook `useConsolidatedMetas.ts`, a meta de faturamento do Plan Growth e calculada como:
-```
-vendas * ticket_medio = 24 * 17.000 = 408.000
-```
-Mas `vendas` ja foi arredondado com `Math.ceil(400.000 / 17.000) = Math.ceil(23.53) = 24`. O valor correto deveria ser R$ 400.000 (o incremento exato calculado no Plan Growth).
+## Problema atual
 
-## Causa raiz
-
-O `FunnelDataItem` no contexto nao armazena o valor financeiro original — so armazena `vendas` (quantidade arredondada). Quando o `useConsolidatedMetas` tenta reconstruir o faturamento multiplicando `vendas * ticket`, o arredondamento causa a discrepancia.
+A funcao `detectChannel()` em `useMarketingAttribution.ts` procura por strings completas como `facebook`, `instagram`, `google`, mas o banco de dados usa abreviacoes: `ig`, `fb`, `googleads`. Isso faz com que leads pagos sejam classificados incorretamente como "Organico".
 
 ## Solucao
 
-### 1. `src/contexts/MediaMetasContext.tsx`
-Adicionar campo `faturamento` ao `FunnelDataItem`:
+Atualizar a funcao `detectChannel()` (linhas 25-38) para reconhecer as abreviacoes reais do banco:
+
+### Arquivo: `src/hooks/useMarketingAttribution.ts`
+
+Alterar a logica de deteccao de fonte (linha 32-33):
+
 ```typescript
-export interface FunnelDataItem {
-  month: string;
-  leads: number;
-  mqls: number;
-  rms: number;
-  rrs: number;
-  propostas: number;
-  vendas: number;
-  investimento: number;
-  faturamento?: number; // valor financeiro exato (incremento)
+function detectChannel(card: AttributionCard): ChannelId {
+  // If campanha field contains a Meta campaign ID, it's Meta Ads
+  if (card.campanha && isMetaCampaignId(card.campanha)) return 'meta_ads';
+  if (card.fbclid) return 'meta_ads';
+  if (card.gclid) return 'google_ads';
+
+  const fonte = (card.fonte || '').toLowerCase().trim();
+  // Abreviacoes reais do banco: 'ig', 'fb', 'googleads'
+  if (fonte === 'ig' || fonte === 'fb' || fonte.includes('facebook') || fonte.includes('instagram') || fonte.includes('meta')) return 'meta_ads';
+  if (fonte === 'googleads' || fonte.includes('google')) return 'google_ads';
+
+  // Detectar eventos pelo tipoOrigem OU pelo campo origem do lead
+  const tipo = (card.tipoOrigem || '').toLowerCase();
+  const origem = ((card as any).origemLead || '').toLowerCase();
+  if (tipo.includes('evento') || origem.includes('evento') || origem.includes('g4')) return 'eventos';
+
+  return 'organico';
 }
 ```
 
-### 2. `src/hooks/usePlanGrowthData.ts`
-Ao publicar funnelData no contexto, incluir o valor de faturamento exato:
-- Para Modelo Atual: usar `faturamentoVender` (incremento)
-- Para outras BUs: usar o valor mensal direto (o2TaxMonthly, oxyHackerMonthly, franquiaMonthly)
+## Mudancas
 
-### 3. `src/hooks/useConsolidatedMetas.ts`
-Alterar `getPlanGrowthMeta` para usar o campo `faturamento` do funnelData quando disponivel, em vez de recalcular via `vendas * ticket`:
-
-```
-Antes:  const faturamento = (monthData.vendas || 0) * BU_TICKETS[bu];
-Depois: const faturamento = monthData.faturamento ?? ((monthData.vendas || 0) * BU_TICKETS[bu]);
-```
+- Adicionar comparacao exata para `ig` e `fb` (match de abreviacao)
+- Adicionar comparacao exata para `googleads`
+- Adicionar `.trim()` na fonte para evitar espacos extras
+- Manter os matches anteriores (`facebook`, `instagram`, `meta`, `google`) como fallback
+- Adicionar deteccao de eventos pelo campo `origemLead` (quando contem "evento" ou "g4")
 
 ## Resultado esperado
 
-- Indicadores Fev Modelo Atual: Meta = R$ 400.000 (exato, igual ao Plan Growth)
-- MRR = R$ 100.000 (25% de 400k)
-- Setup = R$ 240.000 (60% de 400k)
-- Pontual = R$ 60.000 (15% de 400k)
+Leads que antes apareciam como "Organico" por terem fonte `ig` ou `fb` passarao a ser corretamente classificados como "Meta Ads", e leads com fonte `googleads` como "Google Ads".
+
