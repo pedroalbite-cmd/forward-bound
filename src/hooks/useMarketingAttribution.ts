@@ -36,7 +36,7 @@ function detectChannel(card: AttributionCard): ChannelId {
   // Detectar eventos pelo tipoOrigem OU pelo campo origem do lead
   const tipo = (card.tipoOrigem || '').toLowerCase();
   const origem = (card.origemLead || '').toLowerCase();
-  if (tipo.includes('evento') || origem.includes('evento')) return 'eventos';
+  if (tipo.includes('evento') || origem.includes('evento') || fonte.includes('evento')) return 'eventos';
   
   return 'organico';
 }
