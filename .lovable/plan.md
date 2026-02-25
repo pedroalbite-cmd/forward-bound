@@ -2,36 +2,55 @@
 
 # Correcao: Eventos nao aparecem na atribuicao de Marketing
 
-## Problema
+## Problema identificado
 
-O campo `origemLead` (que contem valores como "Evento | Gestao e Estrategia G4") nao esta sendo passado para os cards de atribuicao. Existem dois problemas:
+A funcao `parseCards()` em `useModeloAtualAnalytics.ts` filtra cards cuja fase NAO esta no mapa `PHASE_TO_INDICATOR`. Cards de eventos (com `Origem do lead` = "G4 Eventos", "G4 Frontier", etc.) que estao em fases como "Remarcar reuniao / No show" ou "Em contato" sao descartados antes de chegarem a logica de atribuicao no `MarketingIndicatorsTab`.
 
-1. **Interface `AttributionCard`** (types.ts): nao declara o campo `origemLead`
-2. **Mapeamento no `MarketingIndicatorsTab`**: ao construir `allAttributionCards`, o campo `origemLead` nao e copiado dos cards originais (`ModeloAtualCard` / `ExpansaoCard`)
-
-Resultado: `detectChannel()` faz `(card as any).origemLead` que sempre retorna `undefined`, entao leads de eventos nunca sao detectados por esse caminho.
+Confirmei no banco que existem cards com "Origem do lead" contendo "G4 Eventos" e "G4 Frontier", mas eles estao em fases nao mapeadas e por isso sao excluidos pelo filtro de fase.
 
 ## Solucao
 
-### 1. Adicionar `origemLead` na interface `AttributionCard` (types.ts)
+Expor uma propriedade adicional `allCards` (sem filtro de fase) no retorno de `useModeloAtualAnalytics` para uso exclusivo pela atribuicao de marketing. O array `cards` existente continua inalterado para os indicadores de funil.
 
-Adicionar o campo opcional `origemLead?: string` na interface, junto dos outros campos de marketing.
+### Arquivo 1: `src/hooks/useModeloAtualAnalytics.ts`
 
-### 2. Passar `origemLead` no mapeamento (MarketingIndicatorsTab.tsx)
+1. Na query function, apos o `parseCards(periodResponse.data.data)` existente (linha 275), adicionar um parse sem filtro de fase:
 
-Nos tres blocos onde os cards sao construidos (Modelo Atual, O2 TAX, Oxy Hacker), incluir `origemLead: c.origemLead`.
+```typescript
+const allCardsUnfiltered = parseCards(periodResponse.data.data, true); // skipPhaseFilter=true
+```
 
-### 3. Remover cast `as any` no detectChannel (useMarketingAttribution.ts)
+2. Incluir `allCardsUnfiltered` no retorno da query (junto com `cards`, `fullHistory`, `mqlByCreation`).
 
-Com o campo declarado na interface, trocar `(card as any).origemLead` por `card.origemLead`.
+3. Expor `allCards` no retorno do hook:
 
-## Arquivos alterados
+```typescript
+const allCards = data?.allCardsUnfiltered ?? [];
+```
 
-- `src/components/planning/marketing-indicators/types.ts` - adicionar campo `origemLead`
-- `src/components/planning/MarketingIndicatorsTab.tsx` - passar `origemLead` nos 3 blocos de mapeamento
-- `src/hooks/useMarketingAttribution.ts` - remover cast `as any`
+4. Adicionar `allCards` ao objeto retornado pelo hook.
+
+### Arquivo 2: `src/components/planning/MarketingIndicatorsTab.tsx`
+
+Alterar a desestruturacao na linha 127 para usar `allCards` em vez de `cards` para a atribuicao:
+
+```typescript
+const { cards: modeloAtualCards, allCards: modeloAtualAllCards, isLoading: isLoadingMACards } = useModeloAtualAnalytics(...);
+```
+
+E no `useMemo` de `allAttributionCards`, usar `modeloAtualAllCards` em vez de `modeloAtualCards` para o loop do Modelo Atual.
+
+### Arquivo 3: Logica de deteccao de canal (ajuste menor)
+
+Atualmente `g4` no campo `origemLead` classifica como "eventos", mas "G4 Frontier" nao e um evento - e o programa G4 de educacao executiva. Ajustar a deteccao para ser mais especifica:
+
+```typescript
+if (tipo.includes('evento') || origem.includes('evento')) return 'eventos';
+```
+
+Remover a checagem generica de "g4" para evitar falsos positivos (G4 Frontier, G4 Educacao, etc. nao sao eventos). Manter apenas "evento" como keyword.
 
 ## Resultado esperado
 
-Leads cujo campo "Origem do lead" contenha "Evento" ou "G4" serao corretamente classificados como canal "Eventos" nos cards de atribuicao.
+Cards de todas as fases serao considerados na atribuicao de marketing, e aqueles com "Origem do lead" contendo "Evento" (como "G4 Eventos") aparecerao corretamente no card de Eventos.
 
