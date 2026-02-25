@@ -212,6 +212,7 @@ export interface AttributionCard {
   fbclid?: string;
   gclid?: string;
   tipoOrigem?: string;
+  origemLead?: string;
   fase: string;
   dataEntrada: Date;
   valor: number;
