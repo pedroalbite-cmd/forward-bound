@@ -1,49 +1,37 @@
 
 
-# Correcao da deteccao de canal no Marketing Attribution
+# Correcao: Eventos nao aparecem na atribuicao de Marketing
 
-## Problema atual
+## Problema
 
-A funcao `detectChannel()` em `useMarketingAttribution.ts` procura por strings completas como `facebook`, `instagram`, `google`, mas o banco de dados usa abreviacoes: `ig`, `fb`, `googleads`. Isso faz com que leads pagos sejam classificados incorretamente como "Organico".
+O campo `origemLead` (que contem valores como "Evento | Gestao e Estrategia G4") nao esta sendo passado para os cards de atribuicao. Existem dois problemas:
+
+1. **Interface `AttributionCard`** (types.ts): nao declara o campo `origemLead`
+2. **Mapeamento no `MarketingIndicatorsTab`**: ao construir `allAttributionCards`, o campo `origemLead` nao e copiado dos cards originais (`ModeloAtualCard` / `ExpansaoCard`)
+
+Resultado: `detectChannel()` faz `(card as any).origemLead` que sempre retorna `undefined`, entao leads de eventos nunca sao detectados por esse caminho.
 
 ## Solucao
 
-Atualizar a funcao `detectChannel()` (linhas 25-38) para reconhecer as abreviacoes reais do banco:
+### 1. Adicionar `origemLead` na interface `AttributionCard` (types.ts)
 
-### Arquivo: `src/hooks/useMarketingAttribution.ts`
+Adicionar o campo opcional `origemLead?: string` na interface, junto dos outros campos de marketing.
 
-Alterar a logica de deteccao de fonte (linha 32-33):
+### 2. Passar `origemLead` no mapeamento (MarketingIndicatorsTab.tsx)
 
-```typescript
-function detectChannel(card: AttributionCard): ChannelId {
-  // If campanha field contains a Meta campaign ID, it's Meta Ads
-  if (card.campanha && isMetaCampaignId(card.campanha)) return 'meta_ads';
-  if (card.fbclid) return 'meta_ads';
-  if (card.gclid) return 'google_ads';
+Nos tres blocos onde os cards sao construidos (Modelo Atual, O2 TAX, Oxy Hacker), incluir `origemLead: c.origemLead`.
 
-  const fonte = (card.fonte || '').toLowerCase().trim();
-  // Abreviacoes reais do banco: 'ig', 'fb', 'googleads'
-  if (fonte === 'ig' || fonte === 'fb' || fonte.includes('facebook') || fonte.includes('instagram') || fonte.includes('meta')) return 'meta_ads';
-  if (fonte === 'googleads' || fonte.includes('google')) return 'google_ads';
+### 3. Remover cast `as any` no detectChannel (useMarketingAttribution.ts)
 
-  // Detectar eventos pelo tipoOrigem OU pelo campo origem do lead
-  const tipo = (card.tipoOrigem || '').toLowerCase();
-  const origem = ((card as any).origemLead || '').toLowerCase();
-  if (tipo.includes('evento') || origem.includes('evento') || origem.includes('g4')) return 'eventos';
+Com o campo declarado na interface, trocar `(card as any).origemLead` por `card.origemLead`.
 
-  return 'organico';
-}
-```
+## Arquivos alterados
 
-## Mudancas
-
-- Adicionar comparacao exata para `ig` e `fb` (match de abreviacao)
-- Adicionar comparacao exata para `googleads`
-- Adicionar `.trim()` na fonte para evitar espacos extras
-- Manter os matches anteriores (`facebook`, `instagram`, `meta`, `google`) como fallback
-- Adicionar deteccao de eventos pelo campo `origemLead` (quando contem "evento" ou "g4")
+- `src/components/planning/marketing-indicators/types.ts` - adicionar campo `origemLead`
+- `src/components/planning/MarketingIndicatorsTab.tsx` - passar `origemLead` nos 3 blocos de mapeamento
+- `src/hooks/useMarketingAttribution.ts` - remover cast `as any`
 
 ## Resultado esperado
 
-Leads que antes apareciam como "Organico" por terem fonte `ig` ou `fb` passarao a ser corretamente classificados como "Meta Ads", e leads com fonte `googleads` como "Google Ads".
+Leads cujo campo "Origem do lead" contenha "Evento" ou "G4" serao corretamente classificados como canal "Eventos" nos cards de atribuicao.
 
