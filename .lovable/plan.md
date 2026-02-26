@@ -1,51 +1,50 @@
 
 
-# Correcao: Eventos classificados como Meta Ads pela ordem de prioridade
+# Bug: MRR, Setup e Pontual nao filtram por Closer
 
-## Problema raiz
+## Problema
 
-Na funcao `detectChannel()` em `useMarketingAttribution.ts`, a verificacao de eventos (linha 39) acontece DEPOIS das verificacoes de Meta Ads (linhas 27-28, 33). Cards de eventos que possuem:
-- `Fonte: "Evento"` 
-- MAS tambem `Campanha: "120212747408800418"` (ID numerico do Meta preenchido automaticamente pelo Pipefy)
-
-Sao capturados pela linha 27 (`isMetaCampaignId`) e classificados como `meta_ads` antes de chegarem na verificacao de evento.
+No `useConsolidatedMetas.ts` (linha 215), o filtro de closer so e aplicado quando `indicatorKey === 'faturamento'`. Para MRR, Setup e Pontual, o codigo cai na linha 220 que chama `getMetaForPeriod` sem nenhum ajuste de closer — mostrando 100% da meta da BU.
 
 ## Solucao
 
-Mover a deteccao de eventos para ANTES das verificacoes de Meta/Google. A logica deve ser:
+Estender a logica de filtro de closer para MRR, Setup e Pontual. Como essas metricas sao derivadas do faturamento (25%, 60%, 15%), a abordagem e:
 
-1. Primeiro, checar se e evento (pelo campo `fonte`, `tipoOrigem` ou `origemLead`)
-2. Depois, checar se e Meta Ads ou Google Ads
+1. Quando houver filtro de closer ativo para qualquer metrica monetaria (mrr, setup, pontual), calcular primeiro o faturamento filtrado pelo closer
+2. Aplicar os percentuais padrao (25%, 60%, 15%) sobre o faturamento ja filtrado
 
 ## Arquivo alterado
 
-`src/hooks/useMarketingAttribution.ts` - funcao `detectChannel` (linhas 25-42)
+**`src/hooks/useConsolidatedMetas.ts`** — funcao `getMetaMonetaryForPeriod` (linhas 202-221)
 
-Nova ordem:
+Substituir a condicao `if (indicatorKey === 'faturamento' && ...)` por uma que trate todas as metricas monetarias quando o closer filter estiver ativo:
 
 ```typescript
-function detectChannel(card: AttributionCard): ChannelId {
-  const fonte = (card.fonte || '').toLowerCase().trim();
-  const tipo = (card.tipoOrigem || '').toLowerCase();
-  const origem = (card.origemLead || '').toLowerCase();
+const getMetaMonetaryForPeriod = (
+  indicatorKey: ConsolidatedMetricType | 'sla',
+  bus: BuType[],
+  startDate: Date,
+  endDate: Date,
+  closerFilter?: string[],
+  getFilteredMeta?: (value: number, bu: string, month: string, closers: string[]) => number
+): number => {
+  if (indicatorKey === 'sla') return 30;
 
-  // Eventos tem prioridade - detectar ANTES de Meta/Google
-  if (fonte.includes('evento') || tipo.includes('evento') || origem.includes('evento')) return 'eventos';
+  // Com filtro de closer ativo, ajustar TODAS as métricas monetárias
+  if (closerFilter && closerFilter.length > 0 && getFilteredMeta) {
+    const filteredFaturamento = getFilteredFaturamentoMeta(bus, startDate, endDate, closerFilter, getFilteredMeta);
+    
+    switch (indicatorKey) {
+      case 'faturamento': return filteredFaturamento;
+      case 'mrr': return Math.round(filteredFaturamento * 0.25);
+      case 'setup': return Math.round(filteredFaturamento * 0.60);
+      case 'pontual': return Math.round(filteredFaturamento * 0.15);
+    }
+  }
 
-  // Meta Ads
-  if (card.campanha && isMetaCampaignId(card.campanha)) return 'meta_ads';
-  if (card.fbclid) return 'meta_ads';
-  if (fonte === 'ig' || fonte === 'fb' || fonte.includes('facebook') || fonte.includes('instagram') || fonte.includes('meta')) return 'meta_ads';
-
-  // Google Ads
-  if (card.gclid) return 'google_ads';
-  if (fonte === 'googleads' || fonte.includes('google')) return 'google_ads';
-
-  return 'organico';
-}
+  return getMetaForPeriod(bus, startDate, endDate, indicatorKey);
+};
 ```
 
-## Resultado esperado
-
-Cards com `Fonte: "Evento"` serao corretamente classificados como canal "Eventos", mesmo que possuam um ID de campanha Meta no campo Campanha. Isso fara o card de Eventos aparecer tanto na "Atribuicao por Canal" quanto na tabela "Conversao por Canal".
+Isso garante que ao selecionar um closer, MRR/Setup/Pontual reflitam a proporcao correta da meta filtrada, nao da BU inteira.
 
