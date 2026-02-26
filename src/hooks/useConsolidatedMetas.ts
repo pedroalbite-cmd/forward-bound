@@ -207,16 +207,20 @@ export function useConsolidatedMetas() {
     closerFilter?: string[],
     getFilteredMeta?: (value: number, bu: string, month: string, closers: string[]) => number
   ): number => {
-    if (indicatorKey === 'sla') {
-      return 30; // Meta fixa de 30 minutos
+    if (indicatorKey === 'sla') return 30;
+
+    // Com filtro de closer ativo, ajustar TODAS as métricas monetárias
+    if (closerFilter && closerFilter.length > 0 && getFilteredMeta) {
+      const filteredFaturamento = getFilteredFaturamentoMeta(bus, startDate, endDate, closerFilter, getFilteredMeta);
+      
+      switch (indicatorKey) {
+        case 'faturamento': return filteredFaturamento;
+        case 'mrr': return Math.round(filteredFaturamento * 0.25);
+        case 'setup': return Math.round(filteredFaturamento * 0.60);
+        case 'pontual': return Math.round(filteredFaturamento * 0.15);
+      }
     }
 
-    // Para faturamento com filtro de closer
-    if (indicatorKey === 'faturamento' && closerFilter && closerFilter.length > 0 && getFilteredMeta) {
-      return getFilteredFaturamentoMeta(bus, startDate, endDate, closerFilter, getFilteredMeta);
-    }
-
-    // Para outras métricas ou sem filtro
     return getMetaForPeriod(bus, startDate, endDate, indicatorKey);
   };
 
