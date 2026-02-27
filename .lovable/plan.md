@@ -1,25 +1,34 @@
 
 
-## Alterar hierarquia Google Ads: Campanha → Grupo → Palavras-chave
+## Vincular dados do Pipefy (CRM) às campanhas Google Ads
 
-Atualmente o drill-down do Google Ads e: Campanha → Grupo de Anuncio → Anuncios. O usuario quer trocar o terceiro nivel de **Anuncios** para **Palavras-chave**.
+### Problema
 
-### Alteracoes em `src/components/planning/marketing-indicators/CampaignsTable.tsx`
+O `useMarketingAttribution` so faz matching de cards CRM com campanhas **Meta Ads** (por ID numerico e por nome). Cards com `gclid` ou `fonte=googleads` sao detectados como `google_ads`, mas o nome da campanha no Pipefy nao e cruzado com as campanhas da API do Google. Resultado: colunas CRM (Leads CRM, MQLs, Vendas, Receita, TCV, ROI) ficam vazias para campanhas Google.
 
-1. **Substituir import**: trocar `useGoogleAds` por `useGoogleKeywords`
-2. **Criar componente `GoogleKeywordRow`** (nivel 3): exibir texto da keyword, tipo de correspondencia (BROAD/PHRASE/EXACT), gasto, cliques, conversoes, CPL
-3. **Modificar `GoogleAdGroupRow`**: ao expandir, carregar keywords via `useGoogleKeywords({ adGroupId })` em vez de ads via `useGoogleAds`
-4. **Ajustar textos**: "Carregando anuncios..." → "Carregando palavras-chave...", "Nenhum anuncio encontrado" → "Nenhuma palavra-chave encontrada"
+### Alteracoes
 
-### Visualizacao do novo nivel 3
+#### 1. `src/hooks/useMarketingAttribution.ts`
+
+- Renomear parametro `metaCampaigns` para `allApiCampaigns` (ja recebe Meta + Google)
+- No bloco de lookup (linhas 141-149), incluir campanhas Google no mapa de nomes normalizados
+- Para campanhas Google, mapear tanto `google_123` quanto o ID raw `123` e o nome normalizado
+- Assim o matching por nome fuzzy funciona para ambas as plataformas
+
+#### 2. `src/components/planning/marketing-indicators/CampaignsTable.tsx`
+
+- No `funnelMap` (linha 504-520), adicionar lookup pelo `_googleId` raw para campanhas Google
+- Ao buscar o funnel de uma campanha Google, tentar: `campaign.id` (`google_123`), `_googleId` (`123`), e nome normalizado
+
+### Resultado esperado
 
 ```text
-Campanha Google        | Leads | Invest | CPL  | ...
-├─ Grupo de Anuncio 1  |   12  | R$ 5k  | R$42 | ...
-│  ├─ [BROAD] keyword1 |    5  | R$ 2k  | R$40 | ...
-│  ├─ [EXACT] keyword2 |    7  | R$ 3k  | R$43 | ...
-├─ Grupo de Anuncio 2  |    8  | R$ 3k  | R$38 | ...
+Campanha Google        | Leads | Gasto  | CPL  | ... | Leads(CRM) | MQLs | Vendas | Receita | ROI
+├─ Campanha X          |   30  | R$10k  | R$33 | ... |     8      |  5   |   2    | R$ 15k  | 1.5x
 ```
 
-Nenhuma alteracao na Edge Function ou hook necessaria - a infraestrutura ja existe.
+| Arquivo | Acao |
+|---------|------|
+| `src/hooks/useMarketingAttribution.ts` | Incluir campanhas Google no lookup de matching |
+| `src/components/planning/marketing-indicators/CampaignsTable.tsx` | Adicionar fallback por `_googleId` no `funnelMap` |
 
