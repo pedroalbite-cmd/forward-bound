@@ -242,7 +242,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
           valorPontual,
           valorEducacao,
           valorSetup,
-          valor: valorMRR + valorPontual + valorSetup,
+          valor: valorMRR + valorPontual + valorEducacao + valorSetup,
           faixaFaturamento: faixaFaturamento || undefined,
         });
       }
@@ -309,7 +309,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
             valorPontual,
             valorEducacao,
             valorSetup,
-            valor: valorMRR + valorPontual + valorSetup,
+            valor: valorMRR + valorPontual + valorEducacao + valorSetup,
             faixaFaturamento: (row['Faixa de faturamento mensal'] || row['Faixa'] || row['faixa'] || '') || undefined,
           });
           existingKeys.add(key);

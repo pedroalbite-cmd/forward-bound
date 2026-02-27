@@ -137,7 +137,7 @@ function parseCardRow(row: Record<string, any>, skipPhaseFilter = false): Modelo
   const valorPontual = parseNumericValue(row['Valor Pontual'] || row['valor_pontual'] || 0);
   const valorEducacao = parseNumericValue(row['Valor Educação'] || row['Valor Educacao'] || row['valor_educacao'] || 0);
   const valorSetup = parseNumericValue(row['Valor Setup'] || row['valor_setup'] || 0);
-  const valor = valorMRR + valorPontual + valorSetup;
+  const valor = valorMRR + valorPontual + valorEducacao + valorSetup;
   
   // Parse exit date and calculate duration dynamically
   const dataSaida = parseDate(row['Saída']);
