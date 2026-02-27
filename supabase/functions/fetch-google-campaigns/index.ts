@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const GOOGLE_ADS_API_VERSION = "v18";
+const GOOGLE_ADS_API_VERSION = "v22";
 const CACHE_TTL_MINUTES = 60;
 
 function getSupabaseClient() {
@@ -99,11 +99,12 @@ serve(async (req) => {
   }
 
   try {
-    const customerId = Deno.env.get("GOOGLE_ADS_CUSTOMER_ID");
-    if (!customerId) throw new Error("GOOGLE_ADS_CUSTOMER_ID não configurado");
+    const rawCustomerId = Deno.env.get("GOOGLE_ADS_CUSTOMER_ID");
+    if (!rawCustomerId) throw new Error("GOOGLE_ADS_CUSTOMER_ID não configurado");
+    const customerId = rawCustomerId.replace(/-/g, '');
 
     const { startDate, endDate } = await req.json();
-    console.log("Fetching Google Ads campaigns:", { startDate, endDate });
+    console.log("Fetching Google Ads campaigns:", { customerId, startDate, endDate });
 
     const supabase = getSupabaseClient();
     const cacheKey = `google:campaigns:${customerId}:${startDate}:${endDate}`;
