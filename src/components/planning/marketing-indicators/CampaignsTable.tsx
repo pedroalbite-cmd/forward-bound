@@ -9,6 +9,8 @@ import { ChevronDown, ChevronUp, ChevronRight, Loader2, AlertCircle, ExternalLin
 import { CampaignData, AdSetData, AdData, CampaignFunnel } from "./types";
 import { useCampaignAdSets } from "@/hooks/useCampaignAdSets";
 import { useAdSetAds } from "@/hooks/useAdSetAds";
+import { useGoogleAdGroups } from "@/hooks/useGoogleAdGroups";
+import { useGoogleAds } from "@/hooks/useGoogleAds";
 import { cn } from "@/lib/utils";
 
 interface CampaignsTableProps {
@@ -62,6 +64,22 @@ const getStatusBadge = (status: 'active' | 'paused' | 'ended') => {
   }
 };
 
+const getSourceBadge = (channel: string) => {
+  if (channel === 'Google Ads') {
+    return <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-500 text-blue-600">Google</Badge>;
+  }
+  return <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-indigo-500 text-indigo-600">Meta</Badge>;
+};
+
+// Helper to detect if campaign is from Google Ads
+function isGoogleCampaign(campaign: CampaignData): boolean {
+  return campaign.channel === 'Google Ads' || campaign.id.startsWith('google_');
+}
+
+function getGoogleRawId(campaign: CampaignData): string {
+  return (campaign as any)._googleId || campaign.id.replace('google_', '');
+}
+
 // ─── Thumbnail component ──────────────────────────────────────
 
 function Thumbnail({ 
@@ -89,7 +107,100 @@ function Thumbnail({
   );
 }
 
-// ─── Ad Row (level 3) ─────────────────────────────────────────
+// ─── Google Ad Row (level 3) ──────────────────────────────────
+
+function GoogleAdRow({ ad }: { ad: AdData }) {
+  return (
+    <TableRow className="bg-muted/15">
+      <TableCell className="p-2"></TableCell>
+      <TableCell className="w-14 p-2"></TableCell>
+      <TableCell className="pl-10 font-normal text-xs text-muted-foreground">
+        <span>│  ├─ {ad.name}</span>
+      </TableCell>
+      <TableCell className="text-right text-xs">{formatNumber(ad.leads)}</TableCell>
+      <TableCell className="text-right text-xs">{formatCurrency(ad.spend)}</TableCell>
+      <TableCell className="text-right text-xs">{ad.cpl > 0 ? formatCurrency(ad.cpl) : '-'}</TableCell>
+      <TableCell className="text-right text-xs">{ad.cpa > 0 ? formatCurrency(ad.cpa) : '-'}</TableCell>
+      <TableCell>{getStatusBadge(ad.status)}</TableCell>
+    </TableRow>
+  );
+}
+
+// ─── Google AdGroup Row (level 2) ─────────────────────────────
+
+function GoogleAdGroupRow({ 
+  adGroup, startDate, endDate 
+}: { 
+  adGroup: AdSetData; startDate: Date; endDate: Date 
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  const { data: ads, isLoading, error } = useGoogleAds(
+    isExpanded ? adGroup.id : null, startDate, endDate, isExpanded
+  );
+
+  return (
+    <>
+      <TableRow className="bg-muted/30 cursor-pointer hover:bg-muted/40" onClick={() => setIsExpanded(!isExpanded)}>
+        <TableCell className="p-2">
+          {isLoading ? (
+            <Loader2 className="h-3 w-3 animate-spin ml-2" />
+          ) : (
+            <ChevronRight className={`h-3 w-3 ml-2 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+          )}
+        </TableCell>
+        <TableCell className="w-14 p-2"></TableCell>
+        <TableCell className="pl-6 font-normal text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <span>├─ {adGroup.name}</span>
+            {adGroup.previewUrl && (
+              <a href={adGroup.previewUrl} target="_blank" rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()} className="text-primary hover:text-primary/80" title="Abrir no Google Ads">
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+        </TableCell>
+        <TableCell className="text-right text-sm">{formatNumber(adGroup.leads)}</TableCell>
+        <TableCell className="text-right text-sm">{formatCurrency(adGroup.spend)}</TableCell>
+        <TableCell className="text-right text-sm">{adGroup.cpl > 0 ? formatCurrency(adGroup.cpl) : '-'}</TableCell>
+        <TableCell className="text-right text-sm">{(adGroup.cpa || 0) > 0 ? formatCurrency(adGroup.cpa!) : '-'}</TableCell>
+        <TableCell>{getStatusBadge(adGroup.status)}</TableCell>
+      </TableRow>
+
+      {isExpanded && isLoading && (
+        <TableRow className="bg-muted/15">
+          <TableCell colSpan={14} className="text-center py-3 text-muted-foreground text-sm">
+            <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+            Carregando anúncios...
+          </TableCell>
+        </TableRow>
+      )}
+
+      {isExpanded && error && (
+        <TableRow className="bg-muted/15">
+          <TableCell colSpan={14} className="text-center py-3 text-sm text-destructive">
+            Erro ao carregar anúncios: {(error as Error).message}
+          </TableCell>
+        </TableRow>
+      )}
+
+      {isExpanded && !isLoading && ads && ads.length === 0 && !error && (
+        <TableRow className="bg-muted/15">
+          <TableCell colSpan={14} className="text-center py-3 text-muted-foreground text-xs">
+            Nenhum anúncio encontrado
+          </TableCell>
+        </TableRow>
+      )}
+
+      {isExpanded && ads?.filter(a => a.spend > 0).map((ad) => (
+        <GoogleAdRow key={ad.id} ad={ad} />
+      ))}
+    </>
+  );
+}
+
+// ─── Meta Ad Row (level 3) ────────────────────────────────────
 
 function AdRow({ ad, onPreview }: { ad: AdData; onPreview: (data: PreviewModalData) => void }) {
   return (
@@ -126,7 +237,7 @@ function AdRow({ ad, onPreview }: { ad: AdData; onPreview: (data: PreviewModalDa
   );
 }
 
-// ─── AdSet Row (level 2) ──────────────────────────────────────
+// ─── Meta AdSet Row (level 2) ─────────────────────────────────
 
 function AdSetRow({ 
   adSet, startDate, endDate, onPreview 
@@ -170,7 +281,7 @@ function AdSetRow({
 
       {isExpanded && isLoading && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={13} className="text-center py-3 text-muted-foreground text-sm">
+          <TableCell colSpan={14} className="text-center py-3 text-muted-foreground text-sm">
             <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
             Carregando anúncios...
           </TableCell>
@@ -179,7 +290,7 @@ function AdSetRow({
 
       {isExpanded && error && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={13} className="text-center py-3 text-sm text-destructive">
+          <TableCell colSpan={14} className="text-center py-3 text-sm text-destructive">
             {(error as Error).message === 'RATE_LIMIT'
               ? '⏳ Limite de requisições atingido. Aguarde e tente novamente.'
               : `Erro ao carregar anúncios: ${(error as Error).message}`}
@@ -189,7 +300,7 @@ function AdSetRow({
 
       {isExpanded && !isLoading && ads && ads.length === 0 && !error && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={13} className="text-center py-3 text-muted-foreground text-xs">
+          <TableCell colSpan={14} className="text-center py-3 text-muted-foreground text-xs">
             Nenhum anúncio encontrado
           </TableCell>
         </TableRow>
@@ -202,7 +313,7 @@ function AdSetRow({
   );
 }
 
-// ─── Campaign Row (level 1) ───────────────────────────────────
+// ─── Campaign Row (level 1) - supports both Meta and Google ───
 
 function CampaignRow({
   campaign, isExpanded, onToggle, startDate, endDate, onPreview, funnel,
@@ -211,17 +322,29 @@ function CampaignRow({
   startDate: Date; endDate: Date; onPreview: (data: PreviewModalData) => void;
   funnel?: CampaignFunnel;
 }) {
-  const { data: adSets, isLoading: adSetsLoading, error: adSetsError } = useCampaignAdSets(
-    isExpanded ? campaign.id : null, startDate, endDate, isExpanded
+  const isGoogle = isGoogleCampaign(campaign);
+  const googleRawId = isGoogle ? getGoogleRawId(campaign) : null;
+
+  // Meta drill-down
+  const { data: metaAdSets, isLoading: metaLoading, error: metaError } = useCampaignAdSets(
+    isExpanded && !isGoogle ? campaign.id : null, startDate, endDate, isExpanded && !isGoogle
   );
 
-  const hasAdSets = adSets && adSets.length > 0;
+  // Google drill-down
+  const { data: googleAdGroups, isLoading: googleLoading, error: googleError } = useGoogleAdGroups(
+    isExpanded && isGoogle ? googleRawId : null, startDate, endDate, isExpanded && isGoogle
+  );
+
+  const adSets = isGoogle ? googleAdGroups : metaAdSets;
+  const isLoading = isGoogle ? googleLoading : metaLoading;
+  const drillError = isGoogle ? googleError : metaError;
+  const hasChildren = adSets && adSets.length > 0;
 
   return (
     <>
       <TableRow className="cursor-pointer hover:bg-muted/50" onClick={onToggle}>
         <TableCell className="p-2">
-          {adSetsLoading ? (
+          {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <ChevronRight className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
@@ -230,10 +353,12 @@ function CampaignRow({
         <TableCell className="w-14 p-2"></TableCell>
         <TableCell className="font-medium">
           <div className="flex items-center gap-2">
+            {getSourceBadge(campaign.channel)}
             <span>{campaign.name}</span>
             {campaign.previewUrl && (
               <a href={campaign.previewUrl} target="_blank" rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()} className="text-primary hover:text-primary/80" title="Abrir no Meta Ads Manager">
+                onClick={(e) => e.stopPropagation()} className="text-primary hover:text-primary/80"
+                title={isGoogle ? "Abrir no Google Ads" : "Abrir no Meta Ads Manager"}>
                 <ExternalLink className="h-3 w-3" />
               </a>
             )}
@@ -259,35 +384,39 @@ function CampaignRow({
         </TableCell>
       </TableRow>
 
-      {isExpanded && adSetsLoading && (
+      {isExpanded && isLoading && (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={13} className="text-center py-4 text-muted-foreground">
+          <TableCell colSpan={14} className="text-center py-4 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
-            Carregando conjuntos de anúncios...
+            {isGoogle ? 'Carregando grupos de anúncio...' : 'Carregando conjuntos de anúncios...'}
           </TableCell>
         </TableRow>
       )}
 
-      {isExpanded && !adSetsLoading && !hasAdSets && !adSetsError && (
+      {isExpanded && !isLoading && !hasChildren && !drillError && (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={13} className="text-center py-4 text-muted-foreground text-sm">
-            Nenhum conjunto de anúncio encontrado
+          <TableCell colSpan={14} className="text-center py-4 text-muted-foreground text-sm">
+            {isGoogle ? 'Nenhum grupo de anúncio encontrado' : 'Nenhum conjunto de anúncio encontrado'}
           </TableCell>
         </TableRow>
       )}
 
-      {isExpanded && adSetsError && (
+      {isExpanded && drillError && (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={13} className="text-center py-4 text-sm text-destructive">
-            {adSetsError.message === 'RATE_LIMIT'
+          <TableCell colSpan={14} className="text-center py-4 text-sm text-destructive">
+            {(drillError as Error).message === 'RATE_LIMIT'
               ? '⏳ Limite de requisições atingido. Aguarde alguns segundos e tente novamente.'
-              : `Erro ao carregar conjuntos: ${adSetsError.message}`}
+              : `Erro ao carregar: ${(drillError as Error).message}`}
           </TableCell>
         </TableRow>
       )}
 
-      {isExpanded && hasAdSets && adSets!.filter(a => a.spend > 0).map((adSet) => (
-        <AdSetRow key={adSet.id} adSet={adSet} startDate={startDate} endDate={endDate} onPreview={onPreview} />
+      {isExpanded && hasChildren && adSets!.filter(a => a.spend > 0).map((item) => (
+        isGoogle ? (
+          <GoogleAdGroupRow key={item.id} adGroup={item} startDate={startDate} endDate={endDate} />
+        ) : (
+          <AdSetRow key={item.id} adSet={item} startDate={startDate} endDate={endDate} onPreview={onPreview} />
+        )
       ))}
     </>
   );
@@ -364,7 +493,6 @@ export function CampaignsTable({ campaigns, campaignFunnels, isLoading, error, s
     if (campaignFunnels) {
       for (const f of campaignFunnels) {
         if (f.campaignId) map.set(f.campaignId, f);
-        // Also index by normalized name for old campaigns without ID match
         const normName = f.campaignName
           .toLowerCase()
           .normalize('NFD')
@@ -403,7 +531,7 @@ export function CampaignsTable({ campaigns, campaignFunnels, isLoading, error, s
               {isLoading ? (
                 <div className="h-[120px] flex items-center justify-center text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin mr-2" />
-                  Carregando campanhas do Meta...
+                  Carregando campanhas...
                 </div>
               ) : error ? (
                 <div className="h-[120px] flex flex-col items-center justify-center text-muted-foreground gap-2">

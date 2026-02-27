@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { DateRangePickerGA } from "./DateRangePickerGA";
 import { useMarketingIndicators } from "@/hooks/useMarketingIndicators";
 import { useMetaCampaigns } from "@/hooks/useMetaCampaigns";
+import { useGoogleCampaigns } from "@/hooks/useGoogleCampaigns";
 import { useModeloAtualMetas } from "@/hooks/useModeloAtualMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
@@ -62,6 +63,24 @@ export function MarketingIndicatorsTab() {
     error: metaError,
     refetch: refetchMeta 
   } = useMetaCampaigns(dateRange.from, dateRange.to);
+
+  // Fetch Google Ads campaigns data
+  const {
+    data: googleCampaigns,
+    isLoading: isLoadingGoogle,
+    error: googleError,
+    refetch: refetchGoogle
+  } = useGoogleCampaigns(dateRange.from, dateRange.to);
+
+  // Combine campaigns from both sources
+  const allCampaigns = useMemo(() => {
+    const meta = metaCampaigns || [];
+    const google = googleCampaigns || [];
+    return [...meta, ...google];
+  }, [metaCampaigns, googleCampaigns]);
+
+  const isLoadingAds = isLoadingMeta || isLoadingGoogle;
+  const adsError = metaError || googleError;
 
   // Fetch Modelo Atual revenue data from Pipefy
   const { 
@@ -160,7 +179,7 @@ export function MarketingIndicatorsTab() {
     return result;
   }, [modeloAtualAllCards, o2TaxCards, oxyHackerCards]);
 
-  const { campaignFunnels, channelSummaries } = useMarketingAttribution(allAttributionCards, metaCampaigns);
+  const { campaignFunnels, channelSummaries } = useMarketingAttribution(allAttributionCards, allCampaigns);
 
   // Enrich channels with Eventos data from Pipefy attribution
   const enrichedChannels = useMemo(() => {
@@ -220,10 +239,10 @@ export function MarketingIndicatorsTab() {
           <Button 
             variant="ghost" 
             size="icon" 
-            onClick={() => { refetch(); refetchMeta(); }} 
-            disabled={isLoading || isLoadingMeta}
+            onClick={() => { refetch(); refetchMeta(); refetchGoogle(); }} 
+            disabled={isLoading || isLoadingAds}
           >
-            <RefreshCw className={cn("h-4 w-4", (isLoading || isLoadingMeta) && "animate-spin")} />
+            <RefreshCw className={cn("h-4 w-4", (isLoading || isLoadingAds) && "animate-spin")} />
           </Button>
         </div>
       </div>
@@ -408,12 +427,12 @@ export function MarketingIndicatorsTab() {
       {/* Conversions by Channel Table */}
       <ConversionsByChannelChart channels={enrichedChannels} />
 
-      {/* Campaigns Table - Meta Ads Integration */}
+      {/* Campaigns Table - Meta + Google Ads Integration */}
       <CampaignsTable 
-        campaigns={metaCampaigns || []} 
+        campaigns={allCampaigns} 
         campaignFunnels={campaignFunnels}
-        isLoading={isLoadingMeta}
-        error={metaError || undefined}
+        isLoading={isLoadingAds}
+        error={adsError || undefined}
         startDate={dateRange.from}
         endDate={dateRange.to}
       />
