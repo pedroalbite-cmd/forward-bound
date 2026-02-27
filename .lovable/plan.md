@@ -1,35 +1,33 @@
 
 
-## Alinhar valores monetarios do funil com o acelerometro
+## Alinhar MQL do Funil do Periodo com o Acelerometro
 
 ### Problema
 
-O acelerometro (gauge) calcula Oxy Hacker e Franquia como `quantidade * ticket fixo` (54k e 140k), mas o funil usa `getValueForPeriod` que le campos do Pipefy que podem estar vazios. Resultado: valores divergem (ex: 539k no gauge vs 399k no funil).
+No modo Consolidado, o `PeriodFunnelChart` usa `getMqlsQtyForPeriod()` (dados de Google Sheets) para contar MQLs do Modelo Atual, enquanto o acelerometro usa contagem real de cards do Pipefy (`modeloAtualAnalytics.getCardsForIndicator('mql')`). Isso causa divergencia de 2 unidades (579 vs 577).
 
-### Alteracoes
+O `ClickableFunnelChart` ja esta correto -- usa `getFilteredModeloAtualQty('mql')` que conta cards do Pipefy.
 
-#### 1. `src/components/planning/ClickableFunnelChart.tsx` (linhas 173-183)
+### Alteracao
 
-Substituir `getOxyHackerValue` e `getExpansaoValue` por calculo baseado em quantidade:
+**Arquivo: `src/components/planning/PeriodFunnelChart.tsx` (linha 51)**
 
-- `getOxyHackerValue('proposta')` -> `getOxyHackerQty('proposta') * 54000`
-- `getExpansaoValue('proposta')` -> `getExpansaoQty('proposta') * 140000`
-- `getOxyHackerValue('venda')` -> `getOxyHackerQty('venda') * 54000`
-- `getExpansaoValue('venda')` -> `getExpansaoQty('venda') * 140000`
+Substituir `getMqlsQtyForPeriod(startDate, endDate)` por `getModeloAtualQty('mql', startDate, endDate)` no branch consolidado:
 
-#### 2. `src/components/planning/PeriodFunnelChart.tsx` (linhas 99-117)
+```
+// Antes:
+mql: getMqlsQtyForPeriod(startDate, endDate) + getO2TaxQty('mql', ...) + ...
 
-Mesma substituicao para `propostaValue` e `vendaValue` em todos os branches (consolidado, expansao, oxy_hacker).
+// Depois:
+mql: getModeloAtualQty('mql', startDate, endDate) + getO2TaxQty('mql', ...) + ...
+```
 
-### Logica alinhada
+Isso alinha a fonte de dados com o acelerometro: ambos usam cards reais do Pipefy filtrados por data de criacao e faixa de faturamento qualificada.
 
-Segue exatamente o padrao do acelerometro em `IndicatorsTab.tsx` (linhas 1785-1791):
-- Modelo Atual e O2 TAX: usam valores reais do Pipefy (`getValue`)
-- Oxy Hacker: `qty * R$ 54.000`
-- Franquia: `qty * R$ 140.000`
+O import de `useSheetMetas` pode ser removido se nao for mais utilizado em nenhum outro lugar do componente.
 
-| Arquivo | Linhas | Acao |
-|---------|--------|------|
-| `ClickableFunnelChart.tsx` | 173-183 | Trocar getValue por qty*ticket para Oxy Hacker e Franquia |
-| `PeriodFunnelChart.tsx` | 99-117 | Mesma correcao |
+| Arquivo | Linha | Acao |
+|---------|-------|------|
+| `PeriodFunnelChart.tsx` | 51 | Trocar `getMqlsQtyForPeriod` por `getModeloAtualQty('mql')` |
+| `PeriodFunnelChart.tsx` | 2,29 | Remover import/uso de `useSheetMetas` se nao mais necessario |
 
