@@ -1,57 +1,88 @@
 
-# Diagnostico: Eventos nao aparecem na aba Mkt Indicadores
+# Integracao Google Ads API
 
-## Problemas Identificados
+## Visao Geral
 
-Encontrei **4 causas distintas** que impedem os Eventos de aparecerem corretamente:
+Criar uma integracao com a API do Google Ads similar a que ja existe para o Meta Ads. A arquitetura seguira o mesmo padrao: Edge Function como proxy para a API, cache no banco, hooks React para consumo, e exibicao na tabela de campanhas existente.
 
-### Causa 1: Filtro muito restritivo no `enrichedChannels`
-No `MarketingIndicatorsTab.tsx`, a condicao para adicionar Eventos aos canais exige `leads > 0`:
-```
-if (eventosSummary && eventosSummary.leads > 0)
-```
-Porem, muitos cards de eventos estao em fases avancadas (RM, Proposta, Venda) e nao sao contados como "leads" na atribuicao. Um card de evento na fase "Proposta enviada" so conta como proposta, nao como lead. Resultado: Eventos nao aparece nos graficos de Investimento, Funil e Conversoes.
+## Credenciais Necessarias
 
-### Causa 2: `ChannelMetricsCards` e hardcoded
-O componente `ChannelMetricsCards` so mostra 3 cards fixos: Meta Ads, Google Ads e Totais. Nao ha nenhum card para Eventos, independente dos dados.
+Voce precisara fornecer 5 secrets:
 
-### Causa 3: Deteccao de "G4" incompleta
-No banco de dados, existem cards com `Origem do lead: "Eventos G4"` (que funciona porque contem "evento"). Mas cards com apenas `Origem do lead: "G4"` (sem a palavra "evento") NAO sao detectados como eventos. A funcao `detectChannel` so verifica a palavra "evento".
+| Secret | Descricao |
+|--------|-----------|
+| `GOOGLE_ADS_DEVELOPER_TOKEN` | Token de desenvolvedor aprovado pelo Google |
+| `GOOGLE_ADS_CLIENT_ID` | OAuth2 Client ID |
+| `GOOGLE_ADS_CLIENT_SECRET` | OAuth2 Client Secret |
+| `GOOGLE_ADS_REFRESH_TOKEN` | OAuth2 Refresh Token |
+| `GOOGLE_ADS_CUSTOMER_ID` | ID da conta Google Ads (sem hifens, ex: 1234567890) |
 
-### Causa 4: Atribuicao usa apenas fases pontuais, nao funil cumulativo
-Na `useMarketingAttribution`, cada card so e contado na fase exata em que esta (ex: "propostas"). Diferente do funil de indicadores, nao ha logica cumulativa onde um card em proposta tambem conta como lead. Isso faz com que o canal Eventos tenha 0 leads mesmo tendo cards ativos.
+## Etapas de Implementacao
 
-## Evidencias do Banco de Dados
+### 1. Configurar os secrets
+Solicitar que voce insira cada uma das 5 credenciais acima.
 
-Confirmei que existem cards com atribuicao de eventos:
-- Card "Grupo Lc" (ID 1023121218): `Fonte: "Evento"`, entrada agosto/2025
-- Card "Dalle Incorporadora" (ID 1259442294): `Origem do lead: "Eventos G4"`, entrada fevereiro/2026, fase "Proposta enviada"
-- Na tabela de expansao (`pipefy_cards_movements_expansao`): 0 cards com evento
+### 2. Criar Edge Function `fetch-google-campaigns`
+- Autentica via OAuth2 (refresh token -> access token)
+- Consulta a API REST do Google Ads (`googleads.googleapis.com/v23`)
+- Usa GAQL (Google Ads Query Language) para buscar campanhas com metricas:
 
-## Solucao Proposta
-
-### 1. Relaxar o filtro de `enrichedChannels` (MarketingIndicatorsTab.tsx)
-Mudar a condicao de `leads > 0` para aceitar qualquer metrica relevante:
-```
-if (eventosSummary && (eventosSummary.leads > 0 || eventosSummary.mqls > 0 || eventosSummary.vendas > 0 || eventosSummary.receita > 0))
-```
-
-### 2. Adicionar card de Eventos no `ChannelMetricsCards`
-Tornar o componente dinamico para exibir todos os canais presentes nos dados (incluindo Eventos), em vez de mostrar apenas Meta Ads e Google Ads fixos.
-
-### 3. Adicionar deteccao de "g4" no `detectChannel` (useMarketingAttribution.ts)
-```
-if (fonte.includes('evento') || tipo.includes('evento') || origem.includes('evento')
-  || fonte.includes('g4') || tipo.includes('g4') || origem.includes('g4')) return 'eventos';
+```text
+SELECT campaign.id, campaign.name, campaign.status,
+       metrics.cost_micros, metrics.impressions, metrics.clicks,
+       metrics.conversions, metrics.ctr
+FROM campaign
+WHERE segments.date BETWEEN '{startDate}' AND '{endDate}'
+  AND campaign.status IN ('ENABLED', 'PAUSED')
 ```
 
-### 4. Usar logica de funil cumulativo na atribuicao
-Fazer com que cards em fases avancadas (RM, RR, Proposta, Venda) tambem contem como leads no canal. Isso garante que o canal Eventos sempre tenha um numero de leads condizente com a realidade.
+- Implementa cache na tabela `meta_ads_cache` (renomeando conceitualmente para "ads_cache", mas reutilizando a mesma tabela)
+- Hierarquia: Campanha -> Grupo de Anuncios -> Anuncios (3 consultas GAQL separadas, sob demanda)
 
-## Arquivos a alterar
+### 3. Criar Edge Function `fetch-google-adgroups`
+- Carregamento sob demanda (lazy-load) ao expandir uma campanha
+- Busca grupos de anuncio de uma campanha especifica com metricas
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/hooks/useMarketingAttribution.ts` | Adicionar deteccao "g4", logica cumulativa no funil |
-| `src/components/planning/MarketingIndicatorsTab.tsx` | Relaxar condicao `leads > 0` no enrichedChannels |
-| `src/components/planning/marketing-indicators/ChannelMetricsCards.tsx` | Tornar dinamico para exibir Eventos |
+### 4. Criar Edge Function `fetch-google-ads`
+- Carregamento sob demanda ao expandir um grupo de anuncio
+- Busca anuncios individuais com metricas
+
+### 5. Criar hooks React
+- `useGoogleCampaigns(startDate, endDate)` — similar ao `useMetaCampaigns`
+- `useGoogleAdGroups(campaignId, startDate, endDate)` — similar ao `useCampaignAdSets`
+- `useGoogleAds(adGroupId, startDate, endDate)` — similar ao `useAdSetAds`
+
+### 6. Integrar na aba Mkt Indicadores
+- No `MarketingIndicatorsTab.tsx`, chamar `useGoogleCampaigns` ao lado de `useMetaCampaigns`
+- Combinar as campanhas de ambas as fontes na `CampaignsTable`
+- Adicionar badge "Google Ads" / "Meta Ads" para diferenciar a origem de cada campanha
+- O drill-down de ad groups/ads usara os hooks do Google quando a campanha for do Google Ads
+
+### 7. Atualizar `CampaignsTable`
+- Detectar automaticamente se a campanha e Meta ou Google para usar o hook correto no drill-down
+- Adaptar os links externos para abrir no Google Ads Manager em vez do Meta Ads Manager
+- Manter a mesma estrutura visual (hierarquia 3 niveis colapsavel)
+
+## Detalhes Tecnicos
+
+**Autenticacao OAuth2**: A Edge Function faz um POST para `https://oauth2.googleapis.com/token` com client_id, client_secret e refresh_token para obter um access_token temporario. Esse token e usado no header `Authorization: Bearer` das chamadas a API.
+
+**Google Ads API v23**: Usa o endpoint REST `https://googleads.googleapis.com/v23/customers/{customerId}/googleAds:searchStream` com queries GAQL. O header `developer-token` e obrigatorio em todas as chamadas.
+
+**Valores monetarios**: O Google Ads retorna valores em micros (1.000.000 = R$ 1,00), que serao convertidos para reais na transformacao.
+
+**Cache**: Reutiliza a tabela `meta_ads_cache` com chaves prefixadas `google:campaigns:...` para evitar criar nova tabela.
+
+## Arquivos Criados/Alterados
+
+| Arquivo | Acao |
+|---------|------|
+| `supabase/functions/fetch-google-campaigns/index.ts` | Criar |
+| `supabase/functions/fetch-google-adgroups/index.ts` | Criar |
+| `supabase/functions/fetch-google-ads/index.ts` | Criar |
+| `supabase/config.toml` | Adicionar 3 funcoes |
+| `src/hooks/useGoogleCampaigns.ts` | Criar |
+| `src/hooks/useGoogleAdGroups.ts` | Criar |
+| `src/hooks/useGoogleAds.ts` | Criar |
+| `src/components/planning/MarketingIndicatorsTab.tsx` | Alterar (adicionar Google Ads) |
+| `src/components/planning/marketing-indicators/CampaignsTable.tsx` | Alterar (suportar ambas fontes) |
