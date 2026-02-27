@@ -1,50 +1,52 @@
 
 
-# Trocar Authorization Code por Refresh Token
+# Vincular Google Ads API aos Indicadores de Marketing
 
-## Contexto
+## Problema Atual
 
-Voce completou o fluxo OAuth2 e recebeu um **authorization code** do Google. Esse code precisa ser trocado por um **refresh token** permanente atraves de uma chamada POST ao Google.
+Os dados do Google Ads ja aparecem na **tabela de campanhas** (drill-down), mas os **indicadores do dashboard** (cards de canal, gauges de custo, gauges de performance, graficos de funil) usam apenas dados da planilha Google Sheets. Quando a planilha nao tem dados do Google Ads para o periodo (ou tem valores desatualizados), os indicadores ficam zerados ou incorretos.
 
-## Plano
+## Solucao
 
-### 1. Criar Edge Function temporaria `exchange-google-code`
+Enriquecer os indicadores de marketing com dados reais da API do Google Ads, usando a planilha como fonte primaria e a API como fallback/complemento.
 
-Uma funcao simples que recebe o authorization code e faz o POST para `https://oauth2.googleapis.com/token` usando o `GOOGLE_ADS_CLIENT_ID` e `GOOGLE_ADS_CLIENT_SECRET` ja configurados. Retorna o `refresh_token` e `access_token`.
+### Fluxo de Dados Proposto
 
-Parametros necessarios:
-- `code`: o authorization code recebido na URL
-- `redirect_uri`: deve ser exatamente o mesmo usado na autorizacao (provavelmente `http://localhost:3000`)
+```text
+Google Sheets (planilha)  -->  useMarketingIndicators  -->  Dashboard
+                                      ^
+Google Ads API            -->  useGoogleCampaigns  ----+
+                                                       |
+                              MarketingIndicatorsTab ---+--- Merge/Enrich
+```
 
-### 2. Chamar a funcao para obter o refresh token
+## Alteracoes
 
-Executar a funcao com o code `4/0AfrIepDaio4bs2RuGr5JFlehP5IIjkE1MQt0eZWXxG2VCweGFxCYevzNeEwTRIx_j4mH7Q` e o redirect_uri correto.
+### 1. MarketingIndicatorsTab.tsx - Enriquecer canais com dados da API
 
-### 3. Atualizar o secret `GOOGLE_ADS_REFRESH_TOKEN`
+No `enrichedChannels` (que ja enriquece com Eventos), adicionar logica para:
+- Quando o canal Google Ads da planilha tem investimento = 0, usar os totais somados das campanhas da API
+- Quando a planilha tem dados, manter como fonte primaria (pois inclui ajustes manuais)
+- Somar investimento, leads e calcular CPL a partir das campanhas Google Ads reais
 
-Com o refresh_token retornado, atualizar o secret existente.
+### 2. Atualizar totais e metricas derivadas
 
-### 4. Remover a Edge Function temporaria
+- Recalcular `totalInvestment` e `totalLeads` incluindo dados reais do Google Ads
+- Atualizar `costPerStage` para usar o investimento total correto (incluindo Google Ads da API)
+- Recalcular gauges de performance (ROAS, CAC) com investimento atualizado
 
-Apos obter o token, a funcao `exchange-google-code` sera removida pois nao e mais necessaria.
+### 3. Logica de merge
 
-### 5. Testar a integracao
-
-Chamar `fetch-google-campaigns` para validar que o novo refresh token funciona corretamente.
+A logica segue o mesmo padrao ja usado para "Eventos":
+- Se a planilha ja tem dados do Google Ads (investimento > 0), usa a planilha
+- Se a planilha tem investimento = 0 para Google Ads, calcula a partir da API (somando `spend` e `conversions` de todas as campanhas)
+- O CPL da API sera `totalSpend / totalConversions` das campanhas Google
 
 ## Detalhes Tecnicos
 
-A troca de code por token usa o endpoint `https://oauth2.googleapis.com/token` com:
-- `grant_type`: `authorization_code`
-- `code`: o code da URL
-- `client_id` e `client_secret`: dos secrets ja configurados
-- `redirect_uri`: deve bater exatamente com o usado na autorizacao
-
-**Importante**: Authorization codes expiram em poucos minutos. Se demorar, sera necessario refazer o fluxo OAuth2.
-
-## Arquivos
+O merge sera feito no `useMemo` de `enrichedChannels` dentro de `MarketingIndicatorsTab.tsx`. Os dados de `googleCampaigns` (ja disponivel no componente via `useGoogleCampaigns`) serao agregados para calcular totais de investimento e leads do Google Ads. Isso tambem afetara os totais passados para `ChannelMetricsCards`, `CostPerStageGauges` e `PerformanceGauges`.
 
 | Arquivo | Acao |
 |---------|------|
-| `supabase/functions/exchange-google-code/index.ts` | Criar (temporario) |
+| `src/components/planning/MarketingIndicatorsTab.tsx` | Modificar - adicionar merge de Google Ads API nos canais e recalcular totais |
 
