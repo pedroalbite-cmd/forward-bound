@@ -201,11 +201,13 @@ export function MarketingIndicatorsTab() {
   const enrichedChannels = useMemo(() => {
     const channels = data.channels.map(ch => {
       // If Google Ads channel from sheet has zero investment, use API data
-      if (ch.id === 'google_ads' && ch.investment === 0 && googleAdsApiTotals.investment > 0) {
+      if (ch.id === 'google_ads' && googleAdsApiTotals.investment > 0) {
         return {
           ...ch,
           investment: googleAdsApiTotals.investment,
           leads: googleAdsApiTotals.leads || ch.leads,
+          clicks: googleAdsApiTotals.clicks,
+          impressions: googleAdsApiTotals.impressions,
           cpl: googleAdsApiTotals.cpl,
         };
       }
