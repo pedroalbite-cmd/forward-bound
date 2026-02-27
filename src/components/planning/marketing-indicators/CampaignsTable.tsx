@@ -10,7 +10,7 @@ import { CampaignData, AdSetData, AdData, CampaignFunnel } from "./types";
 import { useCampaignAdSets } from "@/hooks/useCampaignAdSets";
 import { useAdSetAds } from "@/hooks/useAdSetAds";
 import { useGoogleAdGroups } from "@/hooks/useGoogleAdGroups";
-import { useGoogleAds } from "@/hooks/useGoogleAds";
+import { useGoogleKeywords, GoogleKeyword } from "@/hooks/useGoogleKeywords";
 import { cn } from "@/lib/utils";
 
 interface CampaignsTableProps {
@@ -107,21 +107,33 @@ function Thumbnail({
   );
 }
 
-// ─── Google Ad Row (level 3) ──────────────────────────────────
+// ─── Google Keyword Row (level 3) ─────────────────────────────
 
-function GoogleAdRow({ ad }: { ad: AdData }) {
+const MATCH_TYPE_LABEL: Record<string, string> = {
+  BROAD: 'BROAD',
+  PHRASE: 'PHRASE',
+  EXACT: 'EXACT',
+  UNKNOWN: '?',
+};
+
+function GoogleKeywordRow({ keyword }: { keyword: GoogleKeyword }) {
+  const matchLabel = MATCH_TYPE_LABEL[keyword.matchType] || keyword.matchType;
   return (
     <TableRow className="bg-muted/15">
       <TableCell className="p-2"></TableCell>
       <TableCell className="w-14 p-2"></TableCell>
       <TableCell className="pl-10 font-normal text-xs text-muted-foreground">
-        <span>│  ├─ {ad.name}</span>
+        <span>│  ├─ <Badge variant="outline" className="text-[9px] px-1 py-0 mr-1">{matchLabel}</Badge>{keyword.text}</span>
       </TableCell>
-      <TableCell className="text-right text-xs">{formatNumber(ad.leads)}</TableCell>
-      <TableCell className="text-right text-xs">{formatCurrency(ad.spend)}</TableCell>
-      <TableCell className="text-right text-xs">{ad.cpl > 0 ? formatCurrency(ad.cpl) : '-'}</TableCell>
-      <TableCell className="text-right text-xs">{ad.cpa > 0 ? formatCurrency(ad.cpa) : '-'}</TableCell>
-      <TableCell>{getStatusBadge(ad.status)}</TableCell>
+      <TableCell className="text-right text-xs">{formatNumber(keyword.conversions)}</TableCell>
+      <TableCell className="text-right text-xs">{formatCurrency(keyword.spend)}</TableCell>
+      <TableCell className="text-right text-xs">{keyword.cpl > 0 ? formatCurrency(keyword.cpl) : '-'}</TableCell>
+      <TableCell className="text-right text-xs">-</TableCell>
+      <TableCell>
+        <Badge variant={keyword.status === 'ENABLED' ? 'default' : 'outline'} className={keyword.status === 'ENABLED' ? 'bg-emerald-500' : ''}>
+          {keyword.status === 'ENABLED' ? 'Ativo' : keyword.status === 'PAUSED' ? 'Pausado' : keyword.status}
+        </Badge>
+      </TableCell>
     </TableRow>
   );
 }
@@ -135,8 +147,9 @@ function GoogleAdGroupRow({
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   
-  const { data: ads, isLoading, error } = useGoogleAds(
-    isExpanded ? adGroup.id : null, startDate, endDate, isExpanded
+  const { data: keywords, isLoading, error } = useGoogleKeywords(
+    { adGroupId: isExpanded ? adGroup.id : null },
+    startDate, endDate, isExpanded
   );
 
   return (
@@ -172,7 +185,7 @@ function GoogleAdGroupRow({
         <TableRow className="bg-muted/15">
           <TableCell colSpan={14} className="text-center py-3 text-muted-foreground text-sm">
             <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
-            Carregando anúncios...
+            Carregando palavras-chave...
           </TableCell>
         </TableRow>
       )}
@@ -180,21 +193,21 @@ function GoogleAdGroupRow({
       {isExpanded && error && (
         <TableRow className="bg-muted/15">
           <TableCell colSpan={14} className="text-center py-3 text-sm text-destructive">
-            Erro ao carregar anúncios: {(error as Error).message}
+            Erro ao carregar palavras-chave: {(error as Error).message}
           </TableCell>
         </TableRow>
       )}
 
-      {isExpanded && !isLoading && ads && ads.length === 0 && !error && (
+      {isExpanded && !isLoading && keywords && keywords.length === 0 && !error && (
         <TableRow className="bg-muted/15">
           <TableCell colSpan={14} className="text-center py-3 text-muted-foreground text-xs">
-            Nenhum anúncio encontrado
+            Nenhuma palavra-chave encontrada
           </TableCell>
         </TableRow>
       )}
 
-      {isExpanded && ads?.filter(a => a.spend > 0).map((ad) => (
-        <GoogleAdRow key={ad.id} ad={ad} />
+      {isExpanded && keywords?.filter(k => k.spend > 0).map((kw, idx) => (
+        <GoogleKeywordRow key={`${kw.text}-${kw.matchType}-${idx}`} keyword={kw} />
       ))}
     </>
   );
