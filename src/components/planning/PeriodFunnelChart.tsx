@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useSheetMetas } from "@/hooks/useSheetMetas";
+
 import { useClosersMetas } from "@/hooks/useClosersMetas";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
@@ -26,7 +26,7 @@ interface FunnelStage {
 }
 
 export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunnelChartProps) {
-  const { getMqlsQtyForPeriod } = useSheetMetas(startDate, endDate);
+  
   const { getQtyForPeriod: getClosersQty } = useClosersMetas(startDate, endDate);
   const { getQtyForPeriod: getExpansaoQty, getValueForPeriod: getExpansaoValue } = useExpansaoMetas(startDate, endDate);
   const { getQtyForPeriod: getO2TaxQty, getValueForPeriod: getO2TaxValue } = useO2TaxMetas(startDate, endDate);
@@ -48,7 +48,7 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
   const totals = useConsolidado ? {
     // Consolidado: sum all BUs (Modelo Atual + O2 TAX + Oxy Hacker + Franquia)
     leads: leadsQty + o2TaxLeadsQty, // Include O2 TAX leads
-    mql: getMqlsQtyForPeriod(startDate, endDate) + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate),
+    mql: getModeloAtualQty('mql', startDate, endDate) + getO2TaxQty('mql', startDate, endDate) + getOxyHackerQty('mql', startDate, endDate) + getExpansaoQty('mql', startDate, endDate),
     rm: getClosersQty('rm', startDate, endDate) + getO2TaxQty('rm', startDate, endDate) + getOxyHackerQty('rm', startDate, endDate) + getExpansaoQty('rm', startDate, endDate),
     rr: getClosersQty('rr', startDate, endDate) + getO2TaxQty('rr', startDate, endDate) + getOxyHackerQty('rr', startDate, endDate) + getExpansaoQty('rr', startDate, endDate),
     proposta: getClosersQty('proposta', startDate, endDate) + getO2TaxQty('proposta', startDate, endDate) + getOxyHackerQty('proposta', startDate, endDate) + getExpansaoQty('proposta', startDate, endDate),
