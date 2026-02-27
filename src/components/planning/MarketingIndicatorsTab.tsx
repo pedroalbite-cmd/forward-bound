@@ -166,7 +166,7 @@ export function MarketingIndicatorsTab() {
   const enrichedChannels = useMemo(() => {
     const channels = [...data.channels];
     const eventosSummary = channelSummaries.find(s => s.channel === 'eventos');
-    if (eventosSummary && eventosSummary.leads > 0) {
+    if (eventosSummary && (eventosSummary.leads > 0 || eventosSummary.mqls > 0 || eventosSummary.vendas > 0 || eventosSummary.receita > 0)) {
       channels.push({
         id: 'eventos',
         name: 'Eventos',

@@ -2,7 +2,9 @@ import { useMemo } from "react";
 import { AttributionCard, CampaignFunnel, ChannelId, ChannelSummary, CampaignData } from "@/components/planning/marketing-indicators/types";
 
 // Phase to funnel stage mapping (same logic as analytics hooks)
-const PHASE_FUNNEL_MAP: Record<string, keyof Pick<CampaignFunnel, 'leads' | 'mqls' | 'rms' | 'rrs' | 'propostas' | 'vendas'>> = {
+type FunnelStage = 'leads' | 'mqls' | 'rms' | 'rrs' | 'propostas' | 'vendas';
+
+const PHASE_FUNNEL_MAP: Record<string, FunnelStage> = {
   'Novos Leads': 'leads',
   'Start form': 'leads',
   'MQLs': 'mqls',
@@ -18,6 +20,14 @@ const PHASE_FUNNEL_MAP: Record<string, keyof Pick<CampaignFunnel, 'leads' | 'mql
   'Contrato assinado': 'vendas',
 };
 
+// Cumulative funnel order: a card at stage X also counts for all earlier stages
+const FUNNEL_ORDER: FunnelStage[] = ['leads', 'mqls', 'rms', 'rrs', 'propostas', 'vendas'];
+
+function getCumulativeStages(stage: FunnelStage): FunnelStage[] {
+  const idx = FUNNEL_ORDER.indexOf(stage);
+  return FUNNEL_ORDER.slice(0, idx + 1);
+}
+
 function isMetaCampaignId(value: string): boolean {
   return /^\d{10,}$/.test(value.trim());
 }
@@ -28,7 +38,8 @@ function detectChannel(card: AttributionCard): ChannelId {
   const origem = (card.origemLead || '').toLowerCase();
 
   // Eventos tem prioridade - detectar ANTES de Meta/Google
-  if (fonte.includes('evento') || tipo.includes('evento') || origem.includes('evento')) return 'eventos';
+  if (fonte.includes('evento') || tipo.includes('evento') || origem.includes('evento')
+    || fonte.includes('g4') || tipo.includes('g4') || origem.includes('g4')) return 'eventos';
 
   // Meta Ads
   if (card.campanha && isMetaCampaignId(card.campanha)) return 'meta_ads';
@@ -65,6 +76,8 @@ export function useMarketingAttribution(
     
     for (const card of allCards) {
       const stage = PHASE_FUNNEL_MAP[card.fase] || 'leads'; // Default to leads for unmapped phases
+      // Cumulative: a card at "propostas" also counts as leads, mqls, rms, rrs
+      const cumulativeStages = getCumulativeStages(stage);
       
       const campaign = card.campanha || '(Sem campanha)';
       const key = `${card.id}`;
@@ -73,11 +86,13 @@ export function useMarketingAttribution(
         cardBestStage.set(key, {
           campaign,
           channel: detectChannel(card),
-          stages: new Set([stage]),
+          stages: new Set(cumulativeStages),
           card,
         });
       } else {
-        cardBestStage.get(key)!.stages.add(stage);
+        for (const s of cumulativeStages) {
+          cardBestStage.get(key)!.stages.add(s);
+        }
       }
     }
     
