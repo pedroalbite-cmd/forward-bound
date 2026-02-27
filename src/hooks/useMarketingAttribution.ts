@@ -65,7 +65,7 @@ function normalizeName(name: string): string {
 
 export function useMarketingAttribution(
   allCards: AttributionCard[],
-  metaCampaigns: CampaignData[] | null | undefined,
+  allApiCampaigns: CampaignData[] | null | undefined,
 ) {
   // Build funnel by campaign
   const campaignFunnels = useMemo(() => {
@@ -138,13 +138,17 @@ export function useMarketingAttribution(
       }
     }
     
-    // Build Meta Ads lookup by ID and by normalized name
-    const metaById = new Map<string, CampaignData>();
-    const metaByName = new Map<string, CampaignData>();
-    if (metaCampaigns) {
-      for (const mc of metaCampaigns) {
-        metaById.set(mc.id, mc);
-        metaByName.set(normalizeName(mc.name), mc);
+    // Build API campaigns lookup by ID and by normalized name (Meta + Google)
+    const campaignById = new Map<string, CampaignData>();
+    const campaignByName = new Map<string, CampaignData>();
+    if (allApiCampaigns) {
+      for (const mc of allApiCampaigns) {
+        campaignById.set(mc.id, mc);
+        // For Google campaigns (id = "google_123"), also map raw ID "123"
+        if (mc.id.startsWith('google_')) {
+          campaignById.set(mc.id.replace('google_', ''), mc);
+        }
+        campaignByName.set(normalizeName(mc.name), mc);
       }
     }
     
@@ -155,23 +159,27 @@ export function useMarketingAttribution(
       const name = compositeKey.split('::')[0];
       
       // Try matching by ID first, then by name
-      let metaCampaign: CampaignData | undefined;
+      let apiCampaign: CampaignData | undefined;
       let campaignId: string | undefined;
       
       if (isMetaCampaignId(name)) {
-        metaCampaign = metaById.get(name.trim());
+        apiCampaign = campaignById.get(name.trim());
         campaignId = name.trim();
       }
-      if (!metaCampaign) {
-        metaCampaign = metaByName.get(normalizeName(name));
-        if (metaCampaign) campaignId = metaCampaign.id;
+      if (!apiCampaign) {
+        apiCampaign = campaignById.get(name);
+        if (apiCampaign) campaignId = apiCampaign.id;
+      }
+      if (!apiCampaign) {
+        apiCampaign = campaignByName.get(normalizeName(name));
+        if (apiCampaign) campaignId = apiCampaign.id;
       }
       
-      const investimento = metaCampaign?.investment || 0;
+      const investimento = apiCampaign?.investment || 0;
       const receita = data.receita;
       
       funnels.push({
-        campaignName: metaCampaign?.name || name,
+        campaignName: apiCampaign?.name || name,
         campaignId,
         channel: data.channel,
         leads: data.leads.size,
@@ -191,7 +199,7 @@ export function useMarketingAttribution(
     funnels.sort((a, b) => b.leads - a.leads);
     
     return funnels;
-  }, [allCards, metaCampaigns]);
+  }, [allCards, allApiCampaigns]);
 
   // Channel summaries
   const channelSummaries = useMemo(() => {

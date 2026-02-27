@@ -519,6 +519,20 @@ export function CampaignsTable({ campaigns, campaignFunnels, isLoading, error, s
     return map;
   }, [campaignFunnels]);
 
+  // Helper to find funnel for a campaign, with Google _googleId fallback
+  const getFunnel = (campaign: CampaignData): CampaignFunnel | undefined => {
+    const byId = funnelMap.get(campaign.id);
+    if (byId) return byId;
+    // Google campaigns: try raw ID
+    const googleId = (campaign as any)._googleId;
+    if (googleId) {
+      const byRawId = funnelMap.get(googleId);
+      if (byRawId) return byRawId;
+    }
+    const normName = campaign.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
+    return funnelMap.get(normName);
+  };
+
   const hasData = campaigns.length > 0;
 
   return (
@@ -587,7 +601,7 @@ export function CampaignsTable({ campaigns, campaignFunnels, isLoading, error, s
                           startDate={startDate}
                           endDate={endDate}
                           onPreview={setPreviewData}
-                          funnel={funnelMap.get(campaign.id) || funnelMap.get(campaign.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim())}
+                          funnel={getFunnel(campaign)}
                         />
                       ))}
                     </TableBody>
