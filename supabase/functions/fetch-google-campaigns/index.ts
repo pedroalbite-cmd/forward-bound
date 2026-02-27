@@ -80,8 +80,8 @@ async function queryGoogleAds(accessToken: string, customerId: string, query: st
 
   const text = await resp.text();
   if (!resp.ok) {
-    console.error("Google Ads API error:", text);
-    throw new Error(`Google Ads API error: ${resp.status} - ${text.substring(0, 200)}`);
+    console.error("Google Ads API error (full):", text);
+    throw new Error(`Google Ads API error: ${resp.status} - ${text.substring(0, 500)}`);
   }
 
   const results = JSON.parse(text);
