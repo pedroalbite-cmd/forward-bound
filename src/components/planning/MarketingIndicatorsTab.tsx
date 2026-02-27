@@ -181,9 +181,38 @@ export function MarketingIndicatorsTab() {
 
   const { campaignFunnels, channelSummaries } = useMarketingAttribution(allAttributionCards, allCampaigns);
 
-  // Enrich channels with Eventos data from Pipefy attribution
+  // Aggregate Google Ads API totals for enrichment
+  const googleAdsApiTotals = useMemo(() => {
+    const campaigns = googleCampaigns || [];
+    const totalSpend = campaigns.reduce((sum, c) => sum + (c.investment || 0), 0);
+    const totalLeads = campaigns.reduce((sum, c) => sum + (c.leads || 0), 0);
+    const totalClicks = campaigns.reduce((sum, c) => sum + (c.clicks || 0), 0);
+    const totalImpressions = campaigns.reduce((sum, c) => sum + (c.impressions || 0), 0);
+    return {
+      investment: totalSpend,
+      leads: totalLeads,
+      clicks: totalClicks,
+      impressions: totalImpressions,
+      cpl: totalLeads > 0 ? totalSpend / totalLeads : 0,
+    };
+  }, [googleCampaigns]);
+
+  // Enrich channels with Google Ads API data (fallback) and Eventos from Pipefy
   const enrichedChannels = useMemo(() => {
-    const channels = [...data.channels];
+    const channels = data.channels.map(ch => {
+      // If Google Ads channel from sheet has zero investment, use API data
+      if (ch.id === 'google_ads' && ch.investment === 0 && googleAdsApiTotals.investment > 0) {
+        return {
+          ...ch,
+          investment: googleAdsApiTotals.investment,
+          leads: googleAdsApiTotals.leads || ch.leads,
+          cpl: googleAdsApiTotals.cpl,
+        };
+      }
+      return ch;
+    });
+
+    // Add Eventos channel from Pipefy attribution
     const eventosSummary = channelSummaries.find(s => s.channel === 'eventos');
     if (eventosSummary && (eventosSummary.leads > 0 || eventosSummary.mqls > 0 || eventosSummary.vendas > 0 || eventosSummary.receita > 0)) {
       channels.push({
@@ -208,7 +237,32 @@ export function MarketingIndicatorsTab() {
       });
     }
     return channels;
-  }, [data.channels, channelSummaries]);
+  }, [data.channels, channelSummaries, googleAdsApiTotals]);
+
+  // Recalculate totals including enriched Google Ads data
+  const enrichedTotals = useMemo(() => {
+    const googleChannel = enrichedChannels.find(c => c.id === 'google_ads');
+    const sheetGoogleChannel = data.channels.find(c => c.id === 'google_ads');
+    
+    // If we enriched Google Ads with API data, adjust totals
+    const googleDeltaInvestment = (googleChannel?.investment || 0) - (sheetGoogleChannel?.investment || 0);
+    const googleDeltaLeads = (googleChannel?.leads || 0) - (sheetGoogleChannel?.leads || 0);
+    
+    const totalInvestment = data.totalInvestment + googleDeltaInvestment;
+    const totalLeads = data.totalLeads + googleDeltaLeads;
+    
+    // Recalculate cost per stage with updated investment
+    const costPerStage: CostPerStage = {
+      cpl: totalLeads > 0 ? totalInvestment / totalLeads : data.costPerStage.cpl,
+      cpmql: data.totalMqls > 0 ? totalInvestment / data.totalMqls : data.costPerStage.cpmql,
+      cprm: data.totalRms > 0 ? totalInvestment / data.totalRms : data.costPerStage.cprm,
+      cprr: data.totalRrs > 0 ? totalInvestment / data.totalRrs : data.costPerStage.cprr,
+      cpp: data.totalPropostas > 0 ? totalInvestment / data.totalPropostas : data.costPerStage.cpp,
+      cpv: data.totalVendas > 0 ? totalInvestment / data.totalVendas : data.costPerStage.cpv,
+    };
+    
+    return { totalInvestment, totalLeads, costPerStage };
+  }, [enrichedChannels, data]);
 
   const handleDateRangeChange = (start: Date, end: Date) => {
     setDateRange({ from: start, to: end });
@@ -263,8 +317,8 @@ export function MarketingIndicatorsTab() {
       {/* Channel Metrics Cards (from spreadsheet) */}
       <ChannelMetricsCards
         channels={enrichedChannels}
-        totalInvestment={data.totalInvestment}
-        totalLeads={data.totalLeads}
+        totalInvestment={enrichedTotals.totalInvestment}
+        totalLeads={enrichedTotals.totalLeads}
       />
 
       {/* Attribution Cards (real data from Pipefy) */}
@@ -279,7 +333,7 @@ export function MarketingIndicatorsTab() {
 
       {/* Cost Per Stage Gauges */}
       <CostPerStageGauges 
-        costPerStage={data.costPerStage} 
+        costPerStage={enrichedTotals.costPerStage} 
         goals={costGoals}
         onCostClick={(costKey) => setCostDrillDown({ isOpen: true, costKey })}
       />
@@ -310,7 +364,7 @@ export function MarketingIndicatorsTab() {
                 <div className="bg-muted/50 p-4 rounded-lg text-center">
                   <p className="text-xs text-muted-foreground">Custo Geral</p>
                   <p className="text-xl font-bold">
-                    R$ {data.costPerStage[costDrillDown.costKey].toLocaleString('pt-BR')}
+                    R$ {enrichedTotals.costPerStage[costDrillDown.costKey].toLocaleString('pt-BR')}
                   </p>
                 </div>
                 <div className="bg-muted/50 p-4 rounded-lg text-center">
@@ -322,7 +376,7 @@ export function MarketingIndicatorsTab() {
                 <div className="bg-muted/50 p-4 rounded-lg text-center">
                   <p className="text-xs text-muted-foreground">Investimento Total</p>
                   <p className="text-xl font-bold">
-                    R$ {(data.totalInvestment / 1000).toFixed(0)}k
+                    R$ {(enrichedTotals.totalInvestment / 1000).toFixed(0)}k
                   </p>
                 </div>
                 <div className="bg-muted/50 p-4 rounded-lg text-center">
@@ -333,7 +387,7 @@ export function MarketingIndicatorsTab() {
                       ? "text-chart-2" 
                       : "text-destructive"
                   )}>
-                    {((data.costPerStage[costDrillDown.costKey] / costGoals[costDrillDown.costKey]) * 100).toFixed(0)}%
+                    {((enrichedTotals.costPerStage[costDrillDown.costKey] / costGoals[costDrillDown.costKey]) * 100).toFixed(0)}%
                   </p>
                 </div>
               </div>
@@ -386,7 +440,7 @@ export function MarketingIndicatorsTab() {
                             R$ {costValue.toLocaleString('pt-BR')}
                           </td>
                           <td className="text-right p-3">
-                            {((channel.investment / data.totalInvestment) * 100).toFixed(1)}%
+                            {((channel.investment / enrichedTotals.totalInvestment) * 100).toFixed(1)}%
                           </td>
                         </tr>
                       );
@@ -409,7 +463,7 @@ export function MarketingIndicatorsTab() {
         cacGoal={goals.cac}
         ltv={data.ltv}
         ltvGoal={goals.ltv}
-        investment={data.totalInvestment}
+        investment={enrichedTotals.totalInvestment}
         investmentGoal={goals.investment}
       />
 
@@ -417,7 +471,7 @@ export function MarketingIndicatorsTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <InvestmentByChannelChart channels={enrichedChannels} />
         <AcquisitionFunnelChart
-          leads={data.totalLeads}
+          leads={enrichedTotals.totalLeads}
           mqls={data.totalMqls}
           rms={data.totalRms}
           rrs={data.totalRrs}
