@@ -1,34 +1,35 @@
 
 
-## Vincular dados do Pipefy (CRM) às campanhas Google Ads
+## Alinhar valores monetarios do funil com o acelerometro
 
 ### Problema
 
-O `useMarketingAttribution` so faz matching de cards CRM com campanhas **Meta Ads** (por ID numerico e por nome). Cards com `gclid` ou `fonte=googleads` sao detectados como `google_ads`, mas o nome da campanha no Pipefy nao e cruzado com as campanhas da API do Google. Resultado: colunas CRM (Leads CRM, MQLs, Vendas, Receita, TCV, ROI) ficam vazias para campanhas Google.
+O acelerometro (gauge) calcula Oxy Hacker e Franquia como `quantidade * ticket fixo` (54k e 140k), mas o funil usa `getValueForPeriod` que le campos do Pipefy que podem estar vazios. Resultado: valores divergem (ex: 539k no gauge vs 399k no funil).
 
 ### Alteracoes
 
-#### 1. `src/hooks/useMarketingAttribution.ts`
+#### 1. `src/components/planning/ClickableFunnelChart.tsx` (linhas 173-183)
 
-- Renomear parametro `metaCampaigns` para `allApiCampaigns` (ja recebe Meta + Google)
-- No bloco de lookup (linhas 141-149), incluir campanhas Google no mapa de nomes normalizados
-- Para campanhas Google, mapear tanto `google_123` quanto o ID raw `123` e o nome normalizado
-- Assim o matching por nome fuzzy funciona para ambas as plataformas
+Substituir `getOxyHackerValue` e `getExpansaoValue` por calculo baseado em quantidade:
 
-#### 2. `src/components/planning/marketing-indicators/CampaignsTable.tsx`
+- `getOxyHackerValue('proposta')` -> `getOxyHackerQty('proposta') * 54000`
+- `getExpansaoValue('proposta')` -> `getExpansaoQty('proposta') * 140000`
+- `getOxyHackerValue('venda')` -> `getOxyHackerQty('venda') * 54000`
+- `getExpansaoValue('venda')` -> `getExpansaoQty('venda') * 140000`
 
-- No `funnelMap` (linha 504-520), adicionar lookup pelo `_googleId` raw para campanhas Google
-- Ao buscar o funnel de uma campanha Google, tentar: `campaign.id` (`google_123`), `_googleId` (`123`), e nome normalizado
+#### 2. `src/components/planning/PeriodFunnelChart.tsx` (linhas 99-117)
 
-### Resultado esperado
+Mesma substituicao para `propostaValue` e `vendaValue` em todos os branches (consolidado, expansao, oxy_hacker).
 
-```text
-Campanha Google        | Leads | Gasto  | CPL  | ... | Leads(CRM) | MQLs | Vendas | Receita | ROI
-├─ Campanha X          |   30  | R$10k  | R$33 | ... |     8      |  5   |   2    | R$ 15k  | 1.5x
-```
+### Logica alinhada
 
-| Arquivo | Acao |
-|---------|------|
-| `src/hooks/useMarketingAttribution.ts` | Incluir campanhas Google no lookup de matching |
-| `src/components/planning/marketing-indicators/CampaignsTable.tsx` | Adicionar fallback por `_googleId` no `funnelMap` |
+Segue exatamente o padrao do acelerometro em `IndicatorsTab.tsx` (linhas 1785-1791):
+- Modelo Atual e O2 TAX: usam valores reais do Pipefy (`getValue`)
+- Oxy Hacker: `qty * R$ 54.000`
+- Franquia: `qty * R$ 140.000`
+
+| Arquivo | Linhas | Acao |
+|---------|--------|------|
+| `ClickableFunnelChart.tsx` | 173-183 | Trocar getValue por qty*ticket para Oxy Hacker e Franquia |
+| `PeriodFunnelChart.tsx` | 99-117 | Mesma correcao |
 
