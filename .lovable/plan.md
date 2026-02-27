@@ -1,50 +1,57 @@
 
+# Diagnostico: Eventos nao aparecem na aba Mkt Indicadores
 
-# Bug: MRR, Setup e Pontual nao filtram por Closer
+## Problemas Identificados
 
-## Problema
+Encontrei **4 causas distintas** que impedem os Eventos de aparecerem corretamente:
 
-No `useConsolidatedMetas.ts` (linha 215), o filtro de closer so e aplicado quando `indicatorKey === 'faturamento'`. Para MRR, Setup e Pontual, o codigo cai na linha 220 que chama `getMetaForPeriod` sem nenhum ajuste de closer — mostrando 100% da meta da BU.
+### Causa 1: Filtro muito restritivo no `enrichedChannels`
+No `MarketingIndicatorsTab.tsx`, a condicao para adicionar Eventos aos canais exige `leads > 0`:
+```
+if (eventosSummary && eventosSummary.leads > 0)
+```
+Porem, muitos cards de eventos estao em fases avancadas (RM, Proposta, Venda) e nao sao contados como "leads" na atribuicao. Um card de evento na fase "Proposta enviada" so conta como proposta, nao como lead. Resultado: Eventos nao aparece nos graficos de Investimento, Funil e Conversoes.
 
-## Solucao
+### Causa 2: `ChannelMetricsCards` e hardcoded
+O componente `ChannelMetricsCards` so mostra 3 cards fixos: Meta Ads, Google Ads e Totais. Nao ha nenhum card para Eventos, independente dos dados.
 
-Estender a logica de filtro de closer para MRR, Setup e Pontual. Como essas metricas sao derivadas do faturamento (25%, 60%, 15%), a abordagem e:
+### Causa 3: Deteccao de "G4" incompleta
+No banco de dados, existem cards com `Origem do lead: "Eventos G4"` (que funciona porque contem "evento"). Mas cards com apenas `Origem do lead: "G4"` (sem a palavra "evento") NAO sao detectados como eventos. A funcao `detectChannel` so verifica a palavra "evento".
 
-1. Quando houver filtro de closer ativo para qualquer metrica monetaria (mrr, setup, pontual), calcular primeiro o faturamento filtrado pelo closer
-2. Aplicar os percentuais padrao (25%, 60%, 15%) sobre o faturamento ja filtrado
+### Causa 4: Atribuicao usa apenas fases pontuais, nao funil cumulativo
+Na `useMarketingAttribution`, cada card so e contado na fase exata em que esta (ex: "propostas"). Diferente do funil de indicadores, nao ha logica cumulativa onde um card em proposta tambem conta como lead. Isso faz com que o canal Eventos tenha 0 leads mesmo tendo cards ativos.
 
-## Arquivo alterado
+## Evidencias do Banco de Dados
 
-**`src/hooks/useConsolidatedMetas.ts`** — funcao `getMetaMonetaryForPeriod` (linhas 202-221)
+Confirmei que existem cards com atribuicao de eventos:
+- Card "Grupo Lc" (ID 1023121218): `Fonte: "Evento"`, entrada agosto/2025
+- Card "Dalle Incorporadora" (ID 1259442294): `Origem do lead: "Eventos G4"`, entrada fevereiro/2026, fase "Proposta enviada"
+- Na tabela de expansao (`pipefy_cards_movements_expansao`): 0 cards com evento
 
-Substituir a condicao `if (indicatorKey === 'faturamento' && ...)` por uma que trate todas as metricas monetarias quando o closer filter estiver ativo:
+## Solucao Proposta
 
-```typescript
-const getMetaMonetaryForPeriod = (
-  indicatorKey: ConsolidatedMetricType | 'sla',
-  bus: BuType[],
-  startDate: Date,
-  endDate: Date,
-  closerFilter?: string[],
-  getFilteredMeta?: (value: number, bu: string, month: string, closers: string[]) => number
-): number => {
-  if (indicatorKey === 'sla') return 30;
-
-  // Com filtro de closer ativo, ajustar TODAS as métricas monetárias
-  if (closerFilter && closerFilter.length > 0 && getFilteredMeta) {
-    const filteredFaturamento = getFilteredFaturamentoMeta(bus, startDate, endDate, closerFilter, getFilteredMeta);
-    
-    switch (indicatorKey) {
-      case 'faturamento': return filteredFaturamento;
-      case 'mrr': return Math.round(filteredFaturamento * 0.25);
-      case 'setup': return Math.round(filteredFaturamento * 0.60);
-      case 'pontual': return Math.round(filteredFaturamento * 0.15);
-    }
-  }
-
-  return getMetaForPeriod(bus, startDate, endDate, indicatorKey);
-};
+### 1. Relaxar o filtro de `enrichedChannels` (MarketingIndicatorsTab.tsx)
+Mudar a condicao de `leads > 0` para aceitar qualquer metrica relevante:
+```
+if (eventosSummary && (eventosSummary.leads > 0 || eventosSummary.mqls > 0 || eventosSummary.vendas > 0 || eventosSummary.receita > 0))
 ```
 
-Isso garante que ao selecionar um closer, MRR/Setup/Pontual reflitam a proporcao correta da meta filtrada, nao da BU inteira.
+### 2. Adicionar card de Eventos no `ChannelMetricsCards`
+Tornar o componente dinamico para exibir todos os canais presentes nos dados (incluindo Eventos), em vez de mostrar apenas Meta Ads e Google Ads fixos.
 
+### 3. Adicionar deteccao de "g4" no `detectChannel` (useMarketingAttribution.ts)
+```
+if (fonte.includes('evento') || tipo.includes('evento') || origem.includes('evento')
+  || fonte.includes('g4') || tipo.includes('g4') || origem.includes('g4')) return 'eventos';
+```
+
+### 4. Usar logica de funil cumulativo na atribuicao
+Fazer com que cards em fases avancadas (RM, RR, Proposta, Venda) tambem contem como leads no canal. Isso garante que o canal Eventos sempre tenha um numero de leads condizente com a realidade.
+
+## Arquivos a alterar
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/hooks/useMarketingAttribution.ts` | Adicionar deteccao "g4", logica cumulativa no funil |
+| `src/components/planning/MarketingIndicatorsTab.tsx` | Relaxar condicao `leads > 0` no enrichedChannels |
+| `src/components/planning/marketing-indicators/ChannelMetricsCards.tsx` | Tornar dinamico para exibir Eventos |
