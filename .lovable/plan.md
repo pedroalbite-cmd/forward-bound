@@ -1,88 +1,50 @@
 
-# Integracao Google Ads API
 
-## Visao Geral
+# Trocar Authorization Code por Refresh Token
 
-Criar uma integracao com a API do Google Ads similar a que ja existe para o Meta Ads. A arquitetura seguira o mesmo padrao: Edge Function como proxy para a API, cache no banco, hooks React para consumo, e exibicao na tabela de campanhas existente.
+## Contexto
 
-## Credenciais Necessarias
+Voce completou o fluxo OAuth2 e recebeu um **authorization code** do Google. Esse code precisa ser trocado por um **refresh token** permanente atraves de uma chamada POST ao Google.
 
-Voce precisara fornecer 5 secrets:
+## Plano
 
-| Secret | Descricao |
-|--------|-----------|
-| `GOOGLE_ADS_DEVELOPER_TOKEN` | Token de desenvolvedor aprovado pelo Google |
-| `GOOGLE_ADS_CLIENT_ID` | OAuth2 Client ID |
-| `GOOGLE_ADS_CLIENT_SECRET` | OAuth2 Client Secret |
-| `GOOGLE_ADS_REFRESH_TOKEN` | OAuth2 Refresh Token |
-| `GOOGLE_ADS_CUSTOMER_ID` | ID da conta Google Ads (sem hifens, ex: 1234567890) |
+### 1. Criar Edge Function temporaria `exchange-google-code`
 
-## Etapas de Implementacao
+Uma funcao simples que recebe o authorization code e faz o POST para `https://oauth2.googleapis.com/token` usando o `GOOGLE_ADS_CLIENT_ID` e `GOOGLE_ADS_CLIENT_SECRET` ja configurados. Retorna o `refresh_token` e `access_token`.
 
-### 1. Configurar os secrets
-Solicitar que voce insira cada uma das 5 credenciais acima.
+Parametros necessarios:
+- `code`: o authorization code recebido na URL
+- `redirect_uri`: deve ser exatamente o mesmo usado na autorizacao (provavelmente `http://localhost:3000`)
 
-### 2. Criar Edge Function `fetch-google-campaigns`
-- Autentica via OAuth2 (refresh token -> access token)
-- Consulta a API REST do Google Ads (`googleads.googleapis.com/v23`)
-- Usa GAQL (Google Ads Query Language) para buscar campanhas com metricas:
+### 2. Chamar a funcao para obter o refresh token
 
-```text
-SELECT campaign.id, campaign.name, campaign.status,
-       metrics.cost_micros, metrics.impressions, metrics.clicks,
-       metrics.conversions, metrics.ctr
-FROM campaign
-WHERE segments.date BETWEEN '{startDate}' AND '{endDate}'
-  AND campaign.status IN ('ENABLED', 'PAUSED')
-```
+Executar a funcao com o code `4/0AfrIepDaio4bs2RuGr5JFlehP5IIjkE1MQt0eZWXxG2VCweGFxCYevzNeEwTRIx_j4mH7Q` e o redirect_uri correto.
 
-- Implementa cache na tabela `meta_ads_cache` (renomeando conceitualmente para "ads_cache", mas reutilizando a mesma tabela)
-- Hierarquia: Campanha -> Grupo de Anuncios -> Anuncios (3 consultas GAQL separadas, sob demanda)
+### 3. Atualizar o secret `GOOGLE_ADS_REFRESH_TOKEN`
 
-### 3. Criar Edge Function `fetch-google-adgroups`
-- Carregamento sob demanda (lazy-load) ao expandir uma campanha
-- Busca grupos de anuncio de uma campanha especifica com metricas
+Com o refresh_token retornado, atualizar o secret existente.
 
-### 4. Criar Edge Function `fetch-google-ads`
-- Carregamento sob demanda ao expandir um grupo de anuncio
-- Busca anuncios individuais com metricas
+### 4. Remover a Edge Function temporaria
 
-### 5. Criar hooks React
-- `useGoogleCampaigns(startDate, endDate)` — similar ao `useMetaCampaigns`
-- `useGoogleAdGroups(campaignId, startDate, endDate)` — similar ao `useCampaignAdSets`
-- `useGoogleAds(adGroupId, startDate, endDate)` — similar ao `useAdSetAds`
+Apos obter o token, a funcao `exchange-google-code` sera removida pois nao e mais necessaria.
 
-### 6. Integrar na aba Mkt Indicadores
-- No `MarketingIndicatorsTab.tsx`, chamar `useGoogleCampaigns` ao lado de `useMetaCampaigns`
-- Combinar as campanhas de ambas as fontes na `CampaignsTable`
-- Adicionar badge "Google Ads" / "Meta Ads" para diferenciar a origem de cada campanha
-- O drill-down de ad groups/ads usara os hooks do Google quando a campanha for do Google Ads
+### 5. Testar a integracao
 
-### 7. Atualizar `CampaignsTable`
-- Detectar automaticamente se a campanha e Meta ou Google para usar o hook correto no drill-down
-- Adaptar os links externos para abrir no Google Ads Manager em vez do Meta Ads Manager
-- Manter a mesma estrutura visual (hierarquia 3 niveis colapsavel)
+Chamar `fetch-google-campaigns` para validar que o novo refresh token funciona corretamente.
 
 ## Detalhes Tecnicos
 
-**Autenticacao OAuth2**: A Edge Function faz um POST para `https://oauth2.googleapis.com/token` com client_id, client_secret e refresh_token para obter um access_token temporario. Esse token e usado no header `Authorization: Bearer` das chamadas a API.
+A troca de code por token usa o endpoint `https://oauth2.googleapis.com/token` com:
+- `grant_type`: `authorization_code`
+- `code`: o code da URL
+- `client_id` e `client_secret`: dos secrets ja configurados
+- `redirect_uri`: deve bater exatamente com o usado na autorizacao
 
-**Google Ads API v23**: Usa o endpoint REST `https://googleads.googleapis.com/v23/customers/{customerId}/googleAds:searchStream` com queries GAQL. O header `developer-token` e obrigatorio em todas as chamadas.
+**Importante**: Authorization codes expiram em poucos minutos. Se demorar, sera necessario refazer o fluxo OAuth2.
 
-**Valores monetarios**: O Google Ads retorna valores em micros (1.000.000 = R$ 1,00), que serao convertidos para reais na transformacao.
-
-**Cache**: Reutiliza a tabela `meta_ads_cache` com chaves prefixadas `google:campaigns:...` para evitar criar nova tabela.
-
-## Arquivos Criados/Alterados
+## Arquivos
 
 | Arquivo | Acao |
 |---------|------|
-| `supabase/functions/fetch-google-campaigns/index.ts` | Criar |
-| `supabase/functions/fetch-google-adgroups/index.ts` | Criar |
-| `supabase/functions/fetch-google-ads/index.ts` | Criar |
-| `supabase/config.toml` | Adicionar 3 funcoes |
-| `src/hooks/useGoogleCampaigns.ts` | Criar |
-| `src/hooks/useGoogleAdGroups.ts` | Criar |
-| `src/hooks/useGoogleAds.ts` | Criar |
-| `src/components/planning/MarketingIndicatorsTab.tsx` | Alterar (adicionar Google Ads) |
-| `src/components/planning/marketing-indicators/CampaignsTable.tsx` | Alterar (suportar ambas fontes) |
+| `supabase/functions/exchange-google-code/index.ts` | Criar (temporario) |
+
