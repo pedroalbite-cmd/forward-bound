@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.fetch-adset-ads]
 verify_jwt = false
+
+[functions.exchange-google-code]
+verify_jwt = false
