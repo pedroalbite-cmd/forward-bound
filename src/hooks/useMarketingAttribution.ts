@@ -71,6 +71,7 @@ export function useMarketingAttribution(
   const campaignFunnels = useMemo(() => {
     if (!allCards.length) return [];
     
+    
     // Group cards by campaign name, tracking highest funnel stage per card
     const cardBestStage = new Map<string, { campaign: string; channel: ChannelId; stages: Set<string>; card: AttributionCard }>();
     
@@ -110,7 +111,8 @@ export function useMarketingAttribution(
     }>();
     
     for (const [cardId, info] of cardBestStage) {
-      const key = info.campaign;
+      // Group by campaign + channel to prevent different channels merging under same campaign name
+      const key = `${info.campaign}::${info.channel}`;
       if (!campaignMap.has(key)) {
         campaignMap.set(key, {
           channel: info.channel,
@@ -148,7 +150,10 @@ export function useMarketingAttribution(
     
     // Convert to array
     const funnels: CampaignFunnel[] = [];
-    for (const [name, data] of campaignMap) {
+    for (const [compositeKey, data] of campaignMap) {
+      // Extract campaign name from composite key "campaignName::channel"
+      const name = compositeKey.split('::')[0];
+      
       // Try matching by ID first, then by name
       let metaCampaign: CampaignData | undefined;
       let campaignId: string | undefined;
