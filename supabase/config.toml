@@ -32,3 +32,12 @@ verify_jwt = false
 
 [functions.fetch-adset-ads]
 verify_jwt = false
+
+[functions.fetch-google-adgroups]
+verify_jwt = false
+
+[functions.fetch-google-ads]
+verify_jwt = false
+
+[functions.fetch-google-keywords]
+verify_jwt = false
