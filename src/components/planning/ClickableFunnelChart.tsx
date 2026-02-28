@@ -173,14 +173,14 @@ export function ClickableFunnelChart({ startDate, endDate, selectedBU, selectedB
   const propostaValue = 
     (includesModeloAtual ? getFilteredModeloAtualValue('proposta') : 0) +
     (includesO2Tax ? getO2TaxValue('proposta', startDate, endDate) : 0) +
-    (includesOxyHacker ? getOxyHackerQty('proposta', startDate, endDate) * 54000 : 0) +
-    (includesFranquia ? getExpansaoQty('proposta', startDate, endDate) * 140000 : 0);
+    (includesOxyHacker ? getOxyHackerValue('proposta', startDate, endDate) : 0) +
+    (includesFranquia ? getExpansaoValue('proposta', startDate, endDate) : 0);
 
   const vendaValue = 
     (includesModeloAtual ? getFilteredModeloAtualValue('venda') : 0) +
     (includesO2Tax ? getO2TaxValue('venda', startDate, endDate) : 0) +
-    (includesOxyHacker ? getOxyHackerQty('venda', startDate, endDate) * 54000 : 0) +
-    (includesFranquia ? getExpansaoQty('venda', startDate, endDate) * 140000 : 0);
+    (includesOxyHacker ? getOxyHackerValue('venda', startDate, endDate) : 0) +
+    (includesFranquia ? getExpansaoValue('venda', startDate, endDate) : 0);
 
   // Width percentages for funnel visualization (6 stages now)
   const widthPercentages = [100, 85, 70, 55, 45, 35];

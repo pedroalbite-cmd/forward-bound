@@ -185,7 +185,8 @@ export function useExpansaoMetas(startDate?: Date, endDate?: Date) {
             const pontual = movement.valorPontual || 0;
             const setup = movement.valorSetup || 0;
             const mrr = movement.valorMRR || 0;
-            cardValues.set(movement.id, pontual + setup + mrr);
+            const sum = pontual + setup + mrr;
+            cardValues.set(movement.id, sum > 0 ? sum : 140000); // fallback R$ 140k
           }
         }
       }

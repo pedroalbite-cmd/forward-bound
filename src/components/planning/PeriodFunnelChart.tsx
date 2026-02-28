@@ -97,23 +97,23 @@ export function PeriodFunnelChart({ startDate, endDate, selectedBU }: PeriodFunn
   // Calculate monetary values using real values from each BU's data source
   // For Consolidado, sum values from all BUs
   const propostaValue = useConsolidado
-    ? getModeloAtualValue('proposta', startDate, endDate) + getO2TaxValue('proposta', startDate, endDate) + getOxyHackerQty('proposta', startDate, endDate) * 54000 + getExpansaoQty('proposta', startDate, endDate) * 140000
+    ? getModeloAtualValue('proposta', startDate, endDate) + getO2TaxValue('proposta', startDate, endDate) + getOxyHackerValue('proposta', startDate, endDate) + getExpansaoValue('proposta', startDate, endDate)
     : useExpansaoData 
-      ? getExpansaoQty('proposta', startDate, endDate) * 140000
+      ? getExpansaoValue('proposta', startDate, endDate)
       : useO2TaxData 
         ? getO2TaxValue('proposta', startDate, endDate)
         : useOxyHackerData 
-          ? getOxyHackerQty('proposta', startDate, endDate) * 54000
+          ? getOxyHackerValue('proposta', startDate, endDate)
           : getModeloAtualValue('proposta', startDate, endDate);
 
   const vendaValue = useConsolidado
-    ? getModeloAtualValue('venda', startDate, endDate) + getO2TaxValue('venda', startDate, endDate) + getOxyHackerQty('venda', startDate, endDate) * 54000 + getExpansaoQty('venda', startDate, endDate) * 140000
+    ? getModeloAtualValue('venda', startDate, endDate) + getO2TaxValue('venda', startDate, endDate) + getOxyHackerValue('venda', startDate, endDate) + getExpansaoValue('venda', startDate, endDate)
     : useExpansaoData 
-      ? getExpansaoQty('venda', startDate, endDate) * 140000
+      ? getExpansaoValue('venda', startDate, endDate)
       : useO2TaxData 
         ? getO2TaxValue('venda', startDate, endDate)
         : useOxyHackerData 
-          ? getOxyHackerQty('venda', startDate, endDate) * 54000
+          ? getOxyHackerValue('venda', startDate, endDate)
           : getModeloAtualValue('venda', startDate, endDate);
 
   // Width percentages for funnel visualization (6 stages now)
