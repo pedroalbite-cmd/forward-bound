@@ -1,33 +1,56 @@
 
 
-## Alinhar MQL do Funil do Periodo com o Acelerometro
+## Usar valor real da "Taxa de franquia" com fallback para ticket fixo
 
 ### Problema
+O card 1294245876 (Silvio Filho - Recife) tem "Taxa de franquia" = R$ 105.000, mas os funis usam `qty * R$ 140.000` (ticket fixo). Isso gera divergencia: o funil mostra R$ 140k quando deveria mostrar R$ 105k para esse card.
 
-No modo Consolidado, o `PeriodFunnelChart` usa `getMqlsQtyForPeriod()` (dados de Google Sheets) para contar MQLs do Modelo Atual, enquanto o acelerometro usa contagem real de cards do Pipefy (`modeloAtualAnalytics.getCardsForIndicator('mql')`). Isso causa divergencia de 2 unidades (579 vs 577).
+O acelerometro tambem usa `qty * 140.000` fixo, entao a correcao deve ser feita em todos os locais para manter consistencia.
 
-O `ClickableFunnelChart` ja esta correto -- usa `getFilteredModeloAtualQty('mql')` que conta cards do Pipefy.
+### Solucao
+Usar `getValueForPeriod` dos hooks (que ja le o campo "Taxa de franquia" do Pipefy), mas garantir que o fallback seja o ticket padrao (R$ 140k para Franquia, R$ 54k para Oxy Hacker) quando todos os campos monetarios estao vazios.
 
-### Alteracao
+### Alteracoes
 
-**Arquivo: `src/components/planning/PeriodFunnelChart.tsx` (linha 51)**
+#### 1. `src/hooks/useExpansaoMetas.ts` (linhas 178-189)
+No `getValueForPeriod`, quando `taxaFranquia` e 0 e `pontual + setup + mrr` tambem e 0, aplicar fallback de R$ 140.000:
 
-Substituir `getMqlsQtyForPeriod(startDate, endDate)` por `getModeloAtualQty('mql', startDate, endDate)` no branch consolidado:
-
+```typescript
+if (shouldCount && !cardValues.has(movement.id)) {
+  const taxaFranquia = movement.taxaFranquia || 0;
+  if (taxaFranquia > 0) {
+    cardValues.set(movement.id, taxaFranquia);
+  } else {
+    const pontual = movement.valorPontual || 0;
+    const setup = movement.valorSetup || 0;
+    const mrr = movement.valorMRR || 0;
+    const sum = pontual + setup + mrr;
+    cardValues.set(movement.id, sum > 0 ? sum : 140000); // fallback
+  }
+}
 ```
-// Antes:
-mql: getMqlsQtyForPeriod(startDate, endDate) + getO2TaxQty('mql', ...) + ...
 
-// Depois:
-mql: getModeloAtualQty('mql', startDate, endDate) + getO2TaxQty('mql', ...) + ...
-```
+#### 2. `src/hooks/useOxyHackerMetas.ts`
+Mesma logica no `getValueForPeriod`, com fallback de R$ 54.000 para Oxy Hacker.
 
-Isso alinha a fonte de dados com o acelerometro: ambos usam cards reais do Pipefy filtrados por data de criacao e faixa de faturamento qualificada.
+#### 3. `src/components/planning/PeriodFunnelChart.tsx` (linhas 99-117)
+Substituir `qty * 140000` por `getExpansaoValue(...)` e `qty * 54000` por `getOxyHackerValue(...)` em todos os branches (consolidado, franquia, oxy_hacker). Os hooks agora ja incluem o fallback correto.
 
-O import de `useSheetMetas` pode ser removido se nao for mais utilizado em nenhum outro lugar do componente.
+#### 4. `src/components/planning/ClickableFunnelChart.tsx` (linhas 173-183)
+Mesma substituicao: usar `getExpansaoValue` e `getOxyHackerValue` em vez de `qty * ticket`.
 
-| Arquivo | Linha | Acao |
-|---------|-------|------|
-| `PeriodFunnelChart.tsx` | 51 | Trocar `getMqlsQtyForPeriod` por `getModeloAtualQty('mql')` |
-| `PeriodFunnelChart.tsx` | 2,29 | Remover import/uso de `useSheetMetas` se nao mais necessario |
+#### 5. `src/components/planning/IndicatorsTab.tsx` (linhas 1785-1791)
+Atualizar o acelerometro para tambem usar `getExpansaoValue('venda')` e `getOxyHackerValue('venda')` em vez de `qty * ticket`.
 
+### Resultado
+- Card com "Taxa de franquia" preenchida (ex: R$ 105k) -> usa valor real
+- Card com campos monetarios vazios -> usa ticket padrao (R$ 140k ou R$ 54k)
+- Funis e acelerometro ficam 100% alinhados
+
+| Arquivo | Alteracao |
+|---------|-----------|
+| `useExpansaoMetas.ts` | Adicionar fallback R$ 140k no getValueForPeriod |
+| `useOxyHackerMetas.ts` | Adicionar fallback R$ 54k no getValueForPeriod |
+| `PeriodFunnelChart.tsx` | Usar getValueForPeriod em vez de qty * ticket |
+| `ClickableFunnelChart.tsx` | Usar getValueForPeriod em vez de qty * ticket |
+| `IndicatorsTab.tsx` | Usar getValueForPeriod no acelerometro |
