@@ -384,9 +384,9 @@ export function IndicatorsTab() {
 
   const { getTotal, syncWithPipefy, isSyncing, isLoading } = useFunnelRealized(startDate, endDate);
   const { getQtyForPeriod: getModeloAtualQty, getValueForPeriod: getModeloAtualValue, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getGroupedData: getModeloAtualGroupedData, isLoading: isLoadingModeloAtual } = useModeloAtualMetas(startDate, endDate);
-  const { getQtyForPeriod: getExpansaoQty, getGroupedData: getExpansaoGroupedData, isLoading: isLoadingExpansao, refetch: refetchExpansao } = useExpansaoMetas(startDate, endDate);
+  const { getQtyForPeriod: getExpansaoQty, getValueForPeriod: getExpansaoValue, getGroupedData: getExpansaoGroupedData, isLoading: isLoadingExpansao, refetch: refetchExpansao } = useExpansaoMetas(startDate, endDate);
   const { getQtyForPeriod: getO2TaxQty, getValueForPeriod: getO2TaxValue, getMrrForPeriod: getO2TaxMrr, getSetupForPeriod: getO2TaxSetup, getPontualForPeriod: getO2TaxPontual, getGroupedData: getO2TaxGroupedData, isLoading: isLoadingO2Tax } = useO2TaxMetas(startDate, endDate);
-  const { getQtyForPeriod: getOxyHackerQty, getGroupedData: getOxyHackerGroupedData, isLoading: isLoadingOxyHacker } = useOxyHackerMetas(startDate, endDate);
+  const { getQtyForPeriod: getOxyHackerQty, getValueForPeriod: getOxyHackerValue, getGroupedData: getOxyHackerGroupedData, isLoading: isLoadingOxyHacker } = useOxyHackerMetas(startDate, endDate);
   
   // Analytics hooks for drill-down
   const modeloAtualAnalytics = useModeloAtualAnalytics(startDate, endDate);
@@ -1784,10 +1784,10 @@ export function IndicatorsTab() {
           total += getO2TaxValue('venda' as O2TaxIndicator, startDate, endDate);
         }
         if (includesOxyHacker) {
-          total += getOxyHackerQty('venda' as OxyHackerIndicator, startDate, endDate) * 54000;
+          total += getOxyHackerValue('venda' as OxyHackerIndicator, startDate, endDate);
         }
         if (includesFranquia) {
-          total += getExpansaoQty('venda' as ExpansaoIndicator, startDate, endDate) * 140000;
+          total += getExpansaoValue('venda' as ExpansaoIndicator, startDate, endDate);
         }
         
         return total;
