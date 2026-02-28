@@ -1,66 +1,56 @@
 
 
-## Adicionar Franquia e Oxy Hacker ao gauge "Pontual" no acelerometro
+## Usar valor real da "Taxa de franquia" com fallback para ticket fixo
 
-### Problema identificado
-No `IndicatorsTab.tsx`, a funcao `getRealizedMonetaryForIndicator` no `case 'pontual'` (linhas 1865-1885) so soma valores de **Modelo Atual** e **O2 TAX**. Nao inclui **Franquia** nem **Oxy Hacker**, mesmo que a taxa de franquia dessas BUs seja essencialmente um valor pontual.
+### Problema
+O card 1294245876 (Silvio Filho - Recife) tem "Taxa de franquia" = R$ 105.000, mas os funis usam `qty * R$ 140.000` (ticket fixo). Isso gera divergencia: o funil mostra R$ 140k quando deveria mostrar R$ 105k para esse card.
 
-Por isso o valor de R$ 105k (card Silvio Filho) aparece apenas no drill-down, mas nao no gauge "Pontual" principal.
+O acelerometro tambem usa `qty * 140.000` fixo, entao a correcao deve ser feita em todos os locais para manter consistencia.
 
-### Analise dos demais arquivos
-Verifiquei todos os arquivos que usam tickets fixos (140k/54k):
+### Solucao
+Usar `getValueForPeriod` dos hooks (que ja le o campo "Taxa de franquia" do Pipefy), mas garantir que o fallback seja o ticket padrao (R$ 140k para Franquia, R$ 54k para Oxy Hacker) quando todos os campos monetarios estao vazios.
 
-| Arquivo | Status | Motivo |
-|---------|--------|--------|
-| `useExpansaoMetas.ts` | OK | Ja usa taxaFranquia com fallback |
-| `useOxyHackerMetas.ts` | OK | Ja usa taxaFranquia com fallback |
-| `useExpansaoAnalytics.ts` | OK | `getExpansaoCardValue` ja usa taxaFranquia com fallback (linhas 105-114) |
-| `RevenueChartComparison.tsx` | OK | `getExpansaoCardValue` ja usa logica correta (linhas 105-114) |
-| `PeriodFunnelChart.tsx` | OK | Ja usa `getExpansaoValue`/`getOxyHackerValue` |
-| `ClickableFunnelChart.tsx` | OK | Ja usa `getExpansaoValue`/`getOxyHackerValue` |
-| `useConsolidatedMetas.ts` | OK (metas) | Tickets fixos sao para metas de planejamento, nao realizado |
-| `MonthlyRevenueTab.tsx` | OK (metas) | Projecao de faturamento mensal planejado |
-| `MediaInvestmentTab.tsx` | OK (metas) | Planejamento de investimento |
-| `usePlanGrowthData.ts` | OK (metas) | Dados de crescimento planejado |
-| **IndicatorsTab.tsx case 'pontual'** | **PROBLEMA** | **Nao inclui Franquia nem Oxy Hacker** |
+### Alteracoes
 
-### Alteracao necessaria
+#### 1. `src/hooks/useExpansaoMetas.ts` (linhas 178-189)
+No `getValueForPeriod`, quando `taxaFranquia` e 0 e `pontual + setup + mrr` tambem e 0, aplicar fallback de R$ 140.000:
 
-**Arquivo:** `src/components/planning/IndicatorsTab.tsx` (linhas 1880-1885)
-
-Adicionar Franquia e Oxy Hacker ao `case 'pontual'`, usando `getExpansaoValue('venda')` e `getOxyHackerValue('venda')` que ja retornam o valor real da taxa de franquia com fallback correto.
-
-```text
-case 'pontual': {
-  let total = 0;
-  
-  // Modelo Atual pontual
-  if (includesModeloAtual) {
-    // ... logica existente (closer filter)
-    total += getPontualForPeriod(startDate, endDate);
+```typescript
+if (shouldCount && !cardValues.has(movement.id)) {
+  const taxaFranquia = movement.taxaFranquia || 0;
+  if (taxaFranquia > 0) {
+    cardValues.set(movement.id, taxaFranquia);
+  } else {
+    const pontual = movement.valorPontual || 0;
+    const setup = movement.valorSetup || 0;
+    const mrr = movement.valorMRR || 0;
+    const sum = pontual + setup + mrr;
+    cardValues.set(movement.id, sum > 0 ? sum : 140000); // fallback
   }
-  
-  // O2 TAX Pontual
-  if (includesO2Tax) {
-    total += getO2TaxPontual(startDate, endDate);
-  }
-  
-+ // Franquia: Taxa de franquia = valor pontual
-+ if (includesFranquia) {
-+   total += getExpansaoValue('venda', startDate, endDate);
-+ }
-+ 
-+ // Oxy Hacker: Taxa = valor pontual  
-+ if (includesOxyHacker) {
-+   total += getOxyHackerValue('venda', startDate, endDate);
-+ }
-  
-  return total;
 }
 ```
 
-### Resultado
-- O gauge "Pontual" passa a incluir R$ 105k do card Silvio Filho e quaisquer outros cards de Franquia/Oxy Hacker com contrato assinado
-- Valor fica consistente entre o gauge e o drill-down
-- Apenas 1 arquivo precisa ser alterado
+#### 2. `src/hooks/useOxyHackerMetas.ts`
+Mesma logica no `getValueForPeriod`, com fallback de R$ 54.000 para Oxy Hacker.
 
+#### 3. `src/components/planning/PeriodFunnelChart.tsx` (linhas 99-117)
+Substituir `qty * 140000` por `getExpansaoValue(...)` e `qty * 54000` por `getOxyHackerValue(...)` em todos os branches (consolidado, franquia, oxy_hacker). Os hooks agora ja incluem o fallback correto.
+
+#### 4. `src/components/planning/ClickableFunnelChart.tsx` (linhas 173-183)
+Mesma substituicao: usar `getExpansaoValue` e `getOxyHackerValue` em vez de `qty * ticket`.
+
+#### 5. `src/components/planning/IndicatorsTab.tsx` (linhas 1785-1791)
+Atualizar o acelerometro para tambem usar `getExpansaoValue('venda')` e `getOxyHackerValue('venda')` em vez de `qty * ticket`.
+
+### Resultado
+- Card com "Taxa de franquia" preenchida (ex: R$ 105k) -> usa valor real
+- Card com campos monetarios vazios -> usa ticket padrao (R$ 140k ou R$ 54k)
+- Funis e acelerometro ficam 100% alinhados
+
+| Arquivo | Alteracao |
+|---------|-----------|
+| `useExpansaoMetas.ts` | Adicionar fallback R$ 140k no getValueForPeriod |
+| `useOxyHackerMetas.ts` | Adicionar fallback R$ 54k no getValueForPeriod |
+| `PeriodFunnelChart.tsx` | Usar getValueForPeriod em vez de qty * ticket |
+| `ClickableFunnelChart.tsx` | Usar getValueForPeriod em vez de qty * ticket |
+| `IndicatorsTab.tsx` | Usar getValueForPeriod no acelerometro |

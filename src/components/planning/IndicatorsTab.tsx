@@ -1882,16 +1882,6 @@ export function IndicatorsTab() {
           total += getO2TaxPontual(startDate, endDate);
         }
         
-        // Franquia: Taxa de franquia = valor pontual
-        if (includesFranquia) {
-          total += getExpansaoValue('venda' as ExpansaoIndicator, startDate, endDate);
-        }
-        
-        // Oxy Hacker: Taxa de franquia = valor pontual
-        if (includesOxyHacker) {
-          total += getOxyHackerValue('venda' as OxyHackerIndicator, startDate, endDate);
-        }
-        
         return total;
       }
       
