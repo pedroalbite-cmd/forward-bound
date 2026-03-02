@@ -1,67 +1,62 @@
 
 
-## Nova Aba "NPS/CSAT" - Replicar Dashboard de Indicadores de Satisfacao
+## Desbloquear Fevereiro e Adicionar Distribuicao de Diferenca nas Metas Monetarias
 
 ### Objetivo
-Criar uma nova aba "NPS" no Planejamento 2026 que replica visualmente o dashboard de NPS/CSAT do projeto referencia, com dados fixos por enquanto (preparado para banco externo depois). Acesso controlado por permissao.
-
-### Secoes do Dashboard (baseado no screenshot)
-
-```text
-+-------------------------------------------------------+
-| Header: "Resultados da Pesquisa NPS" + badges Q4 2025 |
-| KPIs: Clientes | Respostas | Taxa Resp | CFOs Ativos  |
-+-------------------------------------------------------+
-| Metricas Gerais (3 gauges):                           |
-|   Taxa Resposta 33% | CSAT 82% | NPS 36              |
-+-------------------------------------------------------+
-| Score Cards: NPS | CSAT | Sean Ellis (com meta)       |
-+-------------------------------------------------------+
-| Distribuicoes: NPS | CSAT | Sean Ellis (barras)       |
-+-------------------------------------------------------+
-| Tabela Performance por CFO                            |
-+-------------------------------------------------------+
-| Feedback Qualitativo (Collapsible)                    |
-|   Elogios | Sugestoes | Criticas | Expectativas       |
-+-------------------------------------------------------+
-| Conclusao Executiva (Collapsible)                     |
-|   Pontos Fortes | Atencao | Recomendacoes             |
-+-------------------------------------------------------+
-```
+Permitir editar meses anteriormente bloqueados (como Fevereiro) e, ao alterar uma meta, mostrar a diferenca em relacao ao total anterior da BU com opcoes inteligentes de redistribuicao.
 
 ### Alteracoes
 
-| Arquivo | O que muda |
-|---------|-----------|
-| `src/hooks/useUserPermissions.ts` | Adicionar `'nps'` ao tipo `TabKey` e ao array de tabs do admin |
-| `src/pages/Planning2026.tsx` | Adicionar tab "NPS" com icone `SmilePlus` ao `TAB_CONFIG` e renderizar `<NpsTab />` |
-| `src/components/planning/NpsTab.tsx` | **Novo** - Componente principal da aba, orquestra todas as secoes |
-| `src/components/planning/nps/npsData.ts` | **Novo** - Dados hardcoded (Q4 2025) com tipos e constantes |
-| `src/components/planning/nps/NpsKpiCards.tsx` | **Novo** - 4 KPI cards do header (Clientes, Respostas, Taxa, CFOs) |
-| `src/components/planning/nps/NpsGauges.tsx` | **Novo** - 3 gauges semi-circulares (Taxa Resposta, CSAT, NPS) usando Recharts RadialBarChart |
-| `src/components/planning/nps/NpsScoreCards.tsx` | **Novo** - 3 cards grandes com score, descricao e badge meta atingida/nao |
-| `src/components/planning/nps/NpsDistributions.tsx` | **Novo** - 3 cards lado a lado: distribuicao NPS (barra segmentada + legenda), CSAT (barra + breakdown notas), Sean Ellis (barras horizontais) |
-| `src/components/planning/nps/CfoPerformanceTable.tsx` | **Novo** - Tabela com dados por CFO (Enviados, Respostas, Taxa, NPS, CSAT, Sean Ellis) |
-| `src/components/planning/nps/QualitativeFeedback.tsx` | **Novo** - Collapsible com tabs (Elogios/Sugestoes/Criticas/Expectativas) mostrando cards de citacao |
-| `src/components/planning/nps/ExecutiveSummary.tsx` | **Novo** - Secao de conclusao com pontos fortes, atencao e recomendacoes |
+#### 1. Remover trava de meses (`MonetaryMetasTab.tsx`)
+- Remover a funcao `isMonthLocked` e a logica de `disabled` nos inputs. Todos os meses passam a ser editaveis.
+- Remover os indicadores visuais de cadeado.
 
-### Dados hardcoded (npsData.ts)
+#### 2. Barra de diferenca com opcoes de distribuicao
+Quando o usuario altera o faturamento de um mes, o sistema calcula a diferenca entre o total antigo e o novo da BU selecionada. Se houver diferenca, exibe uma barra flutuante (similar a da imagem do Plan Growth) com:
 
-Todos os valores extraidos do dashboard de referencia:
-- **Geral**: 66 pesquisados, 22 respostas, 33% taxa, 7 CFOs
-- **NPS**: 36 (12 promotores, 6 neutros, 4 detratores), meta 40
-- **CSAT**: 82% (18/22 satisfeitos), meta 80%
-- **Sean Ellis**: 14% (2/14 ativos), meta 40%
-- **CFOs**: 7 registros com metricas individuais
-- **Feedback**: 18 comentarios categorizados (4 elogios, 6 sugestoes, 4 criticas, 4 expectativas)
+- **Informacao**: "Diferenca: +R$ 55.960 no O2 TAX" (ou valor negativo)
+- **Botao 1 - "Distribuir nos meses restantes"**: Divide a diferenca (com sinal invertido) igualmente entre todos os meses que NAO foram editados nesta sessao.
+- **Botao 2 - "Distribuir em periodo"**: Abre um popover/dropdown onde o usuario seleciona:
+  - Um quarter (Q1, Q2, Q3, Q4)
+  - Ou um range customizado (mes inicio -> mes fim)
+  - Ao confirmar, distribui a diferenca igualmente entre os meses do periodo selecionado (excluindo o mes que foi editado).
+- **Botao "Descartar"**: Reverte todas as alteracoes locais ao estado do banco.
+
+#### 3. Logica de distribuicao
+- A diferenca eh calculada como: `totalAnterior - totalAtual` da BU (antes vs depois da edicao).
+- Se a diferenca for positiva (usuario reduziu um mes), ela eh somada aos meses alvo.
+- Se for negativa (usuario aumentou um mes), ela eh subtraida dos meses alvo.
+- A distribuicao eh feita igualmente (diferenca / qtd meses alvo), com arredondamento e ajuste do residuo no ultimo mes.
+- O total da BU se mantem constante apos redistribuicao.
+
+#### 4. Rastreamento de edicoes manuais
+- Manter um `Set<string>` de meses editados manualmente na sessao atual.
+- "Meses restantes" = meses que NAO estao nesse set.
+- Apos distribuir, os meses que receberam ajuste NAO sao marcados como editados (permitindo redistribuicoes subsequentes).
 
 ### Detalhes tecnicos
 
-**Permissoes**: Adicionar `'nps'` como novo `TabKey`. Admins tem acesso automatico. Outros usuarios precisam de registro em `user_tab_permissions` com `tab_key = 'nps'`.
+**Arquivo**: `src/components/planning/MonetaryMetasTab.tsx`
 
-**Gauges**: Usar `RadialBarChart` do Recharts (ja instalado) com gradiente verde/amarelo/vermelho baseado no atingimento da meta, identico aos gauges do screenshot.
+**Estado adicional**:
+```text
+editedMonths: Set<string>     -- meses tocados pelo usuario
+previousBuTotal: number       -- total da BU antes das edicoes
+showDistribution: boolean     -- controla visibilidade da barra
+distributionPeriod: 'remaining' | 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'custom'
+customRange: [MonthType, MonthType]
+```
 
-**Barra segmentada NPS**: Barra horizontal com 3 segmentos coloridos (verde promotores, amarelo neutros, vermelho detratores) usando divs com width percentual.
+**Barra de distribuicao**: Renderizada como um `div` fixo no bottom (estilo identico ao floating bar do Plan Growth), contendo:
+- Badge com a diferenca formatada
+- Botoes de acao
+- Popover para selecao de periodo (usando Select ou RadioGroup)
 
-**Preparacao para banco externo**: Os dados ficam isolados em `npsData.ts`. Quando integrar com banco externo, basta criar um hook `useNpsData()` que substitui as constantes por queries.
+**Fluxo**:
+1. Usuario edita faturamento de Fev de R$ 135.960 para R$ 80.000
+2. Diferenca: R$ 55.960 (sobra para distribuir)
+3. Barra aparece: "1 alteracao | O2 TAX: +R$ 55.960"
+4. Usuario clica "Distribuir nos restantes" -> R$ 55.960 / 10 meses = R$ 5.596 adicionado a cada mes de Mar-Dez
+5. Ou clica "Distribuir em periodo" -> seleciona Q3 -> R$ 55.960 / 3 = R$ 18.653 em Jul, Ago, Set
+6. Total da BU permanece o mesmo de antes da edicao
 
