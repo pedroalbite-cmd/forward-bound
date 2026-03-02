@@ -1,56 +1,74 @@
 
+## Correcao dos indicadores para BU O2 TAX isolada
 
-## Usar valor real da "Taxa de franquia" com fallback para ticket fixo
+### Problemas identificados
 
-### Problema
-O card 1294245876 (Silvio Filho - Recife) tem "Taxa de franquia" = R$ 105.000, mas os funis usam `qty * R$ 140.000` (ticket fixo). Isso gera divergencia: o funil mostra R$ 140k quando deveria mostrar R$ 105k para esse card.
+#### 1. Acelerometro de Vendas mostra 0 mas drill-down mostra venda
+**Causa raiz**: O `getRealizedForIndicator` e o `handleRadialCardClick` usam a mesma funcao `o2TaxAnalytics.getDetailItemsForIndicator('venda')`, mas o hook `useO2TaxAnalytics` faz 3 chamadas sequenciais a API (query_period -> card_history -> mql_by_creation). O radial card renderiza com 0 durante o carregamento e, embora devesse atualizar apos os dados chegarem, a logica de `useMemo` aninhada (getCardsForIndicator -> getDetailItemsForIndicator) pode causar um delay na re-renderizacao.
 
-O acelerometro tambem usa `qty * 140.000` fixo, entao a correcao deve ser feita em todos os locais para manter consistencia.
+**Correcao**: Garantir que `getRealizedForIndicator` retorne 0 apenas se `o2TaxAnalytics.isLoading` for false. Se estiver carregando, mostrar loading state no radial card.
 
-### Solucao
-Usar `getValueForPeriod` dos hooks (que ja le o campo "Taxa de franquia" do Pipefy), mas garantir que o fallback seja o ticket padrao (R$ 140k para Franquia, R$ 54k para Oxy Hacker) quando todos os campos monetarios estao vazios.
+#### 2. Grafico de linha (chart) usa hook diferente do acelerometro
+**Problema**: O grafico diario/semanal/mensal usa `getO2TaxGroupedData` do hook `useO2TaxMetas`, que faz `action: 'preview', limit: 5000` (sem filtro de data, tudo client-side). Enquanto isso, o acelerometro usa `useO2TaxAnalytics` com `action: 'query_period'` (filtrado no servidor com first-entry logic). Isso pode gerar divergencia entre chart e gauge.
 
-### Alteracoes
+**Correcao**: Para manter consistencia, o chart tambem deveria usar dados do analytics hook quando em modo single-BU O2 TAX, igual ao que ja acontece para o radial card.
 
-#### 1. `src/hooks/useExpansaoMetas.ts` (linhas 178-189)
-No `getValueForPeriod`, quando `taxaFranquia` e 0 e `pontual + setup + mrr` tambem e 0, aplicar fallback de R$ 140.000:
+#### 3. Indicadores monetarios (Faturamento, MRR, Setup, Pontual) usam hooks misturados
+**Problema**: Na secao `getRealizedMonetaryForIndicator`:
+- Faturamento O2 TAX: usa `getO2TaxValue('venda')` do `useO2TaxMetas` (hook antigo)
+- MRR: usa `getO2TaxMrr()` do `useO2TaxMetas`
+- Setup: usa `getO2TaxSetup()` do `useO2TaxMetas`
+- Pontual: usa `getO2TaxPontual()` do `useO2TaxMetas`
 
-```typescript
-if (shouldCount && !cardValues.has(movement.id)) {
-  const taxaFranquia = movement.taxaFranquia || 0;
-  if (taxaFranquia > 0) {
-    cardValues.set(movement.id, taxaFranquia);
-  } else {
-    const pontual = movement.valorPontual || 0;
-    const setup = movement.valorSetup || 0;
-    const mrr = movement.valorMRR || 0;
-    const sum = pontual + setup + mrr;
-    cardValues.set(movement.id, sum > 0 ? sum : 140000); // fallback
-  }
-}
+Enquanto o acelerometro de volume usa `o2TaxAnalytics` (hook com first-entry). Isso causa divergencia: o faturamento pode contar uma venda que o acelerometro nao conta (ou vice-versa).
+
+### Solucao proposta
+
+#### 1. Adicionar loading state aos radial cards
+
+No `IndicatorsTab.tsx`, verificar `o2TaxAnalytics.isLoading` antes de computar realized:
+
+```text
+- Se isLoading, exibir skeleton/spinner no radial card
+- Se !isLoading, exibir o valor real
 ```
 
-#### 2. `src/hooks/useOxyHackerMetas.ts`
-Mesma logica no `getValueForPeriod`, com fallback de R$ 54.000 para Oxy Hacker.
+#### 2. Unificar fonte de dados para graficos O2 TAX
 
-#### 3. `src/components/planning/PeriodFunnelChart.tsx` (linhas 99-117)
-Substituir `qty * 140000` por `getExpansaoValue(...)` e `qty * 54000` por `getOxyHackerValue(...)` em todos os branches (consolidado, franquia, oxy_hacker). Os hooks agora ja incluem o fallback correto.
+No `buildChartData` (linhas 874-889), quando single-BU O2 TAX, usar `o2TaxAnalytics.getCardsForIndicator` agrupado por periodo em vez de `getO2TaxGroupedData` do hook `useO2TaxMetas`. Isso alinha chart com acelerometro.
 
-#### 4. `src/components/planning/ClickableFunnelChart.tsx` (linhas 173-183)
-Mesma substituicao: usar `getExpansaoValue` e `getOxyHackerValue` em vez de `qty * ticket`.
+#### 3. Unificar fonte de dados para indicadores monetarios O2 TAX
 
-#### 5. `src/components/planning/IndicatorsTab.tsx` (linhas 1785-1791)
-Atualizar o acelerometro para tambem usar `getExpansaoValue('venda')` e `getOxyHackerValue('venda')` em vez de `qty * ticket`.
+No `getRealizedMonetaryForIndicator`, para faturamento/MRR/setup/pontual de O2 TAX, usar dados do `o2TaxAnalytics` (que aplica first-entry):
 
-### Resultado
-- Card com "Taxa de franquia" preenchida (ex: R$ 105k) -> usa valor real
-- Card com campos monetarios vazios -> usa ticket padrao (R$ 140k ou R$ 54k)
-- Funis e acelerometro ficam 100% alinhados
+```text
+case 'faturamento':
+  if (includesO2Tax) {
+    // Usar o2TaxAnalytics.getCardsForIndicator('venda') 
+    // e somar card.valor de cada card
+    const o2TaxVendas = o2TaxAnalytics.getCardsForIndicator('venda');
+    total += o2TaxVendas.reduce((sum, c) => sum + c.valor, 0);
+  }
+
+case 'mrr':
+  if (includesO2Tax) {
+    const o2TaxVendas = o2TaxAnalytics.getCardsForIndicator('venda');
+    total += o2TaxVendas.reduce((sum, c) => sum + c.valorMRR, 0);
+  }
+// Similar para setup e pontual
+```
+
+### Alteracoes por arquivo
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `useExpansaoMetas.ts` | Adicionar fallback R$ 140k no getValueForPeriod |
-| `useOxyHackerMetas.ts` | Adicionar fallback R$ 54k no getValueForPeriod |
-| `PeriodFunnelChart.tsx` | Usar getValueForPeriod em vez de qty * ticket |
-| `ClickableFunnelChart.tsx` | Usar getValueForPeriod em vez de qty * ticket |
-| `IndicatorsTab.tsx` | Usar getValueForPeriod no acelerometro |
+| `IndicatorsTab.tsx` | 1. Adicionar loading check para radial cards quando O2 TAX |
+| `IndicatorsTab.tsx` | 2. `buildChartData` - usar analytics para O2 TAX single-BU |
+| `IndicatorsTab.tsx` | 3. `getRealizedMonetaryForIndicator` - unificar com analytics |
+| `IndicatorsTab.tsx` | 4. Verificar `getDealsWon` para drill-downs de Conversions tab |
+
+### Resultado esperado
+- Todos indicadores (volume + monetarios) usam a mesma fonte: `useO2TaxAnalytics` com first-entry logic
+- Radial cards mostram loading enquanto dados carregam, evitando "0 falso"
+- Graficos de evolucao temporal batem com acelerometros
+- Drill-down sempre bate com valor exibido no gauge
