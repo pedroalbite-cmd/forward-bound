@@ -1,88 +1,69 @@
 
 
-## Grafico de Incremento de Faturamento com Pace de Meta
+## Redesign do RevenuePaceChart no estilo dos graficos do final da pagina
 
 ### Objetivo
-Criar um unico grafico (card com barra de progresso visual) posicionado entre os filtros e os acelerometros, mostrando:
-- **Meta de Incremento** (faturamento esperado no periodo)
-- **Realizado** (faturamento efetivo das vendas)
-- **Pace** (se esta no ritmo para bater a meta, considerando dias decorridos vs dias totais do periodo)
+Redesenhar o componente `RevenuePaceChart` para seguir o mesmo estilo visual do `RevenueChartGroupedBars` (graficos do final da pagina), incluindo:
+- KPI cards por BU com sparklines e progress bars
+- Grafico de barras com recharts mostrando realizado vs meta
+- Linha de referencia do pace esperado
+- Badge de status (acima/abaixo do pace)
 
-O grafico deve respeitar todos os filtros existentes (BU, Closer, SDR, periodo).
+### Alteracoes necessarias
 
-### Dados utilizados
+#### 1. Expandir as props do RevenuePaceChart
 
-- **Meta**: `getMetaMonetaryForIndicator({ key: 'faturamento' })` -- ja calcula pro-rata por periodo e BU
-- **Realizado**: `getRealizedMonetaryForIndicator({ key: 'faturamento' })` -- ja unificado com analytics
-- **Pace esperado**: `meta * (diasDecorridos / diasTotaisPeriodo)` -- quanto deveria ter sido feito ate hoje proporcionalmente
+O componente precisa receber dados por BU (nao apenas totais), para poder exibir cards individuais como o grafico do final da pagina:
 
-### Design do componente
+```text
+Props atuais: realized, meta, paceExpected, isLoading
+Props novas: + selectedBUs, totalsByBU, metasByBU, paceByBU
+```
 
-Um `Card` unico com:
-1. **Header**: "Incremento de Faturamento" com os valores numericos (Realizado / Meta)
-2. **Barra horizontal**: mostrando realizado vs meta, com marcador de pace
-3. **Indicador de status**: 
-   - Verde: realizado >= pace esperado
-   - Amarelo: realizado >= 80% do pace
-   - Vermelho: realizado < 80% do pace
-4. **Texto auxiliar**: "Pace: R$ XXk de R$ YYk esperados ate hoje (ZZ%)"
+#### 2. Redesenhar o RevenuePaceChart
 
-### Alteracoes
+O novo layout sera:
+
+```text
+Card "Incremento de Faturamento"
+  |
+  +-- Header com titulo + badge de status (Acima/Abaixo do pace)
+  |
+  +-- KPI Cards Row (igual ao RevenueChartGroupedBars):
+  |     - Um card por BU selecionada com:
+  |       - Valor realizado
+  |       - Mini barra de progresso (realized/meta)
+  |       - % da meta
+  |     - Card TOTAL com destaque + pace %
+  |
+  +-- Grafico de barras (recharts BarChart):
+  |     - Duas barras por periodo: "Realizado" e "Meta"
+  |     - Linha de referencia tracejada no nivel do pace esperado
+  |     - Eixo X: periodos (dias/semanas/meses conforme agrupamento)
+  |     - Eixo Y: valores em R$
+  |
+  +-- Legenda: Realizado | Meta | Pace
+```
+
+#### 3. Atualizar IndicatorsTab.tsx
+
+Passar os dados adicionais por BU para o componente:
+- Calcular `realizedByBU` usando `getRealizedMonetaryForIndicator` para cada BU
+- Calcular `metaByBU` usando `getMetaMonetaryForIndicator` para cada BU  
+- Calcular `paceByBU` como `metaByBU * paceFraction`
+- Passar `selectedBUs` para o componente
+
+### Arquivos alterados
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `IndicatorsTab.tsx` | Criar componente `RevenuePaceChart` inline (ou separado) e renderizar entre filtros e acelerometros |
+| `src/components/planning/indicators/RevenuePaceChart.tsx` | Redesign completo seguindo estilo do RevenueChartGroupedBars: KPI cards por BU, grafico de barras recharts com realized vs meta e pace reference line |
+| `src/components/planning/IndicatorsTab.tsx` | Passar dados por BU (totals, metas, pace) e selectedBUs para o RevenuePaceChart |
 
-### Detalhes tecnicos
+### Detalhes visuais
 
-#### Componente `RevenuePaceChart`
-
-```text
-Props:
-  - realized: number (faturamento realizado)
-  - meta: number (meta de faturamento do periodo)
-  - paceExpected: number (meta pro-rata ate hoje)
-  - isLoading: boolean
-
-Layout:
-  Card com:
-    - Titulo "Incremento de Faturamento"
-    - 3 mini KPIs lado a lado: Realizado | Meta Periodo | Pace Esperado
-    - Barra de progresso horizontal (100% = meta total)
-      - Preenchida ate o % realizado (cor baseada em pace)
-      - Marcador vertical no ponto do pace esperado
-    - Texto de status: "Acima do pace" / "No ritmo" / "Abaixo do pace"
-```
-
-#### Calculo do Pace
-
-No `IndicatorsTab.tsx`, antes do return:
-
-```text
-const today = new Date();
-const daysElapsed = Math.min(
-  differenceInDays(today, startDate) + 1, 
-  daysInPeriod
-);
-const paceFraction = daysInPeriod > 0 ? daysElapsed / daysInPeriod : 0;
-
-const faturamentoMeta = getMetaMonetaryForIndicator({ key: 'faturamento', ... });
-const faturamentoRealized = getRealizedMonetaryForIndicator({ key: 'faturamento', ... });
-const paceExpected = faturamentoMeta * paceFraction;
-```
-
-#### Posicao na renderizacao
-
-```text
-{/* Filters */}
-...
-
-{/* NOVO: Grafico de Incremento com Pace */}
-<RevenuePaceChart ... />
-
-{/* Cards - Quantity Indicators (acelerometros) */}
-...
-```
-
-O componente usa `recharts` (BarChart com uma barra horizontal) ou simplesmente um `Progress` customizado com marcador de pace, mantendo consistencia visual com o restante do dashboard.
-
+- Mesmas cores por BU: Modelo Atual (#3b82f6), O2 TAX (#f59e0b), Oxy Hacker (#8b5cf6), Franquia (#22c55e)
+- Mesmos componentes: recharts BarChart, Progress bar, Card com border
+- Grafico mostra barra "Realizado" (cor da BU ou primary) ao lado de barra "Meta" (cinza/muted)
+- ReferenceLine tracejada no valor do pace esperado
+- Badge de status mantido no header (verde/amarelo/vermelho)
