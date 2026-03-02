@@ -356,18 +356,33 @@ export function usePlanGrowthData() {
     return distributeQuarterlyToMonthly(metasTrimestrais);
   }, [metas]);
 
+  // Valores reais de MRR Base conhecidos (sobrescrevem projecao)
+  const realMrrBase: Record<string, number> = {
+    Jan: 700000,
+    Fev: 700000,
+    Mar: 756521.10,
+  };
+
   // Calculate MRR dynamics for Modelo Atual
-  const mrrDynamic = useMemo(() => 
-    calculateMrrAndRevenueToSell(
+  const mrrDynamic = useMemo(() => {
+    const result = calculateMrrAndRevenueToSell(
       mrrInicial, 
       churnMensal, 
       retencaoVendas,
       metasMensaisModeloAtual,
       indicadoresPorBU.modeloAtual.ticketMedio,
       valorVenderInicial
-    ),
-    [metasMensaisModeloAtual]
-  );
+    );
+
+    // Aplicar override com valores reais de MRR Base
+    Object.entries(realMrrBase).forEach(([month, value]) => {
+      result.mrrPorMes[month] = value;
+      const meta = metasMensaisModeloAtual[month] || 0;
+      result.revenueToSell[month] = Math.max(0, meta - value);
+    });
+
+    return result;
+  }, [metasMensaisModeloAtual]);
 
   // Calculate monthly values for other BUs - prioritize DB
   const o2TaxMonthly = useMemo(() => {
