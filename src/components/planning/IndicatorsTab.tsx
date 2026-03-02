@@ -410,7 +410,7 @@ export function IndicatorsTab() {
   const oxyHackerAnalytics = useExpansaoAnalytics(startDate, endDate, 'Oxy Hacker');
   
   // Get funnelData from MediaMetasContext for dynamic metas
-  const { funnelData } = useMediaMetas();
+  const { funnelData, metasPorBU } = useMediaMetas();
   
   // Get consolidated metas (database overrides + Plan Growth fallback)
   const { getMetaMonetaryForPeriod } = useConsolidatedMetas();
@@ -2430,7 +2430,6 @@ export function IndicatorsTab() {
         const dataByBU: Record<string, { realized: number; meta: number; pace: number }> = {};
         
         selectedBUs.forEach(bu => {
-          // Realized per BU
           let buRealized = 0;
           if (bu === 'modelo_atual' && includesModeloAtual) {
             if (selectedClosers.length > 0) {
@@ -2449,7 +2448,6 @@ export function IndicatorsTab() {
             buRealized = getExpansaoValue('venda' as any, startDate, endDate);
           }
 
-          // Meta per BU
           const buMeta = getMetaMonetaryForPeriod(
             'faturamento',
             [bu as any],
@@ -2466,16 +2464,93 @@ export function IndicatorsTab() {
           };
         });
 
-        // Build chart data per period (realized vs meta)
-        const chartLabels = getChartLabels();
-        const paceChartData = chartLabels.map((label, index) => {
-          // For simplicity, distribute totals evenly across periods
-          const periodCount = chartLabels.length || 1;
-          return {
-            label,
-            realized: faturamentoRealized / periodCount,
-            meta: faturamentoMeta / periodCount,
-          };
+        // === Faturamento Total Previsto (MRR Base + Incremento) ===
+        // metasPorBU stores faturamentoMeta per month; for Modelo Atual it includes MRR Base + Incremento
+        let faturamentoTotal = 0;
+        if (metasPorBU) {
+          const monthsInPeriod = eachMonthOfInterval({ start: startDate, end: endDate });
+          selectedBUs.forEach(bu => {
+            const buMetas = metasPorBU[bu as keyof typeof metasPorBU];
+            if (!buMetas) return;
+            for (const monthDate of monthsInPeriod) {
+              const monthName = monthNames[getMonth(monthDate)];
+              const monthStart = startOfMonth(monthDate);
+              const monthEnd = endOfMonth(monthDate);
+              const overlapStart = startDate > monthStart ? startDate : monthStart;
+              const overlapEnd = endDate < monthEnd ? endDate : monthEnd;
+              if (overlapStart > overlapEnd) continue;
+              const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
+              const totalDaysInMonth = differenceInDays(monthEnd, monthStart) + 1;
+              const fraction = totalDaysInMonth > 0 ? overlapDays / totalDaysInMonth : 0;
+              const monthVal = buMetas[monthName] || 0;
+              faturamentoTotal += monthVal * fraction;
+            }
+          });
+        }
+
+        // === Build real chart data per period using analytics hooks ===
+        const paceChartLabels = getChartLabels();
+
+        // Helper: get venda monetary values grouped by period from analytics cards
+        const getVendaCardsForBU = (bu: BUType): { date: Date; value: number }[] => {
+          if (bu === 'modelo_atual' && includesModeloAtual) {
+            const cards = modeloAtualAnalytics.getCardsForIndicator('venda');
+            const filtered = selectedClosers.length > 0
+              ? cards.filter(card => matchesCloserFilter((card.closer || '').trim()))
+              : cards;
+            return filtered.map(c => ({ date: c.dataEntrada, value: c.valor || 0 }));
+          }
+          if (bu === 'o2_tax' && includesO2Tax) {
+            const cards = o2TaxAnalytics.getCardsForIndicator('venda');
+            return cards.map(c => ({ date: c.dataEntrada, value: c.valor || 0 }));
+          }
+          if (bu === 'oxy_hacker' && includesOxyHacker) {
+            const items = oxyHackerAnalytics.getDetailItemsForIndicator('venda');
+            return items.map(i => ({ date: i.date ? new Date(i.date) : new Date(), value: i.pontual || i.value || 0 }));
+          }
+          if (bu === 'franquia' && includesFranquia) {
+            const items = franquiaAnalytics.getDetailItemsForIndicator('venda');
+            return items.map(i => ({ date: i.date ? new Date(i.date) : new Date(), value: i.pontual || i.value || 0 }));
+          }
+          return [];
+        };
+
+        // Collect all venda cards across selected BUs
+        const allVendaCards: { date: Date; value: number }[] = [];
+        selectedBUs.forEach(bu => {
+          allVendaCards.push(...getVendaCardsForBU(bu));
+        });
+
+        // Group by period
+        const metaPerDay = faturamentoMeta / daysInPeriod;
+        const paceChartData = paceChartLabels.map((label, index) => {
+          let periodStart: Date;
+          let periodEnd: Date;
+
+          if (grouping === 'daily') {
+            const days = eachDayOfInterval({ start: startDate, end: endDate });
+            periodStart = days[index] || startDate;
+            periodEnd = periodStart;
+          } else if (grouping === 'weekly') {
+            periodStart = addDays(startDate, index * 7);
+            periodEnd = index === paceChartLabels.length - 1 ? endDate : addDays(periodStart, 6);
+          } else {
+            const months = eachMonthOfInterval({ start: startDate, end: endDate });
+            periodStart = months[index] || startDate;
+            periodEnd = index === months.length - 1 ? endDate : endOfMonth(periodStart);
+          }
+
+          const pStart = new Date(periodStart.getFullYear(), periodStart.getMonth(), periodStart.getDate()).getTime();
+          const pEnd = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate(), 23, 59, 59, 999).getTime();
+
+          const periodRealized = allVendaCards
+            .filter(c => c.date.getTime() >= pStart && c.date.getTime() <= pEnd)
+            .reduce((sum, c) => sum + c.value, 0);
+
+          const periodDays = differenceInDays(periodEnd, periodStart) + 1;
+          const periodMeta = metaPerDay * periodDays;
+
+          return { label, realized: periodRealized, meta: periodMeta };
         });
 
         return (
@@ -2487,6 +2562,7 @@ export function IndicatorsTab() {
             selectedBUs={selectedBUs}
             dataByBU={dataByBU}
             chartData={paceChartData}
+            faturamentoTotal={Math.round(faturamentoTotal)}
           />
         );
       })()}

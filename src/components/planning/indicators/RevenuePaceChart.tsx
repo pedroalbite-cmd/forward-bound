@@ -34,6 +34,7 @@ interface RevenuePaceChartProps {
   selectedBUs: BUType[];
   dataByBU: Record<string, BUData>;
   chartData: { label: string; realized: number; meta: number }[];
+  faturamentoTotal?: number;
 }
 
 const formatCompactCurrency = (value: number): string => {
@@ -75,7 +76,7 @@ function BUPaceCard({ bu, data, color }: { bu: BUType; data: BUData; color: stri
   );
 }
 
-export function RevenuePaceChart({ realized, meta, paceExpected, isLoading, selectedBUs, dataByBU, chartData }: RevenuePaceChartProps) {
+export function RevenuePaceChart({ realized, meta, paceExpected, isLoading, selectedBUs, dataByBU, chartData, faturamentoTotal }: RevenuePaceChartProps) {
   const paceRatio = paceExpected > 0 ? realized / paceExpected : 0;
 
   const status: 'success' | 'warning' | 'danger' =
@@ -188,6 +189,11 @@ export function RevenuePaceChart({ realized, meta, paceExpected, isLoading, sele
               <p className="text-[10px] text-muted-foreground mt-1.5">
                 Meta: {formatCompactCurrency(meta)} | Pace: {formatCompactCurrency(paceExpected)}
               </p>
+              {faturamentoTotal != null && faturamentoTotal > 0 && (
+                <p className="text-[10px] font-medium text-primary mt-1">
+                  Fat. Previsto: {formatCompactCurrency(faturamentoTotal)}
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>
