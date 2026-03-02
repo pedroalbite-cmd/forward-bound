@@ -2483,6 +2483,8 @@ export function IndicatorsTab() {
         // Chart data: each period bar includes MRR Base pro-rata + increment
         const metaPerDay = faturamentoMeta / daysInPeriod;
         const mrrBasePerDay = mrrBase / daysInPeriod;
+        let cumulativeRealized = 0;
+        let cumulativeMeta = 0;
         const paceChartData = paceChartLabels.map((label, index) => {
           let periodStart: Date;
           let periodEnd: Date;
@@ -2511,10 +2513,13 @@ export function IndicatorsTab() {
           const periodMrrBase = mrrBasePerDay * periodDays;
           const periodMetaIncrement = metaPerDay * periodDays;
 
+          cumulativeRealized += periodMrrBase + periodIncrementRealized;
+          cumulativeMeta += periodMrrBase + periodMetaIncrement;
+
           return {
             label,
-            realized: periodMrrBase + periodIncrementRealized,
-            meta: periodMrrBase + periodMetaIncrement,
+            realizado: cumulativeRealized,
+            meta: cumulativeMeta,
           };
         });
 
