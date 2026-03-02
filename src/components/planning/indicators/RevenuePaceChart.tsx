@@ -1,13 +1,39 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BUType } from "@/hooks/useFunnelRealized";
+import { Progress } from "@/components/ui/progress";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, ReferenceLine, AreaChart, Area } from "recharts";
+
+const BU_COLORS: Record<string, string> = {
+  modelo_atual: '#3b82f6',
+  o2_tax: '#f59e0b',
+  oxy_hacker: '#8b5cf6',
+  franquia: '#22c55e',
+};
+
+const BU_LABELS: Record<string, string> = {
+  modelo_atual: 'Modelo Atual',
+  o2_tax: 'O2 TAX',
+  oxy_hacker: 'Oxy Hacker',
+  franquia: 'Franquia',
+};
+
+interface BUData {
+  realized: number;
+  meta: number;
+  pace: number;
+}
 
 interface RevenuePaceChartProps {
   realized: number;
   meta: number;
   paceExpected: number;
   isLoading: boolean;
+  selectedBUs: BUType[];
+  dataByBU: Record<string, BUData>;
+  chartData: { label: string; realized: number; meta: number }[];
 }
 
 const formatCompactCurrency = (value: number): string => {
@@ -16,12 +42,42 @@ const formatCompactCurrency = (value: number): string => {
   return `R$ ${Math.round(value)}`;
 };
 
-export function RevenuePaceChart({ realized, meta, paceExpected, isLoading }: RevenuePaceChartProps) {
-  const realizedPct = meta > 0 ? Math.min((realized / meta) * 100, 100) : 0;
-  const pacePct = meta > 0 ? Math.min((paceExpected / meta) * 100, 100) : 0;
+function BUPaceCard({ bu, data, color }: { bu: BUType; data: BUData; color: string }) {
+  const percentage = data.meta > 0 ? (data.realized / data.meta) * 100 : 0;
+  const paceRatio = data.pace > 0 ? data.realized / data.pace : 0;
+  const isAbovePace = paceRatio >= 1;
+
+  return (
+    <Card className="bg-card border-border flex-1 min-w-[140px]">
+      <CardContent className="p-3">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs font-medium text-muted-foreground">{BU_LABELS[bu]}</span>
+          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+        </div>
+        <div className="text-lg font-bold text-foreground">
+          {formatCompactCurrency(data.realized)}
+        </div>
+
+        {/* Progress bar */}
+        <div className="mt-2">
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className={isAbovePace ? "text-green-500" : "text-destructive"}>
+              {Math.round(percentage)}% meta
+            </span>
+            <span className="text-muted-foreground text-[10px]">
+              Pace: {Math.round(paceRatio * 100)}%
+            </span>
+          </div>
+          <Progress value={Math.min(percentage, 100)} className="h-1.5" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function RevenuePaceChart({ realized, meta, paceExpected, isLoading, selectedBUs, dataByBU, chartData }: RevenuePaceChartProps) {
   const paceRatio = paceExpected > 0 ? realized / paceExpected : 0;
 
-  // Status logic
   const status: 'success' | 'warning' | 'danger' =
     paceRatio >= 1 ? 'success' : paceRatio >= 0.8 ? 'warning' : 'danger';
 
@@ -29,7 +85,6 @@ export function RevenuePaceChart({ realized, meta, paceExpected, isLoading }: Re
     success: {
       label: 'Acima do pace',
       icon: TrendingUp,
-      barColor: 'bg-emerald-500',
       textColor: 'text-emerald-600 dark:text-emerald-400',
       bgColor: 'bg-emerald-50 dark:bg-emerald-950/30',
       borderColor: 'border-emerald-200 dark:border-emerald-800',
@@ -37,7 +92,6 @@ export function RevenuePaceChart({ realized, meta, paceExpected, isLoading }: Re
     warning: {
       label: 'No ritmo',
       icon: Minus,
-      barColor: 'bg-amber-500',
       textColor: 'text-amber-600 dark:text-amber-400',
       bgColor: 'bg-amber-50 dark:bg-amber-950/30',
       borderColor: 'border-amber-200 dark:border-amber-800',
@@ -45,7 +99,6 @@ export function RevenuePaceChart({ realized, meta, paceExpected, isLoading }: Re
     danger: {
       label: 'Abaixo do pace',
       icon: TrendingDown,
-      barColor: 'bg-red-500',
       textColor: 'text-red-600 dark:text-red-400',
       bgColor: 'bg-red-50 dark:bg-red-950/30',
       borderColor: 'border-red-200 dark:border-red-800',
@@ -55,6 +108,14 @@ export function RevenuePaceChart({ realized, meta, paceExpected, isLoading }: Re
   const config = statusConfig[status];
   const StatusIcon = config.icon;
 
+  const totalPercentage = meta > 0 ? (realized / meta) * 100 : 0;
+  const isTotalAbovePace = paceRatio >= 1;
+
+  // Average meta per period for reference line
+  const avgMeta = chartData.length > 0
+    ? chartData.reduce((sum, d) => sum + d.meta, 0) / chartData.length
+    : 0;
+
   if (isLoading) {
     return (
       <Card className="bg-card border-border">
@@ -62,12 +123,12 @@ export function RevenuePaceChart({ realized, meta, paceExpected, isLoading }: Re
           <Skeleton className="h-5 w-48" />
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-4">
-            <Skeleton className="h-16 flex-1" />
-            <Skeleton className="h-16 flex-1" />
-            <Skeleton className="h-16 flex-1" />
+          <div className="flex gap-3">
+            <Skeleton className="h-24 flex-1" />
+            <Skeleton className="h-24 flex-1" />
+            <Skeleton className="h-24 flex-1" />
           </div>
-          <Skeleton className="h-6 w-full" />
+          <Skeleton className="h-64 w-full" />
         </CardContent>
       </Card>
     );
@@ -75,11 +136,14 @@ export function RevenuePaceChart({ realized, meta, paceExpected, isLoading }: Re
 
   return (
     <Card className="bg-card border-border">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-semibold text-foreground">
-            Incremento de Faturamento
-          </CardTitle>
+          <div className="flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-primary" />
+            <CardTitle className="text-base font-semibold text-foreground">
+              Incremento de Faturamento
+            </CardTitle>
+          </div>
           <div className={cn(
             "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border",
             config.bgColor, config.textColor, config.borderColor
@@ -89,60 +153,107 @@ export function RevenuePaceChart({ realized, meta, paceExpected, isLoading }: Re
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Mini KPIs */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="flex flex-col items-center p-3 rounded-lg bg-muted/50 border border-border">
-            <span className="text-lg font-bold text-foreground">{formatCompactCurrency(realized)}</span>
-            <span className="text-xs text-muted-foreground">Realizado</span>
-          </div>
-          <div className="flex flex-col items-center p-3 rounded-lg bg-muted/50 border border-border">
-            <span className="text-lg font-bold text-foreground">{formatCompactCurrency(meta)}</span>
-            <span className="text-xs text-muted-foreground">Meta Período</span>
-          </div>
-          <div className={cn(
-            "flex flex-col items-center p-3 rounded-lg border",
-            config.bgColor, config.borderColor
-          )}>
-            <span className={cn("text-lg font-bold", config.textColor)}>
-              {formatCompactCurrency(paceExpected)}
-            </span>
-            <span className="text-xs text-muted-foreground">Pace Esperado</span>
-          </div>
-        </div>
-
-        {/* Progress bar with pace marker */}
-        <div className="relative">
-          {/* Bar background */}
-          <div className="h-5 w-full rounded-full bg-muted overflow-hidden">
-            {/* Realized fill */}
-            <div
-              className={cn("h-full rounded-full transition-all duration-500", config.barColor)}
-              style={{ width: `${realizedPct}%` }}
+      <CardContent className="pt-2 space-y-4">
+        {/* KPI Cards Row */}
+        <div className="flex gap-3 flex-wrap">
+          {selectedBUs.map(bu => (
+            <BUPaceCard
+              key={bu}
+              bu={bu}
+              data={dataByBU[bu] || { realized: 0, meta: 0, pace: 0 }}
+              color={BU_COLORS[bu]}
             />
-          </div>
+          ))}
 
-          {/* Pace marker */}
-          {pacePct > 0 && (
-            <div
-              className="absolute top-0 h-5 flex flex-col items-center"
-              style={{ left: `${pacePct}%`, transform: 'translateX(-50%)' }}
-            >
-              <div className="w-0.5 h-5 bg-foreground/70" />
-            </div>
-          )}
-
-          {/* Labels below bar */}
-          <div className="flex justify-between mt-1.5 text-xs text-muted-foreground">
-            <span>{Math.round(realizedPct)}% da meta</span>
-            <span>Pace: {Math.round(pacePct)}%</span>
-          </div>
+          {/* Total Card */}
+          <Card className="bg-primary/5 border-primary/20 flex-1 min-w-[140px]">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-primary">TOTAL</span>
+              </div>
+              <div className="text-xl font-bold text-foreground">
+                {formatCompactCurrency(realized)}
+              </div>
+              <div className="mt-2">
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className={isTotalAbovePace ? "text-green-500" : "text-destructive"}>
+                    {Math.round(totalPercentage)}% meta
+                  </span>
+                  <span className="text-muted-foreground text-[10px]">
+                    Pace: {Math.round(paceRatio * 100)}%
+                  </span>
+                </div>
+                <Progress value={Math.min(totalPercentage, 100)} className="h-1.5" />
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1.5">
+                Meta: {formatCompactCurrency(meta)} | Pace: {formatCompactCurrency(paceExpected)}
+              </p>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Pace detail text */}
-        <p className="text-xs text-muted-foreground text-center">
-          Pace: {formatCompactCurrency(realized)} de {formatCompactCurrency(paceExpected)} esperados até hoje ({paceExpected > 0 ? Math.round(paceRatio * 100) : 0}%)
-        </p>
+        {/* Bar Chart: Realized vs Meta per period */}
+        <div className="h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 20, right: 10, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                tickFormatter={(value) => formatCompactCurrency(value)}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--popover))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "8px",
+                  color: "hsl(var(--popover-foreground))"
+                }}
+                formatter={(value: number, name: string) => [
+                  formatCompactCurrency(value),
+                  name === 'realized' ? 'Realizado' : 'Meta'
+                ]}
+              />
+
+              <Bar dataKey="realized" fill="hsl(var(--primary))" name="realized" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="meta" fill="hsl(var(--muted-foreground)/0.3)" name="meta" radius={[4, 4, 0, 0]} />
+
+              {/* Pace reference line */}
+              {avgMeta > 0 && (
+                <ReferenceLine
+                  y={avgMeta}
+                  stroke="#22c55e"
+                  strokeDasharray="5 5"
+                  strokeWidth={2}
+                  label={{ value: 'Meta média', fill: '#22c55e', fontSize: 10, position: 'right' }}
+                />
+              )}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Legend */}
+        <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-sm bg-primary" />
+            <span>Realizado</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-sm bg-muted-foreground/30" />
+            <span>Meta</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-0 border-t-2 border-dashed border-green-500" />
+            <span>Pace</span>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
