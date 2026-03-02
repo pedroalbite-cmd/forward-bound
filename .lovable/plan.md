@@ -1,51 +1,43 @@
 
 
-## Transformar RevenuePaceChart em grafico de Pace Acumulado (Area Chart)
+## Usar MRR Base Real de Marco (R$ 756.521,10)
 
-### Objetivo
-Substituir o grafico de barras atual por um **grafico de area acumulado** identico ao grafico de MQLs mostrado na referencia:
-- Linha "Meta Acumulada" (verde solido)
-- Area "Realizado Acumulado" (verde com preenchimento)
-- Eixo X: dias do periodo (1, 2, 3... 28, 1, 2)
-- KPIs no header: Faturamento Total e Meta Total
+### Problema
+O MRR Base atual eh **projetado** usando formula de churn 6%/mes + retencao 25% a partir de um valor inicial de R$ 700k. O valor real de marco eh R$ 756.521,10 e precisa ser usado no lugar da projecao.
 
-### Layout final
+### Solucao
 
-```text
-Card "Faturamento"
-  |
-  +-- Header esquerdo: "Faturamento" + Badge "Acumulado" + seta
-  |-- Header direito: "Faturamento: R$ X    Meta: R$ Y"
-  |
-  +-- Legenda: "Meta Acumulada" (linha) + "Realizado Acumulado" (area)
-  |
-  +-- Area Chart (ComposedChart com Area + Line):
-  |     - Area preenchida verde = Realizado acumulado dia a dia
-  |     - Linha verde = Meta acumulada dia a dia
-  |     - Eixo X = dias do periodo
-  |     - Eixo Y = valores em R$
+Adicionar um mapa de **MRR Base real** (valores conhecidos) no `usePlanGrowthData.ts` que sobrescreve o valor projetado quando disponivel. Isso garante que o grafico de Faturamento no Indicadores mostre o MRR Base correto.
+
+### Alteracao
+
+| Arquivo | O que muda |
+|---------|-----------|
+| `src/hooks/usePlanGrowthData.ts` | Adicionar mapa `realMrrBase` com os valores reais conhecidos. Apos calcular `mrrDynamic`, sobrescrever `mrrPorMes` com valores reais quando existirem. Isso propaga automaticamente para `faturamentoMeta` (MRR Base + Incremento) e para o `metasPorBU` no contexto. |
+
+### Detalhe tecnico
+
+No `usePlanGrowthData.ts`, apos o calculo do `mrrDynamic`:
+
+```typescript
+// Valores reais de MRR Base conhecidos (sobrescrevem projecao)
+const realMrrBase: Record<string, number> = {
+  Jan: 700000,   // valor inicial
+  Fev: 700000,   // atualizar quando souber
+  Mar: 756521.10,
+};
+
+// Aplicar override nos valores projetados
+Object.entries(realMrrBase).forEach(([month, value]) => {
+  mrrDynamic.mrrPorMes[month] = value;
+  // Recalcular revenueToSell com o MRR real
+  const meta = metasMensaisModeloAtual[month] || 0;
+  mrrDynamic.revenueToSell[month] = Math.max(0, meta - value);
+});
 ```
 
-### Alteracoes
+Isso faz com que:
+- O `faturamentoMeta` para Marco = 756.521,10 + meta de incremento de marco
+- O grafico de Faturamento acumulado no Indicadores use o MRR Base real
+- Todos os calculos downstream (vendas necessarias, funil reverso) reflitam o valor correto
 
-| Arquivo | Alteracao |
-|---------|-----------|
-| `RevenuePaceChart.tsx` | Redesign completo: trocar BarChart por ComposedChart com Area (realizado acumulado) + Line (meta acumulada). Remover KPI card interno e usar header com totais no estilo do IndicatorChartSection. Usar mesmo gradiente e cores dos graficos existentes. Manter badge de status e Collapsible. |
-| `IndicatorsTab.tsx` | Alterar `paceChartData` para ser **cumulativo**: cada ponto soma todos os dias anteriores. Cada entrada tera `{ label: "1", "2"..., realizado: acumuladoAteAqui, meta: metaAcumuladaAteAqui }`. Os valores incluem MRR Base pro-rata acumulado + incremento acumulado. |
-
-### Detalhes tecnicos
-
-**chartData cumulativo no IndicatorsTab:**
-- Para cada dia do periodo, calcular:
-  - `metaAcumulada[i] = metaAcumulada[i-1] + metaDoDia` (MRR Base pro-rata/dia + meta incremento/dia)
-  - `realizadoAcumulado[i] = realizadoAcumulado[i-1] + realizadoDoDia` (MRR Base pro-rata/dia + vendas reais do dia)
-- Label do eixo X: numero do dia do mes (1, 2, 3... 28, 1, 2)
-
-**RevenuePaceChart redesenhado:**
-- Usar `ComposedChart` com `Area` (realizado) + `Line` (meta) - mesmo padrao do `IndicatorChartSection`
-- Gradiente verde para area preenchida
-- Header com totais (Faturamento: R$ X | Meta: R$ Y) no lado direito
-- Badge "Acumulado" ao lado do titulo
-- Collapsible para expandir/recolher
-- Remover o card KPI interno (realizado/meta/pace/atingimento) - os totais vao direto no header
-- Tooltip formatado em R$
