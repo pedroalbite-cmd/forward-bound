@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useMonetaryMetas, BuType, MonthType, BU_LABELS, isPontualOnlyBU } from '@/hooks/useMonetaryMetas';
+import { useMonetaryMetas, BuType, MonthType, BU_LABELS, isPontualOnlyBU, MONTHS } from '@/hooks/useMonetaryMetas';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { useAuditLogs } from '@/hooks/useAuditLogs';
 import { BU_LABELS as BU_LABEL_MAP } from '@/hooks/useMonetaryMetas';
+import { DistributionBar } from './DistributionBar';
 
 const TARGET_TOTAL = 33_306_500;
 
@@ -33,17 +34,6 @@ const DEFAULT_TICKETS: Record<BuType, number> = {
   franquia: 140_000,
 };
 
-// Get current month index (0-based). Feb 2026 = 1
-function getCurrentMonthIndex(): number {
-  const now = new Date();
-  if (now.getFullYear() === 2026) return now.getMonth();
-  return 1; // February
-}
-
-function isMonthLocked(monthIndex: number): boolean {
-  return monthIndex < getCurrentMonthIndex();
-}
-
 export function MonetaryMetasTab() {
   const { toast } = useToast();
   const { metas, isLoading, bulkUpdateMetas, BUS, MONTHS } = useMonetaryMetas();
@@ -51,9 +41,7 @@ export function MonetaryMetasTab() {
 
   const [selectedBu, setSelectedBu] = useState<BuType>('modelo_atual');
   
-  // Local state: faturamento per BU per month (PRIMARY EDITABLE)
   const [localFaturamento, setLocalFaturamento] = useState<Record<string, Record<string, number>>>({});
-  // Ticket medio per BU
   const [localTickets, setLocalTickets] = useState<Record<string, number>>({});
   const [hasChanges, setHasChanges] = useState(false);
   const [editingCell, setEditingCell] = useState<string | null>(null);
@@ -61,7 +49,10 @@ export function MonetaryMetasTab() {
   const [editingTicket, setEditingTicket] = useState<string | null>(null);
   const [editingTicketValue, setEditingTicketValue] = useState<string>('');
   
-  // Snapshot of DB values for diff logging
+  // Distribution state
+  const [editedMonths, setEditedMonths] = useState<Set<string>>(new Set());
+  const [previousBuTotals, setPreviousBuTotals] = useState<Record<string, number>>({});
+
   const dbSnapshot = useRef<{ fat: Record<string, Record<string, number>>; tickets: Record<string, number> }>({ fat: {}, tickets: {} });
 
   // Initialize from DB
@@ -88,7 +79,14 @@ export function MonetaryMetasTab() {
       setLocalFaturamento(fatMap);
       setLocalTickets(ticketMap);
       dbSnapshot.current = { fat: JSON.parse(JSON.stringify(fatMap)), tickets: { ...ticketMap } };
+      // Store initial totals per BU
+      const totals: Record<string, number> = {};
+      BUS.forEach(bu => {
+        totals[bu] = MONTHS.reduce((s, m) => s + (fatMap[bu]?.[m] ?? 0), 0);
+      });
+      setPreviousBuTotals(totals);
       setHasChanges(false);
+      setEditedMonths(new Set());
     } else {
       const fatMap: Record<string, Record<string, number>> = {};
       const ticketMap: Record<string, number> = {};
@@ -113,7 +111,6 @@ export function MonetaryMetasTab() {
   const getBuMonthlyTotal = (bu: string) => MONTHS.reduce((s, m) => s + getFaturamento(bu, m), 0);
   const getBuVendasTotal = (bu: string) => MONTHS.reduce((s, m) => s + getVendas(bu, m), 0);
 
-  // Consolidated total across all BUs
   const consolidatedTotal = useMemo(() => {
     return BUS.reduce((sum, bu) => sum + getBuMonthlyTotal(bu), 0);
   }, [localFaturamento, localTickets]);
@@ -122,17 +119,60 @@ export function MonetaryMetasTab() {
   const isOnTarget = Math.abs(diff) < 1000;
   const progressPct = Math.min((consolidatedTotal / TARGET_TOTAL) * 100, 100);
 
+  // Distribution difference for selected BU
+  const buDifference = useMemo(() => {
+    const prev = previousBuTotals[selectedBu] ?? 0;
+    const current = getBuMonthlyTotal(selectedBu);
+    return prev - current; // positive = user reduced, needs to add back
+  }, [localFaturamento, previousBuTotals, selectedBu]);
+
+  const showDistributionBar = Math.abs(buDifference) >= 1;
+
   const updateFaturamento = (bu: string, month: string, value: number) => {
     setLocalFaturamento(prev => ({
       ...prev,
       [bu]: { ...prev[bu], [month]: value },
     }));
+    setEditedMonths(prev => new Set(prev).add(month));
     setHasChanges(true);
   };
 
   const updateTicket = (bu: string, value: number) => {
     setLocalTickets(prev => ({ ...prev, [bu]: value }));
     setHasChanges(true);
+  };
+
+  // Distribution handlers
+  const distributeToMonths = (targetMonths: MonthType[]) => {
+    if (targetMonths.length === 0) return;
+    const perMonth = Math.floor(buDifference / targetMonths.length);
+    const remainder = buDifference - perMonth * targetMonths.length;
+
+    setLocalFaturamento(prev => {
+      const buData = { ...prev[selectedBu] };
+      targetMonths.forEach((m, i) => {
+        const extra = i === targetMonths.length - 1 ? remainder : 0;
+        buData[m] = (buData[m] ?? 0) + perMonth + extra;
+      });
+      return { ...prev, [selectedBu]: buData };
+    });
+    setHasChanges(true);
+  };
+
+  const handleDistributeRemaining = () => {
+    const remaining = MONTHS.filter(m => !editedMonths.has(m));
+    distributeToMonths(remaining);
+  };
+
+  const handleDistributePeriod = (months: MonthType[]) => {
+    distributeToMonths(months);
+  };
+
+  const handleDiscard = () => {
+    setLocalFaturamento(JSON.parse(JSON.stringify(dbSnapshot.current.fat)));
+    setLocalTickets({ ...dbSnapshot.current.tickets });
+    setEditedMonths(new Set());
+    setHasChanges(false);
   };
 
   const handleSave = async () => {
@@ -158,18 +198,15 @@ export function MonetaryMetasTab() {
     try {
       await bulkUpdateMetas.mutateAsync(updates);
       
-      // Log changes
       const oldFat = dbSnapshot.current.fat;
       const oldTickets = dbSnapshot.current.tickets;
       for (const bu of BUS) {
         const buLabel = BU_LABEL_MAP[bu] || bu;
-        // Check ticket change
         const oldT = oldTickets[bu] ?? 0;
         const newT = getTicket(bu);
         if (oldT !== newT) {
           await logAction('monetary_meta', `${buLabel}: ticket médio de R$ ${formatCompact(oldT)} para R$ ${formatCompact(newT)}`, { bu, old_value: oldT, new_value: newT });
         }
-        // Check faturamento per month
         for (const month of MONTHS) {
           const oldV = oldFat[bu]?.[month] ?? 0;
           const newV = getFaturamento(bu, month);
@@ -179,11 +216,18 @@ export function MonetaryMetasTab() {
         }
       }
       
-      // Update snapshot
       dbSnapshot.current = {
         fat: JSON.parse(JSON.stringify(localFaturamento)),
         tickets: { ...localTickets },
       };
+      
+      // Update previous totals after save
+      const totals: Record<string, number> = {};
+      BUS.forEach(bu => {
+        totals[bu] = MONTHS.reduce((s, m) => s + (localFaturamento[bu]?.[m] ?? 0), 0);
+      });
+      setPreviousBuTotals(totals);
+      setEditedMonths(new Set());
       
       toast({ title: 'Metas salvas com sucesso!' });
       setHasChanges(false);
@@ -192,7 +236,6 @@ export function MonetaryMetasTab() {
     }
   };
 
-  // Derived metrics for display
   const getMetrics = (bu: string, month: string) => {
     const fat = getFaturamento(bu, month);
     const pontualOnly = isPontualOnlyBU(bu as BuType);
@@ -323,37 +366,34 @@ export function MonetaryMetasTab() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="sticky left-0 bg-background z-10 min-w-[120px]">Métrica</TableHead>
-                  {MONTHS.map((month, i) => (
+                  {MONTHS.map((month) => (
                     <TableHead 
                       key={month} 
-                      className={`text-center min-w-[90px] ${isMonthLocked(i) ? 'bg-muted/50' : ''}`}
+                      className={`text-center min-w-[90px] ${editedMonths.has(month) ? 'bg-primary/10' : ''}`}
                     >
                       {month}
-                      {isMonthLocked(i) && <span className="block text-[10px] text-muted-foreground">🔒</span>}
                     </TableHead>
                   ))}
                   <TableHead className="text-center min-w-[100px] bg-muted/30">Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {/* Faturamento Row - EDITABLE (primary input) */}
+                {/* Faturamento Row - EDITABLE */}
                 <TableRow className="bg-primary/5">
                   <TableCell className="sticky left-0 bg-primary/5 z-10 font-semibold">
                     🎯 Meta (Fat.)
                   </TableCell>
-                  {MONTHS.map((month, i) => {
-                    const locked = isMonthLocked(i);
+                  {MONTHS.map((month) => {
                     const cellKey = `fat-${month}`;
                     const value = getFaturamento(selectedBu, month);
                     return (
-                      <TableCell key={cellKey} className={`text-center p-1 ${locked ? 'bg-muted/50' : ''}`}>
+                      <TableCell key={cellKey} className={`text-center p-1 ${editedMonths.has(month) ? 'bg-primary/10' : ''}`}>
                         <Input
                           type="text"
-                          disabled={locked}
                           value={
                             editingCell === cellKey ? editingValue : (value > 0 ? formatCompact(value) : '')
                           }
-                          placeholder={locked ? formatCompact(value) : '0'}
+                          placeholder="0"
                           onFocus={() => {
                             setEditingCell(cellKey);
                             setEditingValue(value > 0 ? value.toString() : '');
@@ -365,7 +405,7 @@ export function MonetaryMetasTab() {
                             updateFaturamento(selectedBu, month, parsed);
                             setEditingCell(null);
                           }}
-                          className={`w-20 h-8 text-center text-sm font-semibold ${locked ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          className="w-20 h-8 text-center text-sm font-semibold"
                         />
                       </TableCell>
                     );
@@ -375,13 +415,11 @@ export function MonetaryMetasTab() {
                   </TableCell>
                 </TableRow>
 
-                {/* Vendas Row - CALCULATED (display only) */}
+                {/* Vendas Row */}
                 <TableRow>
-                  <TableCell className="sticky left-0 bg-background z-10 font-medium">
-                    Vendas
-                  </TableCell>
-                  {MONTHS.map((month, i) => (
-                    <TableCell key={`vendas-${month}`} className={`text-center text-sm ${isMonthLocked(i) ? 'bg-muted/50' : ''}`}>
+                  <TableCell className="sticky left-0 bg-background z-10 font-medium">Vendas</TableCell>
+                  {MONTHS.map((month) => (
+                    <TableCell key={`vendas-${month}`} className="text-center text-sm">
                       {getVendas(selectedBu, month)}
                     </TableCell>
                   ))}
@@ -390,14 +428,11 @@ export function MonetaryMetasTab() {
                   </TableCell>
                 </TableRow>
 
-                {/* MRR Row - only for non-pontual BUs */}
                 {!pontualOnly && (
                   <TableRow>
-                    <TableCell className="sticky left-0 bg-background z-10 font-medium text-muted-foreground">
-                      MRR (25%)
-                    </TableCell>
-                    {MONTHS.map((month, i) => (
-                      <TableCell key={`mrr-${month}`} className={`text-center text-sm text-muted-foreground ${isMonthLocked(i) ? 'bg-muted/50' : ''}`}>
+                    <TableCell className="sticky left-0 bg-background z-10 font-medium text-muted-foreground">MRR (25%)</TableCell>
+                    {MONTHS.map((month) => (
+                      <TableCell key={`mrr-${month}`} className="text-center text-sm text-muted-foreground">
                         {formatCompact(getMetrics(selectedBu, month).mrr)}
                       </TableCell>
                     ))}
@@ -407,14 +442,11 @@ export function MonetaryMetasTab() {
                   </TableRow>
                 )}
 
-                {/* Setup Row - only for non-pontual BUs */}
                 {!pontualOnly && (
                   <TableRow>
-                    <TableCell className="sticky left-0 bg-background z-10 font-medium text-muted-foreground">
-                      Setup (60%)
-                    </TableCell>
-                    {MONTHS.map((month, i) => (
-                      <TableCell key={`setup-${month}`} className={`text-center text-sm text-muted-foreground ${isMonthLocked(i) ? 'bg-muted/50' : ''}`}>
+                    <TableCell className="sticky left-0 bg-background z-10 font-medium text-muted-foreground">Setup (60%)</TableCell>
+                    {MONTHS.map((month) => (
+                      <TableCell key={`setup-${month}`} className="text-center text-sm text-muted-foreground">
                         {formatCompact(getMetrics(selectedBu, month).setup)}
                       </TableCell>
                     ))}
@@ -424,13 +456,12 @@ export function MonetaryMetasTab() {
                   </TableRow>
                 )}
 
-                {/* Pontual Row */}
                 <TableRow>
                   <TableCell className="sticky left-0 bg-background z-10 font-medium text-muted-foreground">
                     Pontual {pontualOnly ? '(100%)' : '(15%)'}
                   </TableCell>
-                  {MONTHS.map((month, i) => (
-                    <TableCell key={`pont-${month}`} className={`text-center text-sm text-muted-foreground ${isMonthLocked(i) ? 'bg-muted/50' : ''}`}>
+                  {MONTHS.map((month) => (
+                    <TableCell key={`pont-${month}`} className="text-center text-sm text-muted-foreground">
                       {formatCompact(getMetrics(selectedBu, month).pontual)}
                     </TableCell>
                   ))}
@@ -444,6 +475,18 @@ export function MonetaryMetasTab() {
           </ScrollArea>
         </CardContent>
       </Card>
+
+      {/* Distribution floating bar */}
+      {showDistributionBar && (
+        <DistributionBar
+          buLabel={BU_LABELS[selectedBu]}
+          difference={buDifference}
+          editedMonths={editedMonths}
+          onDistributeRemaining={handleDistributeRemaining}
+          onDistributePeriod={handleDistributePeriod}
+          onDiscard={handleDiscard}
+        />
+      )}
     </div>
   );
 }
