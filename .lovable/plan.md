@@ -1,57 +1,69 @@
 
 
-## Redesign do RevenuePaceChart: Faturamento Total + Incremento com Pace Real
+## Simplificar RevenuePaceChart: Visao Geral de Faturamento com Pace
 
-### Problema atual
-1. O grafico distribui os totais uniformemente entre os periodos (`faturamentoRealized / periodCount`), sem usar dados reais por dia/semana
-2. Nao mostra o **faturamento total previsto** (MRR Base + Incremento) -- mostra apenas o incremento
-3. O pace nao esta sendo visualizado corretamente no grafico
+### O que muda
 
-### O que sera adicionado
+O grafico atual mostra cards individuais por BU (Modelo Atual, O2 TAX, Oxy Hacker, Franquia) e apenas o incremento. O usuario quer:
 
-O card do RevenuePaceChart tera:
-- **KPI Cards por BU**: Mostrando o incremento realizado, com % da meta e pace (mantido)
-- **KPI Card TOTAL**: Alem do incremento, mostrar tambem o **Faturamento Total Previsto** (MRR Base + Incremento)
-- **Grafico de barras por periodo**: Barras de "Realizado" (incremento real) e "Meta" (incremento meta) usando dados reais agrupados por dia/semana/mes
-- **Linha tracejada de Pace**: Representando a meta diaria/semanal proporcional ao periodo
+1. **Remover cards por BU** - sem breakdown por unidade de negocio
+2. **Mostrar visao geral** com Faturamento Total (MRR Base + Incremento)
+3. **Pace visual** comparando: Realizado (MRR Base + Incremento Realizado) vs Meta (MRR Base + Meta de Incremento)
 
-### Dados do Faturamento Total
+### Layout novo
 
-O `metasPorBU` do contexto `MediaMetasContext` ja armazena o `faturamentoMeta` por mes, que para o Modelo Atual inclui MRR Base + Incremento. Para as demais BUs, o faturamentoMeta eh igual ao incremento.
+```text
+Card "Faturamento"
+  |
+  +-- Header: "Faturamento" + Badge de status (Acima/Abaixo do pace)
+  |
+  +-- KPI simples:
+  |     Realizado: R$ X (MRR Base + Incremento Realizado)
+  |     Meta: R$ Y (MRR Base + Meta Incremento)  
+  |     Pace Esperado: R$ Z
+  |     Progress bar (realizado / meta)
+  |
+  +-- Grafico de barras por periodo:
+  |     Barra "Realizado" = MRR Base pro-rata + incremento real do periodo
+  |     Barra "Meta" = MRR Base pro-rata + meta incremento pro-rata do periodo
+  |     Linha tracejada = Pace
+  |
+  +-- Legenda
+```
 
-No card TOTAL, sera exibido:
-- **Incremento Realizado**: soma das vendas no periodo (valor atual)
-- **Faturamento Total Previsto**: soma dos `faturamentoMeta` mensais do periodo de todas as BUs selecionadas (vem do `metasPorBU`)
+### Dados
 
-### Dados reais por periodo no grafico
-
-Em vez de distribuir uniformemente, usar a mesma logica dos outros graficos:
-- Para cada BU, agrupar os dados de venda por dia/semana/mes usando os hooks de analytics existentes
-- Usar `buildChartData` existente como referencia para gerar os dados temporais reais
+- **MRR Base**: Ja calculado em `faturamentoTotal` (que vem do `metasPorBU` - inclui MRR Base + Incremento para Modelo Atual). O MRR Base isolado sera: `faturamentoTotal - faturamentoMeta` (meta incremento)
+- **Incremento Realizado**: `faturamentoRealized` (ja existe)
+- **Incremento Meta**: `faturamentoMeta` (ja existe)
+- **Faturamento Total Realizado**: MRR Base + Incremento Realizado
+- **Faturamento Total Meta**: `faturamentoTotal` (MRR Base + Incremento Meta)
 
 ### Alteracoes por arquivo
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `RevenuePaceChart.tsx` | Adicionar prop `faturamentoTotal` para mostrar no card TOTAL. Melhorar label para exibir "Faturamento Previsto: R$ X" abaixo do incremento. |
-| `IndicatorsTab.tsx` | 1. Calcular `faturamentoTotal` somando `metasPorBU[bu]` dos meses no periodo para cada BU selecionada. 2. Construir `paceChartData` com dados reais agrupados por periodo (usando as mesmas funcoes de agrupamento dos outros graficos). Passar como prop. |
+| `RevenuePaceChart.tsx` | Simplificar: remover cards por BU, remover props `selectedBUs`/`dataByBU`. Adicionar props `mrrBase` para calcular totais. Mostrar um unico card com Realizado Total vs Meta Total. No grafico de barras, as barras mostram MRR Base pro-rata + incremento por periodo. |
+| `IndicatorsTab.tsx` | Calcular `mrrBase` (diferenca entre faturamentoTotal e faturamentoMeta). Passar para o componente. Remover calculo de `dataByBU` por BU. |
 
-### Layout do card TOTAL atualizado
+### Props simplificadas do RevenuePaceChart
 
 ```text
-TOTAL
-R$ 527k  (incremento realizado)
-63% meta | Pace: 63%
-[========-----] barra de progresso
-Meta Incremento: R$ 842k | Pace: R$ 842k
-Faturamento Previsto: R$ 4.2M (MRR Base + Incremento)
+Props:
+  - realized: number        (incremento realizado)
+  - meta: number            (meta de incremento) 
+  - mrrBase: number         (MRR base pro-rata do periodo)
+  - paceExpected: number    (pace do faturamento total)
+  - isLoading: boolean
+  - chartData: { label, realized, meta }[]  (por periodo, ja incluindo MRR Base)
 ```
 
-### Construcao do chartData com dados reais
+### Calculo no grafico
 
-Para cada periodo (dia/semana/mes), somar o realizado de cada BU usando:
-- **Modelo Atual**: `modeloAtualAnalytics.getCardsForIndicator('venda')` agrupado pela data do card
-- **O2 TAX**: `o2TaxAnalytics.getCardsForIndicator('venda')` agrupado pela data
-- **Oxy Hacker/Franquia**: `getExpansaoGroupedData` / `getOxyHackerGroupedData` agrupado
+- **Faturamento Total Realizado** = mrrBase + realized (incremento)
+- **Faturamento Total Meta** = mrrBase + meta (incremento) = faturamentoTotal
+- **Pace** = faturamentoTotalMeta * paceFraction
+- No grafico de barras, cada periodo mostra:
+  - Barra Realizado = (mrrBase / periodos) + incremento real do periodo
+  - Barra Meta = (mrrBase / periodos) + meta incremento do periodo
 
-A meta por periodo sera distribuida proporcionalmente (meta mensal / dias no mes) para agrupamento diario, ou somada para mensal.
