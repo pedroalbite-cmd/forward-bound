@@ -2425,12 +2425,68 @@ export function IndicatorsTab() {
         const faturamentoRealized = getRealizedMonetaryForIndicator({ key: 'faturamento', label: 'Faturamento', shortLabel: 'Fat.', format: 'currency' });
         const paceExpected = faturamentoMeta * paceFraction;
 
+        // Calculate per-BU data
+        const closerFilter = selectedClosers.length > 0 ? selectedClosers : undefined;
+        const dataByBU: Record<string, { realized: number; meta: number; pace: number }> = {};
+        
+        selectedBUs.forEach(bu => {
+          // Realized per BU
+          let buRealized = 0;
+          if (bu === 'modelo_atual' && includesModeloAtual) {
+            if (selectedClosers.length > 0) {
+              const salesCards = modeloAtualAnalytics.getCardsForIndicator('venda');
+              const filteredCards = salesCards.filter(card => matchesCloserFilter((card.closer || '').trim()));
+              buRealized = filteredCards.reduce((acc, card) => acc + (card.valor || 0), 0);
+            } else {
+              buRealized = getModeloAtualValue('venda', startDate, endDate);
+            }
+          } else if (bu === 'o2_tax' && includesO2Tax) {
+            const o2TaxVendas = o2TaxAnalytics.getCardsForIndicator('venda');
+            buRealized = o2TaxVendas.reduce((acc, card) => acc + (card.valor || 0), 0);
+          } else if (bu === 'oxy_hacker' && includesOxyHacker) {
+            buRealized = getOxyHackerValue('venda' as any, startDate, endDate);
+          } else if (bu === 'franquia' && includesFranquia) {
+            buRealized = getExpansaoValue('venda' as any, startDate, endDate);
+          }
+
+          // Meta per BU
+          const buMeta = getMetaMonetaryForPeriod(
+            'faturamento',
+            [bu as any],
+            startDate,
+            endDate,
+            closerFilter,
+            getFilteredMeta
+          );
+
+          dataByBU[bu] = {
+            realized: buRealized,
+            meta: buMeta,
+            pace: buMeta * paceFraction,
+          };
+        });
+
+        // Build chart data per period (realized vs meta)
+        const chartLabels = getChartLabels();
+        const paceChartData = chartLabels.map((label, index) => {
+          // For simplicity, distribute totals evenly across periods
+          const periodCount = chartLabels.length || 1;
+          return {
+            label,
+            realized: faturamentoRealized / periodCount,
+            meta: faturamentoMeta / periodCount,
+          };
+        });
+
         return (
           <RevenuePaceChart
             realized={faturamentoRealized}
             meta={faturamentoMeta}
             paceExpected={paceExpected}
             isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading}
+            selectedBUs={selectedBUs}
+            dataByBU={dataByBU}
+            chartData={paceChartData}
           />
         );
       })()}
