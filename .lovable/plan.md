@@ -1,43 +1,67 @@
 
 
-## Usar MRR Base Real de Marco (R$ 756.521,10)
+## Nova Aba "NPS/CSAT" - Replicar Dashboard de Indicadores de Satisfacao
 
-### Problema
-O MRR Base atual eh **projetado** usando formula de churn 6%/mes + retencao 25% a partir de um valor inicial de R$ 700k. O valor real de marco eh R$ 756.521,10 e precisa ser usado no lugar da projecao.
+### Objetivo
+Criar uma nova aba "NPS" no Planejamento 2026 que replica visualmente o dashboard de NPS/CSAT do projeto referencia, com dados fixos por enquanto (preparado para banco externo depois). Acesso controlado por permissao.
 
-### Solucao
+### Secoes do Dashboard (baseado no screenshot)
 
-Adicionar um mapa de **MRR Base real** (valores conhecidos) no `usePlanGrowthData.ts` que sobrescreve o valor projetado quando disponivel. Isso garante que o grafico de Faturamento no Indicadores mostre o MRR Base correto.
+```text
++-------------------------------------------------------+
+| Header: "Resultados da Pesquisa NPS" + badges Q4 2025 |
+| KPIs: Clientes | Respostas | Taxa Resp | CFOs Ativos  |
++-------------------------------------------------------+
+| Metricas Gerais (3 gauges):                           |
+|   Taxa Resposta 33% | CSAT 82% | NPS 36              |
++-------------------------------------------------------+
+| Score Cards: NPS | CSAT | Sean Ellis (com meta)       |
++-------------------------------------------------------+
+| Distribuicoes: NPS | CSAT | Sean Ellis (barras)       |
++-------------------------------------------------------+
+| Tabela Performance por CFO                            |
++-------------------------------------------------------+
+| Feedback Qualitativo (Collapsible)                    |
+|   Elogios | Sugestoes | Criticas | Expectativas       |
++-------------------------------------------------------+
+| Conclusao Executiva (Collapsible)                     |
+|   Pontos Fortes | Atencao | Recomendacoes             |
++-------------------------------------------------------+
+```
 
-### Alteracao
+### Alteracoes
 
 | Arquivo | O que muda |
 |---------|-----------|
-| `src/hooks/usePlanGrowthData.ts` | Adicionar mapa `realMrrBase` com os valores reais conhecidos. Apos calcular `mrrDynamic`, sobrescrever `mrrPorMes` com valores reais quando existirem. Isso propaga automaticamente para `faturamentoMeta` (MRR Base + Incremento) e para o `metasPorBU` no contexto. |
+| `src/hooks/useUserPermissions.ts` | Adicionar `'nps'` ao tipo `TabKey` e ao array de tabs do admin |
+| `src/pages/Planning2026.tsx` | Adicionar tab "NPS" com icone `SmilePlus` ao `TAB_CONFIG` e renderizar `<NpsTab />` |
+| `src/components/planning/NpsTab.tsx` | **Novo** - Componente principal da aba, orquestra todas as secoes |
+| `src/components/planning/nps/npsData.ts` | **Novo** - Dados hardcoded (Q4 2025) com tipos e constantes |
+| `src/components/planning/nps/NpsKpiCards.tsx` | **Novo** - 4 KPI cards do header (Clientes, Respostas, Taxa, CFOs) |
+| `src/components/planning/nps/NpsGauges.tsx` | **Novo** - 3 gauges semi-circulares (Taxa Resposta, CSAT, NPS) usando Recharts RadialBarChart |
+| `src/components/planning/nps/NpsScoreCards.tsx` | **Novo** - 3 cards grandes com score, descricao e badge meta atingida/nao |
+| `src/components/planning/nps/NpsDistributions.tsx` | **Novo** - 3 cards lado a lado: distribuicao NPS (barra segmentada + legenda), CSAT (barra + breakdown notas), Sean Ellis (barras horizontais) |
+| `src/components/planning/nps/CfoPerformanceTable.tsx` | **Novo** - Tabela com dados por CFO (Enviados, Respostas, Taxa, NPS, CSAT, Sean Ellis) |
+| `src/components/planning/nps/QualitativeFeedback.tsx` | **Novo** - Collapsible com tabs (Elogios/Sugestoes/Criticas/Expectativas) mostrando cards de citacao |
+| `src/components/planning/nps/ExecutiveSummary.tsx` | **Novo** - Secao de conclusao com pontos fortes, atencao e recomendacoes |
 
-### Detalhe tecnico
+### Dados hardcoded (npsData.ts)
 
-No `usePlanGrowthData.ts`, apos o calculo do `mrrDynamic`:
+Todos os valores extraidos do dashboard de referencia:
+- **Geral**: 66 pesquisados, 22 respostas, 33% taxa, 7 CFOs
+- **NPS**: 36 (12 promotores, 6 neutros, 4 detratores), meta 40
+- **CSAT**: 82% (18/22 satisfeitos), meta 80%
+- **Sean Ellis**: 14% (2/14 ativos), meta 40%
+- **CFOs**: 7 registros com metricas individuais
+- **Feedback**: 18 comentarios categorizados (4 elogios, 6 sugestoes, 4 criticas, 4 expectativas)
 
-```typescript
-// Valores reais de MRR Base conhecidos (sobrescrevem projecao)
-const realMrrBase: Record<string, number> = {
-  Jan: 700000,   // valor inicial
-  Fev: 700000,   // atualizar quando souber
-  Mar: 756521.10,
-};
+### Detalhes tecnicos
 
-// Aplicar override nos valores projetados
-Object.entries(realMrrBase).forEach(([month, value]) => {
-  mrrDynamic.mrrPorMes[month] = value;
-  // Recalcular revenueToSell com o MRR real
-  const meta = metasMensaisModeloAtual[month] || 0;
-  mrrDynamic.revenueToSell[month] = Math.max(0, meta - value);
-});
-```
+**Permissoes**: Adicionar `'nps'` como novo `TabKey`. Admins tem acesso automatico. Outros usuarios precisam de registro em `user_tab_permissions` com `tab_key = 'nps'`.
 
-Isso faz com que:
-- O `faturamentoMeta` para Marco = 756.521,10 + meta de incremento de marco
-- O grafico de Faturamento acumulado no Indicadores use o MRR Base real
-- Todos os calculos downstream (vendas necessarias, funil reverso) reflitam o valor correto
+**Gauges**: Usar `RadialBarChart` do Recharts (ja instalado) com gradiente verde/amarelo/vermelho baseado no atingimento da meta, identico aos gauges do screenshot.
+
+**Barra segmentada NPS**: Barra horizontal com 3 segmentos coloridos (verde promotores, amarelo neutros, vermelho detratores) usando divs com width percentual.
+
+**Preparacao para banco externo**: Os dados ficam isolados em `npsData.ts`. Quando integrar com banco externo, basta criar um hook `useNpsData()` que substitui as constantes por queries.
 
