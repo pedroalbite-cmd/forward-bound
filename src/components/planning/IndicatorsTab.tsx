@@ -152,9 +152,10 @@ interface RadialProgressCardProps {
   meta: number;
   onClick?: () => void;
   isClickable?: boolean;
+  isLoading?: boolean;
 }
 
-const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = false }: RadialProgressCardProps) => {
+const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = false, isLoading = false }: RadialProgressCardProps) => {
   const percentage = meta > 0 ? (realized / meta) * 100 : 0;
   
   // Nova lógica: Verde >= 100%, Amarelo 80-99%, Vermelho < 80%
@@ -189,16 +190,22 @@ const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = fals
         <CardTitle className="text-sm font-medium text-muted-foreground text-center">{title}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col items-center pt-0">
-        <div className="relative w-32 h-32">
-          <RadialBarChart width={128} height={128} innerRadius="70%" outerRadius="100%" data={chartData} startAngle={90} endAngle={-270}>
-            <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-            <RadialBar background={{ fill: "hsl(var(--muted))" }} dataKey="value" cornerRadius={10} />
-          </RadialBarChart>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-3xl font-bold text-foreground">{formatNumber(realized)}</span>
-            <span className={`text-sm font-medium ${getTextColorClass()}`}>{Math.round(percentage)}%</span>
+        {isLoading ? (
+          <div className="relative w-32 h-32 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        </div>
+        ) : (
+          <div className="relative w-32 h-32">
+            <RadialBarChart width={128} height={128} innerRadius="70%" outerRadius="100%" data={chartData} startAngle={90} endAngle={-270}>
+              <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
+              <RadialBar background={{ fill: "hsl(var(--muted))" }} dataKey="value" cornerRadius={10} />
+            </RadialBarChart>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-3xl font-bold text-foreground">{formatNumber(realized)}</span>
+              <span className={`text-sm font-medium ${getTextColorClass()}`}>{Math.round(percentage)}%</span>
+            </div>
+          </div>
+        )}
         <p className="text-sm text-muted-foreground mt-2">Meta: {formatNumber(meta)}</p>
       </CardContent>
     </Card>
@@ -212,9 +219,10 @@ interface MonetaryRadialCardProps {
   format: 'currency' | 'multiplier' | 'duration';
   onClick?: () => void;
   isClickable?: boolean;
+  isLoading?: boolean;
 }
 
-const MonetaryRadialCard = ({ title, realized, meta, format, onClick, isClickable = false }: MonetaryRadialCardProps) => {
+const MonetaryRadialCard = ({ title, realized, meta, format, onClick, isClickable = false, isLoading: isLoadingProp = false }: MonetaryRadialCardProps) => {
   // For SLA (duration format), lower is better - invert the color logic
   const isInverted = format === 'duration';
   const percentage = meta > 0 ? (realized / meta) * 100 : 0;
@@ -272,16 +280,22 @@ const MonetaryRadialCard = ({ title, realized, meta, format, onClick, isClickabl
         <CardTitle className="text-sm font-medium text-muted-foreground text-center">{title}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col items-center pt-0">
-        <div className="relative w-32 h-32">
-          <RadialBarChart width={128} height={128} innerRadius="70%" outerRadius="100%" data={chartData} startAngle={90} endAngle={-270}>
-            <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-            <RadialBar background={{ fill: "hsl(var(--muted))" }} dataKey="value" cornerRadius={10} />
-          </RadialBarChart>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-xl font-bold text-foreground">{formatValue(realized)}</span>
-            <span className={`text-sm font-medium ${getTextColorClass()}`}>{Math.round(percentage)}%</span>
+        {isLoadingProp ? (
+          <div className="relative w-32 h-32 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        </div>
+        ) : (
+          <div className="relative w-32 h-32">
+            <RadialBarChart width={128} height={128} innerRadius="70%" outerRadius="100%" data={chartData} startAngle={90} endAngle={-270}>
+              <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
+              <RadialBar background={{ fill: "hsl(var(--muted))" }} dataKey="value" cornerRadius={10} />
+            </RadialBarChart>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-xl font-bold text-foreground">{formatValue(realized)}</span>
+              <span className={`text-sm font-medium ${getTextColorClass()}`}>{Math.round(percentage)}%</span>
+            </div>
+          </div>
+        )}
         <p className="text-xs text-muted-foreground mt-2">Meta: {formatValue(meta)}</p>
       </CardContent>
     </Card>
@@ -871,16 +885,52 @@ export function IndicatorsTab() {
       }));
     }
 
-    // For single BU selection - O2 TAX
+    // For single BU selection - O2 TAX (use analytics hook with first-entry for consistency with gauges)
     if (hasSingleBU && includesO2Tax) {
-      const o2taxData = getO2TaxGroupedData(indicator.key as O2TaxIndicator, startDate, endDate, grouping);
       const funnelMetasMensais = funnelData?.o2Tax ? getMonthlyMetasFromFunnel(funnelData.o2Tax, indicator.key, startDate, endDate) : [];
       const metaPeriodo = funnelData?.o2Tax ? calcularMetaDoPeriodo(funnelData.o2Tax, indicator.key, startDate, endDate) : 0;
       const metasProrateadas = grouping !== 'monthly' ? getProratedMetaSeries(metaPeriodo) : [];
 
+      // Build realized data from o2TaxAnalytics (first-entry logic) grouped by period
+      const analyticsCards = o2TaxAnalytics.getCardsForIndicator(indicator.key as IndicatorType);
+      
+      const getQtyForPeriodRange = (periodStart: number, periodEnd: number): number => {
+        return analyticsCards.filter(card => {
+          const entryTime = card.dataEntrada.getTime();
+          return entryTime >= periodStart && entryTime <= periodEnd;
+        }).length;
+      };
+
+      const qtyArray: number[] = [];
+      if (grouping === 'daily') {
+        const days = eachDayOfInterval({ start: startDate, end: endDate });
+        for (const day of days) {
+          const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
+          const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59, 999).getTime();
+          qtyArray.push(getQtyForPeriodRange(dayStart, dayEnd));
+        }
+      } else if (grouping === 'weekly') {
+        const numWeeks = chartLabels.length;
+        for (let i = 0; i < numWeeks; i++) {
+          const weekStart = addDays(startDate, i * 7);
+          const weekEnd = i === numWeeks - 1 ? endDate : addDays(weekStart, 6);
+          const weekStartTime = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate()).getTime();
+          const weekEndTime = new Date(weekEnd.getFullYear(), weekEnd.getMonth(), weekEnd.getDate(), 23, 59, 59, 999).getTime();
+          qtyArray.push(getQtyForPeriodRange(weekStartTime, weekEndTime));
+        }
+      } else {
+        const months = eachMonthOfInterval({ start: startDate, end: endDate });
+        for (const monthDate of months) {
+          const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).getTime();
+          const lastDay = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+          const monthEnd = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate(), 23, 59, 59, 999).getTime();
+          qtyArray.push(getQtyForPeriodRange(monthStart, monthEnd));
+        }
+      }
+
       return chartLabels.map((label, index) => ({
         label,
-        realizado: o2taxData.qty[index] || 0,
+        realizado: qtyArray[index] || 0,
         meta:
           grouping === 'monthly'
             ? (funnelMetasMensais[index] ?? 0)
@@ -1779,9 +1829,10 @@ export function IndicatorsTab() {
           }
         }
         
-        // Other BUs don't have closer filter
+        // O2 TAX: use analytics hook (first-entry logic) for consistency with volume gauges
         if (includesO2Tax) {
-          total += getO2TaxValue('venda' as O2TaxIndicator, startDate, endDate);
+          const o2TaxVendas = o2TaxAnalytics.getCardsForIndicator('venda');
+          total += o2TaxVendas.reduce((acc, card) => acc + (card.valor || 0), 0);
         }
         if (includesOxyHacker) {
           total += getOxyHackerValue('venda' as OxyHackerIndicator, startDate, endDate);
@@ -1831,9 +1882,10 @@ export function IndicatorsTab() {
           }
         }
         
-        // O2 TAX MRR from pipefy_cards_movements
+        // O2 TAX MRR: use analytics hook (first-entry logic) for consistency
         if (includesO2Tax) {
-          total += getO2TaxMrr(startDate, endDate);
+          const o2TaxVendas = o2TaxAnalytics.getCardsForIndicator('venda');
+          total += o2TaxVendas.reduce((acc, card) => acc + (card.valorMRR || 0), 0);
         }
         
         return total;
@@ -1854,9 +1906,10 @@ export function IndicatorsTab() {
           }
         }
         
-        // O2 TAX Setup from pipefy_cards_movements
+        // O2 TAX Setup: use analytics hook (first-entry logic) for consistency
         if (includesO2Tax) {
-          total += getO2TaxSetup(startDate, endDate);
+          const o2TaxVendas = o2TaxAnalytics.getCardsForIndicator('venda');
+          total += o2TaxVendas.reduce((acc, card) => acc + (card.valorSetup || 0), 0);
         }
         
         return total;
@@ -1877,9 +1930,10 @@ export function IndicatorsTab() {
           }
         }
         
-        // O2 TAX Pontual from pipefy_cards_movements
+        // O2 TAX Pontual: use analytics hook (first-entry logic) for consistency
         if (includesO2Tax) {
-          total += getO2TaxPontual(startDate, endDate);
+          const o2TaxVendas = o2TaxAnalytics.getCardsForIndicator('venda');
+          total += o2TaxVendas.reduce((acc, card) => acc + (card.valorPontual || 0), 0);
         }
         
         return total;
@@ -2367,6 +2421,7 @@ export function IndicatorsTab() {
             realized={getRealizedForIndicator(indicator)} 
             meta={getMetaForIndicator(indicator)} 
             isClickable={true}
+            isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading}
             onClick={() => handleRadialCardClick(indicator)}
           />
         ))}
@@ -2382,6 +2437,7 @@ export function IndicatorsTab() {
             meta={getMetaMonetaryForIndicator(indicator)}
             format={indicator.format}
             isClickable={true}
+            isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading}
             onClick={() => handleMonetaryCardClick(indicator)}
           />
         ))}
