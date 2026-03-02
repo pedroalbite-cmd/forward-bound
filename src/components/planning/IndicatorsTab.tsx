@@ -30,6 +30,7 @@ import { DetailSheet, DetailItem, columnFormatters } from "./indicators/DetailSh
 import { KpiItem } from "./indicators/KpiCard";
 import { ChartConfig } from "./indicators/DrillDownCharts";
 import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select";
+import { RevenuePaceChart } from "./indicators/RevenuePaceChart";
 
 type ViewMode = 'daily' | 'accumulated';
 
@@ -2411,6 +2412,28 @@ export function IndicatorsTab() {
           Período: {daysInPeriod} dias | Agrupamento: {grouping === 'daily' ? 'Diário' : grouping === 'weekly' ? 'Semanal' : 'Mensal'}
         </p>
       </div>
+
+      {/* Revenue Pace Chart */}
+      {(() => {
+        const today = new Date();
+        const daysElapsed = Math.min(
+          differenceInDays(today, startDate) + 1,
+          daysInPeriod
+        );
+        const paceFraction = daysInPeriod > 0 ? daysElapsed / daysInPeriod : 0;
+        const faturamentoMeta = getMetaMonetaryForIndicator({ key: 'faturamento', label: 'Faturamento', shortLabel: 'Fat.', format: 'currency' });
+        const faturamentoRealized = getRealizedMonetaryForIndicator({ key: 'faturamento', label: 'Faturamento', shortLabel: 'Fat.', format: 'currency' });
+        const paceExpected = faturamentoMeta * paceFraction;
+
+        return (
+          <RevenuePaceChart
+            realized={faturamentoRealized}
+            meta={faturamentoMeta}
+            paceExpected={paceExpected}
+            isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading}
+          />
+        );
+      })()}
 
       {/* Cards - Quantity Indicators */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
