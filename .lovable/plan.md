@@ -1,69 +1,51 @@
 
 
-## Simplificar RevenuePaceChart: Visao Geral de Faturamento com Pace
+## Transformar RevenuePaceChart em grafico de Pace Acumulado (Area Chart)
 
-### O que muda
+### Objetivo
+Substituir o grafico de barras atual por um **grafico de area acumulado** identico ao grafico de MQLs mostrado na referencia:
+- Linha "Meta Acumulada" (verde solido)
+- Area "Realizado Acumulado" (verde com preenchimento)
+- Eixo X: dias do periodo (1, 2, 3... 28, 1, 2)
+- KPIs no header: Faturamento Total e Meta Total
 
-O grafico atual mostra cards individuais por BU (Modelo Atual, O2 TAX, Oxy Hacker, Franquia) e apenas o incremento. O usuario quer:
-
-1. **Remover cards por BU** - sem breakdown por unidade de negocio
-2. **Mostrar visao geral** com Faturamento Total (MRR Base + Incremento)
-3. **Pace visual** comparando: Realizado (MRR Base + Incremento Realizado) vs Meta (MRR Base + Meta de Incremento)
-
-### Layout novo
+### Layout final
 
 ```text
 Card "Faturamento"
   |
-  +-- Header: "Faturamento" + Badge de status (Acima/Abaixo do pace)
+  +-- Header esquerdo: "Faturamento" + Badge "Acumulado" + seta
+  |-- Header direito: "Faturamento: R$ X    Meta: R$ Y"
   |
-  +-- KPI simples:
-  |     Realizado: R$ X (MRR Base + Incremento Realizado)
-  |     Meta: R$ Y (MRR Base + Meta Incremento)  
-  |     Pace Esperado: R$ Z
-  |     Progress bar (realizado / meta)
+  +-- Legenda: "Meta Acumulada" (linha) + "Realizado Acumulado" (area)
   |
-  +-- Grafico de barras por periodo:
-  |     Barra "Realizado" = MRR Base pro-rata + incremento real do periodo
-  |     Barra "Meta" = MRR Base pro-rata + meta incremento pro-rata do periodo
-  |     Linha tracejada = Pace
-  |
-  +-- Legenda
+  +-- Area Chart (ComposedChart com Area + Line):
+  |     - Area preenchida verde = Realizado acumulado dia a dia
+  |     - Linha verde = Meta acumulada dia a dia
+  |     - Eixo X = dias do periodo
+  |     - Eixo Y = valores em R$
 ```
 
-### Dados
-
-- **MRR Base**: Ja calculado em `faturamentoTotal` (que vem do `metasPorBU` - inclui MRR Base + Incremento para Modelo Atual). O MRR Base isolado sera: `faturamentoTotal - faturamentoMeta` (meta incremento)
-- **Incremento Realizado**: `faturamentoRealized` (ja existe)
-- **Incremento Meta**: `faturamentoMeta` (ja existe)
-- **Faturamento Total Realizado**: MRR Base + Incremento Realizado
-- **Faturamento Total Meta**: `faturamentoTotal` (MRR Base + Incremento Meta)
-
-### Alteracoes por arquivo
+### Alteracoes
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `RevenuePaceChart.tsx` | Simplificar: remover cards por BU, remover props `selectedBUs`/`dataByBU`. Adicionar props `mrrBase` para calcular totais. Mostrar um unico card com Realizado Total vs Meta Total. No grafico de barras, as barras mostram MRR Base pro-rata + incremento por periodo. |
-| `IndicatorsTab.tsx` | Calcular `mrrBase` (diferenca entre faturamentoTotal e faturamentoMeta). Passar para o componente. Remover calculo de `dataByBU` por BU. |
+| `RevenuePaceChart.tsx` | Redesign completo: trocar BarChart por ComposedChart com Area (realizado acumulado) + Line (meta acumulada). Remover KPI card interno e usar header com totais no estilo do IndicatorChartSection. Usar mesmo gradiente e cores dos graficos existentes. Manter badge de status e Collapsible. |
+| `IndicatorsTab.tsx` | Alterar `paceChartData` para ser **cumulativo**: cada ponto soma todos os dias anteriores. Cada entrada tera `{ label: "1", "2"..., realizado: acumuladoAteAqui, meta: metaAcumuladaAteAqui }`. Os valores incluem MRR Base pro-rata acumulado + incremento acumulado. |
 
-### Props simplificadas do RevenuePaceChart
+### Detalhes tecnicos
 
-```text
-Props:
-  - realized: number        (incremento realizado)
-  - meta: number            (meta de incremento) 
-  - mrrBase: number         (MRR base pro-rata do periodo)
-  - paceExpected: number    (pace do faturamento total)
-  - isLoading: boolean
-  - chartData: { label, realized, meta }[]  (por periodo, ja incluindo MRR Base)
-```
+**chartData cumulativo no IndicatorsTab:**
+- Para cada dia do periodo, calcular:
+  - `metaAcumulada[i] = metaAcumulada[i-1] + metaDoDia` (MRR Base pro-rata/dia + meta incremento/dia)
+  - `realizadoAcumulado[i] = realizadoAcumulado[i-1] + realizadoDoDia` (MRR Base pro-rata/dia + vendas reais do dia)
+- Label do eixo X: numero do dia do mes (1, 2, 3... 28, 1, 2)
 
-### Calculo no grafico
-
-- **Faturamento Total Realizado** = mrrBase + realized (incremento)
-- **Faturamento Total Meta** = mrrBase + meta (incremento) = faturamentoTotal
-- **Pace** = faturamentoTotalMeta * paceFraction
-- No grafico de barras, cada periodo mostra:
-  - Barra Realizado = (mrrBase / periodos) + incremento real do periodo
-  - Barra Meta = (mrrBase / periodos) + meta incremento do periodo
-
+**RevenuePaceChart redesenhado:**
+- Usar `ComposedChart` com `Area` (realizado) + `Line` (meta) - mesmo padrao do `IndicatorChartSection`
+- Gradiente verde para area preenchida
+- Header com totais (Faturamento: R$ X | Meta: R$ Y) no lado direito
+- Badge "Acumulado" ao lado do titulo
+- Collapsible para expandir/recolher
+- Remover o card KPI interno (realizado/meta/pace/atingimento) - os totais vao direto no header
+- Tooltip formatado em R$
