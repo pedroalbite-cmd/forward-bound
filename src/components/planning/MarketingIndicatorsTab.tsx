@@ -65,6 +65,7 @@ export function MarketingIndicatorsTab() {
   // Use consolidated metas (same source as Indicators tab)
   const { getMetaForPeriod } = useConsolidatedMetas();
   const { funnelData } = useMediaMetas();
+  const { getCostGoalsForPeriod } = useCostStageMetas();
   const allBUs: BuType[] = ['modelo_atual', 'o2_tax', 'oxy_hacker', 'franquia'];
 
   const consolidatedRevenueGoals = useMemo(() => {
