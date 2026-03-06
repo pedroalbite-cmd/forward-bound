@@ -666,13 +666,13 @@ export function MarketingIndicatorsTab() {
 
       {/* Performance Gauges */}
       <PerformanceGauges
-        roas={data.roas}
+        roas={realPerformanceMetrics.roas}
         roasGoal={goals.roas}
-        roiLtv={data.roiLtv}
+        roiLtv={realPerformanceMetrics.roiLtv}
         roiLtvGoal={goals.roiLtv}
-        cac={data.cac}
+        cac={realPerformanceMetrics.cac}
         cacGoal={goals.cac}
-        ltv={data.ltv}
+        ltv={realPerformanceMetrics.ltv}
         ltvGoal={goals.ltv}
         investment={enrichedTotals.totalInvestment}
         investmentGoal={finalInvestmentGoal}
