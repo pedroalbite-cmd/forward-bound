@@ -144,6 +144,10 @@ export function AdminTab() {
           <DollarSign className="h-4 w-4" />
           Metas Monetárias
         </TabsTrigger>
+        <TabsTrigger value="cost-stage-metas" className="gap-2">
+          <Gauge className="h-4 w-4" />
+          Metas CPx
+        </TabsTrigger>
         <TabsTrigger value="logs" className="gap-2">
           <History className="h-4 w-4" />
           Logs
