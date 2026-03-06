@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { startOfMonth, endOfMonth } from "date-fns";
+import { startOfMonth, endOfMonth, eachMonthOfInterval, getMonth } from "date-fns";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MultiSelect } from "@/components/ui/multi-select";
@@ -16,6 +16,8 @@ import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { useMarketingAttribution } from "@/hooks/useMarketingAttribution";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
+import { useMonetaryMetas, MONTHS, type MonthType } from "@/hooks/useMonetaryMetas";
+import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { PerformanceGauges } from "./marketing-indicators/PerformanceGauges";
 import { InvestmentByChannelChart } from "./marketing-indicators/InvestmentByChannelChart";
 import { AcquisitionFunnelChart } from "./marketing-indicators/AcquisitionFunnelChart";
@@ -57,6 +59,73 @@ export function MarketingIndicatorsTab() {
     selectedBUs,
     selectedChannels,
   });
+
+  // Fetch monetary metas from DB (Admin panel)
+  const { metas: monetaryMetas } = useMonetaryMetas(2026);
+  const { funnelData } = useMediaMetas();
+
+  // Map date range to month strings and calculate consolidated goals
+  const selectedMonthStrings = useMemo((): string[] => {
+    const months = eachMonthOfInterval({ start: dateRange.from, end: dateRange.to });
+    return months.map(d => MONTHS[getMonth(d)]);
+  }, [dateRange]);
+
+  const consolidatedRevenueGoals = useMemo(() => {
+    let mrr = 0, setup = 0, pontual = 0;
+    for (const meta of monetaryMetas) {
+      if (selectedMonthStrings.includes(meta.month)) {
+        mrr += Number(meta.mrr) || 0;
+        setup += Number(meta.setup) || 0;
+        pontual += Number(meta.pontual) || 0;
+      }
+    }
+    const gmv = mrr + setup + pontual;
+    return { mrr, setup, pontual, educacao: 0, gmv };
+  }, [monetaryMetas, selectedMonthStrings]);
+
+  const consolidatedFunnelGoals = useMemo(() => {
+    if (!funnelData) return { leads: 0, mqls: 0, rms: 0, rrs: 0, propostas: 0, vendas: 0, investment: 0 };
+    const allBUs = [funnelData.modeloAtual, funnelData.o2Tax, funnelData.oxyHacker, funnelData.franquia];
+    let leads = 0, mqls = 0, rms = 0, rrs = 0, propostas = 0, vendas = 0, investment = 0;
+    for (const buData of allBUs) {
+      for (const item of buData) {
+        if (selectedMonthStrings.includes(item.month)) {
+          leads += item.leads || 0;
+          mqls += item.mqls || 0;
+          rms += item.rms || 0;
+          rrs += item.rrs || 0;
+          propostas += item.propostas || 0;
+          vendas += item.vendas || 0;
+          investment += item.investimento || 0;
+        }
+      }
+    }
+    return { leads, mqls, rms, rrs, propostas, vendas, investment };
+  }, [funnelData, selectedMonthStrings]);
+
+  // Build final goals merging DB data over hardcoded defaults
+  const finalRevenueGoals = useMemo(() => {
+    const hasDbData = consolidatedRevenueGoals.gmv > 0;
+    return hasDbData ? consolidatedRevenueGoals : goals.revenue;
+  }, [consolidatedRevenueGoals, goals.revenue]);
+
+  const finalCostGoals = useMemo(() => {
+    const f = consolidatedFunnelGoals;
+    const inv = f.investment;
+    if (inv <= 0) return costGoals;
+    return {
+      cpl: f.leads > 0 ? inv / f.leads : costGoals.cpl,
+      cpmql: f.mqls > 0 ? inv / f.mqls : costGoals.cpmql,
+      cprm: f.rms > 0 ? inv / f.rms : costGoals.cprm,
+      cprr: f.rrs > 0 ? inv / f.rrs : costGoals.cprr,
+      cpp: f.propostas > 0 ? inv / f.propostas : costGoals.cpp,
+      cpv: f.vendas > 0 ? inv / f.vendas : costGoals.cpv,
+    };
+  }, [consolidatedFunnelGoals, costGoals]);
+
+  const finalInvestmentGoal = useMemo(() => {
+    return consolidatedFunnelGoals.investment > 0 ? consolidatedFunnelGoals.investment : goals.investment;
+  }, [consolidatedFunnelGoals, goals.investment]);
 
   // Fetch Meta Ads campaigns data
   const { 
@@ -368,13 +437,13 @@ export function MarketingIndicatorsTab() {
       {/* Revenue Metrics Cards - Integrated with Modelo Atual data */}
       <RevenueMetricsCards
         revenue={realRevenue}
-        goals={goals.revenue}
+        goals={finalRevenueGoals}
       />
 
       {/* Cost Per Stage Gauges */}
       <CostPerStageGauges 
         costPerStage={enrichedTotals.costPerStage} 
-        goals={costGoals}
+        goals={finalCostGoals}
         onCostClick={(costKey) => setCostDrillDown({ isOpen: true, costKey })}
       />
 
@@ -410,7 +479,7 @@ export function MarketingIndicatorsTab() {
                 <div className="bg-muted/50 p-4 rounded-lg text-center">
                   <p className="text-xs text-muted-foreground">Meta</p>
                   <p className="text-xl font-bold">
-                    R$ {costGoals[costDrillDown.costKey].toLocaleString('pt-BR')}
+                    R$ {finalCostGoals[costDrillDown.costKey].toLocaleString('pt-BR')}
                   </p>
                 </div>
                 <div className="bg-muted/50 p-4 rounded-lg text-center">
@@ -423,11 +492,11 @@ export function MarketingIndicatorsTab() {
                   <p className="text-xs text-muted-foreground">vs Meta</p>
                   <p className={cn(
                     "text-xl font-bold",
-                    data.costPerStage[costDrillDown.costKey] <= costGoals[costDrillDown.costKey] 
+                    data.costPerStage[costDrillDown.costKey] <= finalCostGoals[costDrillDown.costKey] 
                       ? "text-chart-2" 
                       : "text-destructive"
                   )}>
-                    {((enrichedTotals.costPerStage[costDrillDown.costKey] / costGoals[costDrillDown.costKey]) * 100).toFixed(0)}%
+                    {((enrichedTotals.costPerStage[costDrillDown.costKey] / finalCostGoals[costDrillDown.costKey]) * 100).toFixed(0)}%
                   </p>
                 </div>
               </div>
@@ -438,7 +507,7 @@ export function MarketingIndicatorsTab() {
                 data={costByChannel.map(c => ({
                   label: c.channelName,
                   value: c[costDrillDown.costKey as keyof typeof c] as number,
-                  highlight: (c[costDrillDown.costKey as keyof typeof c] as number) <= costGoals[costDrillDown.costKey] 
+                  highlight: (c[costDrillDown.costKey as keyof typeof c] as number) <= finalCostGoals[costDrillDown.costKey] 
                     ? 'success' as const 
                     : 'danger' as const,
                 }))}
@@ -466,7 +535,7 @@ export function MarketingIndicatorsTab() {
                         costDrillDown.costKey === 'cprr' ? 'rrs' :
                         costDrillDown.costKey === 'cpp' ? 'propostas' : 'vendas';
                       const costValue = channel[costDrillDown.costKey as keyof typeof channel] as number;
-                      const isGood = costValue <= costGoals[costDrillDown.costKey];
+                      const isGood = costValue <= finalCostGoals[costDrillDown.costKey];
                       
                       return (
                         <tr key={channel.channelId} className="border-t">
@@ -504,7 +573,7 @@ export function MarketingIndicatorsTab() {
         ltv={data.ltv}
         ltvGoal={goals.ltv}
         investment={enrichedTotals.totalInvestment}
-        investmentGoal={goals.investment}
+        investmentGoal={finalInvestmentGoal}
       />
 
       {/* Investment & Funnel Charts */}
