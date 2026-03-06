@@ -14,6 +14,7 @@ import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { useMarketingAttribution, detectChannel } from "@/hooks/useMarketingAttribution";
+import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
@@ -221,9 +222,10 @@ export function MarketingIndicatorsTab() {
   }, [dateRange, selectedBUs, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod, getO2TaxMrr, getO2TaxSetup, getO2TaxPontual, getFranquiaValue, getOxyHackerValue, data.revenue]);
 
   // Fetch real card data from Pipefy for attribution
-  const { allCards: modeloAtualAllCards, isLoading: isLoadingMACards } = useModeloAtualAnalytics(dateRange.from, dateRange.to);
-  const { cards: o2TaxCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Franquia');
-  const { cards: oxyHackerCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Oxy Hacker');
+  const { allCards: modeloAtualAllCards, isLoading: isLoadingMACards, getCardsForIndicator: maGetCards } = useModeloAtualAnalytics(dateRange.from, dateRange.to);
+  const { getCardsForIndicator: o2GetCards } = useO2TaxAnalytics(dateRange.from, dateRange.to);
+  const { cards: franquiaCards, getCardsForIndicator: franquiaGetCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Franquia');
+  const { cards: oxyHackerCards, getCardsForIndicator: oxyGetCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Oxy Hacker');
 
   // Build attribution cards from all BUs
   const allAttributionCards = useMemo((): AttributionCard[] => {
@@ -239,7 +241,7 @@ export function MarketingIndicatorsTab() {
       });
     }
     
-    for (const c of o2TaxCards) {
+    for (const c of franquiaCards) {
       result.push({
         id: c.id, titulo: c.titulo, campanha: c.campanha, conjuntoGrupo: c.conjuntoGrupo,
         fonte: c.fonte, fbclid: c.fbclid, gclid: c.gclid, tipoOrigem: c.tipoOrigem,
@@ -260,7 +262,7 @@ export function MarketingIndicatorsTab() {
     }
     
     return result;
-  }, [modeloAtualAllCards, o2TaxCards, oxyHackerCards]);
+  }, [modeloAtualAllCards, franquiaCards, oxyHackerCards]);
 
   const { campaignFunnels, channelSummaries } = useMarketingAttribution(allAttributionCards, allCampaigns);
 
@@ -348,43 +350,54 @@ export function MarketingIndicatorsTab() {
         cpv: 0,
       });
     }
+
+    // Add Orgânico / Direto channel from Pipefy attribution
+    const organicoSummary = channelSummaries.find(s => s.channel === 'organico');
+    if (organicoSummary && (organicoSummary.leads > 0 || organicoSummary.mqls > 0 || organicoSummary.vendas > 0)) {
+      channels.push({
+        id: 'organico',
+        name: 'Orgânico / Direto',
+        investment: 0,
+        leads: organicoSummary.leads,
+        mqls: organicoSummary.mqls,
+        rms: 0,
+        rrs: 0,
+        cpl: 0,
+        cpmql: 0,
+        conversionRate: organicoSummary.leads > 0
+          ? Math.round((organicoSummary.mqls / organicoSummary.leads) * 100)
+          : 0,
+        propostas: 0,
+        vendas: organicoSummary.vendas,
+        cprm: 0,
+        cprr: 0,
+        cpp: 0,
+        cpv: 0,
+      });
+    }
+
     return channels;
   }, [data.channels, channelSummaries, googleAdsApiTotals, metaAdsApiTotals]);
 
-  // Count real volumes from Pipefy attribution cards (source of truth)
+  // Count real volumes using the same First Entry logic as the Indicators tab
   const pipefyVolumes = useMemo(() => {
-    const PHASE_STAGE_MAP: Record<string, string> = {
-      'Novos Leads': 'leads',
-      'Start form': 'leads',
-      'MQLs': 'mqls',
-      'MQL': 'mqls',
-      'Tentativas de contato': 'mqls',
-      'Material ISCA': 'mqls',
-      'Reunião agendada / Qualificado': 'rms',
-      'Reunião Realizada': 'rrs',
-      '1° Reunião Realizada - Apresentação': 'rrs',
-      '1° Reunião Realizada': 'rrs',
-      'Proposta enviada / Follow Up': 'propostas',
-      'Enviar para assinatura': 'propostas',
-      'Contrato assinado': 'vendas',
-    };
-    const FUNNEL_ORDER = ['leads', 'mqls', 'rms', 'rrs', 'propostas', 'vendas'];
-
+    const indicators = ['leads', 'mql', 'rm', 'rr', 'proposta', 'venda'] as const;
     const counts = { leads: 0, mqls: 0, rms: 0, rrs: 0, propostas: 0, vendas: 0 };
-    const counted = new Set<string>();
+    const countKeys: Record<string, keyof typeof counts> = {
+      leads: 'leads', mql: 'mqls', rm: 'rms', rr: 'rrs', proposta: 'propostas', venda: 'vendas',
+    };
 
-    for (const card of allAttributionCards) {
-      if (counted.has(card.id)) continue;
-      counted.add(card.id);
-      const stage = PHASE_STAGE_MAP[card.fase] || 'leads';
-      const idx = FUNNEL_ORDER.indexOf(stage);
-      // Cumulative: a card at stage X counts for all stages up to X
-      for (let i = 0; i <= idx; i++) {
-        counts[FUNNEL_ORDER[i] as keyof typeof counts]++;
-      }
+    for (const ind of indicators) {
+      const key = countKeys[ind];
+      counts[key] += maGetCards(ind).length;
+      counts[key] += o2GetCards(ind).length;
+      counts[key] += franquiaGetCards(ind).length;
+      counts[key] += oxyGetCards(ind).length;
     }
+
+    console.log('[MarketingIndicatorsTab] indicatorsVolumes (First Entry):', counts);
     return counts;
-  }, [allAttributionCards]);
+  }, [maGetCards, o2GetCards, franquiaGetCards, oxyGetCards]);
 
   // Recalculate totals including enriched Google Ads data
   const enrichedTotals = useMemo(() => {
@@ -682,10 +695,10 @@ export function MarketingIndicatorsTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <InvestmentByChannelChart channels={enrichedChannels} />
         <AcquisitionFunnelChart
-          leads={enrichedTotals.totalLeads}
-          mqls={data.totalMqls}
-          rms={data.totalRms}
-          rrs={data.totalRrs}
+          leads={pipefyVolumes.leads}
+          mqls={pipefyVolumes.mqls}
+          rms={pipefyVolumes.rms}
+          rrs={pipefyVolumes.rrs}
         />
       </div>
 
