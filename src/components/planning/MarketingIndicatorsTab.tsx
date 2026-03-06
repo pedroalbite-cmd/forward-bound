@@ -197,6 +197,22 @@ export function MarketingIndicatorsTab() {
     };
   }, [googleCampaigns]);
 
+  // Aggregate Meta Ads API totals for enrichment
+  const metaAdsApiTotals = useMemo(() => {
+    const campaigns = metaCampaigns || [];
+    const totalSpend = campaigns.reduce((sum, c) => sum + (c.investment || 0), 0);
+    const totalLeads = campaigns.reduce((sum, c) => sum + (c.leads || 0), 0);
+    const totalClicks = campaigns.reduce((sum, c) => sum + (c.clicks || 0), 0);
+    const totalImpressions = campaigns.reduce((sum, c) => sum + (c.impressions || 0), 0);
+    return {
+      investment: totalSpend,
+      leads: totalLeads,
+      clicks: totalClicks,
+      impressions: totalImpressions,
+      cpl: totalLeads > 0 ? totalSpend / totalLeads : 0,
+    };
+  }, [metaCampaigns]);
+
   // Enrich channels with Google Ads API data (fallback) and Eventos from Pipefy
   const enrichedChannels = useMemo(() => {
     const channels = data.channels.map(ch => {
@@ -209,6 +225,17 @@ export function MarketingIndicatorsTab() {
           clicks: googleAdsApiTotals.clicks,
           impressions: googleAdsApiTotals.impressions,
           cpl: googleAdsApiTotals.cpl,
+        };
+      }
+      // If Meta Ads channel from sheet has lower investment than API, use API data
+      if (ch.id === 'meta_ads' && metaAdsApiTotals.investment > 0) {
+        return {
+          ...ch,
+          investment: metaAdsApiTotals.investment,
+          leads: metaAdsApiTotals.leads || ch.leads,
+          clicks: metaAdsApiTotals.clicks,
+          impressions: metaAdsApiTotals.impressions,
+          cpl: metaAdsApiTotals.cpl,
         };
       }
       return ch;
@@ -239,19 +266,23 @@ export function MarketingIndicatorsTab() {
       });
     }
     return channels;
-  }, [data.channels, channelSummaries, googleAdsApiTotals]);
+  }, [data.channels, channelSummaries, googleAdsApiTotals, metaAdsApiTotals]);
 
   // Recalculate totals including enriched Google Ads data
   const enrichedTotals = useMemo(() => {
     const googleChannel = enrichedChannels.find(c => c.id === 'google_ads');
     const sheetGoogleChannel = data.channels.find(c => c.id === 'google_ads');
+    const metaChannel = enrichedChannels.find(c => c.id === 'meta_ads');
+    const sheetMetaChannel = data.channels.find(c => c.id === 'meta_ads');
     
-    // If we enriched Google Ads with API data, adjust totals
+    // Calculate deltas for both Google and Meta
     const googleDeltaInvestment = (googleChannel?.investment || 0) - (sheetGoogleChannel?.investment || 0);
     const googleDeltaLeads = (googleChannel?.leads || 0) - (sheetGoogleChannel?.leads || 0);
+    const metaDeltaInvestment = (metaChannel?.investment || 0) - (sheetMetaChannel?.investment || 0);
+    const metaDeltaLeads = (metaChannel?.leads || 0) - (sheetMetaChannel?.leads || 0);
     
-    const totalInvestment = data.totalInvestment + googleDeltaInvestment;
-    const totalLeads = data.totalLeads + googleDeltaLeads;
+    const totalInvestment = data.totalInvestment + googleDeltaInvestment + metaDeltaInvestment;
+    const totalLeads = data.totalLeads + googleDeltaLeads + metaDeltaLeads;
     
     // Recalculate cost per stage with updated investment
     const costPerStage: CostPerStage = {
