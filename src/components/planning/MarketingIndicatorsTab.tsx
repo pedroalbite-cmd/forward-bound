@@ -227,6 +227,17 @@ export function MarketingIndicatorsTab() {
           cpl: googleAdsApiTotals.cpl,
         };
       }
+      // If Meta Ads channel from sheet has lower investment than API, use API data
+      if (ch.id === 'meta_ads' && metaAdsApiTotals.investment > 0) {
+        return {
+          ...ch,
+          investment: metaAdsApiTotals.investment,
+          leads: metaAdsApiTotals.leads || ch.leads,
+          clicks: metaAdsApiTotals.clicks,
+          impressions: metaAdsApiTotals.impressions,
+          cpl: metaAdsApiTotals.cpl,
+        };
+      }
       return ch;
     });
 
