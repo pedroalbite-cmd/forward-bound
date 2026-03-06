@@ -32,7 +32,7 @@ function isMetaCampaignId(value: string): boolean {
   return /^\d{10,}$/.test(value.trim());
 }
 
-function detectChannel(card: AttributionCard): ChannelId {
+export function detectChannel(card: AttributionCard): ChannelId {
   const fonte = (card.fonte || '').toLowerCase().trim();
   const tipo = (card.tipoOrigem || '').toLowerCase();
   const origem = (card.origemLead || '').toLowerCase();

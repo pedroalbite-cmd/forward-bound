@@ -13,7 +13,7 @@ import { useModeloAtualMetas } from "@/hooks/useModeloAtualMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
-import { useMarketingAttribution } from "@/hooks/useMarketingAttribution";
+import { useMarketingAttribution, detectChannel } from "@/hooks/useMarketingAttribution";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
@@ -30,6 +30,7 @@ import { RevenueMetricsCards } from "./marketing-indicators/RevenueMetricsCards"
 import { CostPerStageGauges } from "./marketing-indicators/CostPerStageGauges";
 import { ChannelAttributionCards } from "./marketing-indicators/ChannelAttributionCards";
 import { DrillDownBarChart } from "./indicators/DrillDownBarChart";
+import { DetailSheet, columnFormatters } from "./indicators/DetailSheet";
 import { CHANNEL_LABELS, ChannelId, CostPerStage, AttributionCard } from "./marketing-indicators/types";
 
 
@@ -53,6 +54,12 @@ export function MarketingIndicatorsTab() {
     isOpen: boolean;
     costKey: keyof CostPerStage | null;
   }>({ isOpen: false, costKey: null });
+
+  // Drill-down state for channel attribution cards
+  const [channelDrillDown, setChannelDrillDown] = useState<{
+    isOpen: boolean;
+    channel: ChannelId | null;
+  }>({ isOpen: false, channel: null });
 
   // Fetch marketing data from Google Sheets
   const { data, goals, costGoals, costByChannel, isLoading, error, refetch } = useMarketingIndicators({
@@ -431,7 +438,49 @@ export function MarketingIndicatorsTab() {
       />
 
       {/* Attribution Cards (real data from Pipefy) */}
-      <ChannelAttributionCards summaries={channelSummaries} />
+      <ChannelAttributionCards 
+        summaries={channelSummaries} 
+        onChannelClick={(channel) => setChannelDrillDown({ isOpen: true, channel })}
+      />
+
+      {/* Channel Attribution Drill-Down */}
+      {channelDrillDown.channel && (
+        <DetailSheet
+          open={channelDrillDown.isOpen}
+          onOpenChange={(open) => setChannelDrillDown({ isOpen: open, channel: open ? channelDrillDown.channel : null })}
+          title={`Leads — ${CHANNEL_LABELS[channelDrillDown.channel]}`}
+          description={`Cards do CRM atribuídos ao canal ${CHANNEL_LABELS[channelDrillDown.channel]}`}
+          items={allAttributionCards
+            .filter(card => {
+              const resolved = detectChannel(card);
+              // Apply same reclassification logic as the hook
+              if (resolved === 'organico' && card.campanha) {
+                const matched = allCampaigns?.find(c => c.id === card.campanha?.trim() || c.name === card.campanha);
+                if (matched) {
+                  const ch = (matched.channel || '').toLowerCase();
+                  if (ch.includes('meta') || ch.includes('facebook')) return channelDrillDown.channel === 'meta_ads';
+                  if (ch.includes('google')) return channelDrillDown.channel === 'google_ads';
+                }
+              }
+              return resolved === channelDrillDown.channel;
+            })
+            .map(card => ({
+              id: card.id,
+              name: card.titulo,
+              phase: card.fase,
+              value: (card.valorMRR || 0) + (card.valorSetup || 0) + (card.valorPontual || 0),
+              date: card.dataEntrada instanceof Date ? card.dataEntrada.toISOString() : String(card.dataEntrada),
+              product: card.bu,
+            }))}
+          columns={[
+            { key: 'name', label: 'Nome' },
+            { key: 'phase', label: 'Fase', format: columnFormatters.phase },
+            { key: 'product', label: 'BU', format: columnFormatters.product },
+            { key: 'value', label: 'Valor', format: columnFormatters.currency },
+            { key: 'date', label: 'Data Entrada', format: columnFormatters.date },
+          ]}
+        />
+      )}
 
 
       {/* Revenue Metrics Cards - Integrated with Modelo Atual data */}
