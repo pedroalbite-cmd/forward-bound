@@ -351,6 +351,41 @@ export function MarketingIndicatorsTab() {
     return channels;
   }, [data.channels, channelSummaries, googleAdsApiTotals, metaAdsApiTotals]);
 
+  // Count real volumes from Pipefy attribution cards (source of truth)
+  const pipefyVolumes = useMemo(() => {
+    const PHASE_STAGE_MAP: Record<string, string> = {
+      'Novos Leads': 'leads',
+      'Start form': 'leads',
+      'MQLs': 'mqls',
+      'MQL': 'mqls',
+      'Tentativas de contato': 'mqls',
+      'Material ISCA': 'mqls',
+      'Reunião agendada / Qualificado': 'rms',
+      'Reunião Realizada': 'rrs',
+      '1° Reunião Realizada - Apresentação': 'rrs',
+      '1° Reunião Realizada': 'rrs',
+      'Proposta enviada / Follow Up': 'propostas',
+      'Enviar para assinatura': 'propostas',
+      'Contrato assinado': 'vendas',
+    };
+    const FUNNEL_ORDER = ['leads', 'mqls', 'rms', 'rrs', 'propostas', 'vendas'];
+
+    const counts = { leads: 0, mqls: 0, rms: 0, rrs: 0, propostas: 0, vendas: 0 };
+    const counted = new Set<string>();
+
+    for (const card of allAttributionCards) {
+      if (counted.has(card.id)) continue;
+      counted.add(card.id);
+      const stage = PHASE_STAGE_MAP[card.fase] || 'leads';
+      const idx = FUNNEL_ORDER.indexOf(stage);
+      // Cumulative: a card at stage X counts for all stages up to X
+      for (let i = 0; i <= idx; i++) {
+        counts[FUNNEL_ORDER[i] as keyof typeof counts]++;
+      }
+    }
+    return counts;
+  }, [allAttributionCards]);
+
   // Recalculate totals including enriched Google Ads data
   const enrichedTotals = useMemo(() => {
     const googleChannel = enrichedChannels.find(c => c.id === 'google_ads');
@@ -360,25 +395,23 @@ export function MarketingIndicatorsTab() {
     
     // Calculate deltas for both Google and Meta
     const googleDeltaInvestment = (googleChannel?.investment || 0) - (sheetGoogleChannel?.investment || 0);
-    const googleDeltaLeads = (googleChannel?.leads || 0) - (sheetGoogleChannel?.leads || 0);
     const metaDeltaInvestment = (metaChannel?.investment || 0) - (sheetMetaChannel?.investment || 0);
-    const metaDeltaLeads = (metaChannel?.leads || 0) - (sheetMetaChannel?.leads || 0);
     
     const totalInvestment = data.totalInvestment + googleDeltaInvestment + metaDeltaInvestment;
-    const totalLeads = data.totalLeads + googleDeltaLeads + metaDeltaLeads;
+    const totalLeads = pipefyVolumes.leads;
     
-    // Recalculate cost per stage with updated investment
+    // Recalculate cost per stage using API investment / Pipefy volumes
     const costPerStage: CostPerStage = {
-      cpl: totalLeads > 0 ? totalInvestment / totalLeads : data.costPerStage.cpl,
-      cpmql: data.totalMqls > 0 ? totalInvestment / data.totalMqls : data.costPerStage.cpmql,
-      cprm: data.totalRms > 0 ? totalInvestment / data.totalRms : data.costPerStage.cprm,
-      cprr: data.totalRrs > 0 ? totalInvestment / data.totalRrs : data.costPerStage.cprr,
-      cpp: data.totalPropostas > 0 ? totalInvestment / data.totalPropostas : data.costPerStage.cpp,
-      cpv: data.totalVendas > 0 ? totalInvestment / data.totalVendas : data.costPerStage.cpv,
+      cpl: pipefyVolumes.leads > 0 ? totalInvestment / pipefyVolumes.leads : 0,
+      cpmql: pipefyVolumes.mqls > 0 ? totalInvestment / pipefyVolumes.mqls : 0,
+      cprm: pipefyVolumes.rms > 0 ? totalInvestment / pipefyVolumes.rms : 0,
+      cprr: pipefyVolumes.rrs > 0 ? totalInvestment / pipefyVolumes.rrs : 0,
+      cpp: pipefyVolumes.propostas > 0 ? totalInvestment / pipefyVolumes.propostas : 0,
+      cpv: pipefyVolumes.vendas > 0 ? totalInvestment / pipefyVolumes.vendas : 0,
     };
     
     return { totalInvestment, totalLeads, costPerStage };
-  }, [enrichedChannels, data]);
+  }, [enrichedChannels, data, pipefyVolumes]);
 
   const handleDateRangeChange = (start: Date, end: Date) => {
     setDateRange({ from: start, to: end });
