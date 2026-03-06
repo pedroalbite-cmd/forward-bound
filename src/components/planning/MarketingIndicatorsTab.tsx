@@ -55,6 +55,12 @@ export function MarketingIndicatorsTab() {
     costKey: keyof CostPerStage | null;
   }>({ isOpen: false, costKey: null });
 
+  // Drill-down state for channel attribution cards
+  const [channelDrillDown, setChannelDrillDown] = useState<{
+    isOpen: boolean;
+    channel: ChannelId | null;
+  }>({ isOpen: false, channel: null });
+
   // Fetch marketing data from Google Sheets
   const { data, goals, costGoals, costByChannel, isLoading, error, refetch } = useMarketingIndicators({
     startDate: dateRange.from,
