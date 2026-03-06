@@ -87,7 +87,7 @@ export function ChannelMetricsCards({ channels, totalInvestment, totalLeads }: C
               <span className="font-bold text-primary">{formatCurrency(totalInvestment)}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-xs text-muted-foreground">Leads Totais</span>
+              <span className="text-xs text-muted-foreground">Leads Totais (Plataforma)</span>
               <span className="font-bold text-primary">{formatNumber(totalLeads)}</span>
             </div>
             <div className="flex justify-between items-center">

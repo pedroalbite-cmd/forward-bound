@@ -44,7 +44,7 @@ export function ChannelAttributionCards({ summaries }: ChannelAttributionCardsPr
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="flex items-center gap-1.5">
                   <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-muted-foreground">Leads</span>
+                  <span className="text-muted-foreground">Leads (CRM)</span>
                   <span className="font-semibold ml-auto">{s.leads}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
