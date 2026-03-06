@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MarketingChannel } from "./types";
-import { Target } from "lucide-react";
+import { Target, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ChannelMetricsCardsProps {
   channels: MarketingChannel[];
