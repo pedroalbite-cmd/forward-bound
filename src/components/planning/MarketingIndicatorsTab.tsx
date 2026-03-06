@@ -13,7 +13,7 @@ import { useModeloAtualMetas } from "@/hooks/useModeloAtualMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
-import { useMarketingAttribution } from "@/hooks/useMarketingAttribution";
+import { useMarketingAttribution, detectChannel } from "@/hooks/useMarketingAttribution";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
