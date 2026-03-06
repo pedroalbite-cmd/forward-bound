@@ -61,36 +61,28 @@ export function MarketingIndicatorsTab() {
     selectedChannels,
   });
 
-  // Fetch monetary metas from DB (Admin panel)
-  const { metas: monetaryMetas } = useMonetaryMetas(2026);
+  // Use consolidated metas (same source as Indicators tab)
+  const { getMetaForPeriod } = useConsolidatedMetas();
   const { funnelData } = useMediaMetas();
-
-  // Map date range to month strings and calculate consolidated goals
-  const selectedMonthStrings = useMemo((): string[] => {
-    const months = eachMonthOfInterval({ start: dateRange.from, end: dateRange.to });
-    return months.map(d => MONTHS[getMonth(d)]);
-  }, [dateRange]);
+  const allBUs: BuType[] = ['modelo_atual', 'o2_tax', 'oxy_hacker', 'franquia'];
 
   const consolidatedRevenueGoals = useMemo(() => {
-    let mrr = 0, setup = 0, pontual = 0;
-    for (const meta of monetaryMetas) {
-      if (selectedMonthStrings.includes(meta.month)) {
-        mrr += Number(meta.mrr) || 0;
-        setup += Number(meta.setup) || 0;
-        pontual += Number(meta.pontual) || 0;
-      }
-    }
+    const mrr = getMetaForPeriod(allBUs, dateRange.from, dateRange.to, 'mrr');
+    const setup = getMetaForPeriod(allBUs, dateRange.from, dateRange.to, 'setup');
+    const pontual = getMetaForPeriod(allBUs, dateRange.from, dateRange.to, 'pontual');
     const gmv = mrr + setup + pontual;
     return { mrr, setup, pontual, educacao: 0, gmv };
-  }, [monetaryMetas, selectedMonthStrings]);
+  }, [getMetaForPeriod, dateRange, allBUs]);
 
   const consolidatedFunnelGoals = useMemo(() => {
     if (!funnelData) return { leads: 0, mqls: 0, rms: 0, rrs: 0, propostas: 0, vendas: 0, investment: 0 };
-    const allBUs = [funnelData.modeloAtual, funnelData.o2Tax, funnelData.oxyHacker, funnelData.franquia];
+    const allBUData = [funnelData.modeloAtual, funnelData.o2Tax, funnelData.oxyHacker, funnelData.franquia];
+    const monthsInRange = eachMonthOfInterval({ start: dateRange.from, end: dateRange.to });
+    const monthStrings = monthsInRange.map(d => ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][getMonth(d)]);
     let leads = 0, mqls = 0, rms = 0, rrs = 0, propostas = 0, vendas = 0, investment = 0;
-    for (const buData of allBUs) {
+    for (const buData of allBUData) {
       for (const item of buData) {
-        if (selectedMonthStrings.includes(item.month)) {
+        if (monthStrings.includes(item.month)) {
           leads += item.leads || 0;
           mqls += item.mqls || 0;
           rms += item.rms || 0;
@@ -102,7 +94,7 @@ export function MarketingIndicatorsTab() {
       }
     }
     return { leads, mqls, rms, rrs, propostas, vendas, investment };
-  }, [funnelData, selectedMonthStrings]);
+  }, [funnelData, dateRange]);
 
   // Build final goals merging DB data over hardcoded defaults
   const finalRevenueGoals = useMemo(() => {

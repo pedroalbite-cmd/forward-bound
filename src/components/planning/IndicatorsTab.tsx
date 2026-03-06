@@ -1936,6 +1936,16 @@ export function IndicatorsTab() {
           const o2TaxVendas = o2TaxAnalytics.getCardsForIndicator('venda');
           total += o2TaxVendas.reduce((acc, card) => acc + (card.valorPontual || 0), 0);
         }
+
+        // Oxy Hacker: toda receita é pontual
+        if (includesOxyHacker) {
+          total += getOxyHackerValue('venda', startDate, endDate);
+        }
+
+        // Franquia: toda receita é pontual
+        if (includesFranquia) {
+          total += getExpansaoValue('venda', startDate, endDate);
+        }
         
         return total;
       }
