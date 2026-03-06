@@ -30,6 +30,7 @@ import { RevenueMetricsCards } from "./marketing-indicators/RevenueMetricsCards"
 import { CostPerStageGauges } from "./marketing-indicators/CostPerStageGauges";
 import { ChannelAttributionCards } from "./marketing-indicators/ChannelAttributionCards";
 import { DrillDownBarChart } from "./indicators/DrillDownBarChart";
+import { DetailSheet, columnFormatters } from "./indicators/DetailSheet";
 import { CHANNEL_LABELS, ChannelId, CostPerStage, AttributionCard } from "./marketing-indicators/types";
 
 
