@@ -329,6 +329,10 @@ export function AdminTab() {
         <MonetaryMetasTab />
       </TabsContent>
 
+      <TabsContent value="cost-stage-metas">
+        <CostStageMetasTab />
+      </TabsContent>
+
       <TabsContent value="logs">
         <AdminLogsTab />
       </TabsContent>

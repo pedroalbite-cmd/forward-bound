@@ -18,6 +18,7 @@ import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { useConsolidatedMetas, type ConsolidatedMetricType } from "@/hooks/useConsolidatedMetas";
+import { useCostStageMetas } from "@/hooks/useCostStageMetas";
 import type { BuType } from "@/hooks/useMonetaryMetas";
 import { PerformanceGauges } from "./marketing-indicators/PerformanceGauges";
 import { InvestmentByChannelChart } from "./marketing-indicators/InvestmentByChannelChart";
