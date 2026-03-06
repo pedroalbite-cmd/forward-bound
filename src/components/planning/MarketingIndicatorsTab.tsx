@@ -266,7 +266,7 @@ export function MarketingIndicatorsTab() {
       });
     }
     return channels;
-  }, [data.channels, channelSummaries, googleAdsApiTotals]);
+  }, [data.channels, channelSummaries, googleAdsApiTotals, metaAdsApiTotals]);
 
   // Recalculate totals including enriched Google Ads data
   const enrichedTotals = useMemo(() => {
