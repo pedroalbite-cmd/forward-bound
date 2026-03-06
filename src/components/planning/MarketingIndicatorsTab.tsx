@@ -105,6 +105,11 @@ export function MarketingIndicatorsTab() {
   }, [consolidatedRevenueGoals, goals.revenue]);
 
   const finalCostGoals = useMemo(() => {
+    // Priority 1: DB cost stage metas
+    const dbCostGoals = getCostGoalsForPeriod(dateRange.from, dateRange.to);
+    if (dbCostGoals) return dbCostGoals;
+
+    // Priority 2: Calculate from investment / volume
     const f = consolidatedFunnelGoals;
     const inv = f.investment;
     if (inv <= 0) return costGoals;
@@ -116,7 +121,7 @@ export function MarketingIndicatorsTab() {
       cpp: f.propostas > 0 ? inv / f.propostas : costGoals.cpp,
       cpv: f.vendas > 0 ? inv / f.vendas : costGoals.cpv,
     };
-  }, [consolidatedFunnelGoals, costGoals]);
+  }, [getCostGoalsForPeriod, dateRange, consolidatedFunnelGoals, costGoals]);
 
   const finalInvestmentGoal = useMemo(() => {
     return consolidatedFunnelGoals.investment > 0 ? consolidatedFunnelGoals.investment : goals.investment;
