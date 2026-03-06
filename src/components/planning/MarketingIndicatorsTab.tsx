@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { startOfMonth, endOfMonth } from "date-fns";
+import { startOfMonth, endOfMonth, eachMonthOfInterval, getMonth } from "date-fns";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MultiSelect } from "@/components/ui/multi-select";
@@ -16,6 +16,8 @@ import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { useMarketingAttribution } from "@/hooks/useMarketingAttribution";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
+import { useMonetaryMetas, MONTHS } from "@/hooks/useMonetaryMetas";
+import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { PerformanceGauges } from "./marketing-indicators/PerformanceGauges";
 import { InvestmentByChannelChart } from "./marketing-indicators/InvestmentByChannelChart";
 import { AcquisitionFunnelChart } from "./marketing-indicators/AcquisitionFunnelChart";
