@@ -197,6 +197,22 @@ export function MarketingIndicatorsTab() {
     };
   }, [googleCampaigns]);
 
+  // Aggregate Meta Ads API totals for enrichment
+  const metaAdsApiTotals = useMemo(() => {
+    const campaigns = metaCampaigns || [];
+    const totalSpend = campaigns.reduce((sum, c) => sum + (c.investment || 0), 0);
+    const totalLeads = campaigns.reduce((sum, c) => sum + (c.leads || 0), 0);
+    const totalClicks = campaigns.reduce((sum, c) => sum + (c.clicks || 0), 0);
+    const totalImpressions = campaigns.reduce((sum, c) => sum + (c.impressions || 0), 0);
+    return {
+      investment: totalSpend,
+      leads: totalLeads,
+      clicks: totalClicks,
+      impressions: totalImpressions,
+      cpl: totalLeads > 0 ? totalSpend / totalLeads : 0,
+    };
+  }, [metaCampaigns]);
+
   // Enrich channels with Google Ads API data (fallback) and Eventos from Pipefy
   const enrichedChannels = useMemo(() => {
     const channels = data.channels.map(ch => {
