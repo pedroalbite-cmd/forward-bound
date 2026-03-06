@@ -14,6 +14,7 @@ import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { useMarketingAttribution, detectChannel } from "@/hooks/useMarketingAttribution";
+import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
