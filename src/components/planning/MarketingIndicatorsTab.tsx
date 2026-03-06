@@ -535,7 +535,7 @@ export function MarketingIndicatorsTab() {
                         costDrillDown.costKey === 'cprr' ? 'rrs' :
                         costDrillDown.costKey === 'cpp' ? 'propostas' : 'vendas';
                       const costValue = channel[costDrillDown.costKey as keyof typeof channel] as number;
-                      const isGood = costValue <= costGoals[costDrillDown.costKey];
+                      const isGood = costValue <= finalCostGoals[costDrillDown.costKey];
                       
                       return (
                         <tr key={channel.channelId} className="border-t">
