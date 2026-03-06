@@ -443,7 +443,7 @@ export function MarketingIndicatorsTab() {
       {/* Cost Per Stage Gauges */}
       <CostPerStageGauges 
         costPerStage={enrichedTotals.costPerStage} 
-        goals={costGoals}
+        goals={finalCostGoals}
         onCostClick={(costKey) => setCostDrillDown({ isOpen: true, costKey })}
       />
 
