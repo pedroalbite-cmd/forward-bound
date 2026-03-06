@@ -413,6 +413,25 @@ export function MarketingIndicatorsTab() {
     return { totalInvestment, totalLeads, costPerStage };
   }, [enrichedChannels, data, pipefyVolumes]);
 
+  // Calculate real performance metrics from APIs + Pipefy (no spreadsheet dependency)
+  const realPerformanceMetrics = useMemo(() => {
+    const investment = enrichedTotals.totalInvestment;
+    const gmv = realRevenue.gmv;
+    const vendas = pipefyVolumes.vendas;
+
+    // Filter "Contrato assinado" cards to get average MRR
+    const vendasCards = allAttributionCards.filter(c => c.fase === 'Contrato assinado');
+    const totalMrrVendas = vendasCards.reduce((sum, c) => sum + (c.valorMRR || 0), 0);
+    const avgMrr = vendasCards.length > 0 ? totalMrrVendas / vendasCards.length : 0;
+
+    const roas = investment > 0 ? gmv / investment : 0;
+    const cac = vendas > 0 ? investment / vendas : 0;
+    const ltv = avgMrr * 12;
+    const roiLtv = investment > 0 ? (ltv * vendas) / investment : 0;
+
+    return { roas, cac, ltv, roiLtv };
+  }, [enrichedTotals.totalInvestment, realRevenue.gmv, pipefyVolumes.vendas, allAttributionCards]);
+
   const handleDateRangeChange = (start: Date, end: Date) => {
     setDateRange({ from: start, to: end });
   };
