@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { ChannelSummary, CHANNEL_LABELS, ChannelId } from "./types";
-import { TrendingUp, Users, ShoppingCart, DollarSign } from "lucide-react";
+import { TrendingUp, Users, ShoppingCart, DollarSign, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const CHANNEL_ICONS: Record<ChannelId, string> = {
   meta_ads: '📘',
