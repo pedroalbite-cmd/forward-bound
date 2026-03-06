@@ -94,9 +94,6 @@ export function CostPerStageGauges({
     { key: 'cpv', label: 'CPV', sublabel: 'Venda' },
   ];
 
-  // Find stages above goal for alert
-  const stagesAboveGoal = stages.filter(s => costPerStage[s.key] > goals[s.key]);
-
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -115,15 +112,6 @@ export function CostPerStageGauges({
             />
           ))}
         </div>
-        
-        {stagesAboveGoal.length > 0 && (
-          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-            <p className="text-sm text-destructive">
-              ⚠️ {stagesAboveGoal.map(s => s.label).join(', ')} acima da meta! 
-              Investigar taxa de conversão entre etapas.
-            </p>
-          </div>
-        )}
         
         <p className="text-xs text-muted-foreground text-center mt-3">
           Clique em um indicador para ver o breakdown por canal
