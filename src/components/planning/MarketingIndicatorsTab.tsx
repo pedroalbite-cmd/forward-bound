@@ -437,7 +437,7 @@ export function MarketingIndicatorsTab() {
       {/* Revenue Metrics Cards - Integrated with Modelo Atual data */}
       <RevenueMetricsCards
         revenue={realRevenue}
-        goals={goals.revenue}
+        goals={finalRevenueGoals}
       />
 
       {/* Cost Per Stage Gauges */}
