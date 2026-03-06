@@ -190,7 +190,7 @@ export const CHANNEL_LABELS: Record<ChannelId, string> = {
   meta_ads: 'Meta Ads',
   google_ads: 'Google Ads',
   eventos: 'Eventos',
-  organico: 'Orgânico',
+  organico: 'Orgânico / Direto',
   outros: 'Outros',
 };
 
