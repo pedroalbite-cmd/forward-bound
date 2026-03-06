@@ -101,6 +101,12 @@ export function MarketingIndicatorsTab() {
     isLoading: isLoadingO2Tax 
   } = useO2TaxMetas(dateRange.from, dateRange.to);
 
+  // Fetch Expansão (Franquia) revenue data from Pipefy
+  const { getValueForPeriod: getFranquiaValue } = useExpansaoMetas(dateRange.from, dateRange.to);
+
+  // Fetch Oxy Hacker revenue data from Pipefy
+  const { getValueForPeriod: getOxyHackerValue } = useOxyHackerMetas(dateRange.from, dateRange.to);
+
   // Calculate real revenue combining data from selected BUs
   const realRevenue = useMemo(() => {
     const includesModeloAtual = selectedBUs.includes('Modelo Atual');
@@ -108,14 +114,12 @@ export function MarketingIndicatorsTab() {
     const includesOxyHacker = selectedBUs.includes('Oxy Hacker');
     const includesFranquia = selectedBUs.includes('Franquia');
     
-    // If no BU with real data is selected, fallback to sheet data
     if (!includesModeloAtual && !includesO2Tax && !includesOxyHacker && !includesFranquia) {
       return data.revenue;
     }
     
     let mrr = 0, setup = 0, pontual = 0, educacao = 0;
     
-    // Add Modelo Atual values
     if (includesModeloAtual) {
       mrr += getMrrForPeriod(dateRange.from, dateRange.to);
       setup += getSetupForPeriod(dateRange.from, dateRange.to);
@@ -123,38 +127,22 @@ export function MarketingIndicatorsTab() {
       educacao += getEducacaoForPeriod(dateRange.from, dateRange.to);
     }
     
-    // Add O2 TAX values
     if (includesO2Tax) {
       mrr += getO2TaxMrr(dateRange.from, dateRange.to);
       setup += getO2TaxSetup(dateRange.from, dateRange.to);
       pontual += getO2TaxPontual(dateRange.from, dateRange.to);
     }
     
-    // Add Franquia values (pontual only)
     if (includesFranquia) {
       pontual += getFranquiaValue('venda', dateRange.from, dateRange.to);
     }
     
-    // Add Oxy Hacker values (pontual only)
     if (includesOxyHacker) {
       pontual += getOxyHackerValue('venda', dateRange.from, dateRange.to);
     }
     
-    return {
-      mrr,
-      setup,
-      pontual,
-      educacao,
-      gmv: data.revenue.gmv,
-    };
+    return { mrr, setup, pontual, educacao, gmv: data.revenue.gmv };
   }, [dateRange, selectedBUs, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod, getO2TaxMrr, getO2TaxSetup, getO2TaxPontual, getFranquiaValue, getOxyHackerValue, data.revenue]);
-
-
-  // Fetch Expansão (Franquia) revenue data from Pipefy
-  const { getValueForPeriod: getFranquiaValue } = useExpansaoMetas(dateRange.from, dateRange.to);
-
-  // Fetch Oxy Hacker revenue data from Pipefy
-  const { getValueForPeriod: getOxyHackerValue } = useOxyHackerMetas(dateRange.from, dateRange.to);
 
   // Fetch real card data from Pipefy for attribution
   const { allCards: modeloAtualAllCards, isLoading: isLoadingMACards } = useModeloAtualAnalytics(dateRange.from, dateRange.to);
