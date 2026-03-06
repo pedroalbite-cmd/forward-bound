@@ -61,7 +61,7 @@ export function ChannelMetricsCards({ channels, totalInvestment, totalLeads }: C
                   <span className="font-semibold text-foreground">{formatCurrency(ch.investment)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-muted-foreground">Leads</span>
+                  <span className="text-xs text-muted-foreground">Leads (Plataforma)</span>
                   <span className="font-semibold text-foreground">{formatNumber(ch.leads)}</span>
                 </div>
                 <div className="flex justify-between items-center">
