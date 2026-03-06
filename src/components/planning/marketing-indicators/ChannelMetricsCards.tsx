@@ -31,7 +31,19 @@ export function ChannelMetricsCards({ channels, totalInvestment, totalLeads }: C
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-foreground">Mídia e Leads por Canal</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-lg font-semibold text-foreground">Mídia e Leads por Canal</h3>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent side="right" className="max-w-xs">
+              <p>Dados da API do Meta/Google Ads — leads registrados pela plataforma de anúncios</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {channels.map((ch) => {
           const style = CHANNEL_STYLES[ch.id] || { color: 'border-l-muted-foreground', emoji: '📊' };
