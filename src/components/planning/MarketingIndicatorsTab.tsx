@@ -695,10 +695,10 @@ export function MarketingIndicatorsTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <InvestmentByChannelChart channels={enrichedChannels} />
         <AcquisitionFunnelChart
-          leads={enrichedTotals.totalLeads}
-          mqls={data.totalMqls}
-          rms={data.totalRms}
-          rrs={data.totalRrs}
+          leads={pipefyVolumes.leads}
+          mqls={pipefyVolumes.mqls}
+          rms={pipefyVolumes.rms}
+          rrs={pipefyVolumes.rrs}
         />
       </div>
 
