@@ -1,62 +1,45 @@
 
 
-## Desbloquear Fevereiro e Adicionar Distribuicao de Diferenca nas Metas Monetarias
+## Plano: Sincronizar Funil de Aquisição e Investimento por Canal com Indicadores
 
-### Objetivo
-Permitir editar meses anteriormente bloqueados (como Fevereiro) e, ao alterar uma meta, mostrar a diferenca em relacao ao total anterior da BU com opcoes inteligentes de redistribuicao.
+### Problema 1: Funil de Aquisição com números errados
 
-### Alteracoes
+O gráfico `AcquisitionFunnelChart` (linha 684-689) recebe dados misturados:
+- **Leads** = `enrichedTotals.totalLeads` (Pipefy attribution cards, lógica cumulativa)
+- **MQLs, RMs, RRs** = `data.totalMqls`, `data.totalRms`, `data.totalRrs` (planilha "Indicadores 26")
 
-#### 1. Remover trava de meses (`MonetaryMetasTab.tsx`)
-- Remover a funcao `isMonthLocked` e a logica de `disabled` nos inputs. Todos os meses passam a ser editaveis.
-- Remover os indicadores visuais de cadeado.
+A aba Indicadores usa `getCardsForIndicator()` dos hooks de analytics com lógica "First Entry" por indicador. Os volumes da planilha podem ser completamente diferentes.
 
-#### 2. Barra de diferenca com opcoes de distribuicao
-Quando o usuario altera o faturamento de um mes, o sistema calcula a diferenca entre o total antigo e o novo da BU selecionada. Se houver diferenca, exibe uma barra flutuante (similar a da imagem do Plan Growth) com:
+**Correção**: Substituir os 4 valores do funil pelos mesmos analytics hooks que a aba Indicadores usa. Os dados já estão disponíveis:
+- Modelo Atual: `useModeloAtualAnalytics` (já instanciado como `modeloAtualAllCards`)
+- O2 TAX: `useO2TaxAnalytics` (não instanciado ainda — precisa adicionar)
+- Franquia: `useExpansaoAnalytics` (já instanciado)
+- Oxy Hacker: `useExpansaoAnalytics` (já instanciado)
 
-- **Informacao**: "Diferenca: +R$ 55.960 no O2 TAX" (ou valor negativo)
-- **Botao 1 - "Distribuir nos meses restantes"**: Divide a diferenca (com sinal invertido) igualmente entre todos os meses que NAO foram editados nesta sessao.
-- **Botao 2 - "Distribuir em periodo"**: Abre um popover/dropdown onde o usuario seleciona:
-  - Um quarter (Q1, Q2, Q3, Q4)
-  - Ou um range customizado (mes inicio -> mes fim)
-  - Ao confirmar, distribui a diferenca igualmente entre os meses do periodo selecionado (excluindo o mes que foi editado).
-- **Botao "Descartar"**: Reverte todas as alteracoes locais ao estado do banco.
+Porém, os hooks de Expansão e O2 TAX não estão sendo usados com `getCardsForIndicator` no `MarketingIndicatorsTab`. A solução mais simples e consistente:
 
-#### 3. Logica de distribuicao
-- A diferenca eh calculada como: `totalAnterior - totalAtual` da BU (antes vs depois da edicao).
-- Se a diferenca for positiva (usuario reduziu um mes), ela eh somada aos meses alvo.
-- Se for negativa (usuario aumentou um mes), ela eh subtraida dos meses alvo.
-- A distribuicao eh feita igualmente (diferenca / qtd meses alvo), com arredondamento e ajuste do residuo no ultimo mes.
-- O total da BU se mantem constante apos redistribuicao.
+1. Importar `useModeloAtualAnalytics`, `useO2TaxAnalytics`, `useExpansaoAnalytics` (já importados parcialmente)
+2. Criar um `useMemo` chamado `indicatorsVolumes` que soma `getCardsForIndicator('leads')`, `.length` etc. de cada BU — **mesma lógica exata** da aba Indicadores (`getRealizedForIndicator`)
+3. Passar esses valores para `AcquisitionFunnelChart` e também para `pipefyVolumes` (substituindo a contagem cumulativa atual que difere da contagem first-entry)
 
-#### 4. Rastreamento de edicoes manuais
-- Manter um `Set<string>` de meses editados manualmente na sessao atual.
-- "Meses restantes" = meses que NAO estao nesse set.
-- Apos distribuir, os meses que receberam ajuste NAO sao marcados como editados (permitindo redistribuicoes subsequentes).
+### Problema 2: Investimento por Canal incompleto
 
-### Detalhes tecnicos
+Atualmente `enrichedChannels` só tem Meta Ads, Google Ads e Eventos. O usuário quer a visão completa do comercial.
 
-**Arquivo**: `src/components/planning/MonetaryMetasTab.tsx`
+**Correção**: Adicionar canais "Orgânico / Direto" usando os dados já disponíveis via `channelSummaries` (que já calcula leads, MQLs, vendas e receita por canal a partir do Pipefy). Basta iterar os `channelSummaries` e adicionar ao `enrichedChannels` qualquer canal que não seja meta_ads, google_ads ou eventos (ex: `organico`).
 
-**Estado adicional**:
-```text
-editedMonths: Set<string>     -- meses tocados pelo usuario
-previousBuTotal: number       -- total da BU antes das edicoes
-showDistribution: boolean     -- controla visibilidade da barra
-distributionPeriod: 'remaining' | 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'custom'
-customRange: [MonthType, MonthType]
-```
+### Alterações em `src/components/planning/MarketingIndicatorsTab.tsx`
 
-**Barra de distribuicao**: Renderizada como um `div` fixo no bottom (estilo identico ao floating bar do Plan Growth), contendo:
-- Badge com a diferenca formatada
-- Botoes de acao
-- Popover para selecao de periodo (usando Select ou RadioGroup)
+1. **Importar `useO2TaxAnalytics`** (o único hook de analytics que falta)
+2. **Criar `indicatorsVolumes`**: memo que soma `.getCardsForIndicator(indicator).length` das 4 BUs para cada indicador (leads, mql, rm, rr, proposta, venda) — replicando a lógica de `getRealizedForIndicator` da aba Indicadores
+3. **Substituir `pipefyVolumes`** pela lógica de `indicatorsVolumes` (para custos por etapa e performance metrics também usarem os mesmos volumes)
+4. **Atualizar props do `AcquisitionFunnelChart`**: passar `indicatorsVolumes.leads`, `.mqls`, `.rms`, `.rrs` em vez dos valores da planilha
+5. **Enriquecer `enrichedChannels`** com canal "Orgânico / Direto" dos `channelSummaries` (investimento = 0, mas mostrando leads/MQLs/vendas)
 
-**Fluxo**:
-1. Usuario edita faturamento de Fev de R$ 135.960 para R$ 80.000
-2. Diferenca: R$ 55.960 (sobra para distribuir)
-3. Barra aparece: "1 alteracao | O2 TAX: +R$ 55.960"
-4. Usuario clica "Distribuir nos restantes" -> R$ 55.960 / 10 meses = R$ 5.596 adicionado a cada mes de Mar-Dez
-5. Ou clica "Distribuir em periodo" -> seleciona Q3 -> R$ 55.960 / 3 = R$ 18.653 em Jul, Ago, Set
-6. Total da BU permanece o mesmo de antes da edicao
+### Resultado esperado
+- Funil de Aquisição exibe os mesmos números que os radial cards da aba Indicadores
+- Investimento por Canal mostra todos os canais detectados no CRM, incluindo orgânico
+
+### Arquivos alterados
+- `src/components/planning/MarketingIndicatorsTab.tsx`
 
