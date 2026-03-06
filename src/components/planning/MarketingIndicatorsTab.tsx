@@ -353,40 +353,25 @@ export function MarketingIndicatorsTab() {
     return channels;
   }, [data.channels, channelSummaries, googleAdsApiTotals, metaAdsApiTotals]);
 
-  // Count real volumes from Pipefy attribution cards (source of truth)
+  // Count real volumes using the same First Entry logic as the Indicators tab
   const pipefyVolumes = useMemo(() => {
-    const PHASE_STAGE_MAP: Record<string, string> = {
-      'Novos Leads': 'leads',
-      'Start form': 'leads',
-      'MQLs': 'mqls',
-      'MQL': 'mqls',
-      'Tentativas de contato': 'mqls',
-      'Material ISCA': 'mqls',
-      'Reunião agendada / Qualificado': 'rms',
-      'Reunião Realizada': 'rrs',
-      '1° Reunião Realizada - Apresentação': 'rrs',
-      '1° Reunião Realizada': 'rrs',
-      'Proposta enviada / Follow Up': 'propostas',
-      'Enviar para assinatura': 'propostas',
-      'Contrato assinado': 'vendas',
-    };
-    const FUNNEL_ORDER = ['leads', 'mqls', 'rms', 'rrs', 'propostas', 'vendas'];
-
+    const indicators = ['leads', 'mql', 'rm', 'rr', 'proposta', 'venda'] as const;
     const counts = { leads: 0, mqls: 0, rms: 0, rrs: 0, propostas: 0, vendas: 0 };
-    const counted = new Set<string>();
+    const countKeys: Record<string, keyof typeof counts> = {
+      leads: 'leads', mql: 'mqls', rm: 'rms', rr: 'rrs', proposta: 'propostas', venda: 'vendas',
+    };
 
-    for (const card of allAttributionCards) {
-      if (counted.has(card.id)) continue;
-      counted.add(card.id);
-      const stage = PHASE_STAGE_MAP[card.fase] || 'leads';
-      const idx = FUNNEL_ORDER.indexOf(stage);
-      // Cumulative: a card at stage X counts for all stages up to X
-      for (let i = 0; i <= idx; i++) {
-        counts[FUNNEL_ORDER[i] as keyof typeof counts]++;
-      }
+    for (const ind of indicators) {
+      const key = countKeys[ind];
+      counts[key] += maGetCards(ind).length;
+      counts[key] += o2GetCards(ind).length;
+      counts[key] += franquiaGetCards(ind).length;
+      counts[key] += oxyGetCards(ind).length;
     }
+
+    console.log('[MarketingIndicatorsTab] indicatorsVolumes (First Entry):', counts);
     return counts;
-  }, [allAttributionCards]);
+  }, [maGetCards, o2GetCards, franquiaGetCards, oxyGetCards]);
 
   // Recalculate totals including enriched Google Ads data
   const enrichedTotals = useMemo(() => {
