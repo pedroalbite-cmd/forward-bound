@@ -262,7 +262,7 @@ export function MarketingIndicatorsTab() {
     }
     
     return result;
-  }, [modeloAtualAllCards, o2TaxCards, oxyHackerCards]);
+  }, [modeloAtualAllCards, franquiaCards, oxyHackerCards]);
 
   const { campaignFunnels, channelSummaries } = useMarketingAttribution(allAttributionCards, allCampaigns);
 
