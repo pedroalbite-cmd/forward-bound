@@ -448,8 +448,8 @@ export function MarketingIndicatorsTab() {
         <DetailSheet
           open={channelDrillDown.isOpen}
           onOpenChange={(open) => setChannelDrillDown({ isOpen: open, channel: open ? channelDrillDown.channel : null })}
-          title={`Leads — ${CHANNEL_LABELS[channelDrillDown.channel]}`}
-          description={`Cards do CRM atribuídos ao canal ${CHANNEL_LABELS[channelDrillDown.channel]}`}
+          title={`Vendas — ${CHANNEL_LABELS[channelDrillDown.channel]}`}
+          description={`Vendas fechadas atribuídas ao canal ${CHANNEL_LABELS[channelDrillDown.channel]}`}
           items={allAttributionCards
             .filter(card => {
               const resolved = detectChannel(card);
@@ -464,6 +464,7 @@ export function MarketingIndicatorsTab() {
               }
               return resolved === channelDrillDown.channel;
             })
+            .filter(card => card.fase === 'Contrato assinado')
             .map(card => ({
               id: card.id,
               name: card.titulo,
