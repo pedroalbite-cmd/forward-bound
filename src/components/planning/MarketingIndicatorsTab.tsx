@@ -573,7 +573,7 @@ export function MarketingIndicatorsTab() {
         ltv={data.ltv}
         ltvGoal={goals.ltv}
         investment={enrichedTotals.totalInvestment}
-        investmentGoal={goals.investment}
+        investmentGoal={finalInvestmentGoal}
       />
 
       {/* Investment & Funnel Charts */}
