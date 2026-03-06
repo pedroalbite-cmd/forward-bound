@@ -507,7 +507,7 @@ export function MarketingIndicatorsTab() {
                 data={costByChannel.map(c => ({
                   label: c.channelName,
                   value: c[costDrillDown.costKey as keyof typeof c] as number,
-                  highlight: (c[costDrillDown.costKey as keyof typeof c] as number) <= costGoals[costDrillDown.costKey] 
+                  highlight: (c[costDrillDown.costKey as keyof typeof c] as number) <= finalCostGoals[costDrillDown.costKey] 
                     ? 'success' as const 
                     : 'danger' as const,
                 }))}
