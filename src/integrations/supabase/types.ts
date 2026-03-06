@@ -77,6 +77,48 @@ export type Database = {
         }
         Relationships: []
       }
+      cost_stage_metas: {
+        Row: {
+          cpl: number
+          cpmql: number
+          cpp: number
+          cprm: number
+          cprr: number
+          cpv: number
+          created_at: string
+          id: string
+          month: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          cpl?: number
+          cpmql?: number
+          cpp?: number
+          cprm?: number
+          cprr?: number
+          cpv?: number
+          created_at?: string
+          id?: string
+          month: string
+          updated_at?: string
+          year?: number
+        }
+        Update: {
+          cpl?: number
+          cpmql?: number
+          cpp?: number
+          cprm?: number
+          cprr?: number
+          cpv?: number
+          created_at?: string
+          id?: string
+          month?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
       funnel_realized: {
         Row: {
           bu: string
