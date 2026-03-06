@@ -141,7 +141,7 @@ export function MarketingIndicatorsTab() {
       pontual += getOxyHackerValue('venda', dateRange.from, dateRange.to);
     }
     
-    return { mrr, setup, pontual, educacao, gmv: data.revenue.gmv };
+    return { mrr, setup, pontual, educacao, gmv: mrr + setup + pontual + educacao };
   }, [dateRange, selectedBUs, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod, getO2TaxMrr, getO2TaxSetup, getO2TaxPontual, getFranquiaValue, getOxyHackerValue, data.revenue]);
 
   // Fetch real card data from Pipefy for attribution
