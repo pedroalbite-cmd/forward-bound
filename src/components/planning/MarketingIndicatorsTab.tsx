@@ -18,6 +18,7 @@ import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { useConsolidatedMetas, type ConsolidatedMetricType } from "@/hooks/useConsolidatedMetas";
+import { useCostStageMetas } from "@/hooks/useCostStageMetas";
 import type { BuType } from "@/hooks/useMonetaryMetas";
 import { PerformanceGauges } from "./marketing-indicators/PerformanceGauges";
 import { InvestmentByChannelChart } from "./marketing-indicators/InvestmentByChannelChart";
@@ -64,6 +65,7 @@ export function MarketingIndicatorsTab() {
   // Use consolidated metas (same source as Indicators tab)
   const { getMetaForPeriod } = useConsolidatedMetas();
   const { funnelData } = useMediaMetas();
+  const { getCostGoalsForPeriod } = useCostStageMetas();
   const allBUs: BuType[] = ['modelo_atual', 'o2_tax', 'oxy_hacker', 'franquia'];
 
   const consolidatedRevenueGoals = useMemo(() => {
@@ -103,6 +105,11 @@ export function MarketingIndicatorsTab() {
   }, [consolidatedRevenueGoals, goals.revenue]);
 
   const finalCostGoals = useMemo(() => {
+    // Priority 1: DB cost stage metas
+    const dbCostGoals = getCostGoalsForPeriod(dateRange.from, dateRange.to);
+    if (dbCostGoals) return dbCostGoals;
+
+    // Priority 2: Calculate from investment / volume
     const f = consolidatedFunnelGoals;
     const inv = f.investment;
     if (inv <= 0) return costGoals;
@@ -114,7 +121,7 @@ export function MarketingIndicatorsTab() {
       cpp: f.propostas > 0 ? inv / f.propostas : costGoals.cpp,
       cpv: f.vendas > 0 ? inv / f.vendas : costGoals.cpv,
     };
-  }, [consolidatedFunnelGoals, costGoals]);
+  }, [getCostGoalsForPeriod, dateRange, consolidatedFunnelGoals, costGoals]);
 
   const finalInvestmentGoal = useMemo(() => {
     return consolidatedFunnelGoals.investment > 0 ? consolidatedFunnelGoals.investment : goals.investment;
