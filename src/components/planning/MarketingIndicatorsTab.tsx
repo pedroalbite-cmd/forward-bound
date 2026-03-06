@@ -60,6 +60,73 @@ export function MarketingIndicatorsTab() {
     selectedChannels,
   });
 
+  // Fetch monetary metas from DB (Admin panel)
+  const { metas: monetaryMetas } = useMonetaryMetas(2026);
+  const { funnelData } = useMediaMetas();
+
+  // Map date range to month strings and calculate consolidated goals
+  const selectedMonthStrings = useMemo(() => {
+    const months = eachMonthOfInterval({ start: dateRange.from, end: dateRange.to });
+    return months.map(d => MONTHS[getMonth(d)]);
+  }, [dateRange]);
+
+  const consolidatedRevenueGoals = useMemo(() => {
+    let mrr = 0, setup = 0, pontual = 0;
+    for (const meta of monetaryMetas) {
+      if (selectedMonthStrings.includes(meta.month)) {
+        mrr += Number(meta.mrr) || 0;
+        setup += Number(meta.setup) || 0;
+        pontual += Number(meta.pontual) || 0;
+      }
+    }
+    const gmv = mrr + setup + pontual;
+    return { mrr, setup, pontual, educacao: 0, gmv };
+  }, [monetaryMetas, selectedMonthStrings]);
+
+  const consolidatedFunnelGoals = useMemo(() => {
+    if (!funnelData) return { leads: 0, mqls: 0, rms: 0, rrs: 0, propostas: 0, vendas: 0, investment: 0 };
+    const allBUs = [funnelData.modeloAtual, funnelData.o2Tax, funnelData.oxyHacker, funnelData.franquia];
+    let leads = 0, mqls = 0, rms = 0, rrs = 0, propostas = 0, vendas = 0, investment = 0;
+    for (const buData of allBUs) {
+      for (const item of buData) {
+        if (selectedMonthStrings.includes(item.month)) {
+          leads += item.leads || 0;
+          mqls += item.mqls || 0;
+          rms += item.rms || 0;
+          rrs += item.rrs || 0;
+          propostas += item.propostas || 0;
+          vendas += item.vendas || 0;
+          investment += item.investimento || 0;
+        }
+      }
+    }
+    return { leads, mqls, rms, rrs, propostas, vendas, investment };
+  }, [funnelData, selectedMonthStrings]);
+
+  // Build final goals merging DB data over hardcoded defaults
+  const finalRevenueGoals = useMemo(() => {
+    const hasDbData = consolidatedRevenueGoals.gmv > 0;
+    return hasDbData ? consolidatedRevenueGoals : goals.revenue;
+  }, [consolidatedRevenueGoals, goals.revenue]);
+
+  const finalCostGoals = useMemo(() => {
+    const f = consolidatedFunnelGoals;
+    const inv = f.investment;
+    if (inv <= 0) return costGoals;
+    return {
+      cpl: f.leads > 0 ? inv / f.leads : costGoals.cpl,
+      cpmql: f.mqls > 0 ? inv / f.mqls : costGoals.cpmql,
+      cprm: f.rms > 0 ? inv / f.rms : costGoals.cprm,
+      cprr: f.rrs > 0 ? inv / f.rrs : costGoals.cprr,
+      cpp: f.propostas > 0 ? inv / f.propostas : costGoals.cpp,
+      cpv: f.vendas > 0 ? inv / f.vendas : costGoals.cpv,
+    };
+  }, [consolidatedFunnelGoals, costGoals]);
+
+  const finalInvestmentGoal = useMemo(() => {
+    return consolidatedFunnelGoals.investment > 0 ? consolidatedFunnelGoals.investment : goals.investment;
+  }, [consolidatedFunnelGoals, goals.investment]);
+
   // Fetch Meta Ads campaigns data
   const { 
     data: metaCampaigns, 
