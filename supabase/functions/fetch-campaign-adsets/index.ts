@@ -193,7 +193,7 @@ serve(async (req) => {
 
     // Check cache first
     const cacheKey = `adsets:${campaignId}:${startDate}:${endDate}`;
-    const cachedResult = await getCachedData(supabase, cacheKey);
+    const cachedResult = await getCachedData(supabase, cacheKey, true);
 
     if (cachedResult && !cachedResult.isStale) {
       console.log(`Cache HIT for ${cacheKey}`);
