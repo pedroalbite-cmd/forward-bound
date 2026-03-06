@@ -241,7 +241,7 @@ export function MarketingIndicatorsTab() {
       });
     }
     
-    for (const c of o2TaxCards) {
+    for (const c of franquiaCards) {
       result.push({
         id: c.id, titulo: c.titulo, campanha: c.campanha, conjuntoGrupo: c.conjuntoGrupo,
         fonte: c.fonte, fbclid: c.fbclid, gclid: c.gclid, tipoOrigem: c.tipoOrigem,
