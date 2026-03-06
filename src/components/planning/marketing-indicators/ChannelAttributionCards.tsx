@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { ChannelSummary, CHANNEL_LABELS, ChannelId } from "./types";
-import { TrendingUp, Users, ShoppingCart, DollarSign } from "lucide-react";
+import { TrendingUp, Users, ShoppingCart, DollarSign, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const CHANNEL_ICONS: Record<ChannelId, string> = {
   meta_ads: '📘',
@@ -19,7 +20,19 @@ export function ChannelAttributionCards({ summaries }: ChannelAttributionCardsPr
 
   return (
     <div className="space-y-3">
-      <h3 className="text-lg font-semibold">Atribuição por Canal (Dados Reais)</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-lg font-semibold">Atribuição por Canal (Dados Reais)</h3>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent side="right" className="max-w-xs">
+              <p>Dados do CRM — leads atribuídos ao canal com base na origem cadastrada</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {summaries.map((s) => (
           <Card key={s.channel}>
@@ -31,7 +44,7 @@ export function ChannelAttributionCards({ summaries }: ChannelAttributionCardsPr
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="flex items-center gap-1.5">
                   <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-muted-foreground">Leads</span>
+                  <span className="text-muted-foreground">Leads (CRM)</span>
                   <span className="font-semibold ml-auto">{s.leads}</span>
                 </div>
                 <div className="flex items-center gap-1.5">

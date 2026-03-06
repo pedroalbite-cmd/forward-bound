@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MarketingChannel } from "./types";
-import { Target } from "lucide-react";
+import { Target, Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ChannelMetricsCardsProps {
   channels: MarketingChannel[];
@@ -30,7 +31,19 @@ export function ChannelMetricsCards({ channels, totalInvestment, totalLeads }: C
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-foreground">Mídia e Leads por Canal</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-lg font-semibold text-foreground">Mídia e Leads por Canal</h3>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent side="right" className="max-w-xs">
+              <p>Dados da API do Meta/Google Ads — leads registrados pela plataforma de anúncios</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {channels.map((ch) => {
           const style = CHANNEL_STYLES[ch.id] || { color: 'border-l-muted-foreground', emoji: '📊' };
@@ -48,7 +61,7 @@ export function ChannelMetricsCards({ channels, totalInvestment, totalLeads }: C
                   <span className="font-semibold text-foreground">{formatCurrency(ch.investment)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-muted-foreground">Leads</span>
+                  <span className="text-xs text-muted-foreground">Leads (Plataforma)</span>
                   <span className="font-semibold text-foreground">{formatNumber(ch.leads)}</span>
                 </div>
                 <div className="flex justify-between items-center">
@@ -74,7 +87,7 @@ export function ChannelMetricsCards({ channels, totalInvestment, totalLeads }: C
               <span className="font-bold text-primary">{formatCurrency(totalInvestment)}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-xs text-muted-foreground">Leads Totais</span>
+              <span className="text-xs text-muted-foreground">Leads Totais (Plataforma)</span>
               <span className="font-bold text-primary">{formatNumber(totalLeads)}</span>
             </div>
             <div className="flex justify-between items-center">
