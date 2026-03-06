@@ -139,6 +139,12 @@ export function MarketingIndicatorsTab() {
   }, [dateRange, selectedBUs, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod, getO2TaxMrr, getO2TaxSetup, getO2TaxPontual, data.revenue]);
 
 
+  // Fetch Expansão (Franquia) revenue data from Pipefy
+  const { getValueForPeriod: getFranquiaValue } = useExpansaoMetas(dateRange.from, dateRange.to);
+
+  // Fetch Oxy Hacker revenue data from Pipefy
+  const { getValueForPeriod: getOxyHackerValue } = useOxyHackerMetas(dateRange.from, dateRange.to);
+
   // Fetch real card data from Pipefy for attribution
   const { allCards: modeloAtualAllCards, isLoading: isLoadingMACards } = useModeloAtualAnalytics(dateRange.from, dateRange.to);
   const { cards: o2TaxCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Franquia');
