@@ -350,6 +350,32 @@ export function MarketingIndicatorsTab() {
         cpv: 0,
       });
     }
+
+    // Add Orgânico / Direto channel from Pipefy attribution
+    const organicoSummary = channelSummaries.find(s => s.channel === 'organico');
+    if (organicoSummary && (organicoSummary.leads > 0 || organicoSummary.mqls > 0 || organicoSummary.vendas > 0)) {
+      channels.push({
+        id: 'organico',
+        name: 'Orgânico / Direto',
+        investment: 0,
+        leads: organicoSummary.leads,
+        mqls: organicoSummary.mqls,
+        rms: 0,
+        rrs: 0,
+        cpl: 0,
+        cpmql: 0,
+        conversionRate: organicoSummary.leads > 0
+          ? Math.round((organicoSummary.mqls / organicoSummary.leads) * 100)
+          : 0,
+        propostas: 0,
+        vendas: organicoSummary.vendas,
+        cprm: 0,
+        cprr: 0,
+        cpp: 0,
+        cpv: 0,
+      });
+    }
+
     return channels;
   }, [data.channels, channelSummaries, googleAdsApiTotals, metaAdsApiTotals]);
 
