@@ -272,13 +272,17 @@ export function MarketingIndicatorsTab() {
   const enrichedTotals = useMemo(() => {
     const googleChannel = enrichedChannels.find(c => c.id === 'google_ads');
     const sheetGoogleChannel = data.channels.find(c => c.id === 'google_ads');
+    const metaChannel = enrichedChannels.find(c => c.id === 'meta_ads');
+    const sheetMetaChannel = data.channels.find(c => c.id === 'meta_ads');
     
-    // If we enriched Google Ads with API data, adjust totals
+    // Calculate deltas for both Google and Meta
     const googleDeltaInvestment = (googleChannel?.investment || 0) - (sheetGoogleChannel?.investment || 0);
     const googleDeltaLeads = (googleChannel?.leads || 0) - (sheetGoogleChannel?.leads || 0);
+    const metaDeltaInvestment = (metaChannel?.investment || 0) - (sheetMetaChannel?.investment || 0);
+    const metaDeltaLeads = (metaChannel?.leads || 0) - (sheetMetaChannel?.leads || 0);
     
-    const totalInvestment = data.totalInvestment + googleDeltaInvestment;
-    const totalLeads = data.totalLeads + googleDeltaLeads;
+    const totalInvestment = data.totalInvestment + googleDeltaInvestment + metaDeltaInvestment;
+    const totalLeads = data.totalLeads + googleDeltaLeads + metaDeltaLeads;
     
     // Recalculate cost per stage with updated investment
     const costPerStage: CostPerStage = {
