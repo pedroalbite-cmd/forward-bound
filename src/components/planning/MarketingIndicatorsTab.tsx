@@ -105,9 +105,11 @@ export function MarketingIndicatorsTab() {
   const realRevenue = useMemo(() => {
     const includesModeloAtual = selectedBUs.includes('Modelo Atual');
     const includesO2Tax = selectedBUs.includes('O2 TAX');
+    const includesOxyHacker = selectedBUs.includes('Oxy Hacker');
+    const includesFranquia = selectedBUs.includes('Franquia');
     
     // If no BU with real data is selected, fallback to sheet data
-    if (!includesModeloAtual && !includesO2Tax) {
+    if (!includesModeloAtual && !includesO2Tax && !includesOxyHacker && !includesFranquia) {
       return data.revenue;
     }
     
@@ -126,7 +128,16 @@ export function MarketingIndicatorsTab() {
       mrr += getO2TaxMrr(dateRange.from, dateRange.to);
       setup += getO2TaxSetup(dateRange.from, dateRange.to);
       pontual += getO2TaxPontual(dateRange.from, dateRange.to);
-      // O2 TAX doesn't have Educação
+    }
+    
+    // Add Franquia values (pontual only)
+    if (includesFranquia) {
+      pontual += getFranquiaValue('venda', dateRange.from, dateRange.to);
+    }
+    
+    // Add Oxy Hacker values (pontual only)
+    if (includesOxyHacker) {
+      pontual += getOxyHackerValue('venda', dateRange.from, dateRange.to);
     }
     
     return {
@@ -134,9 +145,9 @@ export function MarketingIndicatorsTab() {
       setup,
       pontual,
       educacao,
-      gmv: data.revenue.gmv, // GMV still comes from the sheet (not available in Pipefy)
+      gmv: data.revenue.gmv,
     };
-  }, [dateRange, selectedBUs, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod, getO2TaxMrr, getO2TaxSetup, getO2TaxPontual, data.revenue]);
+  }, [dateRange, selectedBUs, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod, getO2TaxMrr, getO2TaxSetup, getO2TaxPontual, getFranquiaValue, getOxyHackerValue, data.revenue]);
 
 
   // Fetch Expansão (Franquia) revenue data from Pipefy
