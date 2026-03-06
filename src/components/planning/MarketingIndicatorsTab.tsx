@@ -492,11 +492,11 @@ export function MarketingIndicatorsTab() {
                   <p className="text-xs text-muted-foreground">vs Meta</p>
                   <p className={cn(
                     "text-xl font-bold",
-                    data.costPerStage[costDrillDown.costKey] <= costGoals[costDrillDown.costKey] 
+                    data.costPerStage[costDrillDown.costKey] <= finalCostGoals[costDrillDown.costKey] 
                       ? "text-chart-2" 
                       : "text-destructive"
                   )}>
-                    {((enrichedTotals.costPerStage[costDrillDown.costKey] / costGoals[costDrillDown.costKey]) * 100).toFixed(0)}%
+                    {((enrichedTotals.costPerStage[costDrillDown.costKey] / finalCostGoals[costDrillDown.costKey]) * 100).toFixed(0)}%
                   </p>
                 </div>
               </div>
