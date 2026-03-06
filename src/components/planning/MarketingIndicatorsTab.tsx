@@ -222,9 +222,10 @@ export function MarketingIndicatorsTab() {
   }, [dateRange, selectedBUs, getMrrForPeriod, getSetupForPeriod, getPontualForPeriod, getEducacaoForPeriod, getO2TaxMrr, getO2TaxSetup, getO2TaxPontual, getFranquiaValue, getOxyHackerValue, data.revenue]);
 
   // Fetch real card data from Pipefy for attribution
-  const { allCards: modeloAtualAllCards, isLoading: isLoadingMACards } = useModeloAtualAnalytics(dateRange.from, dateRange.to);
-  const { cards: o2TaxCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Franquia');
-  const { cards: oxyHackerCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Oxy Hacker');
+  const { allCards: modeloAtualAllCards, isLoading: isLoadingMACards, getCardsForIndicator: maGetCards } = useModeloAtualAnalytics(dateRange.from, dateRange.to);
+  const { getCardsForIndicator: o2GetCards } = useO2TaxAnalytics(dateRange.from, dateRange.to);
+  const { cards: franquiaCards, getCardsForIndicator: franquiaGetCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Franquia');
+  const { cards: oxyHackerCards, getCardsForIndicator: oxyGetCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Oxy Hacker');
 
   // Build attribution cards from all BUs
   const allAttributionCards = useMemo((): AttributionCard[] => {
