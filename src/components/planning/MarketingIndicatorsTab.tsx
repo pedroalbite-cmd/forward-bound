@@ -65,7 +65,7 @@ export function MarketingIndicatorsTab() {
   const { funnelData } = useMediaMetas();
 
   // Map date range to month strings and calculate consolidated goals
-  const selectedMonthStrings = useMemo(() => {
+  const selectedMonthStrings = useMemo((): string[] => {
     const months = eachMonthOfInterval({ start: dateRange.from, end: dateRange.to });
     return months.map(d => MONTHS[getMonth(d)]);
   }, [dateRange]);
