@@ -16,7 +16,7 @@ import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { useMarketingAttribution } from "@/hooks/useMarketingAttribution";
 import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
 import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
-import { useMonetaryMetas, MONTHS } from "@/hooks/useMonetaryMetas";
+import { useMonetaryMetas, MONTHS, type MonthType } from "@/hooks/useMonetaryMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { PerformanceGauges } from "./marketing-indicators/PerformanceGauges";
 import { InvestmentByChannelChart } from "./marketing-indicators/InvestmentByChannelChart";
