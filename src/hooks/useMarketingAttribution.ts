@@ -175,13 +175,25 @@ export function useMarketingAttribution(
         if (apiCampaign) campaignId = apiCampaign.id;
       }
       
-      const investimento = apiCampaign?.investment || 0;
+      // Reclassify channel: if card was "organico" but matched a paid API campaign, fix the channel
+      let resolvedChannel = data.channel;
+      if (apiCampaign && data.channel === 'organico') {
+        const apiChannel = (apiCampaign.channel || '').toLowerCase();
+        if (apiChannel.includes('meta') || apiChannel.includes('facebook')) {
+          resolvedChannel = 'meta_ads';
+        } else if (apiChannel.includes('google')) {
+          resolvedChannel = 'google_ads';
+        }
+      }
+      
+      // Organic/direct channels have no media investment by definition
+      const investimento = resolvedChannel === 'organico' ? 0 : (apiCampaign?.investment || 0);
       const receita = data.receita;
       
       funnels.push({
         campaignName: apiCampaign?.name || name,
         campaignId,
-        channel: data.channel,
+        channel: resolvedChannel,
         leads: data.leads.size,
         mqls: data.mqls.size,
         rms: data.rms.size,
