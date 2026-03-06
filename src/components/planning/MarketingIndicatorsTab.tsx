@@ -479,7 +479,7 @@ export function MarketingIndicatorsTab() {
                 <div className="bg-muted/50 p-4 rounded-lg text-center">
                   <p className="text-xs text-muted-foreground">Meta</p>
                   <p className="text-xl font-bold">
-                    R$ {costGoals[costDrillDown.costKey].toLocaleString('pt-BR')}
+                    R$ {finalCostGoals[costDrillDown.costKey].toLocaleString('pt-BR')}
                   </p>
                 </div>
                 <div className="bg-muted/50 p-4 rounded-lg text-center">
