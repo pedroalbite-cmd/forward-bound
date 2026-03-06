@@ -14,6 +14,8 @@ import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { useMarketingAttribution } from "@/hooks/useMarketingAttribution";
+import { useExpansaoMetas } from "@/hooks/useExpansaoMetas";
+import { useOxyHackerMetas } from "@/hooks/useOxyHackerMetas";
 import { PerformanceGauges } from "./marketing-indicators/PerformanceGauges";
 import { InvestmentByChannelChart } from "./marketing-indicators/InvestmentByChannelChart";
 import { AcquisitionFunnelChart } from "./marketing-indicators/AcquisitionFunnelChart";
