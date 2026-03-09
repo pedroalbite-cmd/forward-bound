@@ -287,8 +287,10 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       
       // Parse signature-date cards (captures sales signed in period but moved later in Pipefy)
       let signatureCards: ModeloAtualCard[] = [];
+      let signatureCardsUnfiltered: ModeloAtualCard[] = [];
       if (signatureResponse.data?.data) {
         signatureCards = parseCards(signatureResponse.data.data);
+        signatureCardsUnfiltered = parseCards(signatureResponse.data.data, true);
         console.log(`[useModeloAtualAnalytics] Cards signed in period: ${signatureCards.length}`);
       } else if (signatureResponse.error) {
         console.error('[useModeloAtualAnalytics] Error fetching signature data:', signatureResponse.error);
@@ -300,6 +302,15 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         if (!existingKeys.has(`${sc.id}|${sc.fase}`)) {
           cards.push(sc);
           existingKeys.add(`${sc.id}|${sc.fase}`);
+        }
+      }
+      
+      // Merge signature cards into allCardsUnfiltered (deduplicate by id)
+      const existingUnfilteredIds = new Set(allCardsUnfiltered.map(c => c.id));
+      for (const sc of signatureCardsUnfiltered) {
+        if (!existingUnfilteredIds.has(sc.id)) {
+          allCardsUnfiltered.push(sc);
+          existingUnfilteredIds.add(sc.id);
         }
       }
 
