@@ -638,17 +638,16 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
                         <TableHead className="w-8"></TableHead>
                         <TableHead className="w-14">Preview</TableHead>
                         <TableHead>Nome</TableHead>
-                        <TableHead className="text-right">Leads</TableHead>
                         <TableHead className="text-right">Gasto</TableHead>
+                        <TableHead className="text-right">Leads</TableHead>
                         <TableHead className="text-right">CPL</TableHead>
-                        <TableHead className="text-right">CPA</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right border-l">Leads (CRM)</TableHead>
-                        <TableHead className="text-right">MQLs</TableHead>
-                        <TableHead className="text-right">Vendas</TableHead>
-                        <TableHead className="text-right">Receita</TableHead>
-                        <TableHead className="text-right">TCV</TableHead>
-                        <TableHead className="text-right">ROI</TableHead>
+                        <TableHead className="text-right border-l">MQL</TableHead>
+                        <TableHead className="text-right">CPMQL</TableHead>
+                        <TableHead className="text-right">RM</TableHead>
+                        <TableHead className="text-right">RR</TableHead>
+                        <TableHead className="text-right">PE</TableHead>
+                        <TableHead className="text-right">Venda</TableHead>
+                        <TableHead className="text-right">ROAS</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
