@@ -742,10 +742,14 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     return totalMinutes / slaCards.length;
   }, [cards]);
 
+  // Expose all raw cards (including signature-merged) for marketing attribution
+  const allCards = cards;
+
   return {
     isLoading,
     error,
     cards,
+    allCards,
     getCardsByPhase,
     getDealsInProgress,
     getDealsWon,
