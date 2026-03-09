@@ -304,11 +304,9 @@ function AdRow({ ad, onPreview }: { ad: AdData; onPreview: (data: PreviewModalDa
           )}
         </div>
       </TableCell>
-      <TableCell className="text-right text-xs">{formatNumber(ad.leads)}</TableCell>
       <TableCell className="text-right text-xs">{formatCurrency(ad.spend)}</TableCell>
+      <TableCell className="text-right text-xs">{formatNumber(ad.leads)}</TableCell>
       <TableCell className="text-right text-xs">{ad.cpl > 0 ? formatCurrency(ad.cpl) : '-'}</TableCell>
-      <TableCell className="text-right text-xs">{ad.cpa > 0 ? formatCurrency(ad.cpa) : '-'}</TableCell>
-      <TableCell>{getStatusBadge(ad.status)}</TableCell>
       <CrmCells funnel={undefined} size="sm" />
     </TableRow>
   );
