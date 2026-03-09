@@ -15,14 +15,12 @@ function inferTipoOrigem(card: AttributionCard): string {
   const fonte = (card.fonte || '').toLowerCase().trim();
   const origem = (card.origemLead || '').toLowerCase();
 
-  if (fonte.includes('evento') || origem.includes('evento') || fonte.includes('g4') || origem.includes('g4')) return 'Evento';
-  if (card.fbclid) return 'Mídia Paga';
-  if (card.campanha && isMetaCampaignId(card.campanha)) return 'Mídia Paga';
-  if (['ig', 'fb'].includes(fonte) || fonte.includes('facebook') || fonte.includes('instagram') || fonte.includes('meta')) return 'Mídia Paga';
-  if (card.gclid) return 'Mídia Paga';
-  if (fonte === 'googleads' || fonte.includes('google')) return 'Mídia Paga';
-  if (origem.includes('indica')) return 'Indicação';
-  if (fonte.includes('site') || fonte.includes('organic') || fonte.includes('orgânico') || fonte.includes('organico')) return 'Orgânico';
+  if (fonte.includes('evento') || origem.includes('evento') || fonte.includes('g4') || origem.includes('g4')) return 'Eventos';
+  if (card.fbclid || (card.campanha && isMetaCampaignId(card.campanha))) return 'Site/Redes Sociais';
+  if (['ig', 'fb'].includes(fonte) || fonte.includes('facebook') || fonte.includes('instagram') || fonte.includes('meta')) return 'Site/Redes Sociais';
+  if (card.gclid || fonte === 'googleads' || fonte.includes('google')) return 'Site/Redes Sociais';
+  if (origem.includes('indica')) return 'Indicação Cliente';
+  if (fonte.includes('site') || fonte.includes('organic') || fonte.includes('orgânico') || fonte.includes('organico')) return 'Site/Redes Sociais';
 
   return 'Outros';
 }
