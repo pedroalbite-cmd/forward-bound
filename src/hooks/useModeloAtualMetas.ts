@@ -45,6 +45,7 @@ export const MQL_EXCLUDED_LOSS_REASONS = [
   'Buscando parceria',
   'Quer soluções para cliente',
   'Não é MQL, mas entrou como MQL',
+  'Email/Telefone inválido',
 ];
 
 // Verifica se o card deve ser excluído da contagem de MQL por estar perdido com motivo específico
