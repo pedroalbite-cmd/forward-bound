@@ -159,15 +159,7 @@ export default function Planning2026() {
               </TabsContent>
 
               <TabsContent value="indicators" className="mt-0">
-                <IndicatorsTab />
-              </TabsContent>
-
-              <TabsContent value="marketing_indicators" className="mt-0">
-                <MarketingIndicatorsTab />
-              </TabsContent>
-
-              <TabsContent value="nps" className="mt-0">
-                <NpsTab />
+                <IndicatorsWrapper />
               </TabsContent>
 
               <TabsContent value="marketing" className="mt-0">

@@ -39,9 +39,17 @@ export function useUserPermissions(userId: string | undefined) {
   });
 
   // Admins have access to all tabs
+  const allAdminTabs: TabKey[] = ['context', 'goals', 'monthly', 'media', 'marketing', 'structure', 'admin', 'indicators'];
+  
+  // Map marketing_indicators and nps permissions to indicators tab access
+  const rawPermissions = permissions || [];
+  const mappedPermissions = rawPermissions.includes('marketing_indicators') || rawPermissions.includes('nps')
+    ? [...new Set([...rawPermissions, 'indicators' as TabKey])]
+    : rawPermissions;
+  
   const allowedTabs: TabKey[] = isAdmin 
-    ? ['context', 'goals', 'monthly', 'media', 'marketing', 'structure', 'admin', 'indicators', 'marketing_indicators', 'nps']
-    : permissions || [];
+    ? allAdminTabs
+    : mappedPermissions.filter(t => !['marketing_indicators', 'nps'].includes(t));
 
   return {
     allowedTabs,
