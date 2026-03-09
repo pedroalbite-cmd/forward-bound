@@ -144,6 +144,25 @@ export function useMarketingAttribution(
         }
       }
     }
+    // Fallback: resolve name from the lightweight names map (archived/deleted campaigns)
+    if (!apiCampaign && campaignNamesMap && isMetaCampaignId(name)) {
+      const resolvedName = campaignNamesMap.get(name.trim());
+      if (resolvedName) {
+        // Create a stub CampaignData with the resolved name
+        apiCampaign = {
+          id: name.trim(),
+          name: resolvedName,
+          channel: 'Meta Ads',
+          status: 'ended',
+          investment: 0,
+          leads: 0,
+          mqls: 0,
+          roas: 0,
+          startDate: '',
+        };
+        campaignId = name.trim();
+      }
+    }
     return { apiCampaign, campaignId };
   };
 
