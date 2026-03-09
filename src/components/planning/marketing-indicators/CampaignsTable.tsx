@@ -18,6 +18,7 @@ interface CampaignsTableProps {
   campaigns: CampaignData[];
   campaignFunnels?: CampaignFunnel[];
   adSetFunnels?: Map<string, CampaignFunnel>;
+  adCreativeFunnels?: Map<string, CampaignFunnel>;
   isLoading?: boolean;
   error?: Error | null;
   startDate: Date;
