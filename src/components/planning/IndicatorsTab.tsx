@@ -2423,6 +2423,37 @@ export function IndicatorsTab() {
         </p>
       </div>
 
+      {/* Cards - Quantity Indicators */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+        {indicatorConfigs.map((indicator) => (
+          <RadialProgressCard 
+            key={indicator.key} 
+            title={indicator.label} 
+            realized={getRealizedForIndicator(indicator)} 
+            meta={getMetaForIndicator(indicator)} 
+            isClickable={true}
+            isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading}
+            onClick={() => handleRadialCardClick(indicator)}
+          />
+        ))}
+      </div>
+
+      {/* Cards - Monetary Indicators */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+        {monetaryIndicatorConfigs.map((indicator) => (
+          <MonetaryRadialCard 
+            key={indicator.key} 
+            title={indicator.label} 
+            realized={getRealizedMonetaryForIndicator(indicator)} 
+            meta={getMetaMonetaryForIndicator(indicator)}
+            format={indicator.format}
+            isClickable={true}
+            isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading}
+            onClick={() => handleMonetaryCardClick(indicator)}
+          />
+        ))}
+      </div>
+
       {/* Revenue Pace Chart */}
       {(() => {
         const today = new Date();
@@ -2544,37 +2575,6 @@ export function IndicatorsTab() {
           />
         );
       })()}
-
-      {/* Cards - Quantity Indicators */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-        {indicatorConfigs.map((indicator) => (
-          <RadialProgressCard 
-            key={indicator.key} 
-            title={indicator.label} 
-            realized={getRealizedForIndicator(indicator)} 
-            meta={getMetaForIndicator(indicator)} 
-            isClickable={true}
-            isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading}
-            onClick={() => handleRadialCardClick(indicator)}
-          />
-        ))}
-      </div>
-
-      {/* Cards - Monetary Indicators */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-        {monetaryIndicatorConfigs.map((indicator) => (
-          <MonetaryRadialCard 
-            key={indicator.key} 
-            title={indicator.label} 
-            realized={getRealizedMonetaryForIndicator(indicator)} 
-            meta={getMetaMonetaryForIndicator(indicator)}
-            format={indicator.format}
-            isClickable={true}
-            isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading}
-            onClick={() => handleMonetaryCardClick(indicator)}
-          />
-        ))}
-      </div>
 
       {/* New Charts - MQLs, Leads and Funnel */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

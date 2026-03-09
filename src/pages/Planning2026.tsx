@@ -10,14 +10,12 @@ import { MarketingPlanTab } from "@/components/planning/MarketingPlanTab";
 import { StructureTab } from "@/components/planning/StructureTab";
 
 import { AdminTab } from "@/components/planning/AdminTab";
-import { IndicatorsTab } from "@/components/planning/IndicatorsTab";
-import { MarketingIndicatorsTab } from "@/components/planning/MarketingIndicatorsTab";
-import { NpsTab } from "@/components/planning/NpsTab";
+import { IndicatorsWrapper } from "@/components/planning/IndicatorsWrapper";
 import { PlanGrowthDataLoader } from "@/components/planning/PlanGrowthDataLoader";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserPermissions, TabKey } from "@/hooks/useUserPermissions";
 import { MediaMetasProvider } from "@/contexts/MediaMetasContext";
-import { Calendar, BarChart3, LineChart, Megaphone, Lightbulb, Users, Target, Settings, LogOut, User, Loader2, EyeOff, Eye, Activity, TrendingUp, SmilePlus } from "lucide-react";
+import { Calendar, BarChart3, LineChart, Megaphone, Lightbulb, Users, Settings, LogOut, User, Loader2, EyeOff, Eye, Activity } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { O2Logo } from "@/components/O2Logo";
 import { Separator } from "@/components/ui/separator";
@@ -29,8 +27,6 @@ const TAB_CONFIG: { key: TabKey; label: string; icon: React.ComponentType<{ clas
   
   { key: 'media', label: 'Plan Growth', icon: Megaphone },
   { key: 'indicators', label: 'Indicadores', icon: Activity },
-  { key: 'marketing_indicators', label: 'Mkt Indicadores', icon: TrendingUp },
-  { key: 'nps', label: 'NPS', icon: SmilePlus },
   { key: 'marketing', label: 'Marketing', icon: Lightbulb },
   { key: 'structure', label: 'Estrutura', icon: Users },
   { key: 'admin', label: 'Admin', icon: Settings },
@@ -163,15 +159,7 @@ export default function Planning2026() {
               </TabsContent>
 
               <TabsContent value="indicators" className="mt-0">
-                <IndicatorsTab />
-              </TabsContent>
-
-              <TabsContent value="marketing_indicators" className="mt-0">
-                <MarketingIndicatorsTab />
-              </TabsContent>
-
-              <TabsContent value="nps" className="mt-0">
-                <NpsTab />
+                <IndicatorsWrapper />
               </TabsContent>
 
               <TabsContent value="marketing" className="mt-0">
