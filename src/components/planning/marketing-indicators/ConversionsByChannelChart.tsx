@@ -27,6 +27,30 @@ function inferTipoOrigem(card: AttributionCard): string {
   return 'Outros';
 }
 
+const FONTE_LABELS: Record<string, string> = {
+  ig: 'Instagram',
+  fb: 'Facebook',
+  googleads: 'Google Ads',
+  site: 'Site',
+  organic: 'Orgânico',
+  'orgânico': 'Orgânico',
+  organico: 'Orgânico',
+};
+
+function inferOrigemLead(card: AttributionCard): string {
+  const raw = card.origemLead?.trim();
+  if (raw) return raw;
+
+  const fonte = (card.fonte || '').toLowerCase().trim();
+  if (fonte && FONTE_LABELS[fonte]) return FONTE_LABELS[fonte];
+  if (card.campanha && isMetaCampaignId(card.campanha)) return 'Meta Ads';
+  if (card.fbclid) return 'Facebook Ads';
+  if (card.gclid) return 'Google Ads';
+  if (fonte) return fonte.charAt(0).toUpperCase() + fonte.slice(1);
+
+  return '(Sem origem)';
+}
+
 const PHASE_FUNNEL_MAP: Record<string, string> = {
   'Novos Leads': 'leads',
   'Start form': 'leads',
@@ -81,7 +105,7 @@ export function ConversionsByChannelChart({ cards }: ConversionsByChannelChartPr
       if (!existing || FUNNEL_ORDER.indexOf(stage) > FUNNEL_ORDER.indexOf(existing.stage)) {
         cardBest.set(card.id, {
           tipoOrigem: inferTipoOrigem(card),
-          origemLead: card.origemLead?.trim() || '(Sem origem)',
+          origemLead: inferOrigemLead(card),
           stage,
         });
       }
