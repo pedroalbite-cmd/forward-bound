@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { cn } from "@/lib/utils";
 import { DateRangePickerGA } from "./DateRangePickerGA";
 import { useMarketingIndicators } from "@/hooks/useMarketingIndicators";
-import { useMetaCampaigns } from "@/hooks/useMetaCampaigns";
+import { useMetaCampaigns, useMetaCampaignNames } from "@/hooks/useMetaCampaigns";
 import { useGoogleCampaigns } from "@/hooks/useGoogleCampaigns";
 import { useModeloAtualMetas } from "@/hooks/useModeloAtualMetas";
 import { useO2TaxMetas } from "@/hooks/useO2TaxMetas";
@@ -268,7 +268,10 @@ export function MarketingIndicatorsTab() {
     return result;
   }, [modeloAtualAllCards, franquiaCards, o2TaxAllCards]);
 
-  const { campaignFunnels, channelSummaries, adSetFunnels, adCreativeFunnels } = useMarketingAttribution(allAttributionCards, allCampaigns);
+  // Resolve archived/deleted campaign names for attribution
+  const { data: campaignNamesMap } = useMetaCampaignNames();
+
+  const { campaignFunnels, channelSummaries, adSetFunnels, adCreativeFunnels } = useMarketingAttribution(allAttributionCards, allCampaigns, campaignNamesMap);
 
   // Aggregate Google Ads API totals for enrichment
   const googleAdsApiTotals = useMemo(() => {

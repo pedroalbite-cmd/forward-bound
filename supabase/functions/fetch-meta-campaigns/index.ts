@@ -153,6 +153,36 @@ async function enrichCampaignsWithBatchAPI(
   return enrichedCampaigns;
 }
 
+// Fetch ALL campaign IDs and names (no status filter) with pagination
+async function fetchAllCampaignNames(
+  formattedAccountId: string,
+  accessToken: string
+): Promise<Record<string, string>> {
+  const names: Record<string, string> = {};
+  let url = `${META_BASE_URL}/${formattedAccountId}/campaigns?fields=id,name&limit=100&access_token=${accessToken}`;
+
+  while (url) {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.error) {
+      console.error("Meta API error (resolve-names):", data.error);
+      throw new Error(data.error.message || "Erro ao buscar nomes de campanhas");
+    }
+
+    for (const campaign of (data.data || [])) {
+      names[campaign.id] = campaign.name;
+    }
+
+    // Follow pagination cursor
+    url = data.paging?.next || "";
+  }
+
+  return names;
+}
+
+const NAMES_CACHE_TTL_MINUTES = 60 * 24; // 24 hours
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -171,9 +201,7 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { startDate, endDate } = body;
-
-    console.log("Fetching Meta campaigns:", { startDate, endDate, adAccountId });
+    const { startDate, endDate, action } = body;
 
     // Ensure ad account ID has proper format
     const formattedAccountId = adAccountId.startsWith('act_') 
@@ -182,6 +210,43 @@ serve(async (req) => {
 
     // Initialize Supabase client
     const supabase = getSupabaseClient();
+
+    // ── ACTION: resolve-names (lightweight, no enrichment) ──
+    if (action === "resolve-names") {
+      const cacheKey = `campaign-names:${formattedAccountId}`;
+      const cachedNames = await getCachedData(supabase, cacheKey);
+
+      if (cachedNames) {
+        console.log(`Campaign names cache HIT (${Object.keys(cachedNames).length} entries)`);
+        return new Response(JSON.stringify({ success: true, campaignNames: cachedNames }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      console.log("Campaign names cache MISS, fetching all from Meta API");
+      const campaignNames = await fetchAllCampaignNames(formattedAccountId, accessToken);
+
+      // Cache with 24h TTL
+      const expiresAt = new Date(Date.now() + NAMES_CACHE_TTL_MINUTES * 60 * 1000);
+      try {
+        await supabase.from('meta_ads_cache').upsert({
+          cache_key: cacheKey,
+          data: campaignNames,
+          fetched_at: new Date().toISOString(),
+          expires_at: expiresAt.toISOString(),
+        }, { onConflict: 'cache_key' });
+      } catch (err) {
+        console.error("Error caching campaign names:", err);
+      }
+
+      console.log(`Resolved ${Object.keys(campaignNames).length} campaign names`);
+      return new Response(JSON.stringify({ success: true, campaignNames }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── DEFAULT ACTION: fetch campaigns with enrichment (ACTIVE+PAUSED) ──
+    console.log("Fetching Meta campaigns:", { startDate, endDate, adAccountId });
 
     // Check cache first
     const cacheKey = `campaigns:${formattedAccountId}:${startDate}:${endDate}`;

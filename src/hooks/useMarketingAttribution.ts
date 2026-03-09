@@ -63,9 +63,21 @@ function normalizeName(name: string): string {
     .trim();
 }
 
+// Values that are CRM garbage — not real campaign identifiers
+const GARBAGE_CAMPAIGN_VALUES = new Set(['1', '{{campaign.id}}', 'inbound', '{{ad.id}}', '{{adset.id}}', 'null', 'undefined', '0']);
+
+function sanitizeCampaignField(value?: string): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (GARBAGE_CAMPAIGN_VALUES.has(trimmed.toLowerCase())) return undefined;
+  if (trimmed.length < 2) return undefined;
+  return trimmed;
+}
+
 export function useMarketingAttribution(
   allCards: AttributionCard[],
   allApiCampaigns: CampaignData[] | null | undefined,
+  campaignNamesMap?: Map<string, string> | null,
 ) {
   // Pre-process: per-card best stage + metadata
   const cardInfos = useMemo(() => {
@@ -74,9 +86,9 @@ export function useMarketingAttribution(
     for (const card of allCards) {
       const stage = PHASE_FUNNEL_MAP[card.fase] || 'leads';
       const cumulativeStages = getCumulativeStages(stage);
-      const campaign = card.campanha || '(Sem campanha)';
-      const conjunto = card.conjuntoGrupo || '(Sem conjunto)';
-      const anuncio = card.palavraChaveAnuncio || '(Sem anúncio)';
+      const campaign = sanitizeCampaignField(card.campanha) || '(Sem campanha)';
+      const conjunto = sanitizeCampaignField(card.conjuntoGrupo) || '(Sem conjunto)';
+      const anuncio = sanitizeCampaignField(card.palavraChaveAnuncio) || '(Sem anúncio)';
       const key = `${card.id}`;
       
       if (!cardBestStage.has(key)) {
@@ -144,6 +156,25 @@ export function useMarketingAttribution(
         }
       }
     }
+    // Fallback: resolve name from the lightweight names map (archived/deleted campaigns)
+    if (!apiCampaign && campaignNamesMap && isMetaCampaignId(name)) {
+      const resolvedName = campaignNamesMap.get(name.trim());
+      if (resolvedName) {
+        // Create a stub CampaignData with the resolved name
+        apiCampaign = {
+          id: name.trim(),
+          name: resolvedName,
+          channel: 'Meta Ads',
+          status: 'ended',
+          investment: 0,
+          leads: 0,
+          mqls: 0,
+          roas: 0,
+          startDate: '',
+        };
+        campaignId = name.trim();
+      }
+    }
     return { apiCampaign, campaignId };
   };
 
@@ -207,7 +238,7 @@ export function useMarketingAttribution(
     
     funnels.sort((a, b) => b.leads - a.leads);
     return funnels;
-  }, [allCards, cardInfos, apiLookup, allApiCampaigns]);
+  }, [allCards, cardInfos, apiLookup, allApiCampaigns, campaignNamesMap]);
 
   // Build funnel by adSet/adGroup (campaign::conjunto::channel)
   const adSetFunnels = useMemo(() => {
