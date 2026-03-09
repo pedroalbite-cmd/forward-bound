@@ -211,9 +211,9 @@ function GoogleKeywordRow({ keyword }: { keyword: GoogleKeyword }) {
 // ─── Google AdGroup Row (level 2) ─────────────────────────────
 
 function GoogleAdGroupRow({ 
-  adGroup, startDate, endDate 
+  adGroup, startDate, endDate, adSetFunnel 
 }: { 
-  adGroup: AdSetData; startDate: Date; endDate: Date 
+  adGroup: AdSetData; startDate: Date; endDate: Date; adSetFunnel?: CampaignFunnel 
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   
