@@ -477,14 +477,15 @@ export function MonetaryMetasTab() {
                   </TableCell>
                 </TableRow>
 
-                {/* Realizado Row */}
+                {/* Realizado Row - MRR Base (total empresa, não por BU) */}
                 <TableRow className="bg-accent/30">
                   <TableCell className="sticky left-0 bg-accent/30 z-10 font-semibold">
                     ✅ Realizado
-                    {realizedLoading && <Loader2 className="inline h-3 w-3 animate-spin ml-1" />}
+                    {mrrLoading && <Loader2 className="inline h-3 w-3 animate-spin ml-1" />}
+                    <span className="block text-[10px] text-muted-foreground font-normal">Total empresa</span>
                   </TableCell>
                   {MONTHS.map((month) => {
-                    const realized = realizedFunnelByBU?.[selectedBu]?.[month]?.valor ?? 0;
+                    const realized = getMrrBaseForMonth(month, 2026);
                     const hasData = realized > 0;
                     return (
                       <TableCell key={`real-${month}`} className="text-center text-sm font-medium">
@@ -493,18 +494,21 @@ export function MonetaryMetasTab() {
                     );
                   })}
                   <TableCell className="text-center font-bold bg-muted/30">
-                    {formatCurrency(MONTHS.reduce((s, m) => s + (realizedFunnelByBU?.[selectedBu]?.[m]?.valor ?? 0), 0))}
+                    {formatCurrency(MONTHS.reduce((s, m) => s + getMrrBaseForMonth(m, 2026), 0))}
                   </TableCell>
                 </TableRow>
 
-                {/* Gap Row */}
+                {/* Gap Row - Realizado vs Meta consolidada (todas as BUs) */}
                 <TableRow>
-                  <TableCell className="sticky left-0 bg-background z-10 font-semibold">📊 Gap</TableCell>
+                  <TableCell className="sticky left-0 bg-background z-10 font-semibold">
+                    📊 Gap
+                    <span className="block text-[10px] text-muted-foreground font-normal">Real. − Meta total</span>
+                  </TableCell>
                   {MONTHS.map((month) => {
-                    const realized = realizedFunnelByBU?.[selectedBu]?.[month]?.valor ?? 0;
-                    const meta = getFaturamento(selectedBu, month);
+                    const realized = getMrrBaseForMonth(month, 2026);
+                    const metaTotal = BUS.reduce((s, bu) => s + getFaturamento(bu, month), 0);
                     const hasData = realized > 0;
-                    const gap = realized - meta;
+                    const gap = realized - metaTotal;
                     return (
                       <TableCell key={`gap-${month}`} className="text-center text-sm font-semibold">
                         {hasData ? (
@@ -519,10 +523,10 @@ export function MonetaryMetasTab() {
                   })}
                   <TableCell className="text-center font-bold bg-muted/30">
                     {(() => {
-                      const totalRealized = MONTHS.reduce((s, m) => s + (realizedFunnelByBU?.[selectedBu]?.[m]?.valor ?? 0), 0);
-                      const totalMeta = getBuMonthlyTotal(selectedBu);
+                      const totalRealized = MONTHS.reduce((s, m) => s + getMrrBaseForMonth(m, 2026), 0);
+                      const totalMeta = BUS.reduce((sum, bu) => sum + getBuMonthlyTotal(bu), 0);
                       const totalGap = totalRealized - totalMeta;
-                      const hasAnyData = MONTHS.some(m => (realizedFunnelByBU?.[selectedBu]?.[m]?.valor ?? 0) > 0);
+                      const hasAnyData = MONTHS.some(m => getMrrBaseForMonth(m, 2026) > 0);
                       return hasAnyData ? (
                         <span className={totalGap >= 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'}>
                           {totalGap >= 0 ? '+' : ''}{formatCurrency(totalGap)}
