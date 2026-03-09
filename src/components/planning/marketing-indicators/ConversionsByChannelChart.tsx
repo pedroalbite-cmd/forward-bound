@@ -105,7 +105,7 @@ export function ConversionsByChannelChart({ cards }: ConversionsByChannelChartPr
       if (!existing || FUNNEL_ORDER.indexOf(stage) > FUNNEL_ORDER.indexOf(existing.stage)) {
         cardBest.set(card.id, {
           tipoOrigem: inferTipoOrigem(card),
-          origemLead: card.origemLead?.trim() || '(Sem origem)',
+          origemLead: inferOrigemLead(card),
           stage,
         });
       }
