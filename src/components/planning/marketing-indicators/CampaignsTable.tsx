@@ -448,7 +448,7 @@ function CampaignRow({
 
       {isExpanded && isLoading && (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={14} className="text-center py-4 text-muted-foreground">
+          <TableCell colSpan={13} className="text-center py-4 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
             {isGoogle ? 'Carregando grupos de anúncio...' : 'Carregando conjuntos de anúncios...'}
           </TableCell>
