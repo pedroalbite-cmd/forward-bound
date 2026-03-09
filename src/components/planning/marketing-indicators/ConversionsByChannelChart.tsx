@@ -49,7 +49,7 @@ function normalizeOrigemLead(raw: string): string {
   if (raw.includes('{{')) return '(Sem origem)';
   let base = raw.split(/[?,&]/)[0].trim();
   if (/^\d{10,}$/.test(base)) return 'Meta Ads';
-  const key = base.toLowerCase().replace(/\/$/, '');
+  const key = base.toLowerCase().replace(/\.com\/?$/, '').replace(/\/$/, '');
   if (ORIGEM_MAP[key]) return ORIGEM_MAP[key];
   return base.charAt(0).toUpperCase() + base.slice(1);
 }
