@@ -305,12 +305,12 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         }
       }
       
-      // Merge signature cards into allCardsUnfiltered (deduplicate by id)
-      const existingUnfilteredIds = new Set(allCardsUnfiltered.map(c => c.id));
+      // Merge signature cards into allCardsUnfiltered (deduplicate by id+fase)
+      const existingUnfilteredKeys = new Set(allCardsUnfiltered.map(c => `${c.id}|${c.fase}`));
       for (const sc of signatureCardsUnfiltered) {
-        if (!existingUnfilteredIds.has(sc.id)) {
+        if (!existingUnfilteredKeys.has(`${sc.id}|${sc.fase}`)) {
           allCardsUnfiltered.push(sc);
-          existingUnfilteredIds.add(sc.id);
+          existingUnfilteredKeys.add(`${sc.id}|${sc.fase}`);
         }
       }
 
