@@ -69,19 +69,21 @@ export function useMarketingAttribution(
 ) {
   // Pre-process: per-card best stage + metadata
   const cardInfos = useMemo(() => {
-    const cardBestStage = new Map<string, { campaign: string; conjunto: string; channel: ChannelId; stages: Set<string>; card: AttributionCard }>();
+    const cardBestStage = new Map<string, { campaign: string; conjunto: string; anuncio: string; channel: ChannelId; stages: Set<string>; card: AttributionCard }>();
     
     for (const card of allCards) {
       const stage = PHASE_FUNNEL_MAP[card.fase] || 'leads';
       const cumulativeStages = getCumulativeStages(stage);
       const campaign = card.campanha || '(Sem campanha)';
       const conjunto = card.conjuntoGrupo || '(Sem conjunto)';
+      const anuncio = card.palavraChaveAnuncio || '(Sem anúncio)';
       const key = `${card.id}`;
       
       if (!cardBestStage.has(key)) {
         cardBestStage.set(key, {
           campaign,
           conjunto,
+          anuncio,
           channel: detectChannel(card),
           stages: new Set(cumulativeStages),
           card,
@@ -253,6 +255,54 @@ export function useMarketingAttribution(
     return result;
   }, [allCards, cardInfos]);
 
+  // Build funnel by individual ad/creative (campaign::conjunto::anuncio::channel)
+  const adCreativeFunnels = useMemo(() => {
+    if (!allCards.length) return new Map<string, CampaignFunnel>();
+    
+    const adMap = new Map<string, {
+      campaign: string; conjunto: string; anuncio: string; channel: ChannelId;
+      leads: Set<string>; mqls: Set<string>; rms: Set<string>;
+      rrs: Set<string>; propostas: Set<string>; vendas: Set<string>;
+      receita: number; tcv: number;
+    }>();
+    
+    for (const [cardId, info] of cardInfos) {
+      // Skip cards without a specific ad identifier
+      if (info.anuncio === '(Sem anúncio)') continue;
+      
+      const key = `${normalizeName(info.campaign)}::${normalizeName(info.conjunto)}::${normalizeName(info.anuncio)}::${info.channel}`;
+      if (!adMap.has(key)) {
+        adMap.set(key, {
+          campaign: info.campaign, conjunto: info.conjunto, anuncio: info.anuncio, channel: info.channel,
+          leads: new Set(), mqls: new Set(), rms: new Set(),
+          rrs: new Set(), propostas: new Set(), vendas: new Set(),
+          receita: 0, tcv: 0,
+        });
+      }
+      const entry = adMap.get(key)!;
+      for (const stage of info.stages) {
+        (entry[stage as keyof typeof entry] as Set<string>).add(cardId);
+      }
+      if (info.stages.has('vendas')) {
+        entry.receita += (info.card.valorMRR || 0) + (info.card.valorSetup || 0) + (info.card.valorPontual || 0) + (info.card.valorEducacao || 0);
+        entry.tcv += ((info.card.valorMRR || 0) * 12) + (info.card.valorSetup || 0) + (info.card.valorPontual || 0);
+      }
+    }
+    
+    const result = new Map<string, CampaignFunnel>();
+    for (const [key, data] of adMap) {
+      const receita = data.receita;
+      result.set(key, {
+        campaignName: data.anuncio,
+        channel: data.channel,
+        leads: data.leads.size, mqls: data.mqls.size, rms: data.rms.size,
+        rrs: data.rrs.size, propostas: data.propostas.size, vendas: data.vendas.size,
+        receita, investimento: 0, roi: 0, tcv: data.tcv,
+      });
+    }
+    return result;
+  }, [allCards, cardInfos]);
+
   // Channel summaries
   const channelSummaries = useMemo(() => {
     const channelMap = new Map<ChannelId, ChannelSummary>();
@@ -279,5 +329,5 @@ export function useMarketingAttribution(
     return Array.from(channelMap.values()).sort((a, b) => b.leads - a.leads);
   }, [campaignFunnels]);
 
-  return { campaignFunnels, channelSummaries, adSetFunnels };
+  return { campaignFunnels, channelSummaries, adSetFunnels, adCreativeFunnels };
 }

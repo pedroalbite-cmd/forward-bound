@@ -236,7 +236,8 @@ export function MarketingIndicatorsTab() {
       result.push({
         id: c.id, titulo: c.titulo, campanha: c.campanha, conjuntoGrupo: c.conjuntoGrupo,
         fonte: c.fonte, fbclid: c.fbclid, gclid: c.gclid, tipoOrigem: c.tipoOrigem,
-        origemLead: c.origemLead, fase: c.fase, dataEntrada: c.dataEntrada, valor: c.valor,
+        origemLead: c.origemLead, palavraChaveAnuncio: c.palavraChaveAnuncio,
+        fase: c.fase, dataEntrada: c.dataEntrada, valor: c.valor,
         valorMRR: c.valorMRR, valorSetup: c.valorSetup, valorPontual: c.valorPontual,
         valorEducacao: c.valorEducacao, bu: 'Modelo Atual',
       });
@@ -246,7 +247,8 @@ export function MarketingIndicatorsTab() {
       result.push({
         id: c.id, titulo: c.titulo, campanha: c.campanha, conjuntoGrupo: c.conjuntoGrupo,
         fonte: c.fonte, fbclid: c.fbclid, gclid: c.gclid, tipoOrigem: c.tipoOrigem,
-        origemLead: c.origemLead, fase: c.fase, dataEntrada: c.dataEntrada, valor: c.valor,
+        origemLead: c.origemLead, palavraChaveAnuncio: c.palavraChaveAnuncio,
+        fase: c.fase, dataEntrada: c.dataEntrada, valor: c.valor,
         valorMRR: c.valorMRR, valorSetup: c.valorSetup, valorPontual: c.valorPontual,
         bu: 'Franquia',
       });
@@ -256,7 +258,8 @@ export function MarketingIndicatorsTab() {
       result.push({
         id: c.id, titulo: c.titulo, campanha: c.campanha, conjuntoGrupo: c.conjuntoGrupo,
         fonte: c.fonte, fbclid: c.fbclid, gclid: c.gclid, tipoOrigem: c.tipoOrigem,
-        origemLead: c.origemLead, fase: c.fase, dataEntrada: c.dataEntrada, valor: c.valor,
+        origemLead: c.origemLead, palavraChaveAnuncio: c.palavraChaveAnuncio,
+        fase: c.fase, dataEntrada: c.dataEntrada, valor: c.valor,
         valorMRR: c.valorMRR, valorSetup: c.valorSetup, valorPontual: c.valorPontual,
         bu: 'Oxy Hacker',
       });
@@ -265,7 +268,7 @@ export function MarketingIndicatorsTab() {
     return result;
   }, [modeloAtualAllCards, franquiaCards, oxyHackerCards]);
 
-  const { campaignFunnels, channelSummaries, adSetFunnels } = useMarketingAttribution(allAttributionCards, allCampaigns);
+  const { campaignFunnels, channelSummaries, adSetFunnels, adCreativeFunnels } = useMarketingAttribution(allAttributionCards, allCampaigns);
 
   // Aggregate Google Ads API totals for enrichment
   const googleAdsApiTotals = useMemo(() => {
@@ -712,6 +715,7 @@ export function MarketingIndicatorsTab() {
         campaigns={allCampaigns} 
         campaignFunnels={campaignFunnels}
         adSetFunnels={adSetFunnels}
+        adCreativeFunnels={adCreativeFunnels}
         isLoading={isLoadingAds}
         error={adsError || undefined}
         startDate={dateRange.from}

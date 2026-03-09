@@ -18,6 +18,7 @@ interface CampaignsTableProps {
   campaigns: CampaignData[];
   campaignFunnels?: CampaignFunnel[];
   adSetFunnels?: Map<string, CampaignFunnel>;
+  adCreativeFunnels?: Map<string, CampaignFunnel>;
   isLoading?: boolean;
   error?: Error | null;
   startDate: Date;
@@ -157,6 +158,57 @@ function lookupAdSetFunnel(
     if (!campMatch) continue;
     // Check adSet match (partial)
     if (funnelAdSet.includes(normAdSet) || normAdSet.includes(funnelAdSet)) {
+      return funnel;
+    }
+  }
+  return undefined;
+}
+
+// ─── Lookup helper for ad-level CRM match ─────────────────────
+function lookupAdCreativeFunnel(
+  adCreativeFunnels: Map<string, CampaignFunnel>,
+  campaignName: string,
+  adSetName: string,
+  adId: string,
+  channel: string,
+  campaignId?: string,
+): CampaignFunnel | undefined {
+  if (!adCreativeFunnels || adCreativeFunnels.size === 0) return undefined;
+  const channelId = channel === 'Google Ads' ? 'google_ads' : 'meta_ads';
+  const normAdSet = normalizeName(adSetName);
+  const normAdId = normalizeName(adId);
+  
+  // Try with campaign ID (CRM stores numeric IDs for Meta campaigns)
+  if (campaignId) {
+    const normId = normalizeName(campaignId);
+    const idKey = `${normId}::${normAdSet}::${normAdId}::${channelId}`;
+    if (adCreativeFunnels.has(idKey)) return adCreativeFunnels.get(idKey);
+    const rawId = campaignId.replace('google_', '');
+    if (rawId !== campaignId) {
+      const rawKey = `${normalizeName(rawId)}::${normAdSet}::${normAdId}::${channelId}`;
+      if (adCreativeFunnels.has(rawKey)) return adCreativeFunnels.get(rawKey);
+    }
+  }
+  
+  // Try with campaign name
+  const normCamp = normalizeName(campaignName);
+  const nameKey = `${normCamp}::${normAdSet}::${normAdId}::${channelId}`;
+  if (adCreativeFunnels.has(nameKey)) return adCreativeFunnels.get(nameKey);
+
+  // Partial scan for fuzzy matches
+  for (const [key, funnel] of adCreativeFunnels) {
+    const parts = key.split('::');
+    if (parts.length < 4) continue;
+    const [fCamp, fAdSet, fAd, fChannel] = parts;
+    if (fChannel !== channelId) continue;
+    // Ad ID must match exactly
+    if (fAd !== normAdId) continue;
+    // Campaign match (exact or partial, including by ID)
+    const campMatch = fCamp === normCamp || fCamp.includes(normCamp) || normCamp.includes(fCamp)
+      || (campaignId && (fCamp === normalizeName(campaignId) || fCamp === normalizeName(campaignId.replace('google_', ''))));
+    if (!campMatch) continue;
+    // AdSet match (partial)
+    if (fAdSet.includes(normAdSet) || normAdSet.includes(fAdSet)) {
       return funnel;
     }
   }
@@ -331,9 +383,10 @@ function AdRow({ ad, onPreview, adFunnel }: { ad: AdData; onPreview: (data: Prev
 // ─── Meta AdSet Row (level 2) ─────────────────────────────────
 
 function AdSetRow({ 
-  adSet, startDate, endDate, onPreview, adSetFunnel 
+  adSet, startDate, endDate, onPreview, adSetFunnel, adCreativeFunnels, campaignName, campaignId, channelName
 }: { 
-  adSet: AdSetData; startDate: Date; endDate: Date; onPreview: (data: PreviewModalData) => void; adSetFunnel?: CampaignFunnel 
+  adSet: AdSetData; startDate: Date; endDate: Date; onPreview: (data: PreviewModalData) => void; adSetFunnel?: CampaignFunnel;
+  adCreativeFunnels?: Map<string, CampaignFunnel>; campaignName: string; campaignId?: string; channelName: string;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   
@@ -397,9 +450,14 @@ function AdSetRow({
       )}
 
       {isExpanded && ads?.filter(a => a.spend > 0).map((ad) => {
-        // Distribute ad set CRM data proportionally to ads by spend
+        // Try direct CRM match first via adCreativeFunnels
         let adFunnel: CampaignFunnel | undefined;
-        if (adSetFunnel && ads) {
+        if (adCreativeFunnels && adCreativeFunnels.size > 0) {
+          adFunnel = lookupAdCreativeFunnel(adCreativeFunnels, campaignName, adSet.name, ad.id, channelName, campaignId);
+        }
+        
+        // Fallback: distribute ad set CRM data proportionally by spend
+        if (!adFunnel && adSetFunnel && ads) {
           const filteredAds = ads.filter(a => a.spend > 0);
           const totalAdsSpend = filteredAds.reduce((s, a) => s + a.spend, 0);
           if (totalAdsSpend > 0) {
@@ -428,11 +486,11 @@ function AdSetRow({
 // ─── Campaign Row (level 1) - supports both Meta and Google ───
 
 function CampaignRow({
-  campaign, isExpanded, onToggle, startDate, endDate, onPreview, funnel, adSetFunnels,
+  campaign, isExpanded, onToggle, startDate, endDate, onPreview, funnel, adSetFunnels, adCreativeFunnels,
 }: {
   campaign: CampaignData; isExpanded: boolean; onToggle: () => void;
   startDate: Date; endDate: Date; onPreview: (data: PreviewModalData) => void;
-  funnel?: CampaignFunnel; adSetFunnels?: Map<string, CampaignFunnel>;
+  funnel?: CampaignFunnel; adSetFunnels?: Map<string, CampaignFunnel>; adCreativeFunnels?: Map<string, CampaignFunnel>;
 }) {
   const isGoogle = isGoogleCampaign(campaign);
   const googleRawId = isGoogle ? getGoogleRawId(campaign) : null;
@@ -553,7 +611,7 @@ function CampaignRow({
         isGoogle ? (
           <GoogleAdGroupRow key={item.id} adGroup={item} startDate={startDate} endDate={endDate} adSetFunnel={getSubRowFunnel(item)} />
         ) : (
-          <AdSetRow key={item.id} adSet={item} startDate={startDate} endDate={endDate} onPreview={onPreview} adSetFunnel={getSubRowFunnel(item)} />
+          <AdSetRow key={item.id} adSet={item} startDate={startDate} endDate={endDate} onPreview={onPreview} adSetFunnel={getSubRowFunnel(item)} adCreativeFunnels={adCreativeFunnels} campaignName={campaign.name} campaignId={campaign.id} channelName={campaign.channel} />
         )
       ))}
     </>
@@ -611,7 +669,7 @@ function CreativePreviewModal({
 
 // ─── Main Component ───────────────────────────────────────────
 
-export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoading, error, startDate, endDate }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, adCreativeFunnels, isLoading, error, startDate, endDate }: CampaignsTableProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
   const [previewData, setPreviewData] = useState<PreviewModalData | null>(null);
@@ -835,6 +893,7 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
                               onPreview={setPreviewData}
                               funnel={row.funnel}
                               adSetFunnels={adSetFunnels}
+                              adCreativeFunnels={adCreativeFunnels}
                             />
                           );
                         }

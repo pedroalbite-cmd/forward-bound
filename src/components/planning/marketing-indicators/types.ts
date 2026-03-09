@@ -213,6 +213,7 @@ export interface AttributionCard {
   gclid?: string;
   tipoOrigem?: string;
   origemLead?: string;
+  palavraChaveAnuncio?: string;
   fase: string;
   dataEntrada: Date;
   valor: number;
