@@ -69,19 +69,21 @@ export function useMarketingAttribution(
 ) {
   // Pre-process: per-card best stage + metadata
   const cardInfos = useMemo(() => {
-    const cardBestStage = new Map<string, { campaign: string; conjunto: string; channel: ChannelId; stages: Set<string>; card: AttributionCard }>();
+    const cardBestStage = new Map<string, { campaign: string; conjunto: string; anuncio: string; channel: ChannelId; stages: Set<string>; card: AttributionCard }>();
     
     for (const card of allCards) {
       const stage = PHASE_FUNNEL_MAP[card.fase] || 'leads';
       const cumulativeStages = getCumulativeStages(stage);
       const campaign = card.campanha || '(Sem campanha)';
       const conjunto = card.conjuntoGrupo || '(Sem conjunto)';
+      const anuncio = card.palavraChaveAnuncio || '(Sem anúncio)';
       const key = `${card.id}`;
       
       if (!cardBestStage.has(key)) {
         cardBestStage.set(key, {
           campaign,
           conjunto,
+          anuncio,
           channel: detectChannel(card),
           stages: new Set(cumulativeStages),
           card,
