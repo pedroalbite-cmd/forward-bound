@@ -671,26 +671,28 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
                     <span className="text-muted-foreground">Total: {campaigns.filter(c => c.investment > 0).length} campanhas</span>
                     <div className="flex gap-6">
                       <span>
-                        <span className="text-muted-foreground">Leads: </span>
-                        <span className="font-medium">{formatNumber(campaigns.filter(c => c.investment > 0).reduce((sum, c) => sum + c.leads, 0))}</span>
-                      </span>
-                      <span>
                         <span className="text-muted-foreground">Gasto: </span>
                         <span className="font-medium">{formatCurrency(campaigns.filter(c => c.investment > 0).reduce((sum, c) => sum + c.investment, 0))}</span>
+                      </span>
+                      <span>
+                        <span className="text-muted-foreground">Leads: </span>
+                        <span className="font-medium">{formatNumber(campaigns.filter(c => c.investment > 0).reduce((sum, c) => sum + c.leads, 0))}</span>
                       </span>
                       {campaignFunnels && campaignFunnels.length > 0 && (
                         <>
                           <span>
-                            <span className="text-muted-foreground">Vendas (CRM): </span>
+                            <span className="text-muted-foreground">Vendas: </span>
                             <span className="font-medium">{campaignFunnels.reduce((s, f) => s + f.vendas, 0)}</span>
                           </span>
-                           <span>
-                            <span className="text-muted-foreground">Receita: </span>
-                            <span className="font-medium">{formatCurrency(campaignFunnels.reduce((s, f) => s + f.receita, 0))}</span>
-                          </span>
                           <span>
-                            <span className="text-muted-foreground">TCV: </span>
-                            <span className="font-medium">{formatCurrency(campaignFunnels.reduce((s, f) => s + f.tcv, 0))}</span>
+                            <span className="text-muted-foreground">ROAS: </span>
+                            <span className="font-medium">
+                              {(() => {
+                                const totalInv = campaigns.filter(c => c.investment > 0).reduce((s, c) => s + c.investment, 0);
+                                const totalRec = campaignFunnels.reduce((s, f) => s + f.receita, 0);
+                                return totalInv > 0 ? `${(totalRec / totalInv).toFixed(1)}x` : '-';
+                              })()}
+                            </span>
                           </span>
                         </>
                       )}
