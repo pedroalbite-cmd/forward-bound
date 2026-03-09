@@ -1,23 +1,21 @@
 import { useMemo } from "react";
 import { Trophy, TrendingUp, FileText, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import type { AttributionCard } from "./types";
+import type { DetailItem } from "./DetailSheet";
 
 interface TcvHeroBannerProps {
-  attributionCards: AttributionCard[];
+  vendaItems: DetailItem[];
 }
 
-export function TcvHeroBanner({ attributionCards }: TcvHeroBannerProps) {
+export function TcvHeroBanner({ vendaItems }: TcvHeroBannerProps) {
   const stats = useMemo(() => {
-    const vendasCards = attributionCards.filter(c => c.fase === 'Contrato assinado');
-    const totalMrrAnual = vendasCards.reduce((s, c) => s + (c.valorMRR || 0) * 12, 0);
-    const totalSetup = vendasCards.reduce((s, c) => s + (c.valorSetup || 0), 0);
-    const totalPontual = vendasCards.reduce((s, c) => s + (c.valorPontual || 0), 0);
+    const totalMrrAnual = vendaItems.reduce((s, c) => s + (c.mrr || 0) * 12, 0);
+    const totalSetup = vendaItems.reduce((s, c) => s + (c.setup || 0), 0);
+    const totalPontual = vendaItems.reduce((s, c) => s + (c.pontual || 0), 0);
     const tcv = totalMrrAnual + totalSetup + totalPontual;
-    const ticketMedio = vendasCards.length > 0 ? tcv / vendasCards.length : 0;
-    return { tcv, totalMrrAnual, totalSetup, totalPontual, count: vendasCards.length, ticketMedio };
-  }, [attributionCards]);
+    const ticketMedio = vendaItems.length > 0 ? tcv / vendaItems.length : 0;
+    return { tcv, totalMrrAnual, totalSetup, totalPontual, count: vendaItems.length, ticketMedio };
+  }, [vendaItems]);
 
   if (stats.count === 0) return null;
 
@@ -36,7 +34,6 @@ export function TcvHeroBanner({ attributionCards }: TcvHeroBannerProps) {
 
   return (
     <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 p-[1px]">
-      {/* Inner card */}
       <div className="relative rounded-[11px] bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 px-6 py-5 overflow-hidden">
         {/* Background pattern */}
         <div className="absolute inset-0 opacity-[0.07]" style={{
@@ -72,7 +69,7 @@ export function TcvHeroBanner({ attributionCards }: TcvHeroBannerProps) {
                 key={item.label}
                 className="flex items-center gap-3 rounded-xl bg-white/10 backdrop-blur-sm border border-white/15 px-4 py-3 min-w-[150px] flex-1"
               >
-                <item.icon className="h-4.5 w-4.5 text-white/70 flex-shrink-0" />
+                <item.icon className="h-4 w-4 text-white/70 flex-shrink-0" />
                 <div className="flex flex-col">
                   <span className="text-[11px] text-white/60 font-medium uppercase tracking-wider">{item.label}</span>
                   <span className="text-base font-bold text-white">{fmt(item.value)}</span>
@@ -82,7 +79,7 @@ export function TcvHeroBanner({ attributionCards }: TcvHeroBannerProps) {
           </div>
 
           {/* Far right: Ticket Médio */}
-          <div className="flex flex-col items-end text-right flex-shrink-0 hidden lg:flex">
+          <div className="flex-col items-end text-right flex-shrink-0 hidden lg:flex">
             <span className="text-[11px] text-white/60 font-medium uppercase tracking-wider">Ticket Médio</span>
             <span className="text-xl font-bold text-white">{fmt(stats.ticketMedio)}</span>
           </div>

@@ -32,6 +32,7 @@ import { KpiItem } from "./indicators/KpiCard";
 import { ChartConfig } from "./indicators/DrillDownCharts";
 import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select";
 import { RevenuePaceChart } from "./indicators/RevenuePaceChart";
+import { TcvHeroBanner } from "./indicators/TcvHeroBanner";
 
 type ViewMode = 'daily' | 'accumulated';
 
@@ -2424,6 +2425,9 @@ export function IndicatorsTab() {
           Período: {daysInPeriod} dias | Agrupamento: {grouping === 'daily' ? 'Diário' : grouping === 'weekly' ? 'Semanal' : 'Mensal'}
         </p>
       </div>
+
+      {/* TCV Hero Banner */}
+      <TcvHeroBanner vendaItems={getItemsForIndicator('venda')} />
 
       {/* Cards - Quantity Indicators */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
