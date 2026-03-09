@@ -194,15 +194,9 @@ function GoogleKeywordRow({ keyword }: { keyword: GoogleKeyword }) {
       <TableCell className="pl-10 font-normal text-xs text-muted-foreground">
         <span>│  ├─ <Badge variant="outline" className="text-[9px] px-1 py-0 mr-1">{matchLabel}</Badge>{keyword.text}</span>
       </TableCell>
-      <TableCell className="text-right text-xs">{formatNumber(keyword.conversions)}</TableCell>
       <TableCell className="text-right text-xs">{formatCurrency(keyword.spend)}</TableCell>
+      <TableCell className="text-right text-xs">{formatNumber(keyword.conversions)}</TableCell>
       <TableCell className="text-right text-xs">{keyword.cpl > 0 ? formatCurrency(keyword.cpl) : '-'}</TableCell>
-      <TableCell className="text-right text-xs">-</TableCell>
-      <TableCell>
-        <Badge variant={keyword.status === 'ENABLED' ? 'default' : 'outline'} className={keyword.status === 'ENABLED' ? 'bg-emerald-500' : ''}>
-          {keyword.status === 'ENABLED' ? 'Ativo' : keyword.status === 'PAUSED' ? 'Pausado' : keyword.status}
-        </Badge>
-      </TableCell>
       <CrmCells funnel={undefined} size="sm" />
     </TableRow>
   );
