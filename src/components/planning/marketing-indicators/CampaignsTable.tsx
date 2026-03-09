@@ -457,7 +457,7 @@ function CampaignRow({
 
       {isExpanded && !isLoading && !hasChildren && !drillError && (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={14} className="text-center py-4 text-muted-foreground text-sm">
+          <TableCell colSpan={13} className="text-center py-4 text-muted-foreground text-sm">
             {isGoogle ? 'Nenhum grupo de anúncio encontrado' : 'Nenhum conjunto de anúncio encontrado'}
           </TableCell>
         </TableRow>
