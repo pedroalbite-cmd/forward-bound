@@ -32,6 +32,7 @@ import { KpiItem } from "./indicators/KpiCard";
 import { ChartConfig } from "./indicators/DrillDownCharts";
 import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select";
 import { RevenuePaceChart } from "./indicators/RevenuePaceChart";
+import { TcvHeroBanner } from "./indicators/TcvHeroBanner";
 
 type ViewMode = 'daily' | 'accumulated';
 
