@@ -296,6 +296,10 @@ function GoogleAdGroupRow({
 // ─── Meta Ad Row (level 3) ────────────────────────────────────
 
 function AdRow({ ad, onPreview, adFunnel }: { ad: AdData; onPreview: (data: PreviewModalData) => void; adFunnel?: CampaignFunnel }) {
+  // Log for debugging ad-level CRM match
+  if (adFunnel && adFunnel.vendas > 0) {
+    console.log(`[AdRow] Direct CRM match for ad ${ad.name}: ${adFunnel.vendas} vendas`);
+  }
   return (
     <TableRow className="bg-muted/15">
       <TableCell className="p-2"></TableCell>
