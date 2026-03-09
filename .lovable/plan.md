@@ -1,32 +1,62 @@
 
 
-## Plano: Usar Faturamento Total Realizado para Jan e Fev 2026
+## Desbloquear Fevereiro e Adicionar Distribuicao de Diferenca nas Metas Monetarias
 
-### Problema
+### Objetivo
+Permitir editar meses anteriormente bloqueados (como Fevereiro) e, ao alterar uma meta, mostrar a diferenca em relacao ao total anterior da BU com opcoes inteligentes de redistribuicao.
 
-Os valores na tabela `mrr_base_monthly` para Jan/2026 (539.569,60) e Fev/2026 (607.534,59) são apenas MRR base. O gráfico soma Setup + Pontual por cima, resultando no valor "Previsto". O usuário quer que esses dois meses mostrem o **Realizado total**: Jan = R$ 967.968,89 e Fev = R$ 809.975,81.
+### Alteracoes
 
-### Solução
+#### 1. Remover trava de meses (`MonetaryMetasTab.tsx`)
+- Remover a funcao `isMonthLocked` e a logica de `disabled` nos inputs. Todos os meses passam a ser editaveis.
+- Remover os indicadores visuais de cadeado.
 
-Adicionar uma coluna `is_total_override` (boolean, default false) na tabela `mrr_base_monthly`. Quando `true`, o valor é usado diretamente como faturamento total (sem somar Setup/Pontual). Quando `false`, mantém a lógica atual (MRR base + Setup + Pontual).
+#### 2. Barra de diferenca com opcoes de distribuicao
+Quando o usuario altera o faturamento de um mes, o sistema calcula a diferenca entre o total antigo e o novo da BU selecionada. Se houver diferenca, exibe uma barra flutuante (similar a da imagem do Plan Growth) com:
 
-### Alterações
+- **Informacao**: "Diferenca: +R$ 55.960 no O2 TAX" (ou valor negativo)
+- **Botao 1 - "Distribuir nos meses restantes"**: Divide a diferenca (com sinal invertido) igualmente entre todos os meses que NAO foram editados nesta sessao.
+- **Botao 2 - "Distribuir em periodo"**: Abre um popover/dropdown onde o usuario seleciona:
+  - Um quarter (Q1, Q2, Q3, Q4)
+  - Ou um range customizado (mes inicio -> mes fim)
+  - Ao confirmar, distribui a diferenca igualmente entre os meses do periodo selecionado (excluindo o mes que foi editado).
+- **Botao "Descartar"**: Reverte todas as alteracoes locais ao estado do banco.
 
-**1. Migração SQL**
-- Adicionar coluna `is_total_override boolean default false`
-- Atualizar Jan/2026: value = 967968.89, is_total_override = true
-- Atualizar Fev/2026: value = 809975.81, is_total_override = true
+#### 3. Logica de distribuicao
+- A diferenca eh calculada como: `totalAnterior - totalAtual` da BU (antes vs depois da edicao).
+- Se a diferenca for positiva (usuario reduziu um mes), ela eh somada aos meses alvo.
+- Se for negativa (usuario aumentou um mes), ela eh subtraida dos meses alvo.
+- A distribuicao eh feita igualmente (diferenca / qtd meses alvo), com arredondamento e ajuste do residuo no ultimo mes.
+- O total da BU se mantem constante apos redistribuicao.
 
-**2. Hook `useMrrBase.ts`**
-- Adicionar campo `is_total_override` na interface e no retorno
-- Nova função `isTotalOverride(month, year)` que retorna boolean
+#### 4. Rastreamento de edicoes manuais
+- Manter um `Set<string>` de meses editados manualmente na sessao atual.
+- "Meses restantes" = meses que NAO estao nesse set.
+- Apos distribuir, os meses que receberam ajuste NAO sao marcados como editados (permitindo redistribuicoes subsequentes).
 
-**3. `IndicatorsTab.tsx` — bloco RevenuePaceChart (~linhas 2505-2600)**
-- Para cada mês: se `isTotalOverride(month, year)` → usar valor direto (sem somar setup/pontual)
-- Se não → manter lógica atual (MRR base × fração + setup + pontual realizados)
+### Detalhes tecnicos
 
-### Resultado
-- Jan/2026 e Fev/2026: gráfico mostra exatamente os valores "Realizado" do print
-- Demais meses: continuam com a lógica MRR base + Setup + Pontual
-- Futuramente, basta marcar `is_total_override = true` e atualizar o `value` para qualquer mês que tenha o realizado confirmado
+**Arquivo**: `src/components/planning/MonetaryMetasTab.tsx`
+
+**Estado adicional**:
+```text
+editedMonths: Set<string>     -- meses tocados pelo usuario
+previousBuTotal: number       -- total da BU antes das edicoes
+showDistribution: boolean     -- controla visibilidade da barra
+distributionPeriod: 'remaining' | 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'custom'
+customRange: [MonthType, MonthType]
+```
+
+**Barra de distribuicao**: Renderizada como um `div` fixo no bottom (estilo identico ao floating bar do Plan Growth), contendo:
+- Badge com a diferenca formatada
+- Botoes de acao
+- Popover para selecao de periodo (usando Select ou RadioGroup)
+
+**Fluxo**:
+1. Usuario edita faturamento de Fev de R$ 135.960 para R$ 80.000
+2. Diferenca: R$ 55.960 (sobra para distribuir)
+3. Barra aparece: "1 alteracao | O2 TAX: +R$ 55.960"
+4. Usuario clica "Distribuir nos restantes" -> R$ 55.960 / 10 meses = R$ 5.596 adicionado a cada mes de Mar-Dez
+5. Ou clica "Distribuir em periodo" -> seleciona Q3 -> R$ 55.960 / 3 = R$ 18.653 em Jul, Ago, Set
+6. Total da BU permanece o mesmo de antes da edicao
 

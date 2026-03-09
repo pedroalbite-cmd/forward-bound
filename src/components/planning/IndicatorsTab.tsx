@@ -415,7 +415,7 @@ export function IndicatorsTab() {
   
   // Get consolidated metas (database overrides + Plan Growth fallback)
   const { getMetaMonetaryForPeriod, getConsolidatedMeta } = useConsolidatedMetas();
-  const { getMrrBaseForMonth, isLoading: isLoadingMrrBase } = useMrrBase();
+  const { getMrrBaseForMonth, isTotalOverride, isLoading: isLoadingMrrBase } = useMrrBase();
   
   // Get closer metas for filtering goals by closer percentage
   const { getFilteredMeta } = useCloserMetas(currentYear);
@@ -2579,14 +2579,19 @@ export function IndicatorsTab() {
 
             const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
 
-            // Realized setup+pontual in this overlap
-            const pStart = new Date(overlapStart.getFullYear(), overlapStart.getMonth(), overlapStart.getDate()).getTime();
-            const pEnd = new Date(overlapEnd.getFullYear(), overlapEnd.getMonth(), overlapEnd.getDate(), 23, 59, 59, 999).getTime();
-            const spRealized = allSetupPontualCards
-              .filter(c => c.date.getTime() >= pStart && c.date.getTime() <= pEnd)
-              .reduce((sum, c) => sum + c.setup + c.pontual, 0);
+            if (isTotalOverride(monthName, year)) {
+              // Value is total realized revenue — use directly, no setup/pontual added
+              periodRealized += mrrBaseMonth * fraction;
+            } else {
+              // Realized setup+pontual in this overlap
+              const pStart = new Date(overlapStart.getFullYear(), overlapStart.getMonth(), overlapStart.getDate()).getTime();
+              const pEnd = new Date(overlapEnd.getFullYear(), overlapEnd.getMonth(), overlapEnd.getDate(), 23, 59, 59, 999).getTime();
+              const spRealized = allSetupPontualCards
+                .filter(c => c.date.getTime() >= pStart && c.date.getTime() <= pEnd)
+                .reduce((sum, c) => sum + c.setup + c.pontual, 0);
 
-            periodRealized += (mrrBaseMonth * fraction) + spRealized;
+              periodRealized += (mrrBaseMonth * fraction) + spRealized;
+            }
 
             // Meta setup+pontual
             let metaSetup = 0;

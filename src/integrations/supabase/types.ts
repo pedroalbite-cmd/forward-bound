@@ -228,6 +228,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_total_override: boolean
           month: string
           updated_at: string
           value: number
@@ -236,6 +237,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          is_total_override?: boolean
           month: string
           updated_at?: string
           value?: number
@@ -244,6 +246,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          is_total_override?: boolean
           month?: string
           updated_at?: string
           value?: number
