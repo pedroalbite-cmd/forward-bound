@@ -263,7 +263,7 @@ function GoogleAdGroupRow({
 
       {isExpanded && !isLoading && keywords && keywords.length === 0 && !error && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={14} className="text-center py-3 text-muted-foreground text-xs">
+          <TableCell colSpan={13} className="text-center py-3 text-muted-foreground text-xs">
             Nenhuma palavra-chave encontrada
           </TableCell>
         </TableRow>
