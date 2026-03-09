@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ChevronRight, ChevronDown } from "lucide-react";
 import { AttributionCard } from "./types";
 
 function isMetaCampaignId(value: string): boolean {
@@ -14,22 +15,13 @@ function inferTipoOrigem(card: AttributionCard): string {
   const fonte = (card.fonte || '').toLowerCase().trim();
   const origem = (card.origemLead || '').toLowerCase();
 
-  // Eventos
   if (fonte.includes('evento') || origem.includes('evento') || fonte.includes('g4') || origem.includes('g4')) return 'Evento';
-
-  // Mídia Paga (Meta)
   if (card.fbclid) return 'Mídia Paga';
   if (card.campanha && isMetaCampaignId(card.campanha)) return 'Mídia Paga';
   if (['ig', 'fb'].includes(fonte) || fonte.includes('facebook') || fonte.includes('instagram') || fonte.includes('meta')) return 'Mídia Paga';
-
-  // Mídia Paga (Google)
   if (card.gclid) return 'Mídia Paga';
   if (fonte === 'googleads' || fonte.includes('google')) return 'Mídia Paga';
-
-  // Indicação
   if (origem.includes('indica')) return 'Indicação';
-
-  // Orgânico
   if (fonte.includes('site') || fonte.includes('organic') || fonte.includes('orgânico') || fonte.includes('organico')) return 'Orgânico';
 
   return 'Outros';
@@ -68,14 +60,20 @@ interface OrigemRow {
   vendas: number;
 }
 
+interface OrigemGroup {
+  row: OrigemRow;
+  subRows: OrigemRow[];
+}
+
 interface ConversionsByChannelChartProps {
   cards: AttributionCard[];
 }
 
 export function ConversionsByChannelChart({ cards }: ConversionsByChannelChartProps) {
-  const rows = useMemo<OrigemRow[]>(() => {
-    // Deduplicate by card id, keeping the most advanced stage
-    const cardBest = new Map<string, { tipoOrigem: string; stage: string }>();
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const groups = useMemo<OrigemGroup[]>(() => {
+    const cardBest = new Map<string, { tipoOrigem: string; origemLead: string; stage: string }>();
 
     for (const card of cards) {
       const stage = PHASE_FUNNEL_MAP[card.fase] || 'leads';
@@ -83,43 +81,63 @@ export function ConversionsByChannelChart({ cards }: ConversionsByChannelChartPr
       if (!existing || FUNNEL_ORDER.indexOf(stage) > FUNNEL_ORDER.indexOf(existing.stage)) {
         cardBest.set(card.id, {
           tipoOrigem: inferTipoOrigem(card),
+          origemLead: card.origemLead?.trim() || '(Sem origem)',
           stage,
         });
       }
     }
 
-    // Aggregate by tipoOrigem with cumulative funnel
-    const groups = new Map<string, OrigemRow>();
+    // Group by tipoOrigem -> origemLead
+    const nested = new Map<string, Map<string, OrigemRow>>();
 
-    for (const { tipoOrigem, stage } of cardBest.values()) {
-      if (!groups.has(tipoOrigem)) {
-        groups.set(tipoOrigem, { tipoOrigem, leads: 0, mqls: 0, rms: 0, rrs: 0, propostas: 0, vendas: 0 });
+    for (const { tipoOrigem, origemLead, stage } of cardBest.values()) {
+      if (!nested.has(tipoOrigem)) nested.set(tipoOrigem, new Map());
+      const subMap = nested.get(tipoOrigem)!;
+      if (!subMap.has(origemLead)) {
+        subMap.set(origemLead, { tipoOrigem: origemLead, leads: 0, mqls: 0, rms: 0, rrs: 0, propostas: 0, vendas: 0 });
       }
-      const row = groups.get(tipoOrigem)!;
+      const sub = subMap.get(origemLead)!;
       for (const s of getCumulativeStages(stage)) {
-        (row as any)[s] += 1;
+        (sub as any)[s] += 1;
       }
     }
 
-    return Array.from(groups.values()).sort((a, b) => b.leads - a.leads);
+    const result: OrigemGroup[] = [];
+    for (const [tipoOrigem, subMap] of nested) {
+      const subRows = Array.from(subMap.values()).sort((a, b) => b.leads - a.leads);
+      const row: OrigemRow = {
+        tipoOrigem,
+        leads: subRows.reduce((s, r) => s + r.leads, 0),
+        mqls: subRows.reduce((s, r) => s + r.mqls, 0),
+        rms: subRows.reduce((s, r) => s + r.rms, 0),
+        rrs: subRows.reduce((s, r) => s + r.rrs, 0),
+        propostas: subRows.reduce((s, r) => s + r.propostas, 0),
+        vendas: subRows.reduce((s, r) => s + r.vendas, 0),
+      };
+      result.push({ row, subRows });
+    }
+
+    return result.sort((a, b) => b.row.leads - a.row.leads);
   }, [cards]);
 
   const totals = useMemo(() => {
-    return rows.reduce(
-      (acc, r) => ({
-        leads: acc.leads + r.leads,
-        mqls: acc.mqls + r.mqls,
-        rms: acc.rms + r.rms,
-        rrs: acc.rrs + r.rrs,
-        propostas: acc.propostas + r.propostas,
-        vendas: acc.vendas + r.vendas,
+    return groups.reduce(
+      (acc, g) => ({
+        leads: acc.leads + g.row.leads,
+        mqls: acc.mqls + g.row.mqls,
+        rms: acc.rms + g.row.rms,
+        rrs: acc.rrs + g.row.rrs,
+        propostas: acc.propostas + g.row.propostas,
+        vendas: acc.vendas + g.row.vendas,
       }),
       { leads: 0, mqls: 0, rms: 0, rrs: 0, propostas: 0, vendas: 0 }
     );
-  }, [rows]);
+  }, [groups]);
 
   const convRate = (leads: number, vendas: number) =>
     leads > 0 ? `${((vendas / leads) * 100).toFixed(1)}%` : '-';
+
+  const toggle = (tipo: string) => setExpanded(prev => prev === tipo ? null : tipo);
 
   return (
     <Card>
@@ -127,7 +145,7 @@ export function ConversionsByChannelChart({ cards }: ConversionsByChannelChartPr
         <CardTitle className="text-base font-medium">Conversão por Tipo de Origem</CardTitle>
       </CardHeader>
       <CardContent>
-        {rows.length === 0 ? (
+        {groups.length === 0 ? (
           <div className="h-[200px] flex items-center justify-center text-muted-foreground">
             Sem dados de conversão por tipo de origem
           </div>
@@ -147,20 +165,48 @@ export function ConversionsByChannelChart({ cards }: ConversionsByChannelChartPr
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((row) => (
-                  <TableRow key={row.tipoOrigem}>
-                    <TableCell className="font-medium">{row.tipoOrigem}</TableCell>
-                    <TableCell className="text-right">{row.leads}</TableCell>
-                    <TableCell className="text-right">{row.mqls}</TableCell>
-                    <TableCell className="text-right">{row.rms}</TableCell>
-                    <TableCell className="text-right">{row.rrs}</TableCell>
-                    <TableCell className="text-right">{row.propostas}</TableCell>
-                    <TableCell className="text-right">{row.vendas}</TableCell>
-                    <TableCell className="text-right">{convRate(row.leads, row.vendas)}</TableCell>
-                  </TableRow>
-                ))}
+                {groups.map(({ row, subRows }) => {
+                  const isOpen = expanded === row.tipoOrigem;
+                  return (
+                    <>
+                      <TableRow
+                        key={row.tipoOrigem}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => toggle(row.tipoOrigem)}
+                      >
+                        <TableCell className="font-medium">
+                          <span className="inline-flex items-center gap-1.5">
+                            {isOpen
+                              ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                            {row.tipoOrigem}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">{row.leads}</TableCell>
+                        <TableCell className="text-right">{row.mqls}</TableCell>
+                        <TableCell className="text-right">{row.rms}</TableCell>
+                        <TableCell className="text-right">{row.rrs}</TableCell>
+                        <TableCell className="text-right">{row.propostas}</TableCell>
+                        <TableCell className="text-right">{row.vendas}</TableCell>
+                        <TableCell className="text-right">{convRate(row.leads, row.vendas)}</TableCell>
+                      </TableRow>
+                      {isOpen && subRows.map((sub) => (
+                        <TableRow key={`${row.tipoOrigem}-${sub.tipoOrigem}`} className="bg-muted/30">
+                          <TableCell className="pl-10 text-sm text-muted-foreground">{sub.tipoOrigem}</TableCell>
+                          <TableCell className="text-right text-sm">{sub.leads}</TableCell>
+                          <TableCell className="text-right text-sm">{sub.mqls}</TableCell>
+                          <TableCell className="text-right text-sm">{sub.rms}</TableCell>
+                          <TableCell className="text-right text-sm">{sub.rrs}</TableCell>
+                          <TableCell className="text-right text-sm">{sub.propostas}</TableCell>
+                          <TableCell className="text-right text-sm">{sub.vendas}</TableCell>
+                          <TableCell className="text-right text-sm">{convRate(sub.leads, sub.vendas)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </>
+                  );
+                })}
                 <TableRow className="font-bold bg-muted/50">
-                  <TableCell>Total</TableCell>
+                  <TableCell className="pl-10">Total</TableCell>
                   <TableCell className="text-right">{totals.leads}</TableCell>
                   <TableCell className="text-right">{totals.mqls}</TableCell>
                   <TableCell className="text-right">{totals.rms}</TableCell>
