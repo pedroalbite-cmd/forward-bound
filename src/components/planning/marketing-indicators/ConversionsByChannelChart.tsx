@@ -46,12 +46,10 @@ const ORIGEM_MAP: Record<string, string> = {
 };
 
 function normalizeOrigemLead(raw: string): string {
-  if (!raw) return '(Sem origem)';
-  if (raw.includes('{{')) return '(Sem origem)';
-  // Strip everything from first comma followed by "utm" or from "?" or "&"
-  let base = raw.replace(/,\s*utm.*/i, '').split(/[?&]/)[0].trim();
-  // Also handle plain comma-separated values (take first segment)
-  if (base.includes(',')) base = base.split(',')[0].trim();
+  if (!raw || raw.includes('{{')) return '(Sem origem)';
+  // Take only the FIRST segment before any comma, ?, or &
+  const base = raw.split(/[,?&]/)[0].trim();
+  if (!base) return '(Sem origem)';
   if (/^\d{10,}$/.test(base)) return 'Meta Ads';
   const key = base.toLowerCase().replace(/\.com\/?$/, '').replace(/\/$/, '');
   return ORIGEM_MAP[key] || (base.charAt(0).toUpperCase() + base.slice(1));
