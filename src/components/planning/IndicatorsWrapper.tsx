@@ -40,13 +40,7 @@ export function IndicatorsWrapper() {
       </TabsContent>
 
       <TabsContent value="growth" className="mt-0">
-        <div className="flex items-center justify-center py-24 text-muted-foreground">
-          <div className="text-center space-y-2">
-            <Rocket className="h-12 w-12 mx-auto opacity-30" />
-            <p className="text-lg font-medium">Growth</p>
-            <p className="text-sm">Em breve</p>
-          </div>
-        </div>
+        <GrowthTab />
       </TabsContent>
     </Tabs>
   );
