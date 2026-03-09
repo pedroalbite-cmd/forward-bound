@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 interface CampaignsTableProps {
   campaigns: CampaignData[];
   campaignFunnels?: CampaignFunnel[];
+  adSetFunnels?: Map<string, CampaignFunnel>;
   isLoading?: boolean;
   error?: Error | null;
   startDate: Date;

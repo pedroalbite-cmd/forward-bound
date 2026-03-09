@@ -709,6 +709,7 @@ export function MarketingIndicatorsTab() {
       <CampaignsTable 
         campaigns={allCampaigns} 
         campaignFunnels={campaignFunnels}
+        adSetFunnels={adSetFunnels}
         isLoading={isLoadingAds}
         error={adsError || undefined}
         startDate={dateRange.from}
