@@ -253,10 +253,20 @@ export function MarketingIndicatorsTab() {
         bu: 'Franquia',
       });
     }
+
+    // O2 TAX cards (no marketing fields — will appear as orgânico / sem campanha)
+    for (const c of o2TaxAllCards) {
+      result.push({
+        id: `o2tax_${c.id}`, titulo: c.titulo,
+        fase: c.fase, dataEntrada: c.dataEntrada, valor: c.valor,
+        valorMRR: c.valorMRR, valorSetup: c.valorSetup, valorPontual: c.valorPontual,
+        bu: 'O2 TAX',
+      });
+    }
     
     
     return result;
-  }, [modeloAtualAllCards, franquiaCards, oxyHackerCards]);
+  }, [modeloAtualAllCards, franquiaCards, o2TaxAllCards]);
 
   const { campaignFunnels, channelSummaries, adSetFunnels, adCreativeFunnels } = useMarketingAttribution(allAttributionCards, allCampaigns);
 
