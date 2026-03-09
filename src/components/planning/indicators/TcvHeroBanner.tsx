@@ -11,7 +11,7 @@ interface TcvHeroBannerProps {
 }
 
 export function TcvHeroBanner({ vendaItems }: TcvHeroBannerProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const stats = useMemo(() => {
     const totalMrrAnual = vendaItems.reduce((s, c) => s + (c.mrr || 0) * 12, 0);
