@@ -63,9 +63,21 @@ function normalizeName(name: string): string {
     .trim();
 }
 
+// Values that are CRM garbage — not real campaign identifiers
+const GARBAGE_CAMPAIGN_VALUES = new Set(['1', '{{campaign.id}}', 'inbound', '{{ad.id}}', '{{adset.id}}', 'null', 'undefined', '0']);
+
+function sanitizeCampaignField(value?: string): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (GARBAGE_CAMPAIGN_VALUES.has(trimmed.toLowerCase())) return undefined;
+  if (trimmed.length < 2) return undefined;
+  return trimmed;
+}
+
 export function useMarketingAttribution(
   allCards: AttributionCard[],
   allApiCampaigns: CampaignData[] | null | undefined,
+  campaignNamesMap?: Map<string, string> | null,
 ) {
   // Pre-process: per-card best stage + metadata
   const cardInfos = useMemo(() => {
