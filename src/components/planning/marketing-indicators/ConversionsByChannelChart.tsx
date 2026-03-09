@@ -48,11 +48,14 @@ const ORIGEM_MAP: Record<string, string> = {
 function normalizeOrigemLead(raw: string): string {
   if (!raw) return '(Sem origem)';
   if (raw.includes('{{')) return '(Sem origem)';
-  let base = raw.replace(/[,]utm.*/i, '').split(/[?&]/)[0].trim();
+  // Strip everything from first comma followed by "utm" or from "?" or "&"
+  let base = raw.replace(/,\s*utm.*/i, '').split(/[?&]/)[0].trim();
+  // Also handle plain comma-separated values (take first segment)
+  if (base.includes(',')) base = base.split(',')[0].trim();
   if (/^\d{10,}$/.test(base)) return 'Meta Ads';
   const key = base.toLowerCase().replace(/\.com\/?$/, '').replace(/\/$/, '');
-  if (ORIGEM_MAP[key]) return ORIGEM_MAP[key];
-  return base.charAt(0).toUpperCase() + base.slice(1);
+  return ORIGEM_MAP[key] || (base.charAt(0).toUpperCase() + base.slice(1));
+}
 }
 
 function inferOrigemLead(card: AttributionCard): string {
