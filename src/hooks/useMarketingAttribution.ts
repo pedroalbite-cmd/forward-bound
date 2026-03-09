@@ -74,9 +74,9 @@ export function useMarketingAttribution(
     for (const card of allCards) {
       const stage = PHASE_FUNNEL_MAP[card.fase] || 'leads';
       const cumulativeStages = getCumulativeStages(stage);
-      const campaign = card.campanha || '(Sem campanha)';
-      const conjunto = card.conjuntoGrupo || '(Sem conjunto)';
-      const anuncio = card.palavraChaveAnuncio || '(Sem anúncio)';
+      const campaign = sanitizeCampaignField(card.campanha) || '(Sem campanha)';
+      const conjunto = sanitizeCampaignField(card.conjuntoGrupo) || '(Sem conjunto)';
+      const anuncio = sanitizeCampaignField(card.palavraChaveAnuncio) || '(Sem anúncio)';
       const key = `${card.id}`;
       
       if (!cardBestStage.has(key)) {
