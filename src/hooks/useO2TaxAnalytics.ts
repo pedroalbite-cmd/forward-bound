@@ -238,7 +238,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
         console.log(`[O2 TAX Analytics] Full history: ${fullHistory.length} movements for ${uniqueCardIds.length} cards`);
       }
 
-      // Step 4: Fetch MQL by creation date for the period
+      // Step 5: Fetch MQL by creation date for the period
       let mqlByCreation: O2TaxCard[] = [];
       const { data: mqlCreationData, error: mqlCreationError } = await supabase.functions.invoke('query-external-db', {
         body: { 
