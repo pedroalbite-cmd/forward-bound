@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ChevronDown, ChevronUp, ChevronRight, Loader2, AlertCircle, ExternalLink, Image } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronRight, Loader2, AlertCircle, ExternalLink, Image, ArrowUpDown } from "lucide-react";
 import { CHANNEL_LABELS, ChannelId } from "./types";
 import { CampaignData, AdSetData, AdData, CampaignFunnel } from "./types";
 import { useCampaignAdSets } from "@/hooks/useCampaignAdSets";
