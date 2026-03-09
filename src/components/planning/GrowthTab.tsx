@@ -223,7 +223,11 @@ export function GrowthTab() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h2 className="text-xl font-semibold text-foreground">Growth</h2>
-        <DateRangePickerGA dateRange={dateRange} onDateRangeChange={setDateRange} />
+        <DateRangePickerGA
+          startDate={dateRange.from}
+          endDate={dateRange.to}
+          onDateChange={(start, end) => setDateRange({ from: start, to: end })}
+        />
       </div>
 
       {/* ── KPIs de destaque ── */}
