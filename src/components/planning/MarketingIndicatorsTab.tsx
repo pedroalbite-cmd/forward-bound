@@ -224,7 +224,7 @@ export function MarketingIndicatorsTab() {
 
   // Fetch real card data from Pipefy for attribution
   const { allCards: modeloAtualAllCards, isLoading: isLoadingMACards, getCardsForIndicator: maGetCards } = useModeloAtualAnalytics(dateRange.from, dateRange.to);
-  const { getCardsForIndicator: o2GetCards } = useO2TaxAnalytics(dateRange.from, dateRange.to);
+  const { getCardsForIndicator: o2GetCards, allCards: o2TaxAllCards } = useO2TaxAnalytics(dateRange.from, dateRange.to);
   const { cards: franquiaCards, getCardsForIndicator: franquiaGetCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Franquia');
   const { cards: oxyHackerCards, getCardsForIndicator: oxyGetCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Oxy Hacker');
 
@@ -253,10 +253,20 @@ export function MarketingIndicatorsTab() {
         bu: 'Franquia',
       });
     }
+
+    // O2 TAX cards (no marketing fields — will appear as orgânico / sem campanha)
+    for (const c of o2TaxAllCards) {
+      result.push({
+        id: `o2tax_${c.id}`, titulo: c.titulo,
+        fase: c.fase, dataEntrada: c.dataEntrada, valor: c.valor,
+        valorMRR: c.valorMRR, valorSetup: c.valorSetup, valorPontual: c.valorPontual,
+        bu: 'O2 TAX',
+      });
+    }
     
     
     return result;
-  }, [modeloAtualAllCards, franquiaCards, oxyHackerCards]);
+  }, [modeloAtualAllCards, franquiaCards, o2TaxAllCards]);
 
   const { campaignFunnels, channelSummaries, adSetFunnels, adCreativeFunnels } = useMarketingAttribution(allAttributionCards, allCampaigns);
 
