@@ -147,30 +147,30 @@ function lookupAdSetFunnel(
   return undefined;
 }
 
-// CRM cells helper for sub-rows
-function CrmCells({ funnel, size = 'sm' }: { funnel?: CampaignFunnel; size?: 'sm' | 'md' }) {
+// CRM cells helper for sub-rows: MQL | CPMQL | RM | RR | PE | Venda | ROAS
+function CrmCells({ funnel, spend, size = 'sm' }: { funnel?: CampaignFunnel; spend?: number; size?: 'sm' | 'md' }) {
   const textClass = size === 'sm' ? 'text-xs' : 'text-sm';
+  const dash = <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>;
   if (!funnel) {
     return (
       <>
-        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
-        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
-        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
-        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
-        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
-        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
+        {dash}{dash}{dash}{dash}{dash}{dash}{dash}
       </>
     );
   }
+  const inv = spend || funnel.investimento || 0;
+  const cpmql = funnel.mqls > 0 ? inv / funnel.mqls : 0;
+  const roas = inv > 0 ? funnel.receita / inv : 0;
   return (
     <>
-      <TableCell className={`text-right ${textClass}`}>{funnel.leads}</TableCell>
       <TableCell className={`text-right ${textClass}`}>{funnel.mqls}</TableCell>
+      <TableCell className={`text-right ${textClass}`}>{cpmql > 0 ? formatCurrency(cpmql) : '-'}</TableCell>
+      <TableCell className={`text-right ${textClass}`}>{funnel.rms}</TableCell>
+      <TableCell className={`text-right ${textClass}`}>{funnel.rrs}</TableCell>
+      <TableCell className={`text-right ${textClass}`}>{funnel.propostas}</TableCell>
       <TableCell className={`text-right ${textClass}`}>{funnel.vendas}</TableCell>
-      <TableCell className={`text-right ${textClass}`}>{funnel.receita > 0 ? formatCurrency(funnel.receita) : '-'}</TableCell>
-      <TableCell className={`text-right ${textClass}`}>{funnel.tcv > 0 ? formatCurrency(funnel.tcv) : '-'}</TableCell>
-      <TableCell className={cn(`text-right ${textClass} font-semibold`, funnel.roi >= 1 ? "text-chart-2" : funnel.roi > 0 ? "text-destructive" : "text-muted-foreground")}>
-        {funnel.investimento > 0 ? `${funnel.roi.toFixed(1)}x` : '-'}
+      <TableCell className={cn(`text-right ${textClass} font-semibold`, roas >= 1 ? "text-chart-2" : roas > 0 ? "text-destructive" : "text-muted-foreground")}>
+        {inv > 0 ? `${roas.toFixed(1)}x` : '-'}
       </TableCell>
     </>
   );
@@ -194,15 +194,9 @@ function GoogleKeywordRow({ keyword }: { keyword: GoogleKeyword }) {
       <TableCell className="pl-10 font-normal text-xs text-muted-foreground">
         <span>│  ├─ <Badge variant="outline" className="text-[9px] px-1 py-0 mr-1">{matchLabel}</Badge>{keyword.text}</span>
       </TableCell>
-      <TableCell className="text-right text-xs">{formatNumber(keyword.conversions)}</TableCell>
       <TableCell className="text-right text-xs">{formatCurrency(keyword.spend)}</TableCell>
+      <TableCell className="text-right text-xs">{formatNumber(keyword.conversions)}</TableCell>
       <TableCell className="text-right text-xs">{keyword.cpl > 0 ? formatCurrency(keyword.cpl) : '-'}</TableCell>
-      <TableCell className="text-right text-xs">-</TableCell>
-      <TableCell>
-        <Badge variant={keyword.status === 'ENABLED' ? 'default' : 'outline'} className={keyword.status === 'ENABLED' ? 'bg-emerald-500' : ''}>
-          {keyword.status === 'ENABLED' ? 'Ativo' : keyword.status === 'PAUSED' ? 'Pausado' : keyword.status}
-        </Badge>
-      </TableCell>
       <CrmCells funnel={undefined} size="sm" />
     </TableRow>
   );
@@ -244,17 +238,15 @@ function GoogleAdGroupRow({
             )}
           </div>
         </TableCell>
-        <TableCell className="text-right text-sm">{formatNumber(adGroup.leads)}</TableCell>
         <TableCell className="text-right text-sm">{formatCurrency(adGroup.spend)}</TableCell>
+        <TableCell className="text-right text-sm">{formatNumber(adGroup.leads)}</TableCell>
         <TableCell className="text-right text-sm">{adGroup.cpl > 0 ? formatCurrency(adGroup.cpl) : '-'}</TableCell>
-        <TableCell className="text-right text-sm">{(adGroup.cpa || 0) > 0 ? formatCurrency(adGroup.cpa!) : '-'}</TableCell>
-        <TableCell>{getStatusBadge(adGroup.status)}</TableCell>
-        <CrmCells funnel={adSetFunnel} size="sm" />
+        <CrmCells funnel={adSetFunnel} spend={adGroup.spend} size="sm" />
       </TableRow>
 
       {isExpanded && isLoading && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={14} className="text-center py-3 text-muted-foreground text-sm">
+          <TableCell colSpan={13} className="text-center py-3 text-muted-foreground text-sm">
             <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
             Carregando palavras-chave...
           </TableCell>
@@ -263,7 +255,7 @@ function GoogleAdGroupRow({
 
       {isExpanded && error && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={14} className="text-center py-3 text-sm text-destructive">
+          <TableCell colSpan={13} className="text-center py-3 text-sm text-destructive">
             Erro ao carregar palavras-chave: {(error as Error).message}
           </TableCell>
         </TableRow>
@@ -271,7 +263,7 @@ function GoogleAdGroupRow({
 
       {isExpanded && !isLoading && keywords && keywords.length === 0 && !error && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={14} className="text-center py-3 text-muted-foreground text-xs">
+          <TableCell colSpan={13} className="text-center py-3 text-muted-foreground text-xs">
             Nenhuma palavra-chave encontrada
           </TableCell>
         </TableRow>
@@ -312,11 +304,9 @@ function AdRow({ ad, onPreview }: { ad: AdData; onPreview: (data: PreviewModalDa
           )}
         </div>
       </TableCell>
-      <TableCell className="text-right text-xs">{formatNumber(ad.leads)}</TableCell>
       <TableCell className="text-right text-xs">{formatCurrency(ad.spend)}</TableCell>
+      <TableCell className="text-right text-xs">{formatNumber(ad.leads)}</TableCell>
       <TableCell className="text-right text-xs">{ad.cpl > 0 ? formatCurrency(ad.cpl) : '-'}</TableCell>
-      <TableCell className="text-right text-xs">{ad.cpa > 0 ? formatCurrency(ad.cpa) : '-'}</TableCell>
-      <TableCell>{getStatusBadge(ad.status)}</TableCell>
       <CrmCells funnel={undefined} size="sm" />
     </TableRow>
   );
@@ -357,17 +347,15 @@ function AdSetRow({
             )}
           </div>
         </TableCell>
-        <TableCell className="text-right text-sm">{formatNumber(adSet.leads)}</TableCell>
         <TableCell className="text-right text-sm">{formatCurrency(adSet.spend)}</TableCell>
+        <TableCell className="text-right text-sm">{formatNumber(adSet.leads)}</TableCell>
         <TableCell className="text-right text-sm">{adSet.cpl > 0 ? formatCurrency(adSet.cpl) : '-'}</TableCell>
-        <TableCell className="text-right text-sm">{(adSet.cpa || 0) > 0 ? formatCurrency(adSet.cpa!) : '-'}</TableCell>
-        <TableCell>{getStatusBadge(adSet.status)}</TableCell>
-        <CrmCells funnel={adSetFunnel} size="sm" />
+        <CrmCells funnel={adSetFunnel} spend={adSet.spend} size="sm" />
       </TableRow>
 
       {isExpanded && isLoading && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={14} className="text-center py-3 text-muted-foreground text-sm">
+          <TableCell colSpan={13} className="text-center py-3 text-muted-foreground text-sm">
             <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
             Carregando anúncios...
           </TableCell>
@@ -376,7 +364,7 @@ function AdSetRow({
 
       {isExpanded && error && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={14} className="text-center py-3 text-sm text-destructive">
+          <TableCell colSpan={13} className="text-center py-3 text-sm text-destructive">
             {(error as Error).message === 'RATE_LIMIT'
               ? '⏳ Limite de requisições atingido. Aguarde e tente novamente.'
               : `Erro ao carregar anúncios: ${(error as Error).message}`}
@@ -386,7 +374,7 @@ function AdSetRow({
 
       {isExpanded && !isLoading && ads && ads.length === 0 && !error && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={14} className="text-center py-3 text-muted-foreground text-xs">
+          <TableCell colSpan={13} className="text-center py-3 text-muted-foreground text-xs">
             Nenhum anúncio encontrado
           </TableCell>
         </TableRow>
@@ -450,29 +438,17 @@ function CampaignRow({
             )}
           </div>
         </TableCell>
-        <TableCell className="text-right">{formatNumber(campaign.leads)}</TableCell>
         <TableCell className="text-right">{formatCurrency(campaign.investment)}</TableCell>
+        <TableCell className="text-right">{formatNumber(campaign.leads)}</TableCell>
         <TableCell className="text-right">
           {campaign.cpl && campaign.cpl > 0 ? formatCurrency(campaign.cpl) : '-'}
         </TableCell>
-        <TableCell className="text-right">
-          {(campaign.cpa || 0) > 0 ? formatCurrency(campaign.cpa!) : '-'}
-        </TableCell>
-        <TableCell>{getStatusBadge(campaign.status)}</TableCell>
-        {/* CRM funnel columns */}
-        <TableCell className="text-right font-medium">{funnel ? funnel.leads : '-'}</TableCell>
-        <TableCell className="text-right font-medium">{funnel ? funnel.mqls : '-'}</TableCell>
-        <TableCell className="text-right font-medium">{funnel ? funnel.vendas : '-'}</TableCell>
-        <TableCell className="text-right font-medium">{funnel ? formatCurrency(funnel.receita) : '-'}</TableCell>
-        <TableCell className="text-right font-medium">{funnel && funnel.tcv > 0 ? formatCurrency(funnel.tcv) : '-'}</TableCell>
-        <TableCell className={cn("text-right font-medium", funnel && funnel.roi > 0 && (funnel.roi >= 1 ? "text-chart-2" : "text-destructive"))}>
-          {funnel && funnel.investimento > 0 ? `${funnel.roi.toFixed(1)}x` : '-'}
-        </TableCell>
+        <CrmCells funnel={funnel} spend={campaign.investment} size="md" />
       </TableRow>
 
       {isExpanded && isLoading && (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={14} className="text-center py-4 text-muted-foreground">
+          <TableCell colSpan={13} className="text-center py-4 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
             {isGoogle ? 'Carregando grupos de anúncio...' : 'Carregando conjuntos de anúncios...'}
           </TableCell>
@@ -481,7 +457,7 @@ function CampaignRow({
 
       {isExpanded && !isLoading && !hasChildren && !drillError && (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={14} className="text-center py-4 text-muted-foreground text-sm">
+          <TableCell colSpan={13} className="text-center py-4 text-muted-foreground text-sm">
             {isGoogle ? 'Nenhum grupo de anúncio encontrado' : 'Nenhum conjunto de anúncio encontrado'}
           </TableCell>
         </TableRow>
@@ -489,7 +465,7 @@ function CampaignRow({
 
       {isExpanded && drillError && (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={14} className="text-center py-4 text-sm text-destructive">
+          <TableCell colSpan={13} className="text-center py-4 text-sm text-destructive">
             {(drillError as Error).message === 'RATE_LIMIT'
               ? '⏳ Limite de requisições atingido. Aguarde alguns segundos e tente novamente.'
               : `Erro ao carregar: ${(drillError as Error).message}`}
@@ -662,17 +638,16 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
                         <TableHead className="w-8"></TableHead>
                         <TableHead className="w-14">Preview</TableHead>
                         <TableHead>Nome</TableHead>
-                        <TableHead className="text-right">Leads</TableHead>
                         <TableHead className="text-right">Gasto</TableHead>
+                        <TableHead className="text-right">Leads</TableHead>
                         <TableHead className="text-right">CPL</TableHead>
-                        <TableHead className="text-right">CPA</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right border-l">Leads (CRM)</TableHead>
-                        <TableHead className="text-right">MQLs</TableHead>
-                        <TableHead className="text-right">Vendas</TableHead>
-                        <TableHead className="text-right">Receita</TableHead>
-                        <TableHead className="text-right">TCV</TableHead>
-                        <TableHead className="text-right">ROI</TableHead>
+                        <TableHead className="text-right border-l">MQL</TableHead>
+                        <TableHead className="text-right">CPMQL</TableHead>
+                        <TableHead className="text-right">RM</TableHead>
+                        <TableHead className="text-right">RR</TableHead>
+                        <TableHead className="text-right">PE</TableHead>
+                        <TableHead className="text-right">Venda</TableHead>
+                        <TableHead className="text-right">ROAS</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -696,26 +671,28 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
                     <span className="text-muted-foreground">Total: {campaigns.filter(c => c.investment > 0).length} campanhas</span>
                     <div className="flex gap-6">
                       <span>
-                        <span className="text-muted-foreground">Leads: </span>
-                        <span className="font-medium">{formatNumber(campaigns.filter(c => c.investment > 0).reduce((sum, c) => sum + c.leads, 0))}</span>
-                      </span>
-                      <span>
                         <span className="text-muted-foreground">Gasto: </span>
                         <span className="font-medium">{formatCurrency(campaigns.filter(c => c.investment > 0).reduce((sum, c) => sum + c.investment, 0))}</span>
+                      </span>
+                      <span>
+                        <span className="text-muted-foreground">Leads: </span>
+                        <span className="font-medium">{formatNumber(campaigns.filter(c => c.investment > 0).reduce((sum, c) => sum + c.leads, 0))}</span>
                       </span>
                       {campaignFunnels && campaignFunnels.length > 0 && (
                         <>
                           <span>
-                            <span className="text-muted-foreground">Vendas (CRM): </span>
+                            <span className="text-muted-foreground">Vendas: </span>
                             <span className="font-medium">{campaignFunnels.reduce((s, f) => s + f.vendas, 0)}</span>
                           </span>
-                           <span>
-                            <span className="text-muted-foreground">Receita: </span>
-                            <span className="font-medium">{formatCurrency(campaignFunnels.reduce((s, f) => s + f.receita, 0))}</span>
-                          </span>
                           <span>
-                            <span className="text-muted-foreground">TCV: </span>
-                            <span className="font-medium">{formatCurrency(campaignFunnels.reduce((s, f) => s + f.tcv, 0))}</span>
+                            <span className="text-muted-foreground">ROAS: </span>
+                            <span className="font-medium">
+                              {(() => {
+                                const totalInv = campaigns.filter(c => c.investment > 0).reduce((s, c) => s + c.investment, 0);
+                                const totalRec = campaignFunnels.reduce((s, f) => s + f.receita, 0);
+                                return totalInv > 0 ? `${(totalRec / totalInv).toFixed(1)}x` : '-';
+                              })()}
+                            </span>
                           </span>
                         </>
                       )}
