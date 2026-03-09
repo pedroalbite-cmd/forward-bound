@@ -403,9 +403,14 @@ function AdSetRow({
       )}
 
       {isExpanded && ads?.filter(a => a.spend > 0).map((ad) => {
-        // Distribute ad set CRM data proportionally to ads by spend
+        // Try direct CRM match first via adCreativeFunnels
         let adFunnel: CampaignFunnel | undefined;
-        if (adSetFunnel && ads) {
+        if (adCreativeFunnels && adCreativeFunnels.size > 0) {
+          adFunnel = lookupAdCreativeFunnel(adCreativeFunnels, campaignName, adSet.name, ad.id, channelName, campaignId);
+        }
+        
+        // Fallback: distribute ad set CRM data proportionally by spend
+        if (!adFunnel && adSetFunnel && ads) {
           const filteredAds = ads.filter(a => a.spend > 0);
           const totalAdsSpend = filteredAds.reduce((s, a) => s + a.spend, 0);
           if (totalAdsSpend > 0) {
