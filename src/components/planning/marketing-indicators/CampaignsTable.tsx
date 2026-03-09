@@ -716,53 +716,75 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
                         <TableHead className="w-8"></TableHead>
                         <TableHead className="w-14">Preview</TableHead>
                         <TableHead>Nome</TableHead>
-                        <TableHead className="text-right">Gasto</TableHead>
-                        <TableHead className="text-right">Leads</TableHead>
-                        <TableHead className="text-right">CPL</TableHead>
-                        <TableHead className="text-right border-l">MQL</TableHead>
-                        <TableHead className="text-right">CPMQL</TableHead>
-                        <TableHead className="text-right">RM</TableHead>
-                        <TableHead className="text-right">RR</TableHead>
-                        <TableHead className="text-right">PE</TableHead>
-                        <TableHead className="text-right">Venda</TableHead>
-                        <TableHead className="text-right">ROAS</TableHead>
+                        {[
+                          { label: 'Gasto', key: 'spend' },
+                          { label: 'Leads', key: 'leads' },
+                          { label: 'CPL', key: 'cpl' },
+                        ].map(col => (
+                          <TableHead key={col.key} className="text-right cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort(col.key)}>
+                            <span className="flex items-center justify-end gap-1">
+                              {col.label}
+                              <ArrowUpDown className={cn("h-3 w-3", sortKey === col.key ? "text-foreground" : "text-muted-foreground")} />
+                            </span>
+                          </TableHead>
+                        ))}
+                        {[
+                          { label: 'MQL', key: 'mqls' },
+                          { label: 'CPMQL', key: 'cpmql' },
+                          { label: 'RM', key: 'rms' },
+                          { label: 'RR', key: 'rrs' },
+                          { label: 'PE', key: 'propostas' },
+                          { label: 'Venda', key: 'vendas' },
+                          { label: 'ROAS', key: 'roas' },
+                        ].map((col, i) => (
+                          <TableHead key={col.key} className={cn("text-right cursor-pointer select-none whitespace-nowrap", i === 0 && "border-l")} onClick={() => handleSort(col.key)}>
+                            <span className="flex items-center justify-end gap-1">
+                              {col.label}
+                              <ArrowUpDown className={cn("h-3 w-3", sortKey === col.key ? "text-foreground" : "text-muted-foreground")} />
+                            </span>
+                          </TableHead>
+                        ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {campaigns.filter(c => c.investment > 0).map((campaign) => (
-                        <CampaignRow
-                          key={campaign.id}
-                          campaign={campaign}
-                          isExpanded={expandedCampaigns.has(campaign.id)}
-                          onToggle={() => toggleCampaign(campaign.id)}
-                          startDate={startDate}
-                          endDate={endDate}
-                          onPreview={setPreviewData}
-                          funnel={getFunnel(campaign)}
-                          adSetFunnels={adSetFunnels}
-                        />
-                      ))}
-                      {/* CRM-only orphan funnels */}
-                      {unmatchedFunnels.map((funnel, idx) => (
-                        <TableRow key={`crm-${funnel.campaignName}-${idx}`} className="hover:bg-muted/50">
-                          <TableCell className="p-2"></TableCell>
-                          <TableCell className="w-14 p-2">
-                            <div className="w-10 h-10 bg-muted rounded flex items-center justify-center">
-                              <Image className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              {getChannelBadge(funnel.channel)}
-                              <span>{funnel.campaignName}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">-</TableCell>
-                          <TableCell className="text-right text-muted-foreground">-</TableCell>
-                          <TableCell className="text-right text-muted-foreground">-</TableCell>
-                          <CrmCells funnel={funnel} spend={0} size="md" />
-                        </TableRow>
-                      ))}
+                      {sortedRows.map((row, rowIdx) => {
+                        if (row.type === 'api') {
+                          return (
+                            <CampaignRow
+                              key={row.campaign.id}
+                              campaign={row.campaign}
+                              isExpanded={expandedCampaigns.has(row.campaign.id)}
+                              onToggle={() => toggleCampaign(row.campaign.id)}
+                              startDate={startDate}
+                              endDate={endDate}
+                              onPreview={setPreviewData}
+                              funnel={row.funnel}
+                              adSetFunnels={adSetFunnels}
+                            />
+                          );
+                        }
+                        const funnel = row.funnel;
+                        return (
+                          <TableRow key={`crm-${funnel.campaignName}-${row.idx}`} className="hover:bg-muted/50">
+                            <TableCell className="p-2"></TableCell>
+                            <TableCell className="w-14 p-2">
+                              <div className="w-10 h-10 bg-muted rounded flex items-center justify-center">
+                                <Image className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                {getChannelBadge(funnel.channel)}
+                                <span>{funnel.campaignName}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">-</TableCell>
+                            <TableCell className="text-right text-muted-foreground">-</TableCell>
+                            <TableCell className="text-right text-muted-foreground">-</TableCell>
+                            <CrmCells funnel={funnel} spend={0} size="md" />
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
 
