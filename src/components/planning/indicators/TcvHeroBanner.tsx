@@ -25,7 +25,7 @@ export function TcvHeroBanner({ vendaItems }: TcvHeroBannerProps) {
     return { tcv, totalMrrAnual, totalSetup, totalPontual, pctMrr, pctSetup, pctPontual };
   }, [vendaItems]);
 
-  if (stats.count === 0) return null;
+  if (vendaItems.length === 0) return null;
 
   const fmt = (v: number) =>
     v >= 1_000_000
