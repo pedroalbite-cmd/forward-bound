@@ -164,6 +164,57 @@ function lookupAdSetFunnel(
   return undefined;
 }
 
+// ─── Lookup helper for ad-level CRM match ─────────────────────
+function lookupAdCreativeFunnel(
+  adCreativeFunnels: Map<string, CampaignFunnel>,
+  campaignName: string,
+  adSetName: string,
+  adId: string,
+  channel: string,
+  campaignId?: string,
+): CampaignFunnel | undefined {
+  if (!adCreativeFunnels || adCreativeFunnels.size === 0) return undefined;
+  const channelId = channel === 'Google Ads' ? 'google_ads' : 'meta_ads';
+  const normAdSet = normalizeName(adSetName);
+  const normAdId = normalizeName(adId);
+  
+  // Try with campaign ID (CRM stores numeric IDs for Meta campaigns)
+  if (campaignId) {
+    const normId = normalizeName(campaignId);
+    const idKey = `${normId}::${normAdSet}::${normAdId}::${channelId}`;
+    if (adCreativeFunnels.has(idKey)) return adCreativeFunnels.get(idKey);
+    const rawId = campaignId.replace('google_', '');
+    if (rawId !== campaignId) {
+      const rawKey = `${normalizeName(rawId)}::${normAdSet}::${normAdId}::${channelId}`;
+      if (adCreativeFunnels.has(rawKey)) return adCreativeFunnels.get(rawKey);
+    }
+  }
+  
+  // Try with campaign name
+  const normCamp = normalizeName(campaignName);
+  const nameKey = `${normCamp}::${normAdSet}::${normAdId}::${channelId}`;
+  if (adCreativeFunnels.has(nameKey)) return adCreativeFunnels.get(nameKey);
+
+  // Partial scan for fuzzy matches
+  for (const [key, funnel] of adCreativeFunnels) {
+    const parts = key.split('::');
+    if (parts.length < 4) continue;
+    const [fCamp, fAdSet, fAd, fChannel] = parts;
+    if (fChannel !== channelId) continue;
+    // Ad ID must match exactly
+    if (fAd !== normAdId) continue;
+    // Campaign match (exact or partial, including by ID)
+    const campMatch = fCamp === normCamp || fCamp.includes(normCamp) || normCamp.includes(fCamp)
+      || (campaignId && (fCamp === normalizeName(campaignId) || fCamp === normalizeName(campaignId.replace('google_', ''))));
+    if (!campMatch) continue;
+    // AdSet match (partial)
+    if (fAdSet.includes(normAdSet) || normAdSet.includes(fAdSet)) {
+      return funnel;
+    }
+  }
+  return undefined;
+}
+
 // CRM cells helper for sub-rows: MQL | CPMQL | RM | RR | PE | Venda | ROAS
 function CrmCells({ funnel, spend, size = 'sm' }: { funnel?: CampaignFunnel; spend?: number; size?: 'sm' | 'md' }) {
   const textClass = size === 'sm' ? 'text-xs' : 'text-sm';
