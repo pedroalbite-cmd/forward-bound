@@ -329,5 +329,5 @@ export function useMarketingAttribution(
     return Array.from(channelMap.values()).sort((a, b) => b.leads - a.leads);
   }, [campaignFunnels]);
 
-  return { campaignFunnels, channelSummaries, adSetFunnels };
+  return { campaignFunnels, channelSummaries, adSetFunnels, adCreativeFunnels };
 }
