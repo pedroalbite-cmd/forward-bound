@@ -255,7 +255,7 @@ function GoogleAdGroupRow({
 
       {isExpanded && error && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={14} className="text-center py-3 text-sm text-destructive">
+          <TableCell colSpan={13} className="text-center py-3 text-sm text-destructive">
             Erro ao carregar palavras-chave: {(error as Error).message}
           </TableCell>
         </TableRow>
