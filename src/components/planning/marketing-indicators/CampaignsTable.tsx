@@ -323,7 +323,7 @@ function AdRow({ ad, onPreview, adFunnel }: { ad: AdData; onPreview: (data: Prev
       <TableCell className="text-right text-xs">{formatCurrency(ad.spend)}</TableCell>
       <TableCell className="text-right text-xs">{formatNumber(ad.leads)}</TableCell>
       <TableCell className="text-right text-xs">{ad.cpl > 0 ? formatCurrency(ad.cpl) : '-'}</TableCell>
-      <CrmCells funnel={undefined} size="sm" />
+      <CrmCells funnel={adFunnel} spend={ad.spend} size="sm" />
     </TableRow>
   );
 }
