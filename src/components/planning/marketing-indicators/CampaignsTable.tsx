@@ -364,7 +364,7 @@ function AdSetRow({
 
       {isExpanded && error && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={14} className="text-center py-3 text-sm text-destructive">
+          <TableCell colSpan={13} className="text-center py-3 text-sm text-destructive">
             {(error as Error).message === 'RATE_LIMIT'
               ? '⏳ Limite de requisições atingido. Aguarde e tente novamente.'
               : `Erro ao carregar anúncios: ${(error as Error).message}`}
