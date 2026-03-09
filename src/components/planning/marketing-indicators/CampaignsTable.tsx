@@ -362,6 +362,7 @@ function AdSetRow({
         <TableCell className="text-right text-sm">{adSet.cpl > 0 ? formatCurrency(adSet.cpl) : '-'}</TableCell>
         <TableCell className="text-right text-sm">{(adSet.cpa || 0) > 0 ? formatCurrency(adSet.cpa!) : '-'}</TableCell>
         <TableCell>{getStatusBadge(adSet.status)}</TableCell>
+        <CrmCells funnel={adSetFunnel} size="sm" />
       </TableRow>
 
       {isExpanded && isLoading && (
