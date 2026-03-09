@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ChevronDown, ChevronUp, ChevronRight, Loader2, AlertCircle, ExternalLink, Image } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronRight, Loader2, AlertCircle, ExternalLink, Image, ArrowUpDown } from "lucide-react";
 import { CHANNEL_LABELS, ChannelId } from "./types";
 import { CampaignData, AdSetData, AdData, CampaignFunnel } from "./types";
 import { useCampaignAdSets } from "@/hooks/useCampaignAdSets";
@@ -540,6 +540,8 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
   const [isOpen, setIsOpen] = useState(true);
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
   const [previewData, setPreviewData] = useState<PreviewModalData | null>(null);
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortAsc, setSortAsc] = useState(false);
 
   const toggleCampaign = (campaignId: string) => {
     setExpandedCampaigns(prev => {
@@ -548,6 +550,11 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
       else newSet.add(campaignId);
       return newSet;
     });
+  };
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) setSortAsc(!sortAsc);
+    else { setSortKey(key); setSortAsc(false); }
   };
 
   // Build lookup: campaign ID -> funnel, plus normalized name fallback
@@ -573,7 +580,6 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
   const getFunnel = (campaign: CampaignData): CampaignFunnel | undefined => {
     const byId = funnelMap.get(campaign.id);
     if (byId) return byId;
-    // Google campaigns: try raw ID
     const googleId = (campaign as any)._googleId;
     if (googleId) {
       const byRawId = funnelMap.get(googleId);
@@ -582,7 +588,6 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
     const normName = campaign.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
     const exactMatch = funnelMap.get(normName);
     if (exactMatch) return exactMatch;
-    // Partial name matching fallback for Google campaigns
     if (campaignFunnels) {
       for (const f of campaignFunnels) {
         const normFunnel = f.campaignName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -602,7 +607,6 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
     for (const c of activeCampaigns) {
       const f = getFunnel(c);
       if (f) {
-        // Add all possible keys for this funnel
         if (f.campaignId) matched.add(f.campaignId);
         const normName = f.campaignName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
         matched.add(normName);
@@ -618,6 +622,43 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
     
     return { matchedFunnelKeys: matched, unmatchedFunnels: unmatched };
   }, [campaigns, campaignFunnels, funnelMap]);
+
+  // Build unified sortable rows
+  type UnifiedRow = { type: 'api'; campaign: CampaignData; funnel?: CampaignFunnel } | { type: 'crm'; funnel: CampaignFunnel; idx: number };
+  
+  const sortedRows = useMemo<UnifiedRow[]>(() => {
+    const apiRows: UnifiedRow[] = campaigns.filter(c => c.investment > 0).map(c => ({ type: 'api' as const, campaign: c, funnel: getFunnel(c) }));
+    const crmRows: UnifiedRow[] = unmatchedFunnels.map((f, i) => ({ type: 'crm' as const, funnel: f, idx: i }));
+    const all = [...apiRows, ...crmRows];
+    
+    if (!sortKey) return all;
+    
+    const getValue = (row: UnifiedRow): number => {
+      const camp = row.type === 'api' ? row.campaign : null;
+      const funnel = row.type === 'api' ? row.funnel : row.funnel;
+      const spend = camp?.investment || 0;
+      
+      switch (sortKey) {
+        case 'spend': return spend;
+        case 'leads': return camp?.leads || 0;
+        case 'cpl': return camp?.cpl || 0;
+        case 'mqls': return funnel?.mqls || 0;
+        case 'cpmql': return (funnel?.mqls && spend > 0) ? spend / funnel.mqls : 0;
+        case 'rms': return funnel?.rms || 0;
+        case 'rrs': return funnel?.rrs || 0;
+        case 'propostas': return funnel?.propostas || 0;
+        case 'vendas': return funnel?.vendas || 0;
+        case 'roas': return (funnel && spend > 0) ? funnel.receita / spend : (funnel?.receita || 0);
+        default: return 0;
+      }
+    };
+    
+    return all.sort((a, b) => {
+      const av = getValue(a);
+      const bv = getValue(b);
+      return sortAsc ? av - bv : bv - av;
+    });
+  }, [campaigns, unmatchedFunnels, sortKey, sortAsc, funnelMap]);
 
   const hasData = campaigns.length > 0 || unmatchedFunnels.length > 0;
 
@@ -675,53 +716,75 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
                         <TableHead className="w-8"></TableHead>
                         <TableHead className="w-14">Preview</TableHead>
                         <TableHead>Nome</TableHead>
-                        <TableHead className="text-right">Gasto</TableHead>
-                        <TableHead className="text-right">Leads</TableHead>
-                        <TableHead className="text-right">CPL</TableHead>
-                        <TableHead className="text-right border-l">MQL</TableHead>
-                        <TableHead className="text-right">CPMQL</TableHead>
-                        <TableHead className="text-right">RM</TableHead>
-                        <TableHead className="text-right">RR</TableHead>
-                        <TableHead className="text-right">PE</TableHead>
-                        <TableHead className="text-right">Venda</TableHead>
-                        <TableHead className="text-right">ROAS</TableHead>
+                        {[
+                          { label: 'Gasto', key: 'spend' },
+                          { label: 'Leads', key: 'leads' },
+                          { label: 'CPL', key: 'cpl' },
+                        ].map(col => (
+                          <TableHead key={col.key} className="text-right cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort(col.key)}>
+                            <span className="flex items-center justify-end gap-1">
+                              {col.label}
+                              <ArrowUpDown className={cn("h-3 w-3", sortKey === col.key ? "text-foreground" : "text-muted-foreground")} />
+                            </span>
+                          </TableHead>
+                        ))}
+                        {[
+                          { label: 'MQL', key: 'mqls' },
+                          { label: 'CPMQL', key: 'cpmql' },
+                          { label: 'RM', key: 'rms' },
+                          { label: 'RR', key: 'rrs' },
+                          { label: 'PE', key: 'propostas' },
+                          { label: 'Venda', key: 'vendas' },
+                          { label: 'ROAS', key: 'roas' },
+                        ].map((col, i) => (
+                          <TableHead key={col.key} className={cn("text-right cursor-pointer select-none whitespace-nowrap", i === 0 && "border-l")} onClick={() => handleSort(col.key)}>
+                            <span className="flex items-center justify-end gap-1">
+                              {col.label}
+                              <ArrowUpDown className={cn("h-3 w-3", sortKey === col.key ? "text-foreground" : "text-muted-foreground")} />
+                            </span>
+                          </TableHead>
+                        ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {campaigns.filter(c => c.investment > 0).map((campaign) => (
-                        <CampaignRow
-                          key={campaign.id}
-                          campaign={campaign}
-                          isExpanded={expandedCampaigns.has(campaign.id)}
-                          onToggle={() => toggleCampaign(campaign.id)}
-                          startDate={startDate}
-                          endDate={endDate}
-                          onPreview={setPreviewData}
-                          funnel={getFunnel(campaign)}
-                          adSetFunnels={adSetFunnels}
-                        />
-                      ))}
-                      {/* CRM-only orphan funnels */}
-                      {unmatchedFunnels.map((funnel, idx) => (
-                        <TableRow key={`crm-${funnel.campaignName}-${idx}`} className="hover:bg-muted/50">
-                          <TableCell className="p-2"></TableCell>
-                          <TableCell className="w-14 p-2">
-                            <div className="w-10 h-10 bg-muted rounded flex items-center justify-center">
-                              <Image className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              {getChannelBadge(funnel.channel)}
-                              <span>{funnel.campaignName}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">-</TableCell>
-                          <TableCell className="text-right text-muted-foreground">-</TableCell>
-                          <TableCell className="text-right text-muted-foreground">-</TableCell>
-                          <CrmCells funnel={funnel} spend={0} size="md" />
-                        </TableRow>
-                      ))}
+                      {sortedRows.map((row, rowIdx) => {
+                        if (row.type === 'api') {
+                          return (
+                            <CampaignRow
+                              key={row.campaign.id}
+                              campaign={row.campaign}
+                              isExpanded={expandedCampaigns.has(row.campaign.id)}
+                              onToggle={() => toggleCampaign(row.campaign.id)}
+                              startDate={startDate}
+                              endDate={endDate}
+                              onPreview={setPreviewData}
+                              funnel={row.funnel}
+                              adSetFunnels={adSetFunnels}
+                            />
+                          );
+                        }
+                        const funnel = row.funnel;
+                        return (
+                          <TableRow key={`crm-${funnel.campaignName}-${row.idx}`} className="hover:bg-muted/50">
+                            <TableCell className="p-2"></TableCell>
+                            <TableCell className="w-14 p-2">
+                              <div className="w-10 h-10 bg-muted rounded flex items-center justify-center">
+                                <Image className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                {getChannelBadge(funnel.channel)}
+                                <span>{funnel.campaignName}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">-</TableCell>
+                            <TableCell className="text-right text-muted-foreground">-</TableCell>
+                            <TableCell className="text-right text-muted-foreground">-</TableCell>
+                            <CrmCells funnel={funnel} spend={0} size="md" />
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
 
