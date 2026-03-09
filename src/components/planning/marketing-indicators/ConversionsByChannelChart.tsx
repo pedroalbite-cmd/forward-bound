@@ -56,7 +56,6 @@ function normalizeOrigemLead(raw: string): string {
   const key = base.toLowerCase().replace(/\.com\/?$/, '').replace(/\/$/, '');
   return ORIGEM_MAP[key] || (base.charAt(0).toUpperCase() + base.slice(1));
 }
-}
 
 function inferOrigemLead(card: AttributionCard): string {
   const raw = card.origemLead?.trim();
