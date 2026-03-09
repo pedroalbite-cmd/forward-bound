@@ -20,7 +20,7 @@ export function useMrrBase() {
         .order("month");
 
       if (error) throw error;
-      return data as MrrBaseRow[];
+      return (data as unknown as MrrBaseRow[]);
     },
   });
 
