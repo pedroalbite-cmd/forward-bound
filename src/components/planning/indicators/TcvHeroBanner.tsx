@@ -38,7 +38,6 @@ export function TcvHeroBanner({ vendaItems }: TcvHeroBannerProps) {
     { label: "MRR Anualizado", value: stats.totalMrrAnual, pct: stats.pctMrr, icon: TrendingUp, color: "text-chart-1" },
     { label: "Setup", value: stats.totalSetup, pct: stats.pctSetup, icon: FileText, color: "text-chart-2" },
     { label: "Pontual", value: stats.totalPontual, pct: stats.pctPontual, icon: Zap, color: "text-chart-3" },
-    { label: "Ticket Médio", value: stats.ticketMedio, pct: null, icon: Receipt, color: "text-chart-4" },
   ];
 
   return (
