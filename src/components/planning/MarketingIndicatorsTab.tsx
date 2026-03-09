@@ -268,7 +268,7 @@ export function MarketingIndicatorsTab() {
     return result;
   }, [modeloAtualAllCards, franquiaCards, oxyHackerCards]);
 
-  const { campaignFunnels, channelSummaries, adSetFunnels } = useMarketingAttribution(allAttributionCards, allCampaigns);
+  const { campaignFunnels, channelSummaries, adSetFunnels, adCreativeFunnels } = useMarketingAttribution(allAttributionCards, allCampaigns);
 
   // Aggregate Google Ads API totals for enrichment
   const googleAdsApiTotals = useMemo(() => {
