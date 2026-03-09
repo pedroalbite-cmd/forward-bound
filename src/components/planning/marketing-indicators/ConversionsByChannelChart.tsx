@@ -54,7 +54,9 @@ function normalizeOrigemLead(raw: string): string {
   if (base.includes(',')) base = base.split(',')[0].trim();
   if (/^\d{10,}$/.test(base)) return 'Meta Ads';
   const key = base.toLowerCase().replace(/\.com\/?$/, '').replace(/\/$/, '');
-  return ORIGEM_MAP[key] || (base.charAt(0).toUpperCase() + base.slice(1));
+  const result = ORIGEM_MAP[key] || (base.charAt(0).toUpperCase() + base.slice(1));
+  if (raw !== result) console.log('[normalizeOrigemLead]', JSON.stringify(raw), '->', result);
+  return result;
 }
 
 function inferOrigemLead(card: AttributionCard): string {
