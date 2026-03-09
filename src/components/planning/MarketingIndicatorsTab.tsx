@@ -254,16 +254,6 @@ export function MarketingIndicatorsTab() {
       });
     }
     
-    for (const c of oxyHackerCards) {
-      result.push({
-        id: c.id, titulo: c.titulo, campanha: c.campanha, conjuntoGrupo: c.conjuntoGrupo,
-        fonte: c.fonte, fbclid: c.fbclid, gclid: c.gclid, tipoOrigem: c.tipoOrigem,
-        origemLead: c.origemLead, palavraChaveAnuncio: c.palavraChaveAnuncio,
-        fase: c.fase, dataEntrada: c.dataEntrada, valor: c.valor,
-        valorMRR: c.valorMRR, valorSetup: c.valorSetup, valorPontual: c.valorPontual,
-        bu: 'Oxy Hacker',
-      });
-    }
     
     return result;
   }, [modeloAtualAllCards, franquiaCards, oxyHackerCards]);
