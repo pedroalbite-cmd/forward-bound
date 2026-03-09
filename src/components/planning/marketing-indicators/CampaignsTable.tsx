@@ -530,7 +530,18 @@ export function CampaignsTable({ campaigns, campaignFunnels, isLoading, error, s
       if (byRawId) return byRawId;
     }
     const normName = campaign.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
-    return funnelMap.get(normName);
+    const exactMatch = funnelMap.get(normName);
+    if (exactMatch) return exactMatch;
+    // Partial name matching fallback for Google campaigns
+    if (campaignFunnels) {
+      for (const f of campaignFunnels) {
+        const normFunnel = f.campaignName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (normFunnel.includes(normName) || normName.includes(normFunnel)) {
+          return f;
+        }
+      }
+    }
+    return undefined;
   };
 
   const hasData = campaigns.length > 0;
