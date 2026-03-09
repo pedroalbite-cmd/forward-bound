@@ -686,6 +686,7 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
                           endDate={endDate}
                           onPreview={setPreviewData}
                           funnel={getFunnel(campaign)}
+                          adSetFunnels={adSetFunnels}
                         />
                       ))}
                     </TableBody>
