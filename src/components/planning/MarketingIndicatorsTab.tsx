@@ -496,6 +496,9 @@ export function MarketingIndicatorsTab() {
         </div>
       )}
 
+      {/* TCV Hero Banner */}
+      <TcvHeroBanner attributionCards={allAttributionCards} />
+
       {/* Channel Metrics Cards (from spreadsheet) */}
       <ChannelMetricsCards
         channels={enrichedChannels}
