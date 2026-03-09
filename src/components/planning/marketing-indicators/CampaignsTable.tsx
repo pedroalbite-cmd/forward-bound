@@ -347,12 +347,10 @@ function AdSetRow({
             )}
           </div>
         </TableCell>
-        <TableCell className="text-right text-sm">{formatNumber(adSet.leads)}</TableCell>
         <TableCell className="text-right text-sm">{formatCurrency(adSet.spend)}</TableCell>
+        <TableCell className="text-right text-sm">{formatNumber(adSet.leads)}</TableCell>
         <TableCell className="text-right text-sm">{adSet.cpl > 0 ? formatCurrency(adSet.cpl) : '-'}</TableCell>
-        <TableCell className="text-right text-sm">{(adSet.cpa || 0) > 0 ? formatCurrency(adSet.cpa!) : '-'}</TableCell>
-        <TableCell>{getStatusBadge(adSet.status)}</TableCell>
-        <CrmCells funnel={adSetFunnel} size="sm" />
+        <CrmCells funnel={adSetFunnel} spend={adSet.spend} size="sm" />
       </TableRow>
 
       {isExpanded && isLoading && (
