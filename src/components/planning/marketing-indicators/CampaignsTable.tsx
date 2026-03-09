@@ -119,13 +119,27 @@ function lookupAdSetFunnel(
   campaignName: string,
   adSetName: string,
   channel: string,
+  campaignId?: string,
 ): CampaignFunnel | undefined {
   if (!adSetFunnels || adSetFunnels.size === 0) return undefined;
   const normCamp = normalizeName(campaignName);
   const normAdSet = normalizeName(adSetName);
   const channelId = channel === 'Google Ads' ? 'google_ads' : 'meta_ads';
   
-  // Exact key match
+  // Try with campaign ID first (CRM often stores numeric Meta/Google IDs)
+  if (campaignId) {
+    const normId = normalizeName(campaignId);
+    const idKey = `${normId}::${normAdSet}::${channelId}`;
+    if (adSetFunnels.has(idKey)) return adSetFunnels.get(idKey);
+    // Also try raw ID without google_ prefix
+    const rawId = campaignId.replace('google_', '');
+    if (rawId !== campaignId) {
+      const rawIdKey = `${normalizeName(rawId)}::${normAdSet}::${channelId}`;
+      if (adSetFunnels.has(rawIdKey)) return adSetFunnels.get(rawIdKey);
+    }
+  }
+  
+  // Exact key match by name
   const exactKey = `${normCamp}::${normAdSet}::${channelId}`;
   if (adSetFunnels.has(exactKey)) return adSetFunnels.get(exactKey);
   
@@ -136,9 +150,10 @@ function lookupAdSetFunnel(
     const funnelAdSet = parts[1];
     const funnelChannel = parts[2];
     if (funnelChannel !== channelId) continue;
-    // Check campaign match (exact or partial)
+    // Check campaign match (exact or partial, including ID)
     const funnelCamp = parts[0];
-    const campMatch = funnelCamp === normCamp || funnelCamp.includes(normCamp) || normCamp.includes(funnelCamp);
+    const campMatch = funnelCamp === normCamp || funnelCamp.includes(normCamp) || normCamp.includes(funnelCamp)
+      || (campaignId && (funnelCamp === normalizeName(campaignId) || funnelCamp === normalizeName(campaignId.replace('google_', ''))));
     if (!campMatch) continue;
     // Check adSet match (partial)
     if (funnelAdSet.includes(normAdSet) || normAdSet.includes(funnelAdSet)) {
