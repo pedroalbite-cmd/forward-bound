@@ -224,7 +224,7 @@ export function MarketingIndicatorsTab() {
 
   // Fetch real card data from Pipefy for attribution
   const { allCards: modeloAtualAllCards, isLoading: isLoadingMACards, getCardsForIndicator: maGetCards } = useModeloAtualAnalytics(dateRange.from, dateRange.to);
-  const { getCardsForIndicator: o2GetCards } = useO2TaxAnalytics(dateRange.from, dateRange.to);
+  const { getCardsForIndicator: o2GetCards, allCards: o2TaxAllCards } = useO2TaxAnalytics(dateRange.from, dateRange.to);
   const { cards: franquiaCards, getCardsForIndicator: franquiaGetCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Franquia');
   const { cards: oxyHackerCards, getCardsForIndicator: oxyGetCards } = useExpansaoAnalytics(dateRange.from, dateRange.to, 'Oxy Hacker');
 
