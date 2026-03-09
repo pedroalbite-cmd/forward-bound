@@ -594,7 +594,43 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
     return undefined;
   };
 
-  const hasData = campaigns.length > 0;
+  // Compute matched funnel keys + orphan funnels
+  const { matchedFunnelKeys, unmatchedFunnels } = useMemo(() => {
+    const activeCampaigns = campaigns.filter(c => c.investment > 0);
+    const matched = new Set<string>();
+    
+    for (const c of activeCampaigns) {
+      const f = getFunnel(c);
+      if (f) {
+        // Add all possible keys for this funnel
+        if (f.campaignId) matched.add(f.campaignId);
+        const normName = f.campaignName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
+        matched.add(normName);
+      }
+    }
+    
+    const unmatched = (campaignFunnels || []).filter(f => {
+      if (f.campaignId && matched.has(f.campaignId)) return false;
+      const normName = f.campaignName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (matched.has(normName)) return false;
+      return f.leads > 0 || f.vendas > 0;
+    });
+    
+    return { matchedFunnelKeys: matched, unmatchedFunnels: unmatched };
+  }, [campaigns, campaignFunnels, funnelMap]);
+
+  const hasData = campaigns.length > 0 || unmatchedFunnels.length > 0;
+
+  const getChannelBadge = (channel: ChannelId) => {
+    const colors: Record<ChannelId, string> = {
+      meta_ads: 'border-indigo-500 text-indigo-600',
+      google_ads: 'border-blue-500 text-blue-600',
+      eventos: 'border-amber-500 text-amber-600',
+      organico: 'border-emerald-500 text-emerald-600',
+      outros: 'border-muted-foreground text-muted-foreground',
+    };
+    return <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${colors[channel]}`}>{CHANNEL_LABELS[channel]}</Badge>;
+  };
 
   return (
     <>
@@ -608,7 +644,7 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
                 <div className="flex items-center gap-2">
                   <CardTitle className="text-base font-medium">Campanhas e Anúncios</CardTitle>
                   {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-                  {hasData && <Badge variant="outline" className="text-xs">{campaigns.length} campanhas</Badge>}
+                  {hasData && <Badge variant="outline" className="text-xs">{campaigns.length + unmatchedFunnels.length} campanhas</Badge>}
                 </div>
                 {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
               </Button>
@@ -665,11 +701,32 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
                           adSetFunnels={adSetFunnels}
                         />
                       ))}
+                      {/* CRM-only orphan funnels */}
+                      {unmatchedFunnels.map((funnel, idx) => (
+                        <TableRow key={`crm-${funnel.campaignName}-${idx}`} className="hover:bg-muted/50">
+                          <TableCell className="p-2"></TableCell>
+                          <TableCell className="w-14 p-2">
+                            <div className="w-10 h-10 bg-muted rounded flex items-center justify-center">
+                              <Image className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              {getChannelBadge(funnel.channel)}
+                              <span>{funnel.campaignName}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">-</TableCell>
+                          <TableCell className="text-right text-muted-foreground">-</TableCell>
+                          <TableCell className="text-right text-muted-foreground">-</TableCell>
+                          <CrmCells funnel={funnel} spend={0} size="md" />
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
 
                   <div className="mt-4 pt-4 border-t flex justify-between text-sm">
-                    <span className="text-muted-foreground">Total: {campaigns.filter(c => c.investment > 0).length} campanhas</span>
+                    <span className="text-muted-foreground">Total: {campaigns.filter(c => c.investment > 0).length + unmatchedFunnels.length} campanhas</span>
                     <div className="flex gap-6">
                       <span>
                         <span className="text-muted-foreground">Gasto: </span>
