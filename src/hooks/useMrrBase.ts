@@ -6,6 +6,7 @@ interface MrrBaseRow {
   month: string;
   year: number;
   value: number;
+  is_total_override: boolean;
 }
 
 export function useMrrBase() {
@@ -29,9 +30,16 @@ export function useMrrBase() {
     return row ? Number(row.value) : 0;
   };
 
+  const isTotalOverride = (month: string, year: number): boolean => {
+    if (!data) return false;
+    const row = data.find(r => r.month === month && r.year === year);
+    return row ? Boolean(row.is_total_override) : false;
+  };
+
   return {
     mrrBaseData: data || [],
     getMrrBaseForMonth,
+    isTotalOverride,
     isLoading,
   };
 }
