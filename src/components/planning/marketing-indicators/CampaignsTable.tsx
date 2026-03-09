@@ -249,6 +249,7 @@ function GoogleAdGroupRow({
         <TableCell className="text-right text-sm">{adGroup.cpl > 0 ? formatCurrency(adGroup.cpl) : '-'}</TableCell>
         <TableCell className="text-right text-sm">{(adGroup.cpa || 0) > 0 ? formatCurrency(adGroup.cpa!) : '-'}</TableCell>
         <TableCell>{getStatusBadge(adGroup.status)}</TableCell>
+        <CrmCells funnel={adSetFunnel} size="sm" />
       </TableRow>
 
       {isExpanded && isLoading && (
