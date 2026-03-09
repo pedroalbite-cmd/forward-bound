@@ -18,12 +18,11 @@ export function TcvHeroBanner({ vendaItems }: TcvHeroBannerProps) {
     const totalSetup = vendaItems.reduce((s, c) => s + (c.setup || 0), 0);
     const totalPontual = vendaItems.reduce((s, c) => s + (c.pontual || 0), 0);
     const tcv = totalMrrAnual + totalSetup + totalPontual;
-    const ticketMedio = vendaItems.length > 0 ? tcv / vendaItems.length : 0;
     const total = totalMrrAnual + totalSetup + totalPontual;
     const pctMrr = total > 0 ? (totalMrrAnual / total) * 100 : 0;
     const pctSetup = total > 0 ? (totalSetup / total) * 100 : 0;
     const pctPontual = total > 0 ? (totalPontual / total) * 100 : 0;
-    return { tcv, totalMrrAnual, totalSetup, totalPontual, count: vendaItems.length, ticketMedio, pctMrr, pctSetup, pctPontual };
+    return { tcv, totalMrrAnual, totalSetup, totalPontual, pctMrr, pctSetup, pctPontual };
   }, [vendaItems]);
 
   if (stats.count === 0) return null;
