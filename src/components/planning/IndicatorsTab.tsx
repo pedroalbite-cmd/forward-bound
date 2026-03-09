@@ -414,7 +414,8 @@ export function IndicatorsTab() {
   const { funnelData, metasPorBU } = useMediaMetas();
   
   // Get consolidated metas (database overrides + Plan Growth fallback)
-  const { getMetaMonetaryForPeriod } = useConsolidatedMetas();
+  const { getMetaMonetaryForPeriod, getConsolidatedMeta } = useConsolidatedMetas();
+  const { getMrrBaseForMonth, isLoading: isLoadingMrrBase } = useMrrBase();
   
   // Get closer metas for filtering goals by closer percentage
   const { getFilteredMeta } = useCloserMetas(currentYear);
