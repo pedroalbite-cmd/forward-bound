@@ -64,14 +64,58 @@ function normalizeName(name: string): string {
 }
 
 // Values that are CRM garbage — not real campaign identifiers
-const GARBAGE_CAMPAIGN_VALUES = new Set(['1', '{{campaign.id}}', 'inbound', '{{ad.id}}', '{{adset.id}}', 'null', 'undefined', '0']);
+const GARBAGE_CAMPAIGN_VALUES = new Set(['1', '{{campaign.id}}', 'inbound', '{{ad.id}}', '{{adset.id}}', 'null', 'undefined', '0', '{{campaign.name}}']);
+
+function isGarbageValue(val: string): boolean {
+  const lower = val.toLowerCase().trim();
+  if (GARBAGE_CAMPAIGN_VALUES.has(lower)) return true;
+  if (/^\{\{.*\}\}$/.test(lower)) return true; // any {{template}} placeholder
+  if (lower.length < 2) return true;
+  return false;
+}
 
 function sanitizeCampaignField(value?: string): string | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
-  if (GARBAGE_CAMPAIGN_VALUES.has(trimmed.toLowerCase())) return undefined;
-  if (trimmed.length < 2) return undefined;
+  if (isGarbageValue(trimmed)) return undefined;
   return trimmed;
+}
+
+interface ParsedUTM {
+  campaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
+}
+
+function parseCompositeUTM(raw?: string): ParsedUTM {
+  if (!raw) return {};
+  const trimmed = raw.trim();
+
+  // If it contains utm_content or utm_term, parse as composite
+  if (trimmed.includes('utm_content=') || trimmed.includes('utm_term=')) {
+    const parts = trimmed.split(',');
+    let campaign: string | undefined;
+    let utmContent: string | undefined;
+    let utmTerm: string | undefined;
+
+    for (const part of parts) {
+      const p = part.trim();
+      if (p.startsWith('utm_content=')) {
+        const val = p.replace('utm_content=', '').trim();
+        utmContent = isGarbageValue(val) ? undefined : val;
+      } else if (p.startsWith('utm_term=')) {
+        const val = p.replace('utm_term=', '').trim();
+        utmTerm = isGarbageValue(val) ? undefined : val;
+      } else if (!campaign) {
+        campaign = isGarbageValue(p) ? undefined : p;
+      }
+    }
+    return { campaign, utmContent, utmTerm };
+  }
+
+  // Not composite — treat entire value as campaign
+  const sanitized = sanitizeCampaignField(trimmed);
+  return { campaign: sanitized };
 }
 
 export function useMarketingAttribution(
@@ -86,9 +130,12 @@ export function useMarketingAttribution(
     for (const card of allCards) {
       const stage = PHASE_FUNNEL_MAP[card.fase] || 'leads';
       const cumulativeStages = getCumulativeStages(stage);
-      const campaign = sanitizeCampaignField(card.campanha) || '(Sem campanha)';
-      const conjunto = sanitizeCampaignField(card.conjuntoGrupo) || '(Sem conjunto)';
-      const anuncio = sanitizeCampaignField(card.palavraChaveAnuncio) || '(Sem anúncio)';
+      
+      // Parse composite UTM from campanha field
+      const parsed = parseCompositeUTM(card.campanha);
+      const campaign = parsed.campaign || '(Sem campanha)';
+      const conjunto = sanitizeCampaignField(card.conjuntoGrupo) || parsed.utmContent || '(Sem conjunto)';
+      const anuncio = sanitizeCampaignField(card.palavraChaveAnuncio) || parsed.utmTerm || '(Sem anúncio)';
       const key = `${card.id}`;
       
       if (!cardBestStage.has(key)) {
