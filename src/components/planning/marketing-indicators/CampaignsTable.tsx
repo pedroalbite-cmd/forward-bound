@@ -147,30 +147,30 @@ function lookupAdSetFunnel(
   return undefined;
 }
 
-// CRM cells helper for sub-rows
-function CrmCells({ funnel, size = 'sm' }: { funnel?: CampaignFunnel; size?: 'sm' | 'md' }) {
+// CRM cells helper for sub-rows: MQL | CPMQL | RM | RR | PE | Venda | ROAS
+function CrmCells({ funnel, spend, size = 'sm' }: { funnel?: CampaignFunnel; spend?: number; size?: 'sm' | 'md' }) {
   const textClass = size === 'sm' ? 'text-xs' : 'text-sm';
+  const dash = <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>;
   if (!funnel) {
     return (
       <>
-        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
-        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
-        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
-        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
-        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
-        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
+        {dash}{dash}{dash}{dash}{dash}{dash}{dash}
       </>
     );
   }
+  const inv = spend || funnel.investimento || 0;
+  const cpmql = funnel.mqls > 0 ? inv / funnel.mqls : 0;
+  const roas = inv > 0 ? funnel.receita / inv : 0;
   return (
     <>
-      <TableCell className={`text-right ${textClass}`}>{funnel.leads}</TableCell>
       <TableCell className={`text-right ${textClass}`}>{funnel.mqls}</TableCell>
+      <TableCell className={`text-right ${textClass}`}>{cpmql > 0 ? formatCurrency(cpmql) : '-'}</TableCell>
+      <TableCell className={`text-right ${textClass}`}>{funnel.rms}</TableCell>
+      <TableCell className={`text-right ${textClass}`}>{funnel.rrs}</TableCell>
+      <TableCell className={`text-right ${textClass}`}>{funnel.propostas}</TableCell>
       <TableCell className={`text-right ${textClass}`}>{funnel.vendas}</TableCell>
-      <TableCell className={`text-right ${textClass}`}>{funnel.receita > 0 ? formatCurrency(funnel.receita) : '-'}</TableCell>
-      <TableCell className={`text-right ${textClass}`}>{funnel.tcv > 0 ? formatCurrency(funnel.tcv) : '-'}</TableCell>
-      <TableCell className={cn(`text-right ${textClass} font-semibold`, funnel.roi >= 1 ? "text-chart-2" : funnel.roi > 0 ? "text-destructive" : "text-muted-foreground")}>
-        {funnel.investimento > 0 ? `${funnel.roi.toFixed(1)}x` : '-'}
+      <TableCell className={cn(`text-right ${textClass} font-semibold`, roas >= 1 ? "text-chart-2" : roas > 0 ? "text-destructive" : "text-muted-foreground")}>
+        {inv > 0 ? `${roas.toFixed(1)}x` : '-'}
       </TableCell>
     </>
   );
