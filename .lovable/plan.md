@@ -1,62 +1,46 @@
 
 
-## Desbloquear Fevereiro e Adicionar Distribuicao de Diferenca nas Metas Monetarias
+## Diagnóstico: Vendas faltando na atribuição de campanhas
 
-### Objetivo
-Permitir editar meses anteriormente bloqueados (como Fevereiro) e, ao alterar uma meta, mostrar a diferenca em relacao ao total anterior da BU com opcoes inteligentes de redistribuicao.
+### Causa raiz
 
-### Alteracoes
+O bug está na linha 308-315 de `useModeloAtualAnalytics.ts`. A merge de cards assinados no período para `allCardsUnfiltered` (usado pela atribuição de marketing) deduplica por **card ID** apenas:
 
-#### 1. Remover trava de meses (`MonetaryMetasTab.tsx`)
-- Remover a funcao `isMonthLocked` e a logica de `disabled` nos inputs. Todos os meses passam a ser editaveis.
-- Remover os indicadores visuais de cadeado.
-
-#### 2. Barra de diferenca com opcoes de distribuicao
-Quando o usuario altera o faturamento de um mes, o sistema calcula a diferenca entre o total antigo e o novo da BU selecionada. Se houver diferenca, exibe uma barra flutuante (similar a da imagem do Plan Growth) com:
-
-- **Informacao**: "Diferenca: +R$ 55.960 no O2 TAX" (ou valor negativo)
-- **Botao 1 - "Distribuir nos meses restantes"**: Divide a diferenca (com sinal invertido) igualmente entre todos os meses que NAO foram editados nesta sessao.
-- **Botao 2 - "Distribuir em periodo"**: Abre um popover/dropdown onde o usuario seleciona:
-  - Um quarter (Q1, Q2, Q3, Q4)
-  - Ou um range customizado (mes inicio -> mes fim)
-  - Ao confirmar, distribui a diferenca igualmente entre os meses do periodo selecionado (excluindo o mes que foi editado).
-- **Botao "Descartar"**: Reverte todas as alteracoes locais ao estado do banco.
-
-#### 3. Logica de distribuicao
-- A diferenca eh calculada como: `totalAnterior - totalAtual` da BU (antes vs depois da edicao).
-- Se a diferenca for positiva (usuario reduziu um mes), ela eh somada aos meses alvo.
-- Se for negativa (usuario aumentou um mes), ela eh subtraida dos meses alvo.
-- A distribuicao eh feita igualmente (diferenca / qtd meses alvo), com arredondamento e ajuste do residuo no ultimo mes.
-- O total da BU se mantem constante apos redistribuicao.
-
-#### 4. Rastreamento de edicoes manuais
-- Manter um `Set<string>` de meses editados manualmente na sessao atual.
-- "Meses restantes" = meses que NAO estao nesse set.
-- Apos distribuir, os meses que receberam ajuste NAO sao marcados como editados (permitindo redistribuicoes subsequentes).
-
-### Detalhes tecnicos
-
-**Arquivo**: `src/components/planning/MonetaryMetasTab.tsx`
-
-**Estado adicional**:
-```text
-editedMonths: Set<string>     -- meses tocados pelo usuario
-previousBuTotal: number       -- total da BU antes das edicoes
-showDistribution: boolean     -- controla visibilidade da barra
-distributionPeriod: 'remaining' | 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'custom'
-customRange: [MonthType, MonthType]
+```typescript
+// BUG: deduplica por ID — se o card já tem qualquer movimento no período,
+// a linha "Contrato assinado" da query de assinatura é DESCARTADA
+const existingUnfilteredIds = new Set(allCardsUnfiltered.map(c => c.id));
+for (const sc of signatureCardsUnfiltered) {
+  if (!existingUnfilteredIds.has(sc.id)) { // ← só adiciona se ID não existe
+    allCardsUnfiltered.push(sc);
+  }
+}
 ```
 
-**Barra de distribuicao**: Renderizada como um `div` fixo no bottom (estilo identico ao floating bar do Plan Growth), contendo:
-- Badge com a diferenca formatada
-- Botoes de acao
-- Popover para selecao de periodo (usando Select ou RadioGroup)
+Enquanto isso, a merge para o array `cards` (usado nos indicadores) deduplica por **id+fase** (linha 300), preservando corretamente as vendas.
 
-**Fluxo**:
-1. Usuario edita faturamento de Fev de R$ 135.960 para R$ 80.000
-2. Diferenca: R$ 55.960 (sobra para distribuir)
-3. Barra aparece: "1 alteracao | O2 TAX: +R$ 55.960"
-4. Usuario clica "Distribuir nos restantes" -> R$ 55.960 / 10 meses = R$ 5.596 adicionado a cada mes de Mar-Dez
-5. Ou clica "Distribuir em periodo" -> seleciona Q3 -> R$ 55.960 / 3 = R$ 18.653 em Jul, Ago, Set
-6. Total da BU permanece o mesmo de antes da edicao
+**Resultado**: Um card que tem movimentação de "Novos Leads" em fevereiro (já está no `allCardsUnfiltered`) NÃO recebe a linha de "Contrato assinado" da query de assinatura. Na atribuição, esse card nunca chega ao estágio `vendas`.
+
+### Correção
+
+**Arquivo**: `src/hooks/useModeloAtualAnalytics.ts`, linhas 308-315
+
+Trocar a deduplicação de `id` para `id|fase` (mesmo padrão da linha 300):
+
+```typescript
+// Merge signature cards into allCardsUnfiltered (deduplicate by id+fase)
+const existingUnfilteredKeys = new Set(allCardsUnfiltered.map(c => `${c.id}|${c.fase}`));
+for (const sc of signatureCardsUnfiltered) {
+  if (!existingUnfilteredKeys.has(`${sc.id}|${sc.fase}`)) {
+    allCardsUnfiltered.push(sc);
+    existingUnfilteredKeys.add(`${sc.id}|${sc.fase}`);
+  }
+}
+```
+
+Isso garante que a linha "Contrato assinado" (fase de venda) seja adicionada mesmo que o card já tenha outras fases no array. O hook `useMarketingAttribution` já acumula estágios por card ID, então passará a contar corretamente as vendas com suas campanhas/anúncios associados.
+
+### Impacto
+- As vendas que antes eram "invisíveis" na atribuição passarão a aparecer com match direto de campanha/conjunto/anúncio
+- Nenhuma alteração necessária em outros arquivos — o fix é cirúrgico
 
