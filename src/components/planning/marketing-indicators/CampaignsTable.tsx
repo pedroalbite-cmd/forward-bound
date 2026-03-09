@@ -465,7 +465,7 @@ function CampaignRow({
 
       {isExpanded && drillError && (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={14} className="text-center py-4 text-sm text-destructive">
+          <TableCell colSpan={13} className="text-center py-4 text-sm text-destructive">
             {(drillError as Error).message === 'RATE_LIMIT'
               ? '⏳ Limite de requisições atingido. Aguarde alguns segundos e tente novamente.'
               : `Erro ao carregar: ${(drillError as Error).message}`}
