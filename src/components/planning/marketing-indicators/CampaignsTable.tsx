@@ -559,7 +559,7 @@ function CampaignRow({
         isGoogle ? (
           <GoogleAdGroupRow key={item.id} adGroup={item} startDate={startDate} endDate={endDate} adSetFunnel={getSubRowFunnel(item)} />
         ) : (
-          <AdSetRow key={item.id} adSet={item} startDate={startDate} endDate={endDate} onPreview={onPreview} adSetFunnel={getSubRowFunnel(item)} />
+          <AdSetRow key={item.id} adSet={item} startDate={startDate} endDate={endDate} onPreview={onPreview} adSetFunnel={getSubRowFunnel(item)} adCreativeFunnels={adCreativeFunnels} campaignName={campaign.name} campaignId={campaign.id} channelName={campaign.channel} />
         )
       ))}
     </>
