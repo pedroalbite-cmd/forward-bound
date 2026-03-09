@@ -1,62 +1,39 @@
 
 
-## Desbloquear Fevereiro e Adicionar Distribuicao de Diferenca nas Metas Monetarias
+## Problema
 
-### Objetivo
-Permitir editar meses anteriormente bloqueados (como Fevereiro) e, ao alterar uma meta, mostrar a diferenca em relacao ao total anterior da BU com opcoes inteligentes de redistribuicao.
+Campanhas com vendas que foram resolvidas via `resolve-names` (campanhas arquivadas) aparecem como linhas "CRM-only" na tabela `CampaignsTable`. Essas linhas são renderizadas sem chevron de expansão e sem drill-down (linhas 901-919 do `CampaignsTable.tsx`).
 
-### Alteracoes
+O `CampaignFunnel` dessas linhas tem `campaignId` — um ID válido da Meta que pode ser usado para buscar conjuntos de anúncios via `fetch-campaign-adsets`.
 
-#### 1. Remover trava de meses (`MonetaryMetasTab.tsx`)
-- Remover a funcao `isMonthLocked` e a logica de `disabled` nos inputs. Todos os meses passam a ser editaveis.
-- Remover os indicadores visuais de cadeado.
+## Solução
 
-#### 2. Barra de diferenca com opcoes de distribuicao
-Quando o usuario altera o faturamento de um mes, o sistema calcula a diferenca entre o total antigo e o novo da BU selecionada. Se houver diferenca, exibe uma barra flutuante (similar a da imagem do Plan Growth) com:
+Transformar as linhas CRM-only que possuem `campaignId` em linhas expandíveis, reutilizando o componente `CampaignRow` existente.
 
-- **Informacao**: "Diferenca: +R$ 55.960 no O2 TAX" (ou valor negativo)
-- **Botao 1 - "Distribuir nos meses restantes"**: Divide a diferenca (com sinal invertido) igualmente entre todos os meses que NAO foram editados nesta sessao.
-- **Botao 2 - "Distribuir em periodo"**: Abre um popover/dropdown onde o usuario seleciona:
-  - Um quarter (Q1, Q2, Q3, Q4)
-  - Ou um range customizado (mes inicio -> mes fim)
-  - Ao confirmar, distribui a diferenca igualmente entre os meses do periodo selecionado (excluindo o mes que foi editado).
-- **Botao "Descartar"**: Reverte todas as alteracoes locais ao estado do banco.
+### Alteração: `src/components/planning/marketing-indicators/CampaignsTable.tsx`
 
-#### 3. Logica de distribuicao
-- A diferenca eh calculada como: `totalAnterior - totalAtual` da BU (antes vs depois da edicao).
-- Se a diferenca for positiva (usuario reduziu um mes), ela eh somada aos meses alvo.
-- Se for negativa (usuario aumentou um mes), ela eh subtraida dos meses alvo.
-- A distribuicao eh feita igualmente (diferenca / qtd meses alvo), com arredondamento e ajuste do residuo no ultimo mes.
-- O total da BU se mantem constante apos redistribuicao.
+1. **Para linhas CRM-only com `campaignId`**: Criar um `CampaignData` stub a partir do `CampaignFunnel` e renderizar como `CampaignRow` em vez de uma linha flat. Isso habilita automaticamente o drill-down de ad sets/ads via `useCampaignAdSets`.
 
-#### 4. Rastreamento de edicoes manuais
-- Manter um `Set<string>` de meses editados manualmente na sessao atual.
-- "Meses restantes" = meses que NAO estao nesse set.
-- Apos distribuir, os meses que receberam ajuste NAO sao marcados como editados (permitindo redistribuicoes subsequentes).
+2. **O stub terá**:
+   - `id`: o `campaignId` do funnel
+   - `name`: o `campaignName` do funnel
+   - `channel`: derivado do `channel` do funnel (meta_ads → 'Meta Ads', google_ads → 'Google Ads')
+   - `status`: 'ended'
+   - `investment`: 0
+   - `leads`: 0 (sem dados da API)
 
-### Detalhes tecnicos
+3. **Linhas CRM-only SEM `campaignId`** continuam como linhas flat (orgânico, eventos, etc. não têm drill-down).
 
-**Arquivo**: `src/components/planning/MonetaryMetasTab.tsx`
+### Resultado esperado
 
-**Estado adicional**:
-```text
-editedMonths: Set<string>     -- meses tocados pelo usuario
-previousBuTotal: number       -- total da BU antes das edicoes
-showDistribution: boolean     -- controla visibilidade da barra
-distributionPeriod: 'remaining' | 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'custom'
-customRange: [MonthType, MonthType]
-```
+- As 3 campanhas com vendas terão chevron clicável
+- Ao expandir, os conjuntos de anúncios serão carregados via Meta API
+- Dentro dos conjuntos, os anúncios individuais também carregam
+- As métricas CRM (MQL, Vendas, Receita) continuam aparecendo via `adSetFunnels`
 
-**Barra de distribuicao**: Renderizada como um `div` fixo no bottom (estilo identico ao floating bar do Plan Growth), contendo:
-- Badge com a diferenca formatada
-- Botoes de acao
-- Popover para selecao de periodo (usando Select ou RadioGroup)
+### Arquivos alterados
 
-**Fluxo**:
-1. Usuario edita faturamento de Fev de R$ 135.960 para R$ 80.000
-2. Diferenca: R$ 55.960 (sobra para distribuir)
-3. Barra aparece: "1 alteracao | O2 TAX: +R$ 55.960"
-4. Usuario clica "Distribuir nos restantes" -> R$ 55.960 / 10 meses = R$ 5.596 adicionado a cada mes de Mar-Dez
-5. Ou clica "Distribuir em periodo" -> seleciona Q3 -> R$ 55.960 / 3 = R$ 18.653 em Jul, Ago, Set
-6. Total da BU permanece o mesmo de antes da edicao
+| Arquivo | Mudança |
+|---|---|
+| `CampaignsTable.tsx` | Converter CRM-only rows com `campaignId` para `CampaignRow` expandível |
 
