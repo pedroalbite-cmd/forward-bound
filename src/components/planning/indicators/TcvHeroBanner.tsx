@@ -106,7 +106,7 @@ export function TcvHeroBanner({ vendaItems }: TcvHeroBannerProps) {
             </div>
 
             {/* Breakdown grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {breakdownCards.map((item) => (
                 <div
                   key={item.label}
