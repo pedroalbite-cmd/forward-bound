@@ -224,6 +224,33 @@ export type Database = {
         }
         Relationships: []
       }
+      mrr_base_monthly: {
+        Row: {
+          created_at: string
+          id: string
+          month: string
+          updated_at: string
+          value: number
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: string
+          updated_at?: string
+          value?: number
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: string
+          updated_at?: string
+          value?: number
+          year?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
