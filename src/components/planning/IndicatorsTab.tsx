@@ -415,7 +415,7 @@ export function IndicatorsTab() {
   
   // Get consolidated metas (database overrides + Plan Growth fallback)
   const { getMetaMonetaryForPeriod, getConsolidatedMeta } = useConsolidatedMetas();
-  const { getMrrBaseForMonth, isLoading: isLoadingMrrBase } = useMrrBase();
+  const { getMrrBaseForMonth, isTotalOverride, isLoading: isLoadingMrrBase } = useMrrBase();
   
   // Get closer metas for filtering goals by closer percentage
   const { getFilteredMeta } = useCloserMetas(currentYear);
