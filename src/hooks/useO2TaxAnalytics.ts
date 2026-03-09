@@ -186,10 +186,37 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
       
       const cards = responseData.data.map(parseRawCard);
 
-      // Step 2: Get unique card IDs from period
+      // Step 2: Fetch sales by signature date (cards signed in period but entered earlier)
+      let signatureCards: O2TaxCard[] = [];
+      const { data: sigData, error: sigError } = await supabase.functions.invoke('query-external-db', {
+        body: { 
+          table: 'pipefy_cards_movements', 
+          action: 'query_period_by_signature',
+          startDate: `${startDateStr}T00:00:00`,
+          endDate: `${endDateStr}T23:59:59`,
+          limit: 10000 
+        }
+      });
+      if (!sigError && sigData?.data) {
+        signatureCards = sigData.data.map(parseRawCard);
+        console.log(`[O2 TAX Analytics] Signature query returned ${signatureCards.length} movements`);
+      }
+
+      // Merge signature cards into main cards with dedup by id|fase
+      const seenKeys = new Set(cards.map((c: O2TaxCard) => `${c.id}|${c.fase}`));
+      for (const sc of signatureCards) {
+        const key = `${sc.id}|${sc.fase}`;
+        if (!seenKeys.has(key)) {
+          cards.push(sc);
+          seenKeys.add(key);
+        }
+      }
+      console.log(`[O2 TAX Analytics] After signature merge: ${cards.length} total movements`);
+
+      // Step 3: Get unique card IDs from period
       const uniqueCardIds = [...new Set(cards.map((c: O2TaxCard) => c.id))];
       
-      // Step 3: Fetch full history for these cards (in batches of 500 to avoid truncation)
+      // Step 4: Fetch full history for these cards (in batches of 500 to avoid truncation)
       let fullHistory: O2TaxCard[] = [];
       if (uniqueCardIds.length > 0) {
         const BATCH_SIZE = 500;
