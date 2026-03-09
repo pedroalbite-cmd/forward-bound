@@ -396,9 +396,31 @@ function AdSetRow({
         </TableRow>
       )}
 
-      {isExpanded && ads?.filter(a => a.spend > 0).map((ad) => (
-        <AdRow key={ad.id} ad={ad} onPreview={onPreview} />
-      ))}
+      {isExpanded && ads?.filter(a => a.spend > 0).map((ad) => {
+        // Distribute ad set CRM data proportionally to ads by spend
+        let adFunnel: CampaignFunnel | undefined;
+        if (adSetFunnel && ads) {
+          const filteredAds = ads.filter(a => a.spend > 0);
+          const totalAdsSpend = filteredAds.reduce((s, a) => s + a.spend, 0);
+          if (totalAdsSpend > 0) {
+            const ratio = ad.spend / totalAdsSpend;
+            adFunnel = {
+              ...adSetFunnel,
+              campaignName: `${adSetFunnel.campaignName} (${ad.name})`,
+              leads: Math.round(adSetFunnel.leads * ratio),
+              mqls: Math.round(adSetFunnel.mqls * ratio),
+              rms: Math.round(adSetFunnel.rms * ratio),
+              rrs: Math.round(adSetFunnel.rrs * ratio),
+              propostas: Math.round(adSetFunnel.propostas * ratio),
+              vendas: Math.round(adSetFunnel.vendas * ratio),
+              receita: adSetFunnel.receita * ratio,
+              tcv: adSetFunnel.tcv * ratio,
+              investimento: ad.spend,
+            };
+          }
+        }
+        return <AdRow key={ad.id} ad={ad} onPreview={onPreview} adFunnel={adFunnel} />;
+      })}
     </>
   );
 }
