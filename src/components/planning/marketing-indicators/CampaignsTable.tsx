@@ -673,7 +673,7 @@ function CreativePreviewModal({
 
 // ─── Main Component ───────────────────────────────────────────
 
-export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoading, error, startDate, endDate }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, adCreativeFunnels, isLoading, error, startDate, endDate }: CampaignsTableProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
   const [previewData, setPreviewData] = useState<PreviewModalData | null>(null);
