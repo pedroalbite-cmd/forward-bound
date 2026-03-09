@@ -1,62 +1,44 @@
 
 
-## Desbloquear Fevereiro e Adicionar Distribuicao de Diferenca nas Metas Monetarias
+## Problema identificado
 
-### Objetivo
-Permitir editar meses anteriormente bloqueados (como Fevereiro) e, ao alterar uma meta, mostrar a diferenca em relacao ao total anterior da BU com opcoes inteligentes de redistribuicao.
+O campo `Campanha` do Pipefy NÃO contém apenas o ID da campanha — ele contém **strings compostas UTM** concatenadas:
 
-### Alteracoes
+- `120238862305660418,utm_content=120238863142690418,utm_term=120238863142760418`
+- `null,utm_content=null,utm_term=null`
+- `inbound,utm_content=null,utm_term=null`
+- `21021732600,utm_content=154204355450,utm_term=cfo financeiro`
+- `{{campaign.name}}`
 
-#### 1. Remover trava de meses (`MonetaryMetasTab.tsx`)
-- Remover a funcao `isMonthLocked` e a logica de `disabled` nos inputs. Todos os meses passam a ser editaveis.
-- Remover os indicadores visuais de cadeado.
+O `sanitizeCampaignField` atual só checa valores exatos (`"1"`, `"inbound"`) e não parseia essas strings compostas. Por isso aparecem na tabela nomes como `null,utm_content=null,utm_term=null`.
 
-#### 2. Barra de diferenca com opcoes de distribuicao
-Quando o usuario altera o faturamento de um mes, o sistema calcula a diferenca entre o total antigo e o novo da BU selecionada. Se houver diferenca, exibe uma barra flutuante (similar a da imagem do Plan Growth) com:
+## Solução
 
-- **Informacao**: "Diferenca: +R$ 55.960 no O2 TAX" (ou valor negativo)
-- **Botao 1 - "Distribuir nos meses restantes"**: Divide a diferenca (com sinal invertido) igualmente entre todos os meses que NAO foram editados nesta sessao.
-- **Botao 2 - "Distribuir em periodo"**: Abre um popover/dropdown onde o usuario seleciona:
-  - Um quarter (Q1, Q2, Q3, Q4)
-  - Ou um range customizado (mes inicio -> mes fim)
-  - Ao confirmar, distribui a diferenca igualmente entre os meses do periodo selecionado (excluindo o mes que foi editado).
-- **Botao "Descartar"**: Reverte todas as alteracoes locais ao estado do banco.
+Criar um **parser de campo UTM composto** no `useMarketingAttribution.ts` que:
 
-#### 3. Logica de distribuicao
-- A diferenca eh calculada como: `totalAnterior - totalAtual` da BU (antes vs depois da edicao).
-- Se a diferenca for positiva (usuario reduziu um mes), ela eh somada aos meses alvo.
-- Se for negativa (usuario aumentou um mes), ela eh subtraida dos meses alvo.
-- A distribuicao eh feita igualmente (diferenca / qtd meses alvo), com arredondamento e ajuste do residuo no ultimo mes.
-- O total da BU se mantem constante apos redistribuicao.
+1. **Separa a string** por `,` para extrair: `campaignId`, `utm_content` (= conjunto/adset), `utm_term` (= anúncio/keyword)
+2. **Sanitiza cada parte** — `"null"`, `"{{...}}"`, `"inbound"` → `undefined`
+3. **Usa os valores parseados** como fallback para `conjuntoGrupo` e `palavraChaveAnuncio` quando esses campos estão vazios no card original
 
-#### 4. Rastreamento de edicoes manuais
-- Manter um `Set<string>` de meses editados manualmente na sessao atual.
-- "Meses restantes" = meses que NAO estao nesse set.
-- Apos distribuir, os meses que receberam ajuste NAO sao marcados como editados (permitindo redistribuicoes subsequentes).
+### Parsing esperado
 
-### Detalhes tecnicos
+| Campo Pipefy raw | → campaign | → conjunto | → anúncio |
+|---|---|---|---|
+| `120238862305660418,utm_content=120238863142690418,utm_term=120238863142760418` | `120238862305660418` | `120238863142690418` | `120238863142760418` |
+| `null,utm_content=null,utm_term=null` | `(Sem campanha)` | `(Sem conjunto)` | `(Sem anúncio)` |
+| `21021732600,utm_content=154204355450,utm_term=cfo financeiro` | `21021732600` | `154204355450` | `cfo financeiro` |
+| `{{campaign.name}}` | `(Sem campanha)` | — | — |
+| `Conversão \| CFOaaS` | `Conversão \| CFOaaS` | — | — |
 
-**Arquivo**: `src/components/planning/MonetaryMetasTab.tsx`
+### Alterações
 
-**Estado adicional**:
-```text
-editedMonths: Set<string>     -- meses tocados pelo usuario
-previousBuTotal: number       -- total da BU antes das edicoes
-showDistribution: boolean     -- controla visibilidade da barra
-distributionPeriod: 'remaining' | 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'custom'
-customRange: [MonthType, MonthType]
-```
+| Arquivo | Mudança |
+|---|---|
+| `src/hooks/useMarketingAttribution.ts` | Nova função `parseCompositeUTM(raw)` que extrai campaign/content/term. Atualizar `sanitizeCampaignField` para detectar templates `{{...}}`. No `cardInfos`, parsear `card.campanha` com essa função e usar `utm_content`/`utm_term` como fallback para conjunto e anúncio. |
 
-**Barra de distribuicao**: Renderizada como um `div` fixo no bottom (estilo identico ao floating bar do Plan Growth), contendo:
-- Badge com a diferenca formatada
-- Botoes de acao
-- Popover para selecao de periodo (usando Select ou RadioGroup)
-
-**Fluxo**:
-1. Usuario edita faturamento de Fev de R$ 135.960 para R$ 80.000
-2. Diferenca: R$ 55.960 (sobra para distribuir)
-3. Barra aparece: "1 alteracao | O2 TAX: +R$ 55.960"
-4. Usuario clica "Distribuir nos restantes" -> R$ 55.960 / 10 meses = R$ 5.596 adicionado a cada mes de Mar-Dez
-5. Ou clica "Distribuir em periodo" -> seleciona Q3 -> R$ 55.960 / 3 = R$ 18.653 em Jul, Ago, Set
-6. Total da BU permanece o mesmo de antes da edicao
+Isso vai:
+- Eliminar as linhas lixo (`null,utm_content=null,...`)
+- Resolver IDs de campanhas Meta que estavam "escondidos" dentro da string composta
+- Permitir drill-down em conjuntos/anúncios usando os IDs extraídos do utm_content/utm_term
+- Manter compatibilidade com campanhas que já têm nome limpo (ex: `Conversão | CFOaaS`)
 
