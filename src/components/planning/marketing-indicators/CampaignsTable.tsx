@@ -434,7 +434,7 @@ function CampaignRow({
   const proportionalFunnels = useMemo(() => {
     if (!adSets || adSets.length === 0 || !funnel || (funnel.vendas === 0 && funnel.mqls === 0)) return null;
     // Check if any ad set already has a direct CRM match
-    const anyMatch = adSets.some(a => lookupAdSetFunnel(adSetFunnels, campaign.name, a.name, campaign.channel));
+    const anyMatch = adSets.some(a => lookupAdSetFunnel(adSetFunnels, campaign.name, a.name, campaign.channel, campaign.id));
     if (anyMatch) return null; // use direct matches instead
     
     const filteredAdSets = adSets.filter(a => a.spend > 0);
