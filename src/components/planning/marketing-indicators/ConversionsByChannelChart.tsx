@@ -25,24 +25,41 @@ function inferTipoOrigem(card: AttributionCard): string {
   return 'Outros';
 }
 
-const FONTE_LABELS: Record<string, string> = {
-  ig: 'Instagram',
+const ORIGEM_MAP: Record<string, string> = {
   fb: 'Facebook',
+  google: 'Google Ads',
   googleads: 'Google Ads',
+  ig: 'Instagram',
+  instagram: 'Instagram',
   site: 'Site',
   organic: 'Orgânico',
   'orgânico': 'Orgânico',
   organico: 'Orgânico',
+  bing: 'Bing',
 };
+
+function normalizeOrigemLead(raw: string): string {
+  if (!raw) return '(Sem origem)';
+  if (raw.includes('{{')) return '(Sem origem)';
+  let base = raw;
+  const commaIdx = raw.indexOf(',');
+  if (commaIdx > 0) {
+    base = raw.substring(0, commaIdx).trim();
+  }
+  if (/^\d{10,}$/.test(base)) return 'Meta Ads';
+  const key = base.toLowerCase().replace(/\/$/, '');
+  if (ORIGEM_MAP[key]) return ORIGEM_MAP[key];
+  return base.charAt(0).toUpperCase() + base.slice(1);
+}
 
 function inferOrigemLead(card: AttributionCard): string {
   const raw = card.origemLead?.trim();
-  if (raw) return raw;
+  if (raw) return normalizeOrigemLead(raw);
 
   const fonte = (card.fonte || '').toLowerCase().trim();
-  if (fonte && FONTE_LABELS[fonte]) return FONTE_LABELS[fonte];
+  if (fonte && ORIGEM_MAP[fonte]) return ORIGEM_MAP[fonte];
   if (card.campanha && isMetaCampaignId(card.campanha)) return 'Meta Ads';
-  if (card.fbclid) return 'Facebook Ads';
+  if (card.fbclid) return 'Facebook';
   if (card.gclid) return 'Google Ads';
   if (fonte) return fonte.charAt(0).toUpperCase() + fonte.slice(1);
 
