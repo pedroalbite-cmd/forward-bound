@@ -246,7 +246,7 @@ function GoogleAdGroupRow({
 
       {isExpanded && isLoading && (
         <TableRow className="bg-muted/15">
-          <TableCell colSpan={14} className="text-center py-3 text-muted-foreground text-sm">
+          <TableCell colSpan={13} className="text-center py-3 text-muted-foreground text-sm">
             <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
             Carregando palavras-chave...
           </TableCell>
