@@ -268,7 +268,10 @@ export function MarketingIndicatorsTab() {
     return result;
   }, [modeloAtualAllCards, franquiaCards, o2TaxAllCards]);
 
-  const { campaignFunnels, channelSummaries, adSetFunnels, adCreativeFunnels } = useMarketingAttribution(allAttributionCards, allCampaigns);
+  // Resolve archived/deleted campaign names for attribution
+  const { data: campaignNamesMap } = useMetaCampaignNames();
+
+  const { campaignFunnels, channelSummaries, adSetFunnels, adCreativeFunnels } = useMarketingAttribution(allAttributionCards, allCampaigns, campaignNamesMap);
 
   // Aggregate Google Ads API totals for enrichment
   const googleAdsApiTotals = useMemo(() => {

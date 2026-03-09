@@ -163,3 +163,36 @@ export function useMetaCampaigns(startDate: Date, endDate: Date, enabled = true)
     retry: 1,
   });
 }
+
+/**
+ * Lightweight hook to resolve ALL campaign IDs → names (including archived/deleted).
+ * Uses 24h cache. No metrics/enrichment — just id and name.
+ */
+export function useMetaCampaignNames(enabled = true) {
+  return useQuery({
+    queryKey: ['meta-campaign-names'],
+    queryFn: async (): Promise<Map<string, string>> => {
+      console.log('Resolving Meta campaign names (all statuses)');
+      
+      const { data, error } = await supabase.functions.invoke<{ success: boolean; campaignNames: Record<string, string>; error?: string }>('fetch-meta-campaigns', {
+        body: { action: 'resolve-names' },
+      });
+      
+      if (error) {
+        console.error('Error resolving campaign names:', error);
+        throw error;
+      }
+      
+      if (!data?.success) {
+        throw new Error(data?.error || 'Erro ao resolver nomes de campanhas');
+      }
+      
+      const map = new Map(Object.entries(data.campaignNames));
+      console.log(`Resolved ${map.size} campaign names`);
+      return map;
+    },
+    enabled,
+    staleTime: 24 * 60 * 60 * 1000, // 24 hours
+    retry: 1,
+  });
+}
