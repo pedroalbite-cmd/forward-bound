@@ -38,6 +38,7 @@ const DEFAULT_TICKETS: Record<BuType, number> = {
 export function MonetaryMetasTab() {
   const { toast } = useToast();
   const { metas, isLoading, bulkUpdateMetas, BUS, MONTHS } = useMonetaryMetas();
+  const { realizedFunnelByBU, isLoading: realizedLoading } = useIndicatorsRealized(2026);
   const { logAction } = useAuditLogs();
 
   const [selectedBu, setSelectedBu] = useState<BuType>('modelo_atual');
