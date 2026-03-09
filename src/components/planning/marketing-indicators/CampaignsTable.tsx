@@ -438,24 +438,12 @@ function CampaignRow({
             )}
           </div>
         </TableCell>
-        <TableCell className="text-right">{formatNumber(campaign.leads)}</TableCell>
         <TableCell className="text-right">{formatCurrency(campaign.investment)}</TableCell>
+        <TableCell className="text-right">{formatNumber(campaign.leads)}</TableCell>
         <TableCell className="text-right">
           {campaign.cpl && campaign.cpl > 0 ? formatCurrency(campaign.cpl) : '-'}
         </TableCell>
-        <TableCell className="text-right">
-          {(campaign.cpa || 0) > 0 ? formatCurrency(campaign.cpa!) : '-'}
-        </TableCell>
-        <TableCell>{getStatusBadge(campaign.status)}</TableCell>
-        {/* CRM funnel columns */}
-        <TableCell className="text-right font-medium">{funnel ? funnel.leads : '-'}</TableCell>
-        <TableCell className="text-right font-medium">{funnel ? funnel.mqls : '-'}</TableCell>
-        <TableCell className="text-right font-medium">{funnel ? funnel.vendas : '-'}</TableCell>
-        <TableCell className="text-right font-medium">{funnel ? formatCurrency(funnel.receita) : '-'}</TableCell>
-        <TableCell className="text-right font-medium">{funnel && funnel.tcv > 0 ? formatCurrency(funnel.tcv) : '-'}</TableCell>
-        <TableCell className={cn("text-right font-medium", funnel && funnel.roi > 0 && (funnel.roi >= 1 ? "text-chart-2" : "text-destructive"))}>
-          {funnel && funnel.investimento > 0 ? `${funnel.roi.toFixed(1)}x` : '-'}
-        </TableCell>
+        <CrmCells funnel={funnel} spend={campaign.investment} size="md" />
       </TableRow>
 
       {isExpanded && isLoading && (
