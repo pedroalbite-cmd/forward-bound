@@ -258,7 +258,8 @@ export function MarketingIndicatorsTab() {
       result.push({
         id: c.id, titulo: c.titulo, campanha: c.campanha, conjuntoGrupo: c.conjuntoGrupo,
         fonte: c.fonte, fbclid: c.fbclid, gclid: c.gclid, tipoOrigem: c.tipoOrigem,
-        origemLead: c.origemLead, fase: c.fase, dataEntrada: c.dataEntrada, valor: c.valor,
+        origemLead: c.origemLead, palavraChaveAnuncio: c.palavraChaveAnuncio,
+        fase: c.fase, dataEntrada: c.dataEntrada, valor: c.valor,
         valorMRR: c.valorMRR, valorSetup: c.valorSetup, valorPontual: c.valorPontual,
         bu: 'Oxy Hacker',
       });
