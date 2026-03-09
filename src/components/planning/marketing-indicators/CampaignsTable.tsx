@@ -499,9 +499,9 @@ function CampaignRow({
 
       {isExpanded && hasChildren && adSets!.filter(a => a.spend > 0).map((item) => (
         isGoogle ? (
-          <GoogleAdGroupRow key={item.id} adGroup={item} startDate={startDate} endDate={endDate} />
+          <GoogleAdGroupRow key={item.id} adGroup={item} startDate={startDate} endDate={endDate} adSetFunnel={lookupAdSetFunnel(adSetFunnels, campaign.name, item.name, campaign.channel)} />
         ) : (
-          <AdSetRow key={item.id} adSet={item} startDate={startDate} endDate={endDate} onPreview={onPreview} />
+          <AdSetRow key={item.id} adSet={item} startDate={startDate} endDate={endDate} onPreview={onPreview} adSetFunnel={lookupAdSetFunnel(adSetFunnels, campaign.name, item.name, campaign.channel)} />
         )
       ))}
     </>
