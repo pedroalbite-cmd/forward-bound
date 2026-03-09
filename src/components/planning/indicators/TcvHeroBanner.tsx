@@ -48,16 +48,8 @@ export function TcvHeroBanner({ vendaItems }: TcvHeroBannerProps) {
             <div className="flex items-center gap-3">
               <DollarSign className="h-5 w-5 text-primary" />
               <span className="font-display text-base font-semibold text-foreground">
-                TCV Gerado no Período
+                Faturamento no Período
               </span>
-              {!isExpanded && (
-                <span className="font-display text-lg font-bold text-foreground ml-2">
-                  {fmt(stats.tcv)}
-                </span>
-              )}
-              <Badge variant="secondary" className="text-[11px] font-medium">
-                {stats.count} {stats.count === 1 ? 'contrato' : 'contratos'}
-              </Badge>
             </div>
             <Button variant="ghost" size="sm" className="text-muted-foreground gap-1.5">
               {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
