@@ -2454,6 +2454,128 @@ export function IndicatorsTab() {
         ))}
       </div>
 
+      {/* Revenue Pace Chart */}
+      {(() => {
+        const today = new Date();
+        const daysElapsed = Math.min(
+          differenceInDays(today, startDate) + 1,
+          daysInPeriod
+        );
+        const paceFraction = daysInPeriod > 0 ? daysElapsed / daysInPeriod : 0;
+        const faturamentoMeta = getMetaMonetaryForIndicator({ key: 'faturamento', label: 'Faturamento', shortLabel: 'Fat.', format: 'currency' });
+        const faturamentoRealized = getRealizedMonetaryForIndicator({ key: 'faturamento', label: 'Faturamento', shortLabel: 'Fat.', format: 'currency' });
+        const paceExpected = faturamentoMeta * paceFraction;
+
+        // === Calculate MRR Base (faturamentoTotal from metasPorBU minus increment meta) ===
+        let faturamentoTotal = 0;
+        if (metasPorBU) {
+          const monthsInPeriod = eachMonthOfInterval({ start: startDate, end: endDate });
+          selectedBUs.forEach(bu => {
+            const buMetas = metasPorBU[bu as keyof typeof metasPorBU];
+            if (!buMetas) return;
+            for (const monthDate of monthsInPeriod) {
+              const monthName = monthNames[getMonth(monthDate)];
+              const monthStart = startOfMonth(monthDate);
+              const monthEnd = endOfMonth(monthDate);
+              const overlapStart = startDate > monthStart ? startDate : monthStart;
+              const overlapEnd = endDate < monthEnd ? endDate : monthEnd;
+              if (overlapStart > overlapEnd) continue;
+              const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
+              const totalDaysInMonth = differenceInDays(monthEnd, monthStart) + 1;
+              const fraction = totalDaysInMonth > 0 ? overlapDays / totalDaysInMonth : 0;
+              const monthVal = buMetas[monthName] || 0;
+              faturamentoTotal += monthVal * fraction;
+            }
+          });
+        }
+        const mrrBase = Math.max(0, Math.round(faturamentoTotal - faturamentoMeta));
+
+        // === Build real chart data per period using analytics hooks ===
+        const paceChartLabels = getChartLabels();
+
+        const getVendaCardsForBU = (bu: BUType): { date: Date; value: number }[] => {
+          if (bu === 'modelo_atual' && includesModeloAtual) {
+            const cards = modeloAtualAnalytics.getCardsForIndicator('venda');
+            const filtered = selectedClosers.length > 0
+              ? cards.filter(card => matchesCloserFilter((card.closer || '').trim()))
+              : cards;
+            return filtered.map(c => ({ date: c.dataEntrada, value: c.valor || 0 }));
+          }
+          if (bu === 'o2_tax' && includesO2Tax) {
+            const cards = o2TaxAnalytics.getCardsForIndicator('venda');
+            return cards.map(c => ({ date: c.dataEntrada, value: c.valor || 0 }));
+          }
+          if (bu === 'oxy_hacker' && includesOxyHacker) {
+            const items = oxyHackerAnalytics.getDetailItemsForIndicator('venda');
+            return items.map(i => ({ date: i.date ? new Date(i.date) : new Date(), value: i.pontual || i.value || 0 }));
+          }
+          if (bu === 'franquia' && includesFranquia) {
+            const items = franquiaAnalytics.getDetailItemsForIndicator('venda');
+            return items.map(i => ({ date: i.date ? new Date(i.date) : new Date(), value: i.pontual || i.value || 0 }));
+          }
+          return [];
+        };
+
+        const allVendaCards: { date: Date; value: number }[] = [];
+        selectedBUs.forEach(bu => {
+          allVendaCards.push(...getVendaCardsForBU(bu));
+        });
+
+        // Chart data: each period bar includes MRR Base pro-rata + increment
+        const metaPerDay = faturamentoMeta / daysInPeriod;
+        const mrrBasePerDay = mrrBase / daysInPeriod;
+        let cumulativeRealized = 0;
+        let cumulativeMeta = 0;
+        const paceChartData = paceChartLabels.map((label, index) => {
+          let periodStart: Date;
+          let periodEnd: Date;
+
+          if (grouping === 'daily') {
+            const days = eachDayOfInterval({ start: startDate, end: endDate });
+            periodStart = days[index] || startDate;
+            periodEnd = periodStart;
+          } else if (grouping === 'weekly') {
+            periodStart = addDays(startDate, index * 7);
+            periodEnd = index === paceChartLabels.length - 1 ? endDate : addDays(periodStart, 6);
+          } else {
+            const months = eachMonthOfInterval({ start: startDate, end: endDate });
+            periodStart = months[index] || startDate;
+            periodEnd = index === months.length - 1 ? endDate : endOfMonth(periodStart);
+          }
+
+          const pStart = new Date(periodStart.getFullYear(), periodStart.getMonth(), periodStart.getDate()).getTime();
+          const pEnd = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate(), 23, 59, 59, 999).getTime();
+
+          const periodIncrementRealized = allVendaCards
+            .filter(c => c.date.getTime() >= pStart && c.date.getTime() <= pEnd)
+            .reduce((sum, c) => sum + c.value, 0);
+
+          const periodDays = differenceInDays(periodEnd, periodStart) + 1;
+          const periodMrrBase = mrrBasePerDay * periodDays;
+          const periodMetaIncrement = metaPerDay * periodDays;
+
+          cumulativeRealized += periodMrrBase + periodIncrementRealized;
+          cumulativeMeta += periodMrrBase + periodMetaIncrement;
+
+          return {
+            label,
+            realizado: cumulativeRealized,
+            meta: cumulativeMeta,
+          };
+        });
+
+        return (
+          <RevenuePaceChart
+            realized={faturamentoRealized}
+            meta={faturamentoMeta}
+            mrrBase={mrrBase}
+            paceExpected={paceExpected}
+            isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading}
+            chartData={paceChartData}
+          />
+        );
+      })()}
+
       {/* New Charts - MQLs, Leads and Funnel */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="space-y-4">
