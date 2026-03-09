@@ -174,6 +174,20 @@ export function useMarketingAttribution(
         apiCampaign = campaignByName.get(normalizeName(name));
         if (apiCampaign) campaignId = apiCampaign.id;
       }
+      // Partial name matching fallback (bidirectional .includes)
+      if (!apiCampaign && allApiCampaigns) {
+        const normCard = normalizeName(name);
+        if (normCard && normCard !== '(sem campanha)') {
+          for (const mc of allApiCampaigns) {
+            const normApi = normalizeName(mc.name);
+            if (normApi.includes(normCard) || normCard.includes(normApi)) {
+              apiCampaign = mc;
+              campaignId = mc.id;
+              break;
+            }
+          }
+        }
+      }
       
       // Reclassify channel: if card was "organico" but matched a paid API campaign, fix the channel
       let resolvedChannel = data.channel;
