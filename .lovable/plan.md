@@ -1,62 +1,33 @@
 
 
-## Desbloquear Fevereiro e Adicionar Distribuicao de Diferenca nas Metas Monetarias
+## Plano: Drill-down por Origem do Lead dentro de Tipo de Origem
 
 ### Objetivo
-Permitir editar meses anteriormente bloqueados (como Fevereiro) e, ao alterar uma meta, mostrar a diferenca em relacao ao total anterior da BU com opcoes inteligentes de redistribuicao.
+Ao clicar em uma linha de Tipo de Origem (ex: "Mídia Paga"), expandir sub-linhas mostrando o breakdown por `origemLead` com os mesmos dados de funil.
 
-### Alteracoes
+### Alterações
 
-#### 1. Remover trava de meses (`MonetaryMetasTab.tsx`)
-- Remover a funcao `isMonthLocked` e a logica de `disabled` nos inputs. Todos os meses passam a ser editaveis.
-- Remover os indicadores visuais de cadeado.
+**`ConversionsByChannelChart.tsx`** — Único arquivo modificado
 
-#### 2. Barra de diferenca com opcoes de distribuicao
-Quando o usuario altera o faturamento de um mes, o sistema calcula a diferenca entre o total antigo e o novo da BU selecionada. Se houver diferenca, exibe uma barra flutuante (similar a da imagem do Plan Growth) com:
+1. **State**: Adicionar `useState<string | null>` para controlar qual tipo está expandido (toggle)
 
-- **Informacao**: "Diferenca: +R$ 55.960 no O2 TAX" (ou valor negativo)
-- **Botao 1 - "Distribuir nos meses restantes"**: Divide a diferenca (com sinal invertido) igualmente entre todos os meses que NAO foram editados nesta sessao.
-- **Botao 2 - "Distribuir em periodo"**: Abre um popover/dropdown onde o usuario seleciona:
-  - Um quarter (Q1, Q2, Q3, Q4)
-  - Ou um range customizado (mes inicio -> mes fim)
-  - Ao confirmar, distribui a diferenca igualmente entre os meses do periodo selecionado (excluindo o mes que foi editado).
-- **Botao "Descartar"**: Reverte todas as alteracoes locais ao estado do banco.
+2. **Dados**: No `useMemo`, além de agrupar por `tipoOrigem`, também agrupar por `tipoOrigem + origemLead` para gerar sub-linhas
+   - Novo map: `Map<string, Map<string, OrigemRow>>` onde a chave externa é `tipoOrigem` e interna é `origemLead`
+   - `origemLead` vazio → "(Sem origem)"
 
-#### 3. Logica de distribuicao
-- A diferenca eh calculada como: `totalAnterior - totalAtual` da BU (antes vs depois da edicao).
-- Se a diferenca for positiva (usuario reduziu um mes), ela eh somada aos meses alvo.
-- Se for negativa (usuario aumentou um mes), ela eh subtraida dos meses alvo.
-- A distribuicao eh feita igualmente (diferenca / qtd meses alvo), com arredondamento e ajuste do residuo no ultimo mes.
-- O total da BU se mantem constante apos redistribuicao.
+3. **UI**: 
+   - Linha do tipo de origem vira clicável com `cursor-pointer` e ícone `ChevronRight`/`ChevronDown`
+   - Quando expandida, renderizar sub-linhas com `origemLead` indentadas (padding-left maior, texto menor, bg levemente diferente)
+   - Sub-linhas têm os mesmos 7 dados: Leads, MQLs, RM, RR, Propostas, Vendas, Conv. L→V
 
-#### 4. Rastreamento de edicoes manuais
-- Manter um `Set<string>` de meses editados manualmente na sessao atual.
-- "Meses restantes" = meses que NAO estao nesse set.
-- Apos distribuir, os meses que receberam ajuste NAO sao marcados como editados (permitindo redistribuicoes subsequentes).
+### Estrutura visual
 
-### Detalhes tecnicos
-
-**Arquivo**: `src/components/planning/MonetaryMetasTab.tsx`
-
-**Estado adicional**:
 ```text
-editedMonths: Set<string>     -- meses tocados pelo usuario
-previousBuTotal: number       -- total da BU antes das edicoes
-showDistribution: boolean     -- controla visibilidade da barra
-distributionPeriod: 'remaining' | 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'custom'
-customRange: [MonthType, MonthType]
+▶ Mídia Paga        | 120 | 80 | 45 | 30 | 15 | 8 | 6.7%
+▼ Indicação         |  40 | 25 | 18 | 12 |  6 | 4 | 10.0%
+    Indicação cliente|  25 | 15 | 12 |  8 |  4 | 3 | 12.0%
+    Indicação parceiro| 15 | 10 |  6 |  4 |  2 | 1 |  6.7%
+  Evento            |  30 | 20 | 10 |  8 |  5 | 3 | 10.0%
+  Total             | 205 |130 | 75 | 51 | 26 |15 |  7.3%
 ```
-
-**Barra de distribuicao**: Renderizada como um `div` fixo no bottom (estilo identico ao floating bar do Plan Growth), contendo:
-- Badge com a diferenca formatada
-- Botoes de acao
-- Popover para selecao de periodo (usando Select ou RadioGroup)
-
-**Fluxo**:
-1. Usuario edita faturamento de Fev de R$ 135.960 para R$ 80.000
-2. Diferenca: R$ 55.960 (sobra para distribuir)
-3. Barra aparece: "1 alteracao | O2 TAX: +R$ 55.960"
-4. Usuario clica "Distribuir nos restantes" -> R$ 55.960 / 10 meses = R$ 5.596 adicionado a cada mes de Mar-Dez
-5. Ou clica "Distribuir em periodo" -> seleciona Q3 -> R$ 55.960 / 3 = R$ 18.653 em Jul, Ago, Set
-6. Total da BU permanece o mesmo de antes da edicao
 
