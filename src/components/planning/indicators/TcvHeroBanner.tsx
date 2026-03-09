@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { TrendingUp, FileText, Zap, DollarSign, ChevronDown, ChevronRight, Receipt } from "lucide-react";
+import { TrendingUp, FileText, Zap, DollarSign, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
