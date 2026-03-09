@@ -415,6 +415,44 @@ function CampaignRow({
   const drillError = isGoogle ? googleError : metaError;
   const hasChildren = adSets && adSets.length > 0;
 
+  // Proportional CRM fallback: distribute parent funnel across ad sets by spend
+  const proportionalFunnels = useMemo(() => {
+    if (!adSets || adSets.length === 0 || !funnel || (funnel.vendas === 0 && funnel.mqls === 0)) return null;
+    // Check if any ad set already has a direct CRM match
+    const anyMatch = adSets.some(a => lookupAdSetFunnel(adSetFunnels, campaign.name, a.name, campaign.channel));
+    if (anyMatch) return null; // use direct matches instead
+    
+    const filteredAdSets = adSets.filter(a => a.spend > 0);
+    const totalSpend = filteredAdSets.reduce((s, a) => s + a.spend, 0);
+    if (totalSpend === 0) return null;
+    
+    const map = new Map<string, CampaignFunnel>();
+    for (const a of filteredAdSets) {
+      const ratio = a.spend / totalSpend;
+      map.set(a.id, {
+        ...funnel,
+        campaignName: `${funnel.campaignName} (${a.name})`,
+        leads: Math.round(funnel.leads * ratio),
+        mqls: Math.round(funnel.mqls * ratio),
+        rms: Math.round(funnel.rms * ratio),
+        rrs: Math.round(funnel.rrs * ratio),
+        propostas: Math.round(funnel.propostas * ratio),
+        vendas: Math.round(funnel.vendas * ratio),
+        receita: funnel.receita * ratio,
+        tcv: funnel.tcv * ratio,
+        investimento: a.spend,
+      });
+    }
+    return map;
+  }, [adSets, funnel, adSetFunnels, campaign.name, campaign.channel]);
+
+  // Resolve funnel for a sub-row: direct match first, then proportional fallback
+  const getSubRowFunnel = (item: AdSetData): CampaignFunnel | undefined => {
+    const direct = lookupAdSetFunnel(adSetFunnels, campaign.name, item.name, campaign.channel);
+    if (direct) return direct;
+    return proportionalFunnels?.get(item.id);
+  };
+
   return (
     <>
       <TableRow className="cursor-pointer hover:bg-muted/50" onClick={onToggle}>
@@ -476,9 +514,9 @@ function CampaignRow({
 
       {isExpanded && hasChildren && adSets!.filter(a => a.spend > 0).map((item) => (
         isGoogle ? (
-          <GoogleAdGroupRow key={item.id} adGroup={item} startDate={startDate} endDate={endDate} adSetFunnel={lookupAdSetFunnel(adSetFunnels, campaign.name, item.name, campaign.channel)} />
+          <GoogleAdGroupRow key={item.id} adGroup={item} startDate={startDate} endDate={endDate} adSetFunnel={getSubRowFunnel(item)} />
         ) : (
-          <AdSetRow key={item.id} adSet={item} startDate={startDate} endDate={endDate} onPreview={onPreview} adSetFunnel={lookupAdSetFunnel(adSetFunnels, campaign.name, item.name, campaign.channel)} />
+          <AdSetRow key={item.id} adSet={item} startDate={startDate} endDate={endDate} onPreview={onPreview} adSetFunnel={getSubRowFunnel(item)} />
         )
       ))}
     </>
