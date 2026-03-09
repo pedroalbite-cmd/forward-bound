@@ -82,7 +82,7 @@ export function ConversionsByChannelChart({ cards }: ConversionsByChannelChartPr
       const existing = cardBest.get(card.id);
       if (!existing || FUNNEL_ORDER.indexOf(stage) > FUNNEL_ORDER.indexOf(existing.stage)) {
         cardBest.set(card.id, {
-          tipoOrigem: card.tipoOrigem?.trim() || '(Sem tipo)',
+          tipoOrigem: inferTipoOrigem(card),
           stage,
         });
       }
