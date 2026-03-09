@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { TrendingUp, FileText, Zap, DollarSign, ChevronDown, ChevronRight, Receipt } from "lucide-react";
+import { TrendingUp, FileText, Zap, DollarSign, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,15 +18,14 @@ export function TcvHeroBanner({ vendaItems }: TcvHeroBannerProps) {
     const totalSetup = vendaItems.reduce((s, c) => s + (c.setup || 0), 0);
     const totalPontual = vendaItems.reduce((s, c) => s + (c.pontual || 0), 0);
     const tcv = totalMrrAnual + totalSetup + totalPontual;
-    const ticketMedio = vendaItems.length > 0 ? tcv / vendaItems.length : 0;
     const total = totalMrrAnual + totalSetup + totalPontual;
     const pctMrr = total > 0 ? (totalMrrAnual / total) * 100 : 0;
     const pctSetup = total > 0 ? (totalSetup / total) * 100 : 0;
     const pctPontual = total > 0 ? (totalPontual / total) * 100 : 0;
-    return { tcv, totalMrrAnual, totalSetup, totalPontual, count: vendaItems.length, ticketMedio, pctMrr, pctSetup, pctPontual };
+    return { tcv, totalMrrAnual, totalSetup, totalPontual, pctMrr, pctSetup, pctPontual };
   }, [vendaItems]);
 
-  if (stats.count === 0) return null;
+  if (vendaItems.length === 0) return null;
 
   const fmt = (v: number) =>
     v >= 1_000_000
@@ -39,7 +38,6 @@ export function TcvHeroBanner({ vendaItems }: TcvHeroBannerProps) {
     { label: "MRR Anualizado", value: stats.totalMrrAnual, pct: stats.pctMrr, icon: TrendingUp, color: "text-chart-1" },
     { label: "Setup", value: stats.totalSetup, pct: stats.pctSetup, icon: FileText, color: "text-chart-2" },
     { label: "Pontual", value: stats.totalPontual, pct: stats.pctPontual, icon: Zap, color: "text-chart-3" },
-    { label: "Ticket Médio", value: stats.ticketMedio, pct: null, icon: Receipt, color: "text-chart-4" },
   ];
 
   return (
@@ -50,16 +48,8 @@ export function TcvHeroBanner({ vendaItems }: TcvHeroBannerProps) {
             <div className="flex items-center gap-3">
               <DollarSign className="h-5 w-5 text-primary" />
               <span className="font-display text-base font-semibold text-foreground">
-                TCV Gerado no Período
+                Faturamento no Período
               </span>
-              {!isExpanded && (
-                <span className="font-display text-lg font-bold text-foreground ml-2">
-                  {fmt(stats.tcv)}
-                </span>
-              )}
-              <Badge variant="secondary" className="text-[11px] font-medium">
-                {stats.count} {stats.count === 1 ? 'contrato' : 'contratos'}
-              </Badge>
             </div>
             <Button variant="ghost" size="sm" className="text-muted-foreground gap-1.5">
               {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -116,7 +106,7 @@ export function TcvHeroBanner({ vendaItems }: TcvHeroBannerProps) {
             </div>
 
             {/* Breakdown grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {breakdownCards.map((item) => (
                 <div
                   key={item.label}
