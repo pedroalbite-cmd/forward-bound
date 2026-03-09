@@ -402,11 +402,11 @@ function AdSetRow({
 // ─── Campaign Row (level 1) - supports both Meta and Google ───
 
 function CampaignRow({
-  campaign, isExpanded, onToggle, startDate, endDate, onPreview, funnel,
+  campaign, isExpanded, onToggle, startDate, endDate, onPreview, funnel, adSetFunnels,
 }: {
   campaign: CampaignData; isExpanded: boolean; onToggle: () => void;
   startDate: Date; endDate: Date; onPreview: (data: PreviewModalData) => void;
-  funnel?: CampaignFunnel;
+  funnel?: CampaignFunnel; adSetFunnels?: Map<string, CampaignFunnel>;
 }) {
   const isGoogle = isGoogleCampaign(campaign);
   const googleRawId = isGoogle ? getGoogleRawId(campaign) : null;
