@@ -898,6 +898,35 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, adCre
                           );
                         }
                         const funnel = row.funnel;
+                        // If CRM-only row has a campaignId, render as expandable CampaignRow
+                        if (funnel.campaignId && (funnel.channel === 'meta_ads' || funnel.channel === 'google_ads')) {
+                          const channelLabel = funnel.channel === 'meta_ads' ? 'Meta Ads' : 'Google Ads';
+                          const stubCampaign: CampaignData = {
+                            id: funnel.campaignId,
+                            name: funnel.campaignName,
+                            channel: channelLabel,
+                            status: 'ended',
+                            investment: 0,
+                            leads: 0,
+                            mqls: 0,
+                            roas: 0,
+                            startDate: startDate.toISOString().split('T')[0],
+                          };
+                          return (
+                            <CampaignRow
+                              key={`crm-${funnel.campaignId}-${row.idx}`}
+                              campaign={stubCampaign}
+                              isExpanded={expandedCampaigns.has(funnel.campaignId)}
+                              onToggle={() => toggleCampaign(funnel.campaignId!)}
+                              startDate={startDate}
+                              endDate={endDate}
+                              onPreview={setPreviewData}
+                              funnel={funnel}
+                              adSetFunnels={adSetFunnels}
+                              adCreativeFunnels={adCreativeFunnels}
+                            />
+                          );
+                        }
                         return (
                           <TableRow key={`crm-${funnel.campaignName}-${row.idx}`} className="hover:bg-muted/50">
                             <TableCell className="p-2"></TableCell>
