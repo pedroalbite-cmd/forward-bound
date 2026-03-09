@@ -2,6 +2,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IndicatorsTab } from "@/components/planning/IndicatorsTab";
 import { MarketingIndicatorsTab } from "@/components/planning/MarketingIndicatorsTab";
 import { NpsTab } from "@/components/planning/NpsTab";
+import { GrowthTab } from "@/components/planning/GrowthTab";
 import { BarChart3, TrendingUp, SmilePlus, Rocket } from "lucide-react";
 
 export function IndicatorsWrapper() {
@@ -39,13 +40,7 @@ export function IndicatorsWrapper() {
       </TabsContent>
 
       <TabsContent value="growth" className="mt-0">
-        <div className="flex items-center justify-center py-24 text-muted-foreground">
-          <div className="text-center space-y-2">
-            <Rocket className="h-12 w-12 mx-auto opacity-30" />
-            <p className="text-lg font-medium">Growth</p>
-            <p className="text-sm">Em breve</p>
-          </div>
-        </div>
+        <GrowthTab />
       </TabsContent>
     </Tabs>
   );
