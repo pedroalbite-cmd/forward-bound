@@ -294,7 +294,7 @@ function GoogleAdGroupRow({
 
 // ─── Meta Ad Row (level 3) ────────────────────────────────────
 
-function AdRow({ ad, onPreview }: { ad: AdData; onPreview: (data: PreviewModalData) => void }) {
+function AdRow({ ad, onPreview, adFunnel }: { ad: AdData; onPreview: (data: PreviewModalData) => void; adFunnel?: CampaignFunnel }) {
   return (
     <TableRow className="bg-muted/15">
       <TableCell className="p-2"></TableCell>
