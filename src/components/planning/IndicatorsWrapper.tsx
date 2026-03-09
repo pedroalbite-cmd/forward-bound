@@ -2,6 +2,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IndicatorsTab } from "@/components/planning/IndicatorsTab";
 import { MarketingIndicatorsTab } from "@/components/planning/MarketingIndicatorsTab";
 import { NpsTab } from "@/components/planning/NpsTab";
+import { GrowthTab } from "@/components/planning/GrowthTab";
 import { BarChart3, TrendingUp, SmilePlus, Rocket } from "lucide-react";
 
 export function IndicatorsWrapper() {
