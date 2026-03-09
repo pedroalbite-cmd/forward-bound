@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useMonetaryMetas, BuType, MonthType, BU_LABELS, isPontualOnlyBU, MONTHS } from '@/hooks/useMonetaryMetas';
+import { useIndicatorsRealized } from '@/hooks/useIndicatorsRealized';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,7 @@ const DEFAULT_TICKETS: Record<BuType, number> = {
 export function MonetaryMetasTab() {
   const { toast } = useToast();
   const { metas, isLoading, bulkUpdateMetas, BUS, MONTHS } = useMonetaryMetas();
+  const { realizedFunnelByBU, isLoading: realizedLoading } = useIndicatorsRealized(2026);
   const { logAction } = useAuditLogs();
 
   const [selectedBu, setSelectedBu] = useState<BuType>('modelo_atual');
@@ -467,6 +469,68 @@ export function MonetaryMetasTab() {
                   ))}
                   <TableCell className="text-center text-sm font-medium bg-muted/30">
                     {formatCurrency(MONTHS.reduce((s, m) => s + getMetrics(selectedBu, m).pontual, 0))}
+                  </TableCell>
+                </TableRow>
+
+                {/* Separator */}
+                <TableRow>
+                  <TableCell colSpan={MONTHS.length + 2} className="p-0">
+                    <div className="border-t-2 border-dashed border-muted-foreground/30" />
+                  </TableCell>
+                </TableRow>
+
+                {/* Realizado Row */}
+                <TableRow className="bg-accent/30">
+                  <TableCell className="sticky left-0 bg-accent/30 z-10 font-semibold">
+                    ✅ Realizado
+                    {realizedLoading && <Loader2 className="inline h-3 w-3 animate-spin ml-1" />}
+                  </TableCell>
+                  {MONTHS.map((month) => {
+                    const realized = realizedFunnelByBU?.[selectedBu]?.[month]?.valor ?? 0;
+                    const hasData = realized > 0;
+                    return (
+                      <TableCell key={`real-${month}`} className="text-center text-sm font-medium">
+                        {hasData ? formatCompact(realized) : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                    );
+                  })}
+                  <TableCell className="text-center font-bold bg-muted/30">
+                    {formatCurrency(MONTHS.reduce((s, m) => s + (realizedFunnelByBU?.[selectedBu]?.[m]?.valor ?? 0), 0))}
+                  </TableCell>
+                </TableRow>
+
+                {/* Gap Row */}
+                <TableRow>
+                  <TableCell className="sticky left-0 bg-background z-10 font-semibold">📊 Gap</TableCell>
+                  {MONTHS.map((month) => {
+                    const realized = realizedFunnelByBU?.[selectedBu]?.[month]?.valor ?? 0;
+                    const meta = getFaturamento(selectedBu, month);
+                    const hasData = realized > 0;
+                    const gap = realized - meta;
+                    return (
+                      <TableCell key={`gap-${month}`} className="text-center text-sm font-semibold">
+                        {hasData ? (
+                          <span className={gap >= 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'}>
+                            {gap >= 0 ? '+' : ''}{formatCompact(gap)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                  <TableCell className="text-center font-bold bg-muted/30">
+                    {(() => {
+                      const totalRealized = MONTHS.reduce((s, m) => s + (realizedFunnelByBU?.[selectedBu]?.[m]?.valor ?? 0), 0);
+                      const totalMeta = getBuMonthlyTotal(selectedBu);
+                      const totalGap = totalRealized - totalMeta;
+                      const hasAnyData = MONTHS.some(m => (realizedFunnelByBU?.[selectedBu]?.[m]?.valor ?? 0) > 0);
+                      return hasAnyData ? (
+                        <span className={totalGap >= 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'}>
+                          {totalGap >= 0 ? '+' : ''}{formatCurrency(totalGap)}
+                        </span>
+                      ) : <span className="text-muted-foreground">—</span>;
+                    })()}
                   </TableCell>
                 </TableRow>
               </TableBody>
