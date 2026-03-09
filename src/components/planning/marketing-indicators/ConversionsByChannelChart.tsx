@@ -27,10 +27,16 @@ function inferTipoOrigem(card: AttributionCard): string {
 
 const ORIGEM_MAP: Record<string, string> = {
   fb: 'Facebook',
+  facebook: 'Facebook',
+  'facebook.com': 'Facebook',
   google: 'Google Ads',
   googleads: 'Google Ads',
+  'google ads': 'Google Ads',
   ig: 'Instagram',
   instagram: 'Instagram',
+  'instagram.com': 'Instagram',
+  meta: 'Meta Ads',
+  'meta ads': 'Meta Ads',
   site: 'Site',
   organic: 'Orgânico',
   'orgânico': 'Orgânico',
