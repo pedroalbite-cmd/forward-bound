@@ -463,7 +463,7 @@ function CampaignRow({
 
   // Resolve funnel for a sub-row: direct match first, then proportional fallback
   const getSubRowFunnel = (item: AdSetData): CampaignFunnel | undefined => {
-    const direct = lookupAdSetFunnel(adSetFunnels, campaign.name, item.name, campaign.channel);
+    const direct = lookupAdSetFunnel(adSetFunnels, campaign.name, item.name, campaign.channel, campaign.id);
     if (direct) return direct;
     return proportionalFunnels?.get(item.id);
   };
