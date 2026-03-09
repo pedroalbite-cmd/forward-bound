@@ -47,11 +47,7 @@ const ORIGEM_MAP: Record<string, string> = {
 function normalizeOrigemLead(raw: string): string {
   if (!raw) return '(Sem origem)';
   if (raw.includes('{{')) return '(Sem origem)';
-  let base = raw;
-  const commaIdx = raw.indexOf(',');
-  if (commaIdx > 0) {
-    base = raw.substring(0, commaIdx).trim();
-  }
+  let base = raw.split(/[?,&]/)[0].trim();
   if (/^\d{10,}$/.test(base)) return 'Meta Ads';
   const key = base.toLowerCase().replace(/\/$/, '');
   if (ORIGEM_MAP[key]) return ORIGEM_MAP[key];
