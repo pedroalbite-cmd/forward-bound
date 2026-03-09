@@ -10,9 +10,7 @@ import { MarketingPlanTab } from "@/components/planning/MarketingPlanTab";
 import { StructureTab } from "@/components/planning/StructureTab";
 
 import { AdminTab } from "@/components/planning/AdminTab";
-import { IndicatorsTab } from "@/components/planning/IndicatorsTab";
-import { MarketingIndicatorsTab } from "@/components/planning/MarketingIndicatorsTab";
-import { NpsTab } from "@/components/planning/NpsTab";
+import { IndicatorsWrapper } from "@/components/planning/IndicatorsWrapper";
 import { PlanGrowthDataLoader } from "@/components/planning/PlanGrowthDataLoader";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserPermissions, TabKey } from "@/hooks/useUserPermissions";
