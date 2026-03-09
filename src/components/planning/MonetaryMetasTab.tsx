@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useMonetaryMetas, BuType, MonthType, BU_LABELS, isPontualOnlyBU, MONTHS } from '@/hooks/useMonetaryMetas';
-import { useMrrBase } from '@/hooks/useMrrBase';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { useMrrBase } from '@/hooks/useMrrBaseContent, CardHeader } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,8 +37,7 @@ const DEFAULT_TICKETS: Record<BuType, number> = {
 export function MonetaryMetasTab() {
   const { toast } = useToast();
   const { metas, isLoading, bulkUpdateMetas, BUS, MONTHS } = useMonetaryMetas();
-  const { realizedFunnelByBU, isLoading: realizedLoading } = useIndicatorsRealized(2026);
-  const { logAction } = useAuditLogs();
+  const { realizedFunnelByBU, isgetMrrBaseForMonth, isLoading: mrrLoading } = useMrrBase( } = useAuditLogs();
 
   const [selectedBu, setSelectedBu] = useState<BuType>('modelo_atual');
   
