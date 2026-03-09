@@ -897,6 +897,7 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, adCre
                               onPreview={setPreviewData}
                               funnel={row.funnel}
                               adSetFunnels={adSetFunnels}
+                              adCreativeFunnels={adCreativeFunnels}
                             />
                           );
                         }
