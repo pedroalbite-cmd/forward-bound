@@ -705,7 +705,7 @@ export function MarketingIndicatorsTab() {
       </div>
 
       {/* Conversions by Channel Table */}
-      <ConversionsByChannelChart channels={enrichedChannels} />
+      <ConversionsByChannelChart cards={allAttributionCards} />
 
       {/* Campaigns Table - Meta + Google Ads Integration */}
       <CampaignsTable 
