@@ -336,9 +336,10 @@ function AdRow({ ad, onPreview, adFunnel }: { ad: AdData; onPreview: (data: Prev
 // ─── Meta AdSet Row (level 2) ─────────────────────────────────
 
 function AdSetRow({ 
-  adSet, startDate, endDate, onPreview, adSetFunnel 
+  adSet, startDate, endDate, onPreview, adSetFunnel, adCreativeFunnels, campaignName, campaignId, channelName
 }: { 
-  adSet: AdSetData; startDate: Date; endDate: Date; onPreview: (data: PreviewModalData) => void; adSetFunnel?: CampaignFunnel 
+  adSet: AdSetData; startDate: Date; endDate: Date; onPreview: (data: PreviewModalData) => void; adSetFunnel?: CampaignFunnel;
+  adCreativeFunnels?: Map<string, CampaignFunnel>; campaignName: string; campaignId?: string; channelName: string;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   
