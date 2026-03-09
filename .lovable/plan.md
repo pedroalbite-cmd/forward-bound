@@ -1,30 +1,35 @@
 
 
-## Análise: Discrepância entre vendas no funil e na tabela de campanhas
+## Plano: Adicionar O2 TAX à atribuição + investigar vendas "(Sem campanha)"
 
-### Fontes de dados
+### Parte 1: Adicionar O2 TAX ao `allAttributionCards`
 
-| Componente | Fonte | BUs incluídas |
-|---|---|---|
-| **Funil / Gauges** (`pipefyVolumes`) | `getCardsForIndicator('venda')` de cada BU | MA + O2 TAX + Franquia + **Oxy Hacker** |
-| **Tabela de Campanhas** (`campaignFunnels`) | `allAttributionCards` → `useMarketingAttribution` | MA + Franquia |
-| **CAC / ROAS** (`realPerformanceMetrics`) | Usa `pipefyVolumes.vendas` (4 BUs) | 4 BUs |
+**Problema**: O2 TAX não participa da atribuição de campanhas. Tem 1 venda em fevereiro que está "sumida".
 
-### Discrepâncias identificadas
+**Desafio**: O `O2TaxCard` não possui campos de marketing (campanha, fonte, fbclid, gclid, etc.) — a tabela `pipefy_cards_movements` do O2 TAX não registra esses dados. Todos os cards O2 TAX entrarão como canal "orgânico" / "(Sem campanha)".
 
-1. **O2 TAX nunca foi incluído** no `allAttributionCards` — logo suas vendas nunca aparecem na tabela de campanhas
-2. **Oxy Hacker foi removido** na última alteração — correto para atribuição de mídia, mas gera diferença com o funil
-3. **Lógica de contagem diferente**: O funil usa first-entry deduplication por card ID; a atribuição usa cumulative stages (um card em "Contrato assinado" conta para leads, mqls, rms, etc.)
+**Outro problema**: O hook `useO2TaxAnalytics` só faz `query_period` (filtra por data de entrada na fase). Se o card entrou no pipeline meses atrás e só assinou em fevereiro, a venda não aparece nos `cards`. Diferente do Modelo Atual, o O2 TAX **não tem query de assinatura** (`query_period_by_signature`).
 
-### Conclusão
+**Solução (2 passos)**:
 
-A diferença é **esperada por design**: a tabela de campanhas faz atribuição de marketing (só BUs com campanhas rastreáveis), enquanto o funil conta volume total de todas as BUs. Não há bug — são perspectivas diferentes.
+1. **`src/hooks/useO2TaxAnalytics.ts`**: Adicionar uma query de `query_period_by_signature` (igual ao Modelo Atual) para capturar vendas assinadas no período mas que entraram antes. Merge com deduplicação por `id|fase`.
 
-### Opções
+2. **`src/components/planning/MarketingIndicatorsTab.tsx`**: Adicionar loop que converte `o2TaxCards` em `AttributionCard[]` e pusha no `allAttributionCards`, mapeando os campos disponíveis (id, titulo, fase, valores) e deixando os campos de marketing como `undefined`.
 
-**A) Aceitar a diferença** — Sem alteração de código. As duas visões têm propósitos diferentes.
+### Parte 2: Vendas "(Sem campanha)" — 6 vendas sem match
 
-**B) Alinhar removendo Oxy Hacker do funil** — Remover `oxyGetCards` do `pipefyVolumes` para que funil e CAC reflitam apenas as BUs com atribuição de mídia.
+**Situação**: Das 9 vendas mapeadas, 6 aparecem como "(Sem campanha)". O usuário diz que só 2 dessas 6 são corretamente mapeáveis.
 
-**C) Adicionar O2 TAX à atribuição** — Incluir cards O2 TAX no `allAttributionCards` para que vendas O2 TAX apareçam na tabela de campanhas (se eles tiverem dados de campanha/fonte no CRM).
+**Causa**: Esses cards têm o campo `campanha` vazio/undefined no Pipefy. O matching por nome (`resolveApiCampaign`) não encontra nada porque não há nome para buscar.
+
+**Isso é uma limitação de dados do CRM** — se o Pipefy não registrou a campanha de origem, o sistema não tem como atribuir. As 4 vendas restantes provavelmente são orgânicas/indicação/sem rastreamento.
+
+**Ação**: Sem alteração de código necessária para este ponto. A atribuição está funcionando corretamente — cards sem campo campanha vão para "(Sem campanha)" como esperado.
+
+### Resumo de alterações
+
+| Arquivo | Alteração |
+|---|---|
+| `src/hooks/useO2TaxAnalytics.ts` | Adicionar query `query_period_by_signature` + merge com dedup `id\|fase` + expor `cards` raw para atribuição |
+| `src/components/planning/MarketingIndicatorsTab.tsx` | Adicionar loop O2 TAX no `allAttributionCards` |
 
