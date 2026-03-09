@@ -540,6 +540,8 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
   const [isOpen, setIsOpen] = useState(true);
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
   const [previewData, setPreviewData] = useState<PreviewModalData | null>(null);
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortAsc, setSortAsc] = useState(false);
 
   const toggleCampaign = (campaignId: string) => {
     setExpandedCampaigns(prev => {
@@ -548,6 +550,11 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
       else newSet.add(campaignId);
       return newSet;
     });
+  };
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) setSortAsc(!sortAsc);
+    else { setSortKey(key); setSortAsc(false); }
   };
 
   // Build lookup: campaign ID -> funnel, plus normalized name fallback
@@ -573,7 +580,6 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
   const getFunnel = (campaign: CampaignData): CampaignFunnel | undefined => {
     const byId = funnelMap.get(campaign.id);
     if (byId) return byId;
-    // Google campaigns: try raw ID
     const googleId = (campaign as any)._googleId;
     if (googleId) {
       const byRawId = funnelMap.get(googleId);
@@ -582,7 +588,6 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
     const normName = campaign.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
     const exactMatch = funnelMap.get(normName);
     if (exactMatch) return exactMatch;
-    // Partial name matching fallback for Google campaigns
     if (campaignFunnels) {
       for (const f of campaignFunnels) {
         const normFunnel = f.campaignName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -602,7 +607,6 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
     for (const c of activeCampaigns) {
       const f = getFunnel(c);
       if (f) {
-        // Add all possible keys for this funnel
         if (f.campaignId) matched.add(f.campaignId);
         const normName = f.campaignName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
         matched.add(normName);
@@ -618,6 +622,43 @@ export function CampaignsTable({ campaigns, campaignFunnels, adSetFunnels, isLoa
     
     return { matchedFunnelKeys: matched, unmatchedFunnels: unmatched };
   }, [campaigns, campaignFunnels, funnelMap]);
+
+  // Build unified sortable rows
+  type UnifiedRow = { type: 'api'; campaign: CampaignData; funnel?: CampaignFunnel } | { type: 'crm'; funnel: CampaignFunnel; idx: number };
+  
+  const sortedRows = useMemo<UnifiedRow[]>(() => {
+    const apiRows: UnifiedRow[] = campaigns.filter(c => c.investment > 0).map(c => ({ type: 'api' as const, campaign: c, funnel: getFunnel(c) }));
+    const crmRows: UnifiedRow[] = unmatchedFunnels.map((f, i) => ({ type: 'crm' as const, funnel: f, idx: i }));
+    const all = [...apiRows, ...crmRows];
+    
+    if (!sortKey) return all;
+    
+    const getValue = (row: UnifiedRow): number => {
+      const camp = row.type === 'api' ? row.campaign : null;
+      const funnel = row.type === 'api' ? row.funnel : row.funnel;
+      const spend = camp?.investment || 0;
+      
+      switch (sortKey) {
+        case 'spend': return spend;
+        case 'leads': return camp?.leads || 0;
+        case 'cpl': return camp?.cpl || 0;
+        case 'mqls': return funnel?.mqls || 0;
+        case 'cpmql': return (funnel?.mqls && spend > 0) ? spend / funnel.mqls : 0;
+        case 'rms': return funnel?.rms || 0;
+        case 'rrs': return funnel?.rrs || 0;
+        case 'propostas': return funnel?.propostas || 0;
+        case 'vendas': return funnel?.vendas || 0;
+        case 'roas': return (funnel && spend > 0) ? funnel.receita / spend : (funnel?.receita || 0);
+        default: return 0;
+      }
+    };
+    
+    return all.sort((a, b) => {
+      const av = getValue(a);
+      const bv = getValue(b);
+      return sortAsc ? av - bv : bv - av;
+    });
+  }, [campaigns, unmatchedFunnels, sortKey, sortAsc, funnelMap]);
 
   const hasData = campaigns.length > 0 || unmatchedFunnels.length > 0;
 
