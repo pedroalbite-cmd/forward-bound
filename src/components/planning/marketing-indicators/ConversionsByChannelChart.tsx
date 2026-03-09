@@ -27,10 +27,16 @@ function inferTipoOrigem(card: AttributionCard): string {
 
 const ORIGEM_MAP: Record<string, string> = {
   fb: 'Facebook',
+  facebook: 'Facebook',
+  'facebook.com': 'Facebook',
   google: 'Google Ads',
   googleads: 'Google Ads',
+  'google ads': 'Google Ads',
   ig: 'Instagram',
   instagram: 'Instagram',
+  'instagram.com': 'Instagram',
+  meta: 'Meta Ads',
+  'meta ads': 'Meta Ads',
   site: 'Site',
   organic: 'Orgânico',
   'orgânico': 'Orgânico',
@@ -41,13 +47,9 @@ const ORIGEM_MAP: Record<string, string> = {
 function normalizeOrigemLead(raw: string): string {
   if (!raw) return '(Sem origem)';
   if (raw.includes('{{')) return '(Sem origem)';
-  let base = raw;
-  const commaIdx = raw.indexOf(',');
-  if (commaIdx > 0) {
-    base = raw.substring(0, commaIdx).trim();
-  }
+  let base = raw.split(/[?,&]/)[0].trim();
   if (/^\d{10,}$/.test(base)) return 'Meta Ads';
-  const key = base.toLowerCase().replace(/\/$/, '');
+  const key = base.toLowerCase().replace(/\.com\/?$/, '').replace(/\/$/, '');
   if (ORIGEM_MAP[key]) return ORIGEM_MAP[key];
   return base.charAt(0).toUpperCase() + base.slice(1);
 }
