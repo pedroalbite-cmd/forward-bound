@@ -1,6 +1,9 @@
-import { useMemo } from "react";
-import { Trophy, TrendingUp, FileText, Zap } from "lucide-react";
+import { useMemo, useState } from "react";
+import { TrendingUp, FileText, Zap, DollarSign, ChevronDown, ChevronRight, Receipt } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { DetailItem } from "./DetailSheet";
 
 interface TcvHeroBannerProps {
@@ -8,13 +11,19 @@ interface TcvHeroBannerProps {
 }
 
 export function TcvHeroBanner({ vendaItems }: TcvHeroBannerProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
+
   const stats = useMemo(() => {
     const totalMrrAnual = vendaItems.reduce((s, c) => s + (c.mrr || 0) * 12, 0);
     const totalSetup = vendaItems.reduce((s, c) => s + (c.setup || 0), 0);
     const totalPontual = vendaItems.reduce((s, c) => s + (c.pontual || 0), 0);
     const tcv = totalMrrAnual + totalSetup + totalPontual;
     const ticketMedio = vendaItems.length > 0 ? tcv / vendaItems.length : 0;
-    return { tcv, totalMrrAnual, totalSetup, totalPontual, count: vendaItems.length, ticketMedio };
+    const total = totalMrrAnual + totalSetup + totalPontual;
+    const pctMrr = total > 0 ? (totalMrrAnual / total) * 100 : 0;
+    const pctSetup = total > 0 ? (totalSetup / total) * 100 : 0;
+    const pctPontual = total > 0 ? (totalPontual / total) * 100 : 0;
+    return { tcv, totalMrrAnual, totalSetup, totalPontual, count: vendaItems.length, ticketMedio, pctMrr, pctSetup, pctPontual };
   }, [vendaItems]);
 
   if (stats.count === 0) return null;
@@ -26,65 +35,113 @@ export function TcvHeroBanner({ vendaItems }: TcvHeroBannerProps) {
         ? `R$ ${(v / 1_000).toFixed(1).replace('.', ',')}k`
         : `R$ ${v.toFixed(0)}`;
 
-  const breakdownItems = [
-    { label: "MRR Anualizado", value: stats.totalMrrAnual, icon: TrendingUp },
-    { label: "Setup", value: stats.totalSetup, icon: FileText },
-    { label: "Pontual", value: stats.totalPontual, icon: Zap },
+  const breakdownCards = [
+    { label: "MRR Anualizado", value: stats.totalMrrAnual, pct: stats.pctMrr, icon: TrendingUp, color: "text-chart-1" },
+    { label: "Setup", value: stats.totalSetup, pct: stats.pctSetup, icon: FileText, color: "text-chart-2" },
+    { label: "Pontual", value: stats.totalPontual, pct: stats.pctPontual, icon: Zap, color: "text-chart-3" },
+    { label: "Ticket Médio", value: stats.ticketMedio, pct: null, icon: Receipt, color: "text-chart-4" },
   ];
 
   return (
-    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 p-[1px]">
-      <div className="relative rounded-[11px] bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 px-6 py-5 overflow-hidden">
-        {/* Background pattern */}
-        <div className="absolute inset-0 opacity-[0.07]" style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
-        }} />
-
-        <div className="relative flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-8">
-          {/* Left: Main TCV */}
-          <div className="flex items-center gap-4 flex-shrink-0">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm border border-white/20">
-              <Trophy className="h-7 w-7 text-white" />
+    <Card className="border-l-4 border-l-primary overflow-hidden">
+      <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+        <CollapsibleTrigger asChild>
+          <div className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-muted/30 transition-colors">
+            <div className="flex items-center gap-3">
+              <DollarSign className="h-5 w-5 text-primary" />
+              <span className="font-display text-base font-semibold text-foreground">
+                TCV Gerado no Período
+              </span>
+              {!isExpanded && (
+                <span className="font-display text-lg font-bold text-foreground ml-2">
+                  {fmt(stats.tcv)}
+                </span>
+              )}
+              <Badge variant="secondary" className="text-[11px] font-medium">
+                {stats.count} {stats.count === 1 ? 'contrato' : 'contratos'}
+              </Badge>
             </div>
-            <div>
-              <div className="flex items-center gap-2.5 mb-0.5">
-                <span className="text-sm font-medium text-white/80 tracking-wide uppercase">TCV Gerado</span>
-                <Badge className="bg-white/20 text-white border-white/30 text-[10px] font-semibold hover:bg-white/25">
-                  {stats.count} {stats.count === 1 ? 'contrato' : 'contratos'}
-                </Badge>
-              </div>
-              <span className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">
+            <Button variant="ghost" size="sm" className="text-muted-foreground gap-1.5">
+              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              {isExpanded ? 'Ocultar' : 'Mostrar'}
+            </Button>
+          </div>
+        </CollapsibleTrigger>
+
+        <CollapsibleContent>
+          <div className="px-5 pb-5 space-y-5">
+            {/* Main TCV value */}
+            <div className="text-center py-2">
+              <span className="font-display text-5xl font-bold tracking-tight text-foreground">
                 {fmt(stats.tcv)}
               </span>
             </div>
-          </div>
 
-          {/* Divider */}
-          <div className="hidden md:block w-px h-16 bg-white/20" />
-
-          {/* Right: Breakdown */}
-          <div className="flex flex-wrap gap-3 flex-1">
-            {breakdownItems.map((item) => (
-              <div
-                key={item.label}
-                className="flex items-center gap-3 rounded-xl bg-white/10 backdrop-blur-sm border border-white/15 px-4 py-3 min-w-[150px] flex-1"
-              >
-                <item.icon className="h-4 w-4 text-white/70 flex-shrink-0" />
-                <div className="flex flex-col">
-                  <span className="text-[11px] text-white/60 font-medium uppercase tracking-wider">{item.label}</span>
-                  <span className="text-base font-bold text-white">{fmt(item.value)}</span>
-                </div>
+            {/* Distribution bar */}
+            <div className="space-y-2">
+              <div className="flex h-3 w-full rounded-full overflow-hidden bg-muted">
+                {stats.pctMrr > 0 && (
+                  <div
+                    className="h-full bg-chart-1 transition-all duration-500"
+                    style={{ width: `${stats.pctMrr}%` }}
+                  />
+                )}
+                {stats.pctSetup > 0 && (
+                  <div
+                    className="h-full bg-chart-2 transition-all duration-500"
+                    style={{ width: `${stats.pctSetup}%` }}
+                  />
+                )}
+                {stats.pctPontual > 0 && (
+                  <div
+                    className="h-full bg-chart-3 transition-all duration-500"
+                    style={{ width: `${stats.pctPontual}%` }}
+                  />
+                )}
               </div>
-            ))}
-          </div>
+              <div className="flex items-center justify-center gap-5 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-chart-1 inline-block" />
+                  MRR x12 ({Math.round(stats.pctMrr)}%)
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-chart-2 inline-block" />
+                  Setup ({Math.round(stats.pctSetup)}%)
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-chart-3 inline-block" />
+                  Pontual ({Math.round(stats.pctPontual)}%)
+                </span>
+              </div>
+            </div>
 
-          {/* Far right: Ticket Médio */}
-          <div className="flex-col items-end text-right flex-shrink-0 hidden lg:flex">
-            <span className="text-[11px] text-white/60 font-medium uppercase tracking-wider">Ticket Médio</span>
-            <span className="text-xl font-bold text-white">{fmt(stats.ticketMedio)}</span>
+            {/* Breakdown grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {breakdownCards.map((item) => (
+                <div
+                  key={item.label}
+                  className="flex flex-col gap-1.5 rounded-lg border border-border bg-muted/40 p-4"
+                >
+                  <div className="flex items-center gap-2">
+                    <item.icon className={`h-4 w-4 ${item.color}`} />
+                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                      {item.label}
+                    </span>
+                  </div>
+                  <span className="font-display text-xl font-bold text-foreground">
+                    {fmt(item.value)}
+                  </span>
+                  {item.pct !== null && (
+                    <span className="text-xs text-muted-foreground">
+                      {Math.round(item.pct)}% do TCV
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </Card>
   );
 }
