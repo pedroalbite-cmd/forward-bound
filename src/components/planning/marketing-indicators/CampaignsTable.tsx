@@ -108,6 +108,74 @@ function Thumbnail({
   );
 }
 
+// ─── Normalize helper for adSet lookup ────────────────────────
+function normalizeName(name: string): string {
+  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function lookupAdSetFunnel(
+  adSetFunnels: Map<string, CampaignFunnel> | undefined,
+  campaignName: string,
+  adSetName: string,
+  channel: string,
+): CampaignFunnel | undefined {
+  if (!adSetFunnels || adSetFunnels.size === 0) return undefined;
+  const normCamp = normalizeName(campaignName);
+  const normAdSet = normalizeName(adSetName);
+  const channelId = channel === 'Google Ads' ? 'google_ads' : 'meta_ads';
+  
+  // Exact key match
+  const exactKey = `${normCamp}::${normAdSet}::${channelId}`;
+  if (adSetFunnels.has(exactKey)) return adSetFunnels.get(exactKey);
+  
+  // Partial match: scan for adSet name containing or contained by
+  for (const [key, funnel] of adSetFunnels) {
+    const parts = key.split('::');
+    if (parts.length < 3) continue;
+    const funnelAdSet = parts[1];
+    const funnelChannel = parts[2];
+    if (funnelChannel !== channelId) continue;
+    // Check campaign match (exact or partial)
+    const funnelCamp = parts[0];
+    const campMatch = funnelCamp === normCamp || funnelCamp.includes(normCamp) || normCamp.includes(funnelCamp);
+    if (!campMatch) continue;
+    // Check adSet match (partial)
+    if (funnelAdSet.includes(normAdSet) || normAdSet.includes(funnelAdSet)) {
+      return funnel;
+    }
+  }
+  return undefined;
+}
+
+// CRM cells helper for sub-rows
+function CrmCells({ funnel, size = 'sm' }: { funnel?: CampaignFunnel; size?: 'sm' | 'md' }) {
+  const textClass = size === 'sm' ? 'text-xs' : 'text-sm';
+  if (!funnel) {
+    return (
+      <>
+        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
+        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
+        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
+        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
+        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
+        <TableCell className={`text-right ${textClass} text-muted-foreground`}>-</TableCell>
+      </>
+    );
+  }
+  return (
+    <>
+      <TableCell className={`text-right ${textClass}`}>{funnel.leads}</TableCell>
+      <TableCell className={`text-right ${textClass}`}>{funnel.mqls}</TableCell>
+      <TableCell className={`text-right ${textClass}`}>{funnel.vendas}</TableCell>
+      <TableCell className={`text-right ${textClass}`}>{funnel.receita > 0 ? formatCurrency(funnel.receita) : '-'}</TableCell>
+      <TableCell className={`text-right ${textClass}`}>{funnel.tcv > 0 ? formatCurrency(funnel.tcv) : '-'}</TableCell>
+      <TableCell className={cn(`text-right ${textClass} font-semibold`, funnel.roi >= 1 ? "text-chart-2" : funnel.roi > 0 ? "text-destructive" : "text-muted-foreground")}>
+        {funnel.investimento > 0 ? `${funnel.roi.toFixed(1)}x` : '-'}
+      </TableCell>
+    </>
+  );
+}
+
 // ─── Google Keyword Row (level 3) ─────────────────────────────
 
 const MATCH_TYPE_LABEL: Record<string, string> = {
@@ -135,6 +203,7 @@ function GoogleKeywordRow({ keyword }: { keyword: GoogleKeyword }) {
           {keyword.status === 'ENABLED' ? 'Ativo' : keyword.status === 'PAUSED' ? 'Pausado' : keyword.status}
         </Badge>
       </TableCell>
+      <CrmCells funnel={undefined} size="sm" />
     </TableRow>
   );
 }
