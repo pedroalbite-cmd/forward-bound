@@ -2426,6 +2426,9 @@ export function IndicatorsTab() {
         </p>
       </div>
 
+      {/* TCV Hero Banner */}
+      <TcvHeroBanner vendaItems={getItemsForIndicator('venda')} />
+
       {/* Cards - Quantity Indicators */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
         {indicatorConfigs.map((indicator) => (
