@@ -12,6 +12,7 @@ import { useO2TaxMetas, O2TaxIndicator } from "@/hooks/useO2TaxMetas";
 import { useOxyHackerMetas, OxyHackerIndicator } from "@/hooks/useOxyHackerMetas";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { useConsolidatedMetas, ConsolidatedMetricType } from "@/hooks/useConsolidatedMetas";
+import { useMrrBase } from "@/hooks/useMrrBase";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
@@ -413,7 +414,8 @@ export function IndicatorsTab() {
   const { funnelData, metasPorBU } = useMediaMetas();
   
   // Get consolidated metas (database overrides + Plan Growth fallback)
-  const { getMetaMonetaryForPeriod } = useConsolidatedMetas();
+  const { getMetaMonetaryForPeriod, getConsolidatedMeta } = useConsolidatedMetas();
+  const { getMrrBaseForMonth, isLoading: isLoadingMrrBase } = useMrrBase();
   
   // Get closer metas for filtering goals by closer percentage
   const { getFilteredMeta } = useCloserMetas(currentYear);
@@ -2461,71 +2463,86 @@ export function IndicatorsTab() {
           differenceInDays(today, startDate) + 1,
           daysInPeriod
         );
-        const paceFraction = daysInPeriod > 0 ? daysElapsed / daysInPeriod : 0;
-        const faturamentoMeta = getMetaMonetaryForIndicator({ key: 'faturamento', label: 'Faturamento', shortLabel: 'Fat.', format: 'currency' });
-        const faturamentoRealized = getRealizedMonetaryForIndicator({ key: 'faturamento', label: 'Faturamento', shortLabel: 'Fat.', format: 'currency' });
-        const paceExpected = faturamentoMeta * paceFraction;
 
-        // === Calculate MRR Base (faturamentoTotal from metasPorBU minus increment meta) ===
-        let faturamentoTotal = 0;
-        if (metasPorBU) {
-          const monthsInPeriod = eachMonthOfInterval({ start: startDate, end: endDate });
-          selectedBUs.forEach(bu => {
-            const buMetas = metasPorBU[bu as keyof typeof metasPorBU];
-            if (!buMetas) return;
-            for (const monthDate of monthsInPeriod) {
-              const monthName = monthNames[getMonth(monthDate)];
-              const monthStart = startOfMonth(monthDate);
-              const monthEnd = endOfMonth(monthDate);
-              const overlapStart = startDate > monthStart ? startDate : monthStart;
-              const overlapEnd = endDate < monthEnd ? endDate : monthEnd;
-              if (overlapStart > overlapEnd) continue;
-              const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
-              const totalDaysInMonth = differenceInDays(monthEnd, monthStart) + 1;
-              const fraction = totalDaysInMonth > 0 ? overlapDays / totalDaysInMonth : 0;
-              const monthVal = buMetas[monthName] || 0;
-              faturamentoTotal += monthVal * fraction;
-            }
-          });
-        }
-        const mrrBase = Math.max(0, Math.round(faturamentoTotal - faturamentoMeta));
+        // === New logic: Faturamento = MRR Base (tabela) + Setup + Pontual ===
+        // Build per-month data for both realized and meta
 
-        // === Build real chart data per period using analytics hooks ===
-        const paceChartLabels = getChartLabels();
+        const paceMonths = eachMonthOfInterval({ start: startDate, end: endDate });
 
-        const getVendaCardsForBU = (bu: BUType): { date: Date; value: number }[] => {
+        // Get realized setup + pontual cards with dates
+        const getSetupPontualCardsForBU = (bu: BUType): { date: Date; setup: number; pontual: number }[] => {
           if (bu === 'modelo_atual' && includesModeloAtual) {
             const cards = modeloAtualAnalytics.getCardsForIndicator('venda');
             const filtered = selectedClosers.length > 0
               ? cards.filter(card => matchesCloserFilter((card.closer || '').trim()))
               : cards;
-            return filtered.map(c => ({ date: c.dataEntrada, value: c.valor || 0 }));
+            return filtered.map(c => ({ date: c.dataEntrada, setup: c.valorSetup || 0, pontual: c.valorPontual || 0 }));
           }
           if (bu === 'o2_tax' && includesO2Tax) {
             const cards = o2TaxAnalytics.getCardsForIndicator('venda');
-            return cards.map(c => ({ date: c.dataEntrada, value: c.valor || 0 }));
+            return cards.map(c => ({ date: c.dataEntrada, setup: c.valorSetup || 0, pontual: c.valorPontual || 0 }));
           }
           if (bu === 'oxy_hacker' && includesOxyHacker) {
             const items = oxyHackerAnalytics.getDetailItemsForIndicator('venda');
-            return items.map(i => ({ date: i.date ? new Date(i.date) : new Date(), value: i.pontual || i.value || 0 }));
+            return items.map(i => ({ date: i.date ? new Date(i.date) : new Date(), setup: 0, pontual: i.pontual || i.value || 0 }));
           }
           if (bu === 'franquia' && includesFranquia) {
             const items = franquiaAnalytics.getDetailItemsForIndicator('venda');
-            return items.map(i => ({ date: i.date ? new Date(i.date) : new Date(), value: i.pontual || i.value || 0 }));
+            return items.map(i => ({ date: i.date ? new Date(i.date) : new Date(), setup: 0, pontual: i.pontual || i.value || 0 }));
           }
           return [];
         };
 
-        const allVendaCards: { date: Date; value: number }[] = [];
+        const allSetupPontualCards: { date: Date; setup: number; pontual: number }[] = [];
         selectedBUs.forEach(bu => {
-          allVendaCards.push(...getVendaCardsForBU(bu));
+          allSetupPontualCards.push(...getSetupPontualCardsForBU(bu));
         });
 
-        // Chart data: each period bar includes MRR Base pro-rata + increment
-        const metaPerDay = faturamentoMeta / daysInPeriod;
-        const mrrBasePerDay = mrrBase / daysInPeriod;
+        // Calculate total realized and total meta for header
+        let totalRealized = 0;
+        let totalMeta = 0;
+
+        for (const monthDate of paceMonths) {
+          const monthName = monthNames[getMonth(monthDate)];
+          const year = monthDate.getFullYear();
+          const monthStart = startOfMonth(monthDate);
+          const monthEnd = endOfMonth(monthDate);
+          const overlapStart = startDate > monthStart ? startDate : monthStart;
+          const overlapEnd = endDate < monthEnd ? endDate : monthEnd;
+          if (overlapStart > overlapEnd) continue;
+          const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
+          const daysInMonth = differenceInDays(monthEnd, monthStart) + 1;
+          const fraction = daysInMonth > 0 ? overlapDays / daysInMonth : 0;
+
+          const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
+
+          // Realized: MRR base pro-rata + actual setup + actual pontual in this month
+          const mStart = new Date(overlapStart.getFullYear(), overlapStart.getMonth(), overlapStart.getDate()).getTime();
+          const mEnd = new Date(overlapEnd.getFullYear(), overlapEnd.getMonth(), overlapEnd.getDate(), 23, 59, 59, 999).getTime();
+          const monthSetupPontual = allSetupPontualCards
+            .filter(c => c.date.getTime() >= mStart && c.date.getTime() <= mEnd)
+            .reduce((sum, c) => sum + c.setup + c.pontual, 0);
+          totalRealized += (mrrBaseMonth * fraction) + monthSetupPontual;
+
+          // Meta: MRR base pro-rata + meta setup + meta pontual for all selected BUs
+          let metaSetupMonth = 0;
+          let metaPontualMonth = 0;
+          selectedBUs.forEach(bu => {
+            const buKey = bu as import("@/hooks/useCloserMetas").BuType;
+            metaSetupMonth += getConsolidatedMeta(buKey, monthName as any, 'setup').value;
+            metaPontualMonth += getConsolidatedMeta(buKey, monthName as any, 'pontual').value;
+          });
+          totalMeta += (mrrBaseMonth * fraction) + ((metaSetupMonth + metaPontualMonth) * fraction);
+        }
+
+        const paceFraction = daysInPeriod > 0 ? daysElapsed / daysInPeriod : 0;
+        const paceExpected = totalMeta * paceFraction;
+
+        // === Build chart data per period ===
+        const paceChartLabels = getChartLabels();
         let cumulativeRealized = 0;
         let cumulativeMeta = 0;
+
         const paceChartData = paceChartLabels.map((label, index) => {
           let periodStart: Date;
           let periodEnd: Date;
@@ -2543,19 +2560,47 @@ export function IndicatorsTab() {
             periodEnd = index === months.length - 1 ? endDate : endOfMonth(periodStart);
           }
 
-          const pStart = new Date(periodStart.getFullYear(), periodStart.getMonth(), periodStart.getDate()).getTime();
-          const pEnd = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), periodEnd.getDate(), 23, 59, 59, 999).getTime();
+          // For this period, calculate MRR base + setup/pontual for each month overlap
+          const periodMonths = eachMonthOfInterval({ start: periodStart, end: periodEnd });
+          let periodRealized = 0;
+          let periodMeta = 0;
 
-          const periodIncrementRealized = allVendaCards
-            .filter(c => c.date.getTime() >= pStart && c.date.getTime() <= pEnd)
-            .reduce((sum, c) => sum + c.value, 0);
+          for (const monthDate of periodMonths) {
+            const monthName = monthNames[getMonth(monthDate)];
+            const year = monthDate.getFullYear();
+            const monthStart = startOfMonth(monthDate);
+            const monthEnd = endOfMonth(monthDate);
+            const overlapStart = periodStart > monthStart ? periodStart : monthStart;
+            const overlapEnd = periodEnd < monthEnd ? periodEnd : monthEnd;
+            if (overlapStart > overlapEnd) continue;
+            const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
+            const daysInMonth = differenceInDays(monthEnd, monthStart) + 1;
+            const fraction = daysInMonth > 0 ? overlapDays / daysInMonth : 0;
 
-          const periodDays = differenceInDays(periodEnd, periodStart) + 1;
-          const periodMrrBase = mrrBasePerDay * periodDays;
-          const periodMetaIncrement = metaPerDay * periodDays;
+            const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
 
-          cumulativeRealized += periodMrrBase + periodIncrementRealized;
-          cumulativeMeta += periodMrrBase + periodMetaIncrement;
+            // Realized setup+pontual in this overlap
+            const pStart = new Date(overlapStart.getFullYear(), overlapStart.getMonth(), overlapStart.getDate()).getTime();
+            const pEnd = new Date(overlapEnd.getFullYear(), overlapEnd.getMonth(), overlapEnd.getDate(), 23, 59, 59, 999).getTime();
+            const spRealized = allSetupPontualCards
+              .filter(c => c.date.getTime() >= pStart && c.date.getTime() <= pEnd)
+              .reduce((sum, c) => sum + c.setup + c.pontual, 0);
+
+            periodRealized += (mrrBaseMonth * fraction) + spRealized;
+
+            // Meta setup+pontual
+            let metaSetup = 0;
+            let metaPontual = 0;
+            selectedBUs.forEach(bu => {
+              const buKey = bu as import("@/hooks/useCloserMetas").BuType;
+              metaSetup += getConsolidatedMeta(buKey, monthName as any, 'setup').value;
+              metaPontual += getConsolidatedMeta(buKey, monthName as any, 'pontual').value;
+            });
+            periodMeta += (mrrBaseMonth * fraction) + ((metaSetup + metaPontual) * fraction);
+          }
+
+          cumulativeRealized += periodRealized;
+          cumulativeMeta += periodMeta;
 
           return {
             label,
@@ -2564,13 +2609,29 @@ export function IndicatorsTab() {
           };
         });
 
+        // mrrBase for header = sum of MRR base values in the period
+        let mrrBaseTotal = 0;
+        for (const monthDate of paceMonths) {
+          const monthName = monthNames[getMonth(monthDate)];
+          const year = monthDate.getFullYear();
+          const monthStart = startOfMonth(monthDate);
+          const monthEnd = endOfMonth(monthDate);
+          const overlapStart = startDate > monthStart ? startDate : monthStart;
+          const overlapEnd = endDate < monthEnd ? endDate : monthEnd;
+          if (overlapStart > overlapEnd) continue;
+          const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1;
+          const daysInMonth = differenceInDays(monthEnd, monthStart) + 1;
+          const fraction = daysInMonth > 0 ? overlapDays / daysInMonth : 0;
+          mrrBaseTotal += getMrrBaseForMonth(monthName, year) * fraction;
+        }
+
         return (
           <RevenuePaceChart
-            realized={faturamentoRealized}
-            meta={faturamentoMeta}
-            mrrBase={mrrBase}
+            realized={totalRealized - mrrBaseTotal}
+            meta={totalMeta - mrrBaseTotal}
+            mrrBase={Math.round(mrrBaseTotal)}
             paceExpected={paceExpected}
-            isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading}
+            isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading || isLoadingMrrBase}
             chartData={paceChartData}
           />
         );
