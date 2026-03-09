@@ -3,6 +3,38 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AttributionCard } from "./types";
 
+function isMetaCampaignId(value: string): boolean {
+  return /^\d{10,}$/.test(value.trim());
+}
+
+function inferTipoOrigem(card: AttributionCard): string {
+  const raw = card.tipoOrigem?.trim();
+  if (raw) return raw;
+
+  const fonte = (card.fonte || '').toLowerCase().trim();
+  const origem = (card.origemLead || '').toLowerCase();
+
+  // Eventos
+  if (fonte.includes('evento') || origem.includes('evento') || fonte.includes('g4') || origem.includes('g4')) return 'Evento';
+
+  // Mídia Paga (Meta)
+  if (card.fbclid) return 'Mídia Paga';
+  if (card.campanha && isMetaCampaignId(card.campanha)) return 'Mídia Paga';
+  if (['ig', 'fb'].includes(fonte) || fonte.includes('facebook') || fonte.includes('instagram') || fonte.includes('meta')) return 'Mídia Paga';
+
+  // Mídia Paga (Google)
+  if (card.gclid) return 'Mídia Paga';
+  if (fonte === 'googleads' || fonte.includes('google')) return 'Mídia Paga';
+
+  // Indicação
+  if (origem.includes('indica')) return 'Indicação';
+
+  // Orgânico
+  if (fonte.includes('site') || fonte.includes('organic') || fonte.includes('orgânico') || fonte.includes('organico')) return 'Orgânico';
+
+  return 'Outros';
+}
+
 const PHASE_FUNNEL_MAP: Record<string, string> = {
   'Novos Leads': 'leads',
   'Start form': 'leads',
@@ -50,7 +82,7 @@ export function ConversionsByChannelChart({ cards }: ConversionsByChannelChartPr
       const existing = cardBest.get(card.id);
       if (!existing || FUNNEL_ORDER.indexOf(stage) > FUNNEL_ORDER.indexOf(existing.stage)) {
         cardBest.set(card.id, {
-          tipoOrigem: card.tipoOrigem?.trim() || '(Sem tipo)',
+          tipoOrigem: inferTipoOrigem(card),
           stage,
         });
       }
