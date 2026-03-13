@@ -2524,7 +2524,6 @@ export function IndicatorsTab() {
 
           // DRE priority: sum DRE from Oxy Finance for selected BUs
           const dreTotal = selectedBUs.reduce((acc, bu) => {
-            const buKey = bu as import("@/hooks/useOxyFinance").default extends never ? string : string;
             return acc + (dreByBU[bu as keyof typeof dreByBU]?.[monthName as keyof (typeof dreByBU)[keyof typeof dreByBU]] || 0);
           }, 0);
 
