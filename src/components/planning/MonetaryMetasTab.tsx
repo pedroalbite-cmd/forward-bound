@@ -1,18 +1,21 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useMonetaryMetas, BuType, MonthType, BU_LABELS, isPontualOnlyBU, MONTHS } from '@/hooks/useMonetaryMetas';
 import { useMrrBase } from '@/hooks/useMrrBase';
+import { useEffectiveMetas } from '@/hooks/useEffectiveMetas';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, Info } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { useAuditLogs } from '@/hooks/useAuditLogs';
 import { BU_LABELS as BU_LABEL_MAP } from '@/hooks/useMonetaryMetas';
 import { DistributionBar } from './DistributionBar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const TARGET_TOTAL = 33_306_500;
 
