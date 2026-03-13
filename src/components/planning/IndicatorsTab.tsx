@@ -2598,7 +2598,14 @@ export function IndicatorsTab() {
 
             const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
 
-            if (isTotalOverride(monthName, year)) {
+            // DRE priority: sum DRE from Oxy Finance for selected BUs
+            const dreTotalPeriod = selectedBUs.reduce((acc, bu) => {
+              return acc + (dreByBU[bu as keyof typeof dreByBU]?.[monthName as keyof (typeof dreByBU)[keyof typeof dreByBU]] || 0);
+            }, 0);
+
+            if (dreTotalPeriod > 0) {
+              periodRealized += dreTotalPeriod * fraction;
+            } else if (isTotalOverride(monthName, year)) {
               // Value is total realized revenue — use directly, no setup/pontual added
               periodRealized += mrrBaseMonth * fraction;
             } else {
