@@ -97,7 +97,10 @@ export function useEffectiveMetas(year: number = 2026): EffectiveMetasResult {
         const effective = original + accumulatedGap;
         effectiveMetas[bu][month] = effective;
 
-        const realized = realizedByBU[bu]?.[month] || 0;
+        // Prioritize DRE accounting data over Pipefy new-sales data
+        const dreValue = dreByBU[bu]?.[month] || 0;
+        const pipefyValue = realizedByBU[bu]?.[month] || 0;
+        const realized = dreValue > 0 ? dreValue : pipefyValue;
         const closed = checkMonthClosed(month, year);
 
         if (closed && realized > 0) {
