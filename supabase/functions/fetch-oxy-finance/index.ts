@@ -25,13 +25,14 @@ serve(async (req) => {
     const { action, startDate, endDate, movimentType, isLate } = await req.json();
     console.log(`Action: ${action}, startDate: ${startDate}, endDate: ${endDate}`);
 
-    // Try multiple auth methods - log which one works
+    // Try multiple auth header formats
     const authHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'x-api-key': apiKey,
-      'api-key': apiKey,
+      'apiKey': apiKey,
     };
+
+    // Also try as query param
+    const authParam = `apiKey=${encodeURIComponent(apiKey)}`;
 
     let url: string;
     let fetchOptions: RequestInit;
@@ -43,7 +44,7 @@ serve(async (req) => {
           endDate,
           'cnpjs[]': CNPJ_CLEAN,
         });
-        url = `${BASE_URL}/v2/dre/dre-table?${params}`;
+        url = `${BASE_URL}/v2/dre/dre-table?${params}&${authParam}`;
         fetchOptions = { method: 'GET', headers: authHeaders };
         break;
       }
@@ -55,7 +56,7 @@ serve(async (req) => {
           movimentType: movimentType || 'R',
           isLate: String(isLate || false),
         });
-        url = `${BASE_URL}/widgets/cash-flow/v2/card/details?${params}`;
+        url = `${BASE_URL}/widgets/cash-flow/v2/card/details?${params}&${authParam}`;
         fetchOptions = { method: 'GET', headers: authHeaders };
         break;
       }
@@ -65,7 +66,7 @@ serve(async (req) => {
           endDate,
           'cnpjs[]': CNPJ_FORMATTED,
         });
-        url = `${BASE_URL}/widgets/cash-flow/charts/fluxo-caixa?${params}`;
+        url = `${BASE_URL}/widgets/cash-flow/charts/fluxo-caixa?${params}&${authParam}`;
         fetchOptions = { method: 'GET', headers: authHeaders };
         break;
       }
