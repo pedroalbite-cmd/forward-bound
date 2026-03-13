@@ -418,7 +418,7 @@ export function IndicatorsTab() {
   // Get consolidated metas (database overrides + Plan Growth fallback)
   const { getMetaMonetaryForPeriod, getConsolidatedMeta } = useConsolidatedMetas();
   const { getMrrBaseForMonth, isTotalOverride, isLoading: isLoadingMrrBase } = useMrrBase();
-  const { dreByBU, isLoading: isLoadingDre } = useOxyFinance(currentYear);
+  const { cashflowByMonth, isLoading: isLoadingDre } = useOxyFinance(currentYear);
   
   // Get closer metas for filtering goals by closer percentage
   const { getFilteredMeta } = useCloserMetas(currentYear);
@@ -2522,14 +2522,12 @@ export function IndicatorsTab() {
 
           const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
 
-          // DRE priority: sum DRE from Oxy Finance for selected BUs
-          const dreTotal = selectedBUs.reduce((acc, bu) => {
-            return acc + (dreByBU[bu as keyof typeof dreByBU]?.[monthName as keyof (typeof dreByBU)[keyof typeof dreByBU]] || 0);
-          }, 0);
+          // Cashflow priority: use inflows from Oxy Finance cash flow
+          const cashflowTotal = cashflowByMonth[monthName as keyof typeof cashflowByMonth] || 0;
 
-          if (dreTotal > 0) {
-            // Use accounting DRE data
-            totalRealized += dreTotal * fraction;
+          if (cashflowTotal > 0) {
+            // Use actual cash flow receipts
+            totalRealized += cashflowTotal * fraction;
           } else if (isTotalOverride(monthName, year)) {
             totalRealized += mrrBaseMonth * fraction;
           } else {
@@ -2597,13 +2595,11 @@ export function IndicatorsTab() {
 
             const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
 
-            // DRE priority: sum DRE from Oxy Finance for selected BUs
-            const dreTotalPeriod = selectedBUs.reduce((acc, bu) => {
-              return acc + (dreByBU[bu as keyof typeof dreByBU]?.[monthName as keyof (typeof dreByBU)[keyof typeof dreByBU]] || 0);
-            }, 0);
+            // Cashflow priority: use inflows from Oxy Finance cash flow
+            const cashflowTotalPeriod = cashflowByMonth[monthName as keyof typeof cashflowByMonth] || 0;
 
-            if (dreTotalPeriod > 0) {
-              periodRealized += dreTotalPeriod * fraction;
+            if (cashflowTotalPeriod > 0) {
+              periodRealized += cashflowTotalPeriod * fraction;
             } else if (isTotalOverride(monthName, year)) {
               // Value is total realized revenue — use directly, no setup/pontual added
               periodRealized += mrrBaseMonth * fraction;
