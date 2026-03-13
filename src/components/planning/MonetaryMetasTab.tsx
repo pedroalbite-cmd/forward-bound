@@ -42,6 +42,7 @@ export function MonetaryMetasTab() {
   const { toast } = useToast();
   const { metas, isLoading, bulkUpdateMetas, BUS, MONTHS } = useMonetaryMetas();
   const { getMrrBaseForMonth, isLoading: mrrLoading } = useMrrBase();
+  const { effectiveMetas, gapByMonth, rolloverLog, isMonthClosed } = useEffectiveMetas();
   const { logAction } = useAuditLogs();
 
   const [selectedBu, setSelectedBu] = useState<BuType>('modelo_atual');
