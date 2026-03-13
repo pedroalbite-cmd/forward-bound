@@ -4,18 +4,17 @@ import { useMemo } from "react";
 import type { BuType, MonthType } from "./useMonetaryMetas";
 import { MONTHS } from "./useMonetaryMetas";
 
-// Mapeamento de grupos DRE para BUs internas
+// Mapeamento de grupos DRE para BUs internas (apenas mapeamentos diretos 1:1)
+// "Expansão" contém oxy_hacker + franquia combinados — tratado separadamente
 const DRE_GROUP_TO_BU: Record<string, BuType> = {
   'CaaS': 'modelo_atual',
   'caas': 'modelo_atual',
   'Tax': 'o2_tax',
   'tax': 'o2_tax',
-  'SaaS': 'oxy_hacker',
-  'saas': 'oxy_hacker',
-  'Expansão': 'franquia',
-  'expansao': 'franquia',
-  'Expansao': 'franquia',
 };
+
+// Grupos que representam "Expansão" (contém oxy_hacker + franquia juntos)
+const EXPANSAO_GROUPS = ['Expansão', 'expansao', 'Expansao', 'expansão'];
 
 const MONTH_INDEX_TO_NAME: Record<number, MonthType> = {
   0: 'Jan', 1: 'Fev', 2: 'Mar', 3: 'Abr',
@@ -47,6 +46,8 @@ export interface DailyRevenueRow {
 
 export interface OxyFinanceResult {
   dreByBU: Record<BuType, Record<MonthType, number>>;
+  /** Receita bruta do grupo "Expansão" (oxy_hacker + franquia combinados) por mês */
+  expansaoByMonth: Record<MonthType, number>;
   dreRaw: any;
   cashflowChart: CashflowChartPoint[];
   cashflowByMonth: Record<MonthType, number>;
@@ -73,14 +74,18 @@ function parseMonthFromDate(dateStr: string): MonthType | null {
 
 function matchBU(groupName: string): BuType | null {
   if (!groupName) return null;
-  // Direct match
   if (DRE_GROUP_TO_BU[groupName]) return DRE_GROUP_TO_BU[groupName];
-  // Case-insensitive partial match
   const lower = groupName.toLowerCase();
   for (const [key, bu] of Object.entries(DRE_GROUP_TO_BU)) {
     if (lower.includes(key.toLowerCase())) return bu;
   }
   return null;
+}
+
+function isExpansaoGroup(groupName: string): boolean {
+  if (!groupName) return false;
+  const lower = groupName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return EXPANSAO_GROUPS.some(g => g.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === lower);
 }
 
 function initDreByBU(): Record<BuType, Record<MonthType, number>> {
@@ -144,64 +149,66 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
     retry: 2,
   });
 
-  // Parse DRE into dreByBU
-  const dreByBU = useMemo(() => {
+  // Parse DRE into dreByBU + expansaoByMonth
+  const { parsedDreByBU, expansaoByMonth } = useMemo(() => {
     const result = initDreByBU();
-    if (!dreData) return result;
+    const expansao: Record<string, number> = {};
+    for (const m of MONTHS) expansao[m] = 0;
+
+    if (!dreData) return { parsedDreByBU: result, expansaoByMonth: expansao as Record<MonthType, number> };
 
     try {
-      // Primary: parse groups format { groups: [{ label, data: [{ period, value }] }] }
+      // Primary: parse groups format { groups: [{ label, code, data: [{ period, value }] }] }
       if (dreData?.groups && Array.isArray(dreData.groups)) {
         for (const group of dreData.groups) {
-          const bu = matchBU(group.label || '');
-          if (!bu) continue;
+          // Filter only Receita Bruta (code "RB")
+          if (group.code !== 'RB') continue;
+
+          const label = group.label || '';
           const entries = Array.isArray(group.data) ? group.data : [];
-          for (const entry of entries) {
-            const monthName = parseMonthFromDate(entry.period || entry.date || '');
-            if (monthName) {
-              result[bu][monthName] += Number(entry.value || 0);
+
+          if (isExpansaoGroup(label)) {
+            // Expansão: store separately (contains oxy_hacker + franquia combined)
+            for (const entry of entries) {
+              const monthName = parseMonthFromDate(entry.period || entry.date || '');
+              if (monthName) {
+                expansao[monthName] += Number(entry.value || 0);
+              }
+            }
+          } else {
+            const bu = matchBU(label);
+            if (!bu) continue;
+            for (const entry of entries) {
+              const monthName = parseMonthFromDate(entry.period || entry.date || '');
+              if (monthName) {
+                result[bu][monthName] += Number(entry.value || 0);
+              }
             }
           }
         }
-        return result;
+        return { parsedDreByBU: result, expansaoByMonth: expansao as Record<MonthType, number> };
       }
 
       // Fallback: flat rows format
       const rows = Array.isArray(dreData) ? dreData : dreData?.data || dreData?.rows || [];
-      
       if (Array.isArray(rows)) {
         for (const row of rows) {
-          const group = row.grupo || row.group || row.name || row.categoria || '';
-          const bu = matchBU(group);
-          if (!bu) continue;
+          if (row.code && row.code !== 'RB') continue;
+          const groupLabel = row.grupo || row.group || row.name || row.categoria || '';
 
-          if (row.months && Array.isArray(row.months)) {
-            for (const monthEntry of row.months) {
-              const monthName = parseMonthFromDate(monthEntry.date || monthEntry.month || '');
-              if (monthName) {
-                result[bu][monthName] += Number(monthEntry.value || monthEntry.total || 0);
-              }
+          if (isExpansaoGroup(groupLabel)) {
+            if (row.value && row.date) {
+              const monthName = parseMonthFromDate(row.date);
+              if (monthName) expansao[monthName] += Number(row.value || 0);
             }
-          } else {
-            for (const [key, value] of Object.entries(row)) {
-              const monthIdx = MONTH_NAME_TO_INDEX[key.toLowerCase()];
-              if (monthIdx !== undefined && typeof value === 'number') {
-                const monthName = MONTH_INDEX_TO_NAME[monthIdx];
-                if (monthName) result[bu][monthName] += value;
-              }
-            }
-            for (const m of MONTHS) {
-              if (row[m] !== undefined) {
-                result[bu][m] += Number(row[m] || 0);
-              }
-            }
+            continue;
           }
 
+          const bu = matchBU(groupLabel);
+          if (!bu) continue;
           if (row.value && row.date) {
             const monthName = parseMonthFromDate(row.date);
-            if (monthName) {
-              result[bu][monthName] += Number(row.value || 0);
-            }
+            if (monthName) result[bu][monthName] += Number(row.value || 0);
           }
         }
       }
@@ -209,7 +216,7 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
       console.error('[useOxyFinance] Error parsing DRE data:', e);
     }
 
-    return result;
+    return { parsedDreByBU: result, expansaoByMonth: expansao as Record<MonthType, number> };
   }, [dreData]);
 
   // Parse cashflow chart data (for CashflowChart component)
@@ -274,7 +281,8 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
   }, [dailyRevenue, cashflowChart]);
 
   return {
-    dreByBU,
+    dreByBU: parsedDreByBU,
+    expansaoByMonth,
     dreRaw: dreData,
     cashflowChart,
     cashflowByMonth,

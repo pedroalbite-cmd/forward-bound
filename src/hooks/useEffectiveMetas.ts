@@ -59,13 +59,41 @@ function checkMonthClosed(month: string, year: number): boolean {
 export function useEffectiveMetas(year: number = 2026): EffectiveMetasResult {
   const { metas, isLoading: metasLoading } = useMonetaryMetas(year);
   const { realizedByBU, isLoading: realizedLoading } = useIndicatorsRealized(year);
-  const { dreByBU, isLoading: dreLoading } = useOxyFinance(year);
+  const { dreByBU: rawDreByBU, expansaoByMonth, isLoading: dreLoading } = useOxyFinance(year);
 
   const isLoading = metasLoading || realizedLoading || dreLoading;
 
   const isMonthClosed = (month: string) => checkMonthClosed(month, year);
 
   const result = useMemo(() => {
+    // Split Expansão proportionally between oxy_hacker and franquia based on metas
+    const dreByBU = { ...rawDreByBU };
+    // Deep copy oxy_hacker and franquia to avoid mutating
+    dreByBU.oxy_hacker = { ...rawDreByBU.oxy_hacker };
+    dreByBU.franquia = { ...rawDreByBU.franquia };
+
+    const buMetas_oh = metas.filter(m => m.bu === 'oxy_hacker');
+    const buMetas_fr = metas.filter(m => m.bu === 'franquia');
+
+    for (const month of MONTHS) {
+      const expValue = expansaoByMonth[month] || 0;
+      if (expValue <= 0) continue;
+
+      const ohMeta = buMetas_oh.find(m => m.month === month);
+      const frMeta = buMetas_fr.find(m => m.month === month);
+      const ohTarget = Number(ohMeta?.pontual || 0);
+      const frTarget = Number(frMeta?.pontual || 0);
+      const totalTarget = ohTarget + frTarget;
+
+      if (totalTarget <= 0) {
+        // No metas: assign all to oxy_hacker
+        dreByBU.oxy_hacker[month] += expValue;
+      } else {
+        dreByBU.oxy_hacker[month] += expValue * (ohTarget / totalTarget);
+        dreByBU.franquia[month] += expValue * (frTarget / totalTarget);
+      }
+    }
+
     const bus: BuType[] = ['modelo_atual', 'o2_tax', 'oxy_hacker', 'franquia'];
     const effectiveMetas: Record<string, Record<string, number>> = {};
     const originalMetas: Record<string, Record<string, number>> = {};
@@ -135,12 +163,12 @@ export function useEffectiveMetas(year: number = 2026): EffectiveMetasResult {
       });
     }
 
-    return { effectiveMetas, originalMetas, gapByMonth, rolloverLog };
-  }, [metas, realizedByBU, dreByBU, year]);
+    return { effectiveMetas, originalMetas, gapByMonth, rolloverLog, dreByBU };
+  }, [metas, realizedByBU, rawDreByBU, expansaoByMonth, year]);
 
   return {
     ...result,
-    realizedDRE: dreByBU,
+    realizedDRE: result.dreByBU,
     realizedPipefy: realizedByBU,
     isMonthClosed,
     isLoading,

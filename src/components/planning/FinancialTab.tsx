@@ -1,4 +1,5 @@
 import { useOxyFinance } from "@/hooks/useOxyFinance";
+import { useEffectiveMetas } from "@/hooks/useEffectiveMetas";
 import { useMonetaryMetas, MONTHS, isPontualOnlyBU, type BuType } from "@/hooks/useMonetaryMetas";
 import { DreTable } from "./financial/DreTable";
 import { CashflowChart } from "./financial/CashflowChart";
@@ -7,8 +8,10 @@ import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function FinancialTab() {
-  const { dreByBU, cashflowChart, isLoading, error } = useOxyFinance(2026);
+  const { cashflowChart, isLoading: oxyLoading, error } = useOxyFinance(2026);
+  const { realizedDRE, isLoading: effectiveLoading } = useEffectiveMetas(2026);
   const { metas, isLoading: metasLoading } = useMonetaryMetas(2026);
+  const isLoading = oxyLoading || effectiveLoading || metasLoading;
 
   // Calculate annual meta totals per BU
   const metasByBU: Record<BuType, number> = {
@@ -43,8 +46,8 @@ export function FinancialTab() {
         </Alert>
       )}
 
-      <MetaVsRealized dreByBU={dreByBU} metasByBU={metasByBU} isLoading={isLoading || metasLoading} />
-      <DreTable dreByBU={dreByBU} isLoading={isLoading} />
+      <MetaVsRealized dreByBU={realizedDRE} metasByBU={metasByBU} isLoading={isLoading} />
+      <DreTable dreByBU={realizedDRE} isLoading={isLoading} />
       <CashflowChart data={cashflowChart} isLoading={isLoading} />
     </div>
   );
