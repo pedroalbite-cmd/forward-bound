@@ -164,6 +164,10 @@ export default function Planning2026() {
                 <IndicatorsWrapper />
               </TabsContent>
 
+              <TabsContent value="financial" className="mt-0">
+                <FinancialTab />
+              </TabsContent>
+
               <TabsContent value="marketing" className="mt-0">
                 <MarketingPlanTab />
               </TabsContent>

@@ -39,7 +39,7 @@ export function useUserPermissions(userId: string | undefined) {
   });
 
   // Admins have access to all tabs
-  const allAdminTabs: TabKey[] = ['context', 'goals', 'monthly', 'media', 'marketing', 'structure', 'admin', 'indicators'];
+  const allAdminTabs: TabKey[] = ['context', 'goals', 'monthly', 'media', 'indicators', 'financial', 'marketing', 'structure', 'admin'];
   
   // Map marketing_indicators and nps permissions to indicators tab access
   const rawPermissions = permissions || [];

@@ -140,6 +140,8 @@ export function useEffectiveMetas(year: number = 2026): EffectiveMetasResult {
 
   return {
     ...result,
+    realizedDRE: dreByBU,
+    realizedPipefy: realizedByBU,
     isMonthClosed,
     isLoading,
   };
