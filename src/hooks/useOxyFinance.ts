@@ -4,18 +4,17 @@ import { useMemo } from "react";
 import type { BuType, MonthType } from "./useMonetaryMetas";
 import { MONTHS } from "./useMonetaryMetas";
 
-// Mapeamento de grupos DRE para BUs internas
+// Mapeamento de grupos DRE para BUs internas (apenas mapeamentos diretos 1:1)
+// "Expansão" contém oxy_hacker + franquia combinados — tratado separadamente
 const DRE_GROUP_TO_BU: Record<string, BuType> = {
   'CaaS': 'modelo_atual',
   'caas': 'modelo_atual',
   'Tax': 'o2_tax',
   'tax': 'o2_tax',
-  'SaaS': 'oxy_hacker',
-  'saas': 'oxy_hacker',
-  'Expansão': 'franquia',
-  'expansao': 'franquia',
-  'Expansao': 'franquia',
 };
+
+// Grupos que representam "Expansão" (contém oxy_hacker + franquia juntos)
+const EXPANSAO_GROUPS = ['Expansão', 'expansao', 'Expansao', 'expansão'];
 
 const MONTH_INDEX_TO_NAME: Record<number, MonthType> = {
   0: 'Jan', 1: 'Fev', 2: 'Mar', 3: 'Abr',
