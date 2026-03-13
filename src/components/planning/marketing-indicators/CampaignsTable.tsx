@@ -121,6 +121,7 @@ function lookupAdSetFunnel(
   adSetName: string,
   channel: string,
   campaignId?: string,
+  adSetId?: string,
 ): CampaignFunnel | undefined {
   if (!adSetFunnels || adSetFunnels.size === 0) return undefined;
   const normCamp = normalizeName(campaignName);
