@@ -326,22 +326,26 @@ export function usePlanGrowthData() {
   const churnMensal = 0.06;
   const retencaoVendas = 0.25;
 
-  // Helper: Get metas from database for a BU
-  const getMetasFromDb = (bu: BuType): Record<string, number> | null => {
+  // Helper: Get metas from database for a BU, with effective metas overlay
+  const getMetasFromDb = (bu: BuType, useEffective = false): Record<string, number> | null => {
+    // If using effective metas and they're available, use them directly
+    if (useEffective && effectiveMetas[bu]) {
+      const effMetas = effectiveMetas[bu];
+      const hasValues = Object.values(effMetas).some(v => v > 0);
+      if (hasValues) return { ...effMetas };
+    }
+
     const buMetas = metas.filter(m => m.bu === bu);
     if (buMetas.length === 0) return null;
     
-    // Check if there are any values > 0
     const hasValues = buMetas.some(m => 
       Number(m.faturamento) > 0 || Number(m.pontual) > 0
     );
     if (!hasValues) return null;
     
-    // Return monthly metas from database
     const result: Record<string, number> = {};
     const isPontualOnly = isPontualOnlyBU(bu);
     buMetas.forEach(m => {
-      // For pontual-only BUs, use pontual field; otherwise use faturamento
       result[m.month] = isPontualOnly 
         ? (Number(m.pontual) || 0)
         : (Number(m.faturamento) || 0);
