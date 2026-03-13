@@ -2595,13 +2595,11 @@ export function IndicatorsTab() {
 
             const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
 
-            // DRE priority: sum DRE from Oxy Finance for selected BUs
-            const dreTotalPeriod = selectedBUs.reduce((acc, bu) => {
-              return acc + (dreByBU[bu as keyof typeof dreByBU]?.[monthName as keyof (typeof dreByBU)[keyof typeof dreByBU]] || 0);
-            }, 0);
+            // Cashflow priority: use inflows from Oxy Finance cash flow
+            const cashflowTotalPeriod = cashflowByMonth[monthName as keyof typeof cashflowByMonth] || 0;
 
-            if (dreTotalPeriod > 0) {
-              periodRealized += dreTotalPeriod * fraction;
+            if (cashflowTotalPeriod > 0) {
+              periodRealized += cashflowTotalPeriod * fraction;
             } else if (isTotalOverride(monthName, year)) {
               // Value is total realized revenue — use directly, no setup/pontual added
               periodRealized += mrrBaseMonth * fraction;
