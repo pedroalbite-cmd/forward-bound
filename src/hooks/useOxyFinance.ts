@@ -110,11 +110,11 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
       if (error) throw error;
       return data;
     },
-    staleTime: 10 * 60 * 1000, // 10 min cache
+    staleTime: 10 * 60 * 1000,
     retry: 2,
   });
 
-  // Cashflow chart query
+  // Cashflow chart query (kept for the CashflowChart component)
   const { data: cashflowData, isLoading: cfLoading, error: cfError } = useQuery({
     queryKey: ['oxy-finance-cashflow-chart', year],
     queryFn: async () => {
@@ -128,14 +128,28 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
     retry: 2,
   });
 
+  // Daily revenue from database (primary source for cashflowByMonth)
+  const { data: dailyRevenueData, isLoading: drLoading, error: drError } = useQuery({
+    queryKey: ['daily-revenue', year],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('daily_revenue')
+        .select('date, total_inflows, customer_count')
+        .eq('year', year)
+        .order('date', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+
   // Parse DRE into dreByBU
   const dreByBU = useMemo(() => {
     const result = initDreByBU();
     if (!dreData) return result;
 
     try {
-      // The DRE API returns grouped data - we need to map groups to BUs
-      // Structure varies: could be array of rows or nested object
       const rows = Array.isArray(dreData) ? dreData : dreData?.data || dreData?.rows || [];
       
       if (Array.isArray(rows)) {
@@ -144,8 +158,6 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
           const bu = matchBU(group);
           if (!bu) continue;
 
-          // Try to extract monthly values
-          // Could be in 'months' array, or direct month keys
           if (row.months && Array.isArray(row.months)) {
             for (const monthEntry of row.months) {
               const monthName = parseMonthFromDate(monthEntry.date || monthEntry.month || '');
@@ -154,7 +166,6 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
               }
             }
           } else {
-            // Try direct month keys (janeiro, fevereiro, etc.)
             for (const [key, value] of Object.entries(row)) {
               const monthIdx = MONTH_NAME_TO_INDEX[key.toLowerCase()];
               if (monthIdx !== undefined && typeof value === 'number') {
@@ -162,7 +173,6 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
                 if (monthName) result[bu][monthName] += value;
               }
             }
-            // Also try short month keys
             for (const m of MONTHS) {
               if (row[m] !== undefined) {
                 result[bu][m] += Number(row[m] || 0);
@@ -170,7 +180,6 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
             }
           }
 
-          // Single total value with a date
           if (row.value && row.date) {
             const monthName = parseMonthFromDate(row.date);
             if (monthName) {
@@ -186,7 +195,7 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
     return result;
   }, [dreData]);
 
-  // Parse cashflow chart data
+  // Parse cashflow chart data (for CashflowChart component)
   const cashflowChart = useMemo<CashflowChartPoint[]>(() => {
     if (!cashflowData) return [];
     try {
@@ -211,10 +220,33 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
     }
   }, [cashflowData]);
 
-  // Derive cashflowByMonth: month -> total inflows
+  // Daily revenue array
+  const dailyRevenue = useMemo<DailyRevenueRow[]>(() => {
+    if (!dailyRevenueData) return [];
+    return dailyRevenueData.map((row: any) => ({
+      date: row.date,
+      total_inflows: Number(row.total_inflows || 0),
+      customer_count: Number(row.customer_count || 0),
+    }));
+  }, [dailyRevenueData]);
+
+  // Derive cashflowByMonth: prioritize daily_revenue table, fallback to cashflow_chart API
   const cashflowByMonth = useMemo<Record<MonthType, number>>(() => {
     const result: Record<string, number> = {};
     for (const m of MONTHS) result[m] = 0;
+
+    // Primary: sum daily_revenue by month
+    if (dailyRevenue.length > 0) {
+      for (const row of dailyRevenue) {
+        const monthName = parseMonthFromDate(row.date);
+        if (monthName && MONTHS.includes(monthName)) {
+          result[monthName] += row.total_inflows;
+        }
+      }
+      return result as Record<MonthType, number>;
+    }
+
+    // Fallback: use cashflow chart data
     for (const point of cashflowChart) {
       const month = point.month as MonthType;
       if (MONTHS.includes(month)) {
@@ -222,15 +254,16 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
       }
     }
     return result as Record<MonthType, number>;
-  }, [cashflowChart]);
+  }, [dailyRevenue, cashflowChart]);
 
   return {
     dreByBU,
     dreRaw: dreData,
     cashflowChart,
     cashflowByMonth,
+    dailyRevenue,
     cashflowRaw: cashflowData,
-    isLoading: dreLoading || cfLoading,
-    error: (dreError || cfError) as Error | null,
+    isLoading: dreLoading || cfLoading || drLoading,
+    error: (dreError || cfError || drError) as Error | null,
   };
 }
