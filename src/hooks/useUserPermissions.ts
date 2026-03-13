@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-export type TabKey = 'context' | 'goals' | 'monthly' | 'media' | 'marketing' | 'structure' | 'admin' | 'indicators' | 'marketing_indicators' | 'nps';
+export type TabKey = 'context' | 'goals' | 'monthly' | 'media' | 'marketing' | 'structure' | 'admin' | 'indicators' | 'marketing_indicators' | 'nps' | 'financial';
 
 export function useUserPermissions(userId: string | undefined) {
   const { data: permissions, isLoading: permissionsLoading } = useQuery({
@@ -39,7 +39,7 @@ export function useUserPermissions(userId: string | undefined) {
   });
 
   // Admins have access to all tabs
-  const allAdminTabs: TabKey[] = ['context', 'goals', 'monthly', 'media', 'marketing', 'structure', 'admin', 'indicators'];
+  const allAdminTabs: TabKey[] = ['context', 'goals', 'monthly', 'media', 'indicators', 'financial', 'marketing', 'structure', 'admin'];
   
   // Map marketing_indicators and nps permissions to indicators tab access
   const rawPermissions = permissions || [];

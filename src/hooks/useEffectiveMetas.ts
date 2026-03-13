@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useMonetaryMetas, BuType, MONTHS, isPontualOnlyBU } from "./useMonetaryMetas";
 import { useIndicatorsRealized } from "./useIndicatorsRealized";
+import { useOxyFinance } from "./useOxyFinance";
 
 const MONTH_INDEX: Record<string, number> = {
   Jan: 0, Fev: 1, Mar: 2, Abr: 3,
@@ -26,6 +27,10 @@ export interface EffectiveMetasResult {
   gapByMonth: Record<string, Record<string, number>>;
   /** Log de rollover para auditoria */
   rolloverLog: RolloverLogEntry[];
+  /** Realizado DRE contábil por BU e mês (Oxy Finance) */
+  realizedDRE: Record<string, Record<string, number>>;
+  /** Realizado Pipefy (venda nova) por BU e mês */
+  realizedPipefy: Record<string, Record<string, number>>;
   /** Verifica se um mês está "fechado" (passado + tem dados) */
   isMonthClosed: (month: string) => boolean;
   isLoading: boolean;
@@ -54,8 +59,9 @@ function checkMonthClosed(month: string, year: number): boolean {
 export function useEffectiveMetas(year: number = 2026): EffectiveMetasResult {
   const { metas, isLoading: metasLoading } = useMonetaryMetas(year);
   const { realizedByBU, isLoading: realizedLoading } = useIndicatorsRealized(year);
+  const { dreByBU, isLoading: dreLoading } = useOxyFinance(year);
 
-  const isLoading = metasLoading || realizedLoading;
+  const isLoading = metasLoading || realizedLoading || dreLoading;
 
   const isMonthClosed = (month: string) => checkMonthClosed(month, year);
 
@@ -91,7 +97,10 @@ export function useEffectiveMetas(year: number = 2026): EffectiveMetasResult {
         const effective = original + accumulatedGap;
         effectiveMetas[bu][month] = effective;
 
-        const realized = realizedByBU[bu]?.[month] || 0;
+        // Prioritize DRE accounting data over Pipefy new-sales data
+        const dreValue = dreByBU[bu]?.[month] || 0;
+        const pipefyValue = realizedByBU[bu]?.[month] || 0;
+        const realized = dreValue > 0 ? dreValue : pipefyValue;
         const closed = checkMonthClosed(month, year);
 
         if (closed && realized > 0) {
@@ -127,10 +136,12 @@ export function useEffectiveMetas(year: number = 2026): EffectiveMetasResult {
     }
 
     return { effectiveMetas, originalMetas, gapByMonth, rolloverLog };
-  }, [metas, realizedByBU, year]);
+  }, [metas, realizedByBU, dreByBU, year]);
 
   return {
     ...result,
+    realizedDRE: dreByBU,
+    realizedPipefy: realizedByBU,
     isMonthClosed,
     isLoading,
   };
