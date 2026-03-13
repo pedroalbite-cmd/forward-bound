@@ -56,7 +56,7 @@ serve(async (req) => {
           movimentType: movimentType || 'R',
           isLate: String(isLate || false),
         });
-        url = `${BASE_URL}/widgets/cash-flow/v2/card/details?${params}`;
+        url = `${BASE_URL}/widgets/cash-flow/v2/card/details?${params}&${authParam}`;
         fetchOptions = { method: 'GET', headers: authHeaders };
         break;
       }
