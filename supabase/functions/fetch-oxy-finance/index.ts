@@ -35,44 +35,35 @@ serve(async (req) => {
 
     switch (action) {
       case 'dre': {
-        url = `${BASE_URL}/v2/dre/dre-table`;
-        fetchOptions = {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            startDate,
-            endDate,
-            cnpjs: [CNPJ_CLEAN],
-          }),
-        };
+        const params = new URLSearchParams({
+          startDate,
+          endDate,
+          'cnpjs[]': CNPJ_CLEAN,
+        });
+        url = `${BASE_URL}/v2/dre/dre-table?${params}`;
+        fetchOptions = { method: 'GET', headers };
         break;
       }
       case 'cashflow_details': {
-        url = `${BASE_URL}/widgets/cash-flow/v2/card/details`;
-        fetchOptions = {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            startDate,
-            endDate,
-            cnpjs: [CNPJ_FORMATTED],
-            movimentType: movimentType || 'R',
-            isLate: isLate || false,
-          }),
-        };
+        const params = new URLSearchParams({
+          startDate,
+          endDate,
+          'cnpjs[]': CNPJ_FORMATTED,
+          movimentType: movimentType || 'R',
+          isLate: String(isLate || false),
+        });
+        url = `${BASE_URL}/widgets/cash-flow/v2/card/details?${params}`;
+        fetchOptions = { method: 'GET', headers };
         break;
       }
       case 'cashflow_chart': {
-        url = `${BASE_URL}/widgets/cash-flow/charts/fluxo-caixa`;
-        fetchOptions = {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            startDate,
-            endDate,
-            cnpjs: [CNPJ_FORMATTED],
-          }),
-        };
+        const params = new URLSearchParams({
+          startDate,
+          endDate,
+          'cnpjs[]': CNPJ_FORMATTED,
+        });
+        url = `${BASE_URL}/widgets/cash-flow/charts/fluxo-caixa?${params}`;
+        fetchOptions = { method: 'GET', headers };
         break;
       }
       default:
@@ -82,15 +73,13 @@ serve(async (req) => {
     }
 
     console.log(`Fetching: ${url}`);
-    console.log(`Body: ${(fetchOptions as any).body}`);
 
     const response = await fetch(url, fetchOptions);
     const responseText = await response.text();
     
     console.log(`Response status: ${response.status}`);
-    console.log(`Response body (first 2000 chars): ${responseText.substring(0, 2000)}`);
+    console.log(`Response body (first 3000 chars): ${responseText.substring(0, 3000)}`);
     
-    // Try to parse as JSON for structured logging
     try {
       const jsonData = JSON.parse(responseText);
       console.log(`Response keys: ${JSON.stringify(Object.keys(jsonData))}`);
@@ -98,7 +87,20 @@ serve(async (req) => {
         console.log(`Array length: ${jsonData.length}`);
         if (jsonData.length > 0) {
           console.log(`First item keys: ${JSON.stringify(Object.keys(jsonData[0]))}`);
-          console.log(`First item: ${JSON.stringify(jsonData[0]).substring(0, 1000)}`);
+          console.log(`First item: ${JSON.stringify(jsonData[0]).substring(0, 1500)}`);
+        }
+      } else if (typeof jsonData === 'object') {
+        for (const key of Object.keys(jsonData)) {
+          const val = jsonData[key];
+          if (Array.isArray(val)) {
+            console.log(`Key "${key}": array of ${val.length} items`);
+            if (val.length > 0) {
+              console.log(`  First item keys: ${JSON.stringify(Object.keys(val[0]))}`);
+              console.log(`  First item: ${JSON.stringify(val[0]).substring(0, 1000)}`);
+            }
+          } else {
+            console.log(`Key "${key}": ${JSON.stringify(val).substring(0, 500)}`);
+          }
         }
       }
     } catch {
