@@ -79,14 +79,17 @@ serve(async (req) => {
             }
 
             const data = JSON.parse(text);
-            // The details endpoint returns items with value fields
-            const items = Array.isArray(data) ? data : data?.items || data?.data || [];
+            // Response: { data: [ { label: "Customer", data: [ { period: "Total", value: X } ] } ] }
+            const customers = Array.isArray(data) ? data : data?.data || [];
             let totalInflows = 0;
             let customerCount = 0;
 
-            if (Array.isArray(items)) {
-              for (const item of items) {
-                const value = Number(item.value || item.amount || item.total || 0);
+            if (Array.isArray(customers)) {
+              for (const customer of customers) {
+                const entries = customer.data || [];
+                // Get the "Total" entry for this customer
+                const totalEntry = entries.find((e: any) => e.period === 'Total');
+                const value = Number(totalEntry?.value || 0);
                 if (value > 0) {
                   totalInflows += value;
                   customerCount++;
