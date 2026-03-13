@@ -183,14 +183,19 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
   const cashflowChart = useMemo<CashflowChartPoint[]>(() => {
     if (!cashflowData) return [];
     try {
-      const items = Array.isArray(cashflowData) ? cashflowData : cashflowData?.data || [];
+      const items = Array.isArray(cashflowData) ? cashflowData : cashflowData?.items || [];
       return items.map((item: any) => {
-        const monthName = parseMonthFromDate(item.date || item.month || item.periodo || '') || item.month || '';
+        const monthName = parseMonthFromDate(item.month || item.date || '') || '';
+        const vals: any[] = item.values || [];
+        const getVal = (label: string) => {
+          const found = vals.find((v: any) => v.label === label);
+          return found ? Number(found.value || 0) : 0;
+        };
         return {
-          month: monthName || item.label || '',
-          inflows: Number(item.receitas || item.inflows || item.entradas || item.recebimentos || 0),
-          outflows: Math.abs(Number(item.despesas || item.outflows || item.saidas || item.pagamentos || 0)),
-          balance: Number(item.saldo || item.balance || item.resultado || 0),
+          month: monthName,
+          inflows: getVal('Entradas'),
+          outflows: Math.abs(getVal('Saídas')),
+          balance: getVal('Saldo'),
         };
       });
     } catch (e) {
