@@ -59,8 +59,9 @@ function checkMonthClosed(month: string, year: number): boolean {
 export function useEffectiveMetas(year: number = 2026): EffectiveMetasResult {
   const { metas, isLoading: metasLoading } = useMonetaryMetas(year);
   const { realizedByBU, isLoading: realizedLoading } = useIndicatorsRealized(year);
+  const { dreByBU, isLoading: dreLoading } = useOxyFinance(year);
 
-  const isLoading = metasLoading || realizedLoading;
+  const isLoading = metasLoading || realizedLoading || dreLoading;
 
   const isMonthClosed = (month: string) => checkMonthClosed(month, year);
 
