@@ -2522,13 +2522,26 @@ export function IndicatorsTab() {
 
           const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
 
-          // Realized: MRR base pro-rata + actual setup + actual pontual in this month
-          const mStart = new Date(overlapStart.getFullYear(), overlapStart.getMonth(), overlapStart.getDate()).getTime();
-          const mEnd = new Date(overlapEnd.getFullYear(), overlapEnd.getMonth(), overlapEnd.getDate(), 23, 59, 59, 999).getTime();
-          const monthSetupPontual = allSetupPontualCards
-            .filter(c => c.date.getTime() >= mStart && c.date.getTime() <= mEnd)
-            .reduce((sum, c) => sum + c.setup + c.pontual, 0);
-          totalRealized += (mrrBaseMonth * fraction) + monthSetupPontual;
+          // DRE priority: sum DRE from Oxy Finance for selected BUs
+          const dreTotal = selectedBUs.reduce((acc, bu) => {
+            const buKey = bu as import("@/hooks/useOxyFinance").default extends never ? string : string;
+            return acc + (dreByBU[bu as keyof typeof dreByBU]?.[monthName as keyof (typeof dreByBU)[keyof typeof dreByBU]] || 0);
+          }, 0);
+
+          if (dreTotal > 0) {
+            // Use accounting DRE data
+            totalRealized += dreTotal * fraction;
+          } else if (isTotalOverride(monthName, year)) {
+            totalRealized += mrrBaseMonth * fraction;
+          } else {
+            // Fallback: MRR base pro-rata + actual setup + actual pontual
+            const mStart = new Date(overlapStart.getFullYear(), overlapStart.getMonth(), overlapStart.getDate()).getTime();
+            const mEnd = new Date(overlapEnd.getFullYear(), overlapEnd.getMonth(), overlapEnd.getDate(), 23, 59, 59, 999).getTime();
+            const monthSetupPontual = allSetupPontualCards
+              .filter(c => c.date.getTime() >= mStart && c.date.getTime() <= mEnd)
+              .reduce((sum, c) => sum + c.setup + c.pontual, 0);
+            totalRealized += (mrrBaseMonth * fraction) + monthSetupPontual;
+          }
 
           // Meta: MRR base pro-rata + meta setup + meta pontual for all selected BUs
           let metaSetupMonth = 0;
