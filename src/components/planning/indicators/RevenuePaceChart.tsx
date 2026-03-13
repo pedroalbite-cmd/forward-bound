@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, ChevronDown, ChevronUp } from "lucide-react";
+import { DollarSign, ChevronDown, ChevronUp, Database } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Line, ComposedChart } from "recharts";
 
@@ -61,6 +62,10 @@ export function RevenuePaceChart({ realized, meta, mrrBase, isLoading, chartData
               </div>
             </div>
             <div className="flex items-center gap-4 mt-2">
+              <Badge variant="outline" className="text-xs gap-1 font-normal">
+                <Database className="h-3 w-3" />
+                DRE Contábil (Oxy Finance)
+              </Badge>
               <div className="flex items-center gap-2"><div className="w-3 h-0.5 bg-chart-1 rounded" /><span className="text-xs text-muted-foreground">Meta Acumulada</span></div>
               <div className="flex items-center gap-2"><div className="w-3 h-0.5 bg-chart-2 rounded" /><span className="text-xs text-muted-foreground">Realizado Acumulado</span></div>
             </div>

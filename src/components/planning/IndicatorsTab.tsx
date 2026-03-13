@@ -14,6 +14,7 @@ import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { useConsolidatedMetas, ConsolidatedMetricType } from "@/hooks/useConsolidatedMetas";
 import { useMrrBase } from "@/hooks/useMrrBase";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
+import { useOxyFinance } from "@/hooks/useOxyFinance";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { useCloserMetas, BU_CLOSERS, BuType, CloserType } from "@/hooks/useCloserMetas";
@@ -417,6 +418,7 @@ export function IndicatorsTab() {
   // Get consolidated metas (database overrides + Plan Growth fallback)
   const { getMetaMonetaryForPeriod, getConsolidatedMeta } = useConsolidatedMetas();
   const { getMrrBaseForMonth, isTotalOverride, isLoading: isLoadingMrrBase } = useMrrBase();
+  const { dreByBU, isLoading: isLoadingDre } = useOxyFinance(currentYear);
   
   // Get closer metas for filtering goals by closer percentage
   const { getFilteredMeta } = useCloserMetas(currentYear);
@@ -2520,13 +2522,25 @@ export function IndicatorsTab() {
 
           const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
 
-          // Realized: MRR base pro-rata + actual setup + actual pontual in this month
-          const mStart = new Date(overlapStart.getFullYear(), overlapStart.getMonth(), overlapStart.getDate()).getTime();
-          const mEnd = new Date(overlapEnd.getFullYear(), overlapEnd.getMonth(), overlapEnd.getDate(), 23, 59, 59, 999).getTime();
-          const monthSetupPontual = allSetupPontualCards
-            .filter(c => c.date.getTime() >= mStart && c.date.getTime() <= mEnd)
-            .reduce((sum, c) => sum + c.setup + c.pontual, 0);
-          totalRealized += (mrrBaseMonth * fraction) + monthSetupPontual;
+          // DRE priority: sum DRE from Oxy Finance for selected BUs
+          const dreTotal = selectedBUs.reduce((acc, bu) => {
+            return acc + (dreByBU[bu as keyof typeof dreByBU]?.[monthName as keyof (typeof dreByBU)[keyof typeof dreByBU]] || 0);
+          }, 0);
+
+          if (dreTotal > 0) {
+            // Use accounting DRE data
+            totalRealized += dreTotal * fraction;
+          } else if (isTotalOverride(monthName, year)) {
+            totalRealized += mrrBaseMonth * fraction;
+          } else {
+            // Fallback: MRR base pro-rata + actual setup + actual pontual
+            const mStart = new Date(overlapStart.getFullYear(), overlapStart.getMonth(), overlapStart.getDate()).getTime();
+            const mEnd = new Date(overlapEnd.getFullYear(), overlapEnd.getMonth(), overlapEnd.getDate(), 23, 59, 59, 999).getTime();
+            const monthSetupPontual = allSetupPontualCards
+              .filter(c => c.date.getTime() >= mStart && c.date.getTime() <= mEnd)
+              .reduce((sum, c) => sum + c.setup + c.pontual, 0);
+            totalRealized += (mrrBaseMonth * fraction) + monthSetupPontual;
+          }
 
           // Meta: MRR base pro-rata + meta setup + meta pontual for all selected BUs
           let metaSetupMonth = 0;
@@ -2583,7 +2597,14 @@ export function IndicatorsTab() {
 
             const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
 
-            if (isTotalOverride(monthName, year)) {
+            // DRE priority: sum DRE from Oxy Finance for selected BUs
+            const dreTotalPeriod = selectedBUs.reduce((acc, bu) => {
+              return acc + (dreByBU[bu as keyof typeof dreByBU]?.[monthName as keyof (typeof dreByBU)[keyof typeof dreByBU]] || 0);
+            }, 0);
+
+            if (dreTotalPeriod > 0) {
+              periodRealized += dreTotalPeriod * fraction;
+            } else if (isTotalOverride(monthName, year)) {
               // Value is total realized revenue — use directly, no setup/pontual added
               periodRealized += mrrBaseMonth * fraction;
             } else {
@@ -2640,7 +2661,7 @@ export function IndicatorsTab() {
             meta={totalMeta - mrrBaseTotal}
             mrrBase={Math.round(mrrBaseTotal)}
             paceExpected={paceExpected}
-            isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading || isLoadingMrrBase}
+            isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading || isLoadingMrrBase || isLoadingDre}
             chartData={paceChartData}
           />
         );
