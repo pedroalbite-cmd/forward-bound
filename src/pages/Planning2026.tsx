@@ -15,7 +15,8 @@ import { PlanGrowthDataLoader } from "@/components/planning/PlanGrowthDataLoader
 import { useAuth } from "@/hooks/useAuth";
 import { useUserPermissions, TabKey } from "@/hooks/useUserPermissions";
 import { MediaMetasProvider } from "@/contexts/MediaMetasContext";
-import { Calendar, BarChart3, LineChart, Megaphone, Lightbulb, Users, Settings, LogOut, User, Loader2, EyeOff, Eye, Activity } from "lucide-react";
+import { FinancialTab } from "@/components/planning/FinancialTab";
+import { Calendar, BarChart3, LineChart, Megaphone, Lightbulb, Users, Settings, LogOut, User, Loader2, EyeOff, Eye, Activity, DollarSign } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { O2Logo } from "@/components/O2Logo";
 import { Separator } from "@/components/ui/separator";
