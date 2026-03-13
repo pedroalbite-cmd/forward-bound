@@ -74,14 +74,18 @@ function parseMonthFromDate(dateStr: string): MonthType | null {
 
 function matchBU(groupName: string): BuType | null {
   if (!groupName) return null;
-  // Direct match
   if (DRE_GROUP_TO_BU[groupName]) return DRE_GROUP_TO_BU[groupName];
-  // Case-insensitive partial match
   const lower = groupName.toLowerCase();
   for (const [key, bu] of Object.entries(DRE_GROUP_TO_BU)) {
     if (lower.includes(key.toLowerCase())) return bu;
   }
   return null;
+}
+
+function isExpansaoGroup(groupName: string): boolean {
+  if (!groupName) return false;
+  const lower = groupName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return EXPANSAO_GROUPS.some(g => g.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === lower);
 }
 
 function initDreByBU(): Record<BuType, Record<MonthType, number>> {
