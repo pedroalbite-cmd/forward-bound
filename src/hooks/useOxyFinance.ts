@@ -150,6 +150,23 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
     if (!dreData) return result;
 
     try {
+      // Primary: parse groups format { groups: [{ label, data: [{ period, value }] }] }
+      if (dreData?.groups && Array.isArray(dreData.groups)) {
+        for (const group of dreData.groups) {
+          const bu = matchBU(group.label || '');
+          if (!bu) continue;
+          const entries = Array.isArray(group.data) ? group.data : [];
+          for (const entry of entries) {
+            const monthName = parseMonthFromDate(entry.period || entry.date || '');
+            if (monthName) {
+              result[bu][monthName] += Number(entry.value || 0);
+            }
+          }
+        }
+        return result;
+      }
+
+      // Fallback: flat rows format
       const rows = Array.isArray(dreData) ? dreData : dreData?.data || dreData?.rows || [];
       
       if (Array.isArray(rows)) {
