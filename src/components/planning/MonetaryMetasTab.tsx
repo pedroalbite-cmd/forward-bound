@@ -1,18 +1,21 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useMonetaryMetas, BuType, MonthType, BU_LABELS, isPontualOnlyBU, MONTHS } from '@/hooks/useMonetaryMetas';
 import { useMrrBase } from '@/hooks/useMrrBase';
+import { useEffectiveMetas } from '@/hooks/useEffectiveMetas';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, Info } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { useAuditLogs } from '@/hooks/useAuditLogs';
 import { BU_LABELS as BU_LABEL_MAP } from '@/hooks/useMonetaryMetas';
 import { DistributionBar } from './DistributionBar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const TARGET_TOTAL = 33_306_500;
 
@@ -39,6 +42,7 @@ export function MonetaryMetasTab() {
   const { toast } = useToast();
   const { metas, isLoading, bulkUpdateMetas, BUS, MONTHS } = useMonetaryMetas();
   const { getMrrBaseForMonth, isLoading: mrrLoading } = useMrrBase();
+  const { effectiveMetas, gapByMonth, rolloverLog, isMonthClosed } = useEffectiveMetas();
   const { logAction } = useAuditLogs();
 
   const [selectedBu, setSelectedBu] = useState<BuType>('modelo_atual');
@@ -417,6 +421,42 @@ export function MonetaryMetasTab() {
                   </TableCell>
                 </TableRow>
 
+                {/* Meta Efetiva Row - calculated with rollover */}
+                <TableRow className="bg-amber-500/10">
+                  <TableCell className="sticky left-0 bg-amber-500/10 z-10 font-semibold">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger className="flex items-center gap-1">
+                          ⚡ Meta Efetiva
+                          <Info className="h-3 w-3 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-[250px]">
+                          <p className="text-xs">Meta original + gap acumulado dos meses anteriores que não bateram a meta.</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableCell>
+                  {MONTHS.map((month) => {
+                    const effective = effectiveMetas[selectedBu]?.[month] ?? 0;
+                    const original = getFaturamento(selectedBu, month);
+                    const hasRollover = effective > original && effective > 0;
+                    return (
+                      <TableCell key={`eff-${month}`} className="text-center text-sm">
+                        {effective > 0 ? (
+                          <span className={hasRollover ? 'font-bold text-amber-600 dark:text-amber-400' : ''}>
+                            {formatCompact(effective)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                  <TableCell className="text-center font-bold bg-muted/30">
+                    {formatCurrency(MONTHS.reduce((s, m) => s + (effectiveMetas[selectedBu]?.[m] ?? 0), 0))}
+                  </TableCell>
+                </TableRow>
+
                 {/* Vendas Row */}
                 <TableRow>
                   <TableCell className="sticky left-0 bg-background z-10 font-medium">Vendas</TableCell>
@@ -537,12 +577,82 @@ export function MonetaryMetasTab() {
                     })()}
                   </TableCell>
                 </TableRow>
+
+                {/* Gap Acumulado por BU (rollover) */}
+                <TableRow className="bg-amber-500/5">
+                  <TableCell className="sticky left-0 bg-amber-500/5 z-10 font-semibold">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger className="flex items-center gap-1">
+                          🔄 Gap BU
+                          <Info className="h-3 w-3 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-[250px]">
+                          <p className="text-xs">Déficit acumulado da BU selecionada. Este valor é adicionado à meta do próximo mês (rollover).</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <span className="block text-[10px] text-muted-foreground font-normal">{BU_LABELS[selectedBu]}</span>
+                  </TableCell>
+                  {MONTHS.map((month) => {
+                    const gap = gapByMonth[selectedBu]?.[month] ?? 0;
+                    const closed = isMonthClosed(month);
+                    return (
+                      <TableCell key={`bugap-${month}`} className="text-center text-sm font-semibold">
+                        {closed ? (
+                          <span className={gap > 0 ? 'text-destructive' : 'text-green-600 dark:text-green-400'}>
+                            {gap > 0 ? `-${formatCompact(gap)}` : '✓'}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                  <TableCell className="text-center font-bold bg-muted/30">
+                    {(() => {
+                      const totalGap = MONTHS.reduce((s, m) => s + (gapByMonth[selectedBu]?.[m] ?? 0), 0);
+                      return totalGap > 0 ? (
+                        <span className="text-destructive">-{formatCurrency(totalGap)}</span>
+                      ) : <span className="text-green-600 dark:text-green-400">✓</span>;
+                    })()}
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
         </CardContent>
       </Card>
+
+      {/* Rollover Log */}
+      {rolloverLog.filter(l => l.bu === selectedBu).length > 0 && (
+        <Collapsible>
+          <Card>
+            <CardContent className="pt-4 pb-2">
+              <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full">
+                <Info className="h-4 w-4" />
+                🔄 Rollover automático — {rolloverLog.filter(l => l.bu === selectedBu).length} ajuste(s) em {BU_LABELS[selectedBu]}
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="mt-3 space-y-1">
+                  {rolloverLog
+                    .filter(l => l.bu === selectedBu)
+                    .map((entry, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground py-1 border-b border-border/50 last:border-0">
+                        <span className="font-medium text-foreground">{entry.month}</span>
+                        <span>Meta original: {formatCurrency(entry.originalMeta)}</span>
+                        <span className="text-amber-600 dark:text-amber-400">+{formatCurrency(entry.rolledOver)} rollover</span>
+                        <span>= {formatCurrency(entry.effectiveMeta)}</span>
+                        <span className="text-muted-foreground/60">({entry.source})</span>
+                      </div>
+                    ))}
+                </div>
+              </CollapsibleContent>
+            </CardContent>
+          </Card>
+        </Collapsible>
+      )}
 
       {/* Distribution floating bar */}
       {showDistributionBar && (

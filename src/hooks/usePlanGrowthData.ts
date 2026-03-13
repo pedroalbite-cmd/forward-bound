@@ -1,6 +1,7 @@
 import { useMemo, useEffect } from "react";
 import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { useMonetaryMetas, BuType, isPontualOnlyBU } from "./useMonetaryMetas";
+import { useEffectiveMetas } from "./useEffectiveMetas";
 
 // Indicadores de 2025 (base para projeção)
 const indicators2025 = {
@@ -317,6 +318,7 @@ function calculateReverseFunnel(
 export function usePlanGrowthData() {
   const { setMetasPorBU, setFunnelData, isLoaded } = useMediaMetas();
   const { metas, isLoading: isLoadingMetas } = useMonetaryMetas();
+  const { effectiveMetas, isLoading: isLoadingEffective } = useEffectiveMetas();
   
   // Default values (same as MediaInvestmentTab)
   const mrrInicial = 700000;
@@ -324,22 +326,26 @@ export function usePlanGrowthData() {
   const churnMensal = 0.06;
   const retencaoVendas = 0.25;
 
-  // Helper: Get metas from database for a BU
-  const getMetasFromDb = (bu: BuType): Record<string, number> | null => {
+  // Helper: Get metas from database for a BU, with effective metas overlay
+  const getMetasFromDb = (bu: BuType, useEffective = false): Record<string, number> | null => {
+    // If using effective metas and they're available, use them directly
+    if (useEffective && effectiveMetas[bu]) {
+      const effMetas = effectiveMetas[bu];
+      const hasValues = Object.values(effMetas).some(v => v > 0);
+      if (hasValues) return { ...effMetas };
+    }
+
     const buMetas = metas.filter(m => m.bu === bu);
     if (buMetas.length === 0) return null;
     
-    // Check if there are any values > 0
     const hasValues = buMetas.some(m => 
       Number(m.faturamento) > 0 || Number(m.pontual) > 0
     );
     if (!hasValues) return null;
     
-    // Return monthly metas from database
     const result: Record<string, number> = {};
     const isPontualOnly = isPontualOnlyBU(bu);
     buMetas.forEach(m => {
-      // For pontual-only BUs, use pontual field; otherwise use faturamento
       result[m.month] = isPontualOnly 
         ? (Number(m.pontual) || 0)
         : (Number(m.faturamento) || 0);
@@ -349,12 +355,12 @@ export function usePlanGrowthData() {
 
   // Calculate Modelo Atual monthly targets - prioritize DB
   const metasMensaisModeloAtual = useMemo(() => {
-    const dbMetas = getMetasFromDb('modelo_atual');
+    const dbMetas = getMetasFromDb('modelo_atual', true);
     if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
       return dbMetas;
     }
     return distributeQuarterlyToMonthly(metasTrimestrais);
-  }, [metas]);
+  }, [metas, effectiveMetas]);
 
   // Valores reais de MRR Base conhecidos (sobrescrevem projecao)
   const realMrrBase: Record<string, number> = {
@@ -386,28 +392,28 @@ export function usePlanGrowthData() {
 
   // Calculate monthly values for other BUs - prioritize DB
   const o2TaxMonthly = useMemo(() => {
-    const dbMetas = getMetasFromDb('o2_tax');
+    const dbMetas = getMetasFromDb('o2_tax', true);
     if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
       return dbMetas;
     }
     return calculateMonthlyValuesSmooth(quarterlyTotalsOutrasBUs.o2Tax, 120000);
-  }, [metas]);
+  }, [metas, effectiveMetas]);
   
   const oxyHackerMonthly = useMemo(() => {
-    const dbMetas = getMetasFromDb('oxy_hacker');
+    const dbMetas = getMetasFromDb('oxy_hacker', true);
     if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
       return dbMetas;
     }
     return calculateFromUnits(oxyHackerUnits, 54000);
-  }, [metas]);
+  }, [metas, effectiveMetas]);
   
   const franquiaMonthly = useMemo(() => {
-    const dbMetas = getMetasFromDb('franquia');
+    const dbMetas = getMetasFromDb('franquia', true);
     if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
       return dbMetas;
     }
     return calculateFromUnits(franquiaUnits, 140000);
-  }, [metas]);
+  }, [metas, effectiveMetas]);
 
   // Calculate funnel data for each BU
   const modeloAtualFunnel = useMemo(() => 
