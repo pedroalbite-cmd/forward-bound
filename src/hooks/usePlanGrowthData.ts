@@ -392,28 +392,28 @@ export function usePlanGrowthData() {
 
   // Calculate monthly values for other BUs - prioritize DB
   const o2TaxMonthly = useMemo(() => {
-    const dbMetas = getMetasFromDb('o2_tax');
+    const dbMetas = getMetasFromDb('o2_tax', true);
     if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
       return dbMetas;
     }
     return calculateMonthlyValuesSmooth(quarterlyTotalsOutrasBUs.o2Tax, 120000);
-  }, [metas]);
+  }, [metas, effectiveMetas]);
   
   const oxyHackerMonthly = useMemo(() => {
-    const dbMetas = getMetasFromDb('oxy_hacker');
+    const dbMetas = getMetasFromDb('oxy_hacker', true);
     if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
       return dbMetas;
     }
     return calculateFromUnits(oxyHackerUnits, 54000);
-  }, [metas]);
+  }, [metas, effectiveMetas]);
   
   const franquiaMonthly = useMemo(() => {
-    const dbMetas = getMetasFromDb('franquia');
+    const dbMetas = getMetasFromDb('franquia', true);
     if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
       return dbMetas;
     }
     return calculateFromUnits(franquiaUnits, 140000);
-  }, [metas]);
+  }, [metas, effectiveMetas]);
 
   // Calculate funnel data for each BU
   const modeloAtualFunnel = useMemo(() => 
