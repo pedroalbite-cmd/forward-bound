@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.fetch-google-keywords]
 verify_jwt = false
+
+[functions.fetch-oxy-finance]
+verify_jwt = false
