@@ -62,7 +62,7 @@ serve(async (req) => {
           endDate,
           'cnpjs[]': CNPJ_FORMATTED,
         });
-        url = `${BASE_URL}/widgets/cash-flow/charts/fluxo-caixa?${params}&${authParam}`;
+        url = `${BASE_URL}/widgets/cash-flow/charts/fluxo-caixa?${params}`;
         fetchOptions = { method: 'GET', headers: authHeaders };
         break;
       }
