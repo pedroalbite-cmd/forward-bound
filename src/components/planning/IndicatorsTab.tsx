@@ -2532,12 +2532,15 @@ export function IndicatorsTab() {
 
           const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
 
-          // Cashflow priority: use inflows from Oxy Finance cash flow
-          const cashflowTotal = cashflowByMonth[monthName as keyof typeof cashflowByMonth] || 0;
-
-          if (cashflowTotal > 0) {
-            // Use actual cash flow receipts
-            totalRealized += cashflowTotal * fraction;
+          // Daily revenue priority: sum actual daily values for the overlap period
+          if (hasDailyRevenueData) {
+            const overlapDaysList = eachDayOfInterval({ start: overlapStart, end: overlapEnd });
+            let dailyTotal = 0;
+            for (const day of overlapDaysList) {
+              const key = format(day, 'yyyy-MM-dd');
+              dailyTotal += dailyRevenueMap[key] || 0;
+            }
+            totalRealized += dailyTotal;
           } else if (isTotalOverride(monthName, year)) {
             totalRealized += mrrBaseMonth * fraction;
           } else {
