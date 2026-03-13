@@ -43,6 +43,7 @@ export interface OxyFinanceResult {
   dreByBU: Record<BuType, Record<MonthType, number>>;
   dreRaw: any;
   cashflowChart: CashflowChartPoint[];
+  cashflowByMonth: Record<MonthType, number>;
   cashflowRaw: any;
   isLoading: boolean;
   error: Error | null;
