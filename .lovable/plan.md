@@ -1,62 +1,106 @@
 
 
-## Desbloquear Fevereiro e Adicionar Distribuicao de Diferenca nas Metas Monetarias
+## Rollover Automático de Metas com Gap Acumulado
 
-### Objetivo
-Permitir editar meses anteriormente bloqueados (como Fevereiro) e, ao alterar uma meta, mostrar a diferenca em relacao ao total anterior da BU com opcoes inteligentes de redistribuicao.
+### Conceito
 
-### Alteracoes
+Quando uma BU não bate a meta de um mês, o déficit é automaticamente somado à meta do mês seguinte. Isso se acumula: se Fev também não bate, o gap de Jan + gap de Fev vai para Mar.
 
-#### 1. Remover trava de meses (`MonetaryMetasTab.tsx`)
-- Remover a funcao `isMonthLocked` e a logica de `disabled` nos inputs. Todos os meses passam a ser editaveis.
-- Remover os indicadores visuais de cadeado.
+Exemplo (O2 TAX):
+- Jan: meta 80k, realizado 60k → gap 20k
+- Fev: meta original 80k → meta efetiva 100k (80k + 20k de Jan). Realizado 50k → gap 50k
+- Mar: meta original 100k → meta efetiva 150k (100k + 50k acumulado)
 
-#### 2. Barra de diferenca com opcoes de distribuicao
-Quando o usuario altera o faturamento de um mes, o sistema calcula a diferenca entre o total antigo e o novo da BU selecionada. Se houver diferenca, exibe uma barra flutuante (similar a da imagem do Plan Growth) com:
+### Onde isso se aplica
 
-- **Informacao**: "Diferenca: +R$ 55.960 no O2 TAX" (ou valor negativo)
-- **Botao 1 - "Distribuir nos meses restantes"**: Divide a diferenca (com sinal invertido) igualmente entre todos os meses que NAO foram editados nesta sessao.
-- **Botao 2 - "Distribuir em periodo"**: Abre um popover/dropdown onde o usuario seleciona:
-  - Um quarter (Q1, Q2, Q3, Q4)
-  - Ou um range customizado (mes inicio -> mes fim)
-  - Ao confirmar, distribui a diferenca igualmente entre os meses do periodo selecionado (excluindo o mes que foi editado).
-- **Botao "Descartar"**: Reverte todas as alteracoes locais ao estado do banco.
+A "meta efetiva" (com rollover) deve ser usada nos **Indicadores** (acelerômetros, gauges, funnel) como a meta real do mês. A meta original (do banco) continua sendo a meta de planejamento editável no Admin.
 
-#### 3. Logica de distribuicao
-- A diferenca eh calculada como: `totalAnterior - totalAtual` da BU (antes vs depois da edicao).
-- Se a diferenca for positiva (usuario reduziu um mes), ela eh somada aos meses alvo.
-- Se for negativa (usuario aumentou um mes), ela eh subtraida dos meses alvo.
-- A distribuicao eh feita igualmente (diferenca / qtd meses alvo), com arredondamento e ajuste do residuo no ultimo mes.
-- O total da BU se mantem constante apos redistribuicao.
+### Arquitetura
 
-#### 4. Rastreamento de edicoes manuais
-- Manter um `Set<string>` de meses editados manualmente na sessao atual.
-- "Meses restantes" = meses que NAO estao nesse set.
-- Apos distribuir, os meses que receberam ajuste NAO sao marcados como editados (permitindo redistribuicoes subsequentes).
-
-### Detalhes tecnicos
-
-**Arquivo**: `src/components/planning/MonetaryMetasTab.tsx`
-
-**Estado adicional**:
 ```text
-editedMonths: Set<string>     -- meses tocados pelo usuario
-previousBuTotal: number       -- total da BU antes das edicoes
-showDistribution: boolean     -- controla visibilidade da barra
-distributionPeriod: 'remaining' | 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'custom'
-customRange: [MonthType, MonthType]
+monetary_metas (DB)          useIndicatorsRealized
+     │ (meta original)              │ (realizado por BU)
+     └──────────┬───────────────────┘
+                ▼
+      useEffectiveMetas (NOVO HOOK)
+                │
+                ├─ effectiveMetas: Record<BU, Record<Month, number>>
+                ├─ rolloverLog: { month, bu, originalMeta, gap, accumulated }[]
+                └─ isMonthClosed(month): boolean
+                │
+                ▼
+         usePlanGrowthData (usa effectiveMetas em vez de raw metas)
+                │
+                ▼
+         MediaMetasContext → Indicadores
 ```
 
-**Barra de distribuicao**: Renderizada como um `div` fixo no bottom (estilo identico ao floating bar do Plan Growth), contendo:
-- Badge com a diferenca formatada
-- Botoes de acao
-- Popover para selecao de periodo (usando Select ou RadioGroup)
+### Alterações
 
-**Fluxo**:
-1. Usuario edita faturamento de Fev de R$ 135.960 para R$ 80.000
-2. Diferenca: R$ 55.960 (sobra para distribuir)
-3. Barra aparece: "1 alteracao | O2 TAX: +R$ 55.960"
-4. Usuario clica "Distribuir nos restantes" -> R$ 55.960 / 10 meses = R$ 5.596 adicionado a cada mes de Mar-Dez
-5. Ou clica "Distribuir em periodo" -> seleciona Q3 -> R$ 55.960 / 3 = R$ 18.653 em Jul, Ago, Set
-6. Total da BU permanece o mesmo de antes da edicao
+| Arquivo | Mudança |
+|---|---|
+| `src/hooks/useEffectiveMetas.ts` | **NOVO** — Hook que cruza `monetary_metas` com `realizedByBU` e calcula metas efetivas com rollover. Expõe `effectiveMetas`, `rolloverLog` e `originalMetas`. |
+| `src/hooks/usePlanGrowthData.ts` | Usar `useEffectiveMetas` para obter as metas mensais em vez de ler direto do `monetary_metas`. As metas efetivas alimentam o funil reverso. |
+| `src/components/planning/MonetaryMetasTab.tsx` | Adicionar linhas visuais: "Meta Efetiva" (meta com rollover), "Gap Acumulado" por mês. Destacar meses com rollover. A edição continua alterando a meta original. |
+| `src/components/planning/DistributionBar.tsx` ou inline | Ao redistribuir, respeitar que a meta global não muda — redistribui a meta original, o rollover é recalculado automaticamente. |
+
+### Hook `useEffectiveMetas` — Lógica
+
+```typescript
+function useEffectiveMetas(year = 2026) {
+  const { metas } = useMonetaryMetas(year);
+  const { realizedByBU } = useIndicatorsRealized(year);
+
+  // Para cada BU:
+  //   gapAcumulado = 0
+  //   para cada mês em ordem:
+  //     metaOriginal = metas[bu][month]
+  //     metaEfetiva = metaOriginal + gapAcumulado
+  //     realizado = realizedByBU[bu][month] (valor de venda)
+  //     se mês fechado (realizado > 0 ou mês passado):
+  //       gap = max(0, metaEfetiva - realizado)  // só rollover se não bateu
+  //       gapAcumulado = gap
+  //     else:
+  //       gapAcumulado permanece (meta efetiva = original + acumulado anterior)
+}
+```
+
+Regra de "mês fechado": um mês é considerado fechado quando tem dados de realizado (realizedByBU[bu][month] > 0) **e** o mês já passou (data atual > último dia do mês). Isso evita que meses parciais gerem rollover prematuro.
+
+### Visualização no Admin (MonetaryMetasTab)
+
+Novas linhas na tabela:
+
+| Métrica | Jan | Fev | Mar | ... |
+|---|---|---|---|---|
+| 🎯 Meta (Fat.) | 80k | 80k | 100k | (editável) |
+| ⚡ Meta Efetiva | 80k | **100k** | **150k** | (calculada) |
+| ✅ Realizado | 60k | 50k | — | |
+| 📊 Gap Acumulado | **-20k** | **-50k** | — | |
+
+- "Meta Efetiva" em negrito/amarelo quando difere da original
+- "Gap Acumulado" em vermelho quando negativo
+
+### Rollover Log
+
+Array de ajustes para auditoria:
+```typescript
+[
+  { bu: 'o2_tax', month: 'Fev', originalMeta: 80000, rolledOver: 20000, effectiveMeta: 100000, source: 'Jan gap' },
+  { bu: 'o2_tax', month: 'Mar', originalMeta: 100000, rolledOver: 50000, effectiveMeta: 150000, source: 'Fev gap' },
+]
+```
+
+Exibido como tooltip ou seção colapsável abaixo da tabela.
+
+### Edição manual continua funcionando
+
+- O usuário edita a **meta original** (que vai para o banco)
+- A redistribuição (DistributionBar) opera sobre metas originais
+- A meta global consolidada valida contra o `TARGET_TOTAL` usando metas originais
+- O rollover é **sempre recalculado** automaticamente a partir do cruzamento meta original × realizado
+
+### Impacto nos Indicadores
+
+Como `usePlanGrowthData` passará a usar as metas efetivas, os acelerômetros e gauges automaticamente refletirão as metas ajustadas com rollover. Se Mar tem meta efetiva de 150k (original 100k + 50k de gap), o acelerômetro mostrará progresso contra 150k.
 
