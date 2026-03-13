@@ -25,13 +25,14 @@ serve(async (req) => {
     const { action, startDate, endDate, movimentType, isLate } = await req.json();
     console.log(`Action: ${action}, startDate: ${startDate}, endDate: ${endDate}`);
 
-    // Try multiple auth methods - log which one works
+    // Try multiple auth header formats
     const authHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'x-api-key': apiKey,
-      'api-key': apiKey,
+      'apiKey': apiKey,
     };
+
+    // Also try as query param
+    const authParam = `apiKey=${encodeURIComponent(apiKey)}`;
 
     let url: string;
     let fetchOptions: RequestInit;
