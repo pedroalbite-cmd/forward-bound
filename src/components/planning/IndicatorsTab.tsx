@@ -418,7 +418,17 @@ export function IndicatorsTab() {
   // Get consolidated metas (database overrides + Plan Growth fallback)
   const { getMetaMonetaryForPeriod, getConsolidatedMeta } = useConsolidatedMetas();
   const { getMrrBaseForMonth, isTotalOverride, isLoading: isLoadingMrrBase } = useMrrBase();
-  const { cashflowByMonth, isLoading: isLoadingDre } = useOxyFinance(currentYear);
+  const { cashflowByMonth, dailyRevenue, isLoading: isLoadingDre } = useOxyFinance(currentYear);
+
+  // Build a lookup map: date string -> total_inflows for daily granularity
+  const dailyRevenueMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const row of dailyRevenue) {
+      map[row.date] = row.total_inflows;
+    }
+    return map;
+  }, [dailyRevenue]);
+  const hasDailyRevenueData = dailyRevenue.length > 0;
   
   // Get closer metas for filtering goals by closer percentage
   const { getFilteredMeta } = useCloserMetas(currentYear);
