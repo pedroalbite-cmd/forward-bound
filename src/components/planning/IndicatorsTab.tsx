@@ -418,7 +418,17 @@ export function IndicatorsTab() {
   // Get consolidated metas (database overrides + Plan Growth fallback)
   const { getMetaMonetaryForPeriod, getConsolidatedMeta } = useConsolidatedMetas();
   const { getMrrBaseForMonth, isTotalOverride, isLoading: isLoadingMrrBase } = useMrrBase();
-  const { cashflowByMonth, isLoading: isLoadingDre } = useOxyFinance(currentYear);
+  const { cashflowByMonth, dailyRevenue, isLoading: isLoadingDre } = useOxyFinance(currentYear);
+
+  // Build a lookup map: date string -> total_inflows for daily granularity
+  const dailyRevenueMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const row of dailyRevenue) {
+      map[row.date] = row.total_inflows;
+    }
+    return map;
+  }, [dailyRevenue]);
+  const hasDailyRevenueData = dailyRevenue.length > 0;
   
   // Get closer metas for filtering goals by closer percentage
   const { getFilteredMeta } = useCloserMetas(currentYear);
@@ -2522,12 +2532,15 @@ export function IndicatorsTab() {
 
           const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
 
-          // Cashflow priority: use inflows from Oxy Finance cash flow
-          const cashflowTotal = cashflowByMonth[monthName as keyof typeof cashflowByMonth] || 0;
-
-          if (cashflowTotal > 0) {
-            // Use actual cash flow receipts
-            totalRealized += cashflowTotal * fraction;
+          // Daily revenue priority: sum actual daily values for the overlap period
+          if (hasDailyRevenueData) {
+            const overlapDaysList = eachDayOfInterval({ start: overlapStart, end: overlapEnd });
+            let dailyTotal = 0;
+            for (const day of overlapDaysList) {
+              const key = format(day, 'yyyy-MM-dd');
+              dailyTotal += dailyRevenueMap[key] || 0;
+            }
+            totalRealized += dailyTotal;
           } else if (isTotalOverride(monthName, year)) {
             totalRealized += mrrBaseMonth * fraction;
           } else {
@@ -2595,11 +2608,15 @@ export function IndicatorsTab() {
 
             const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
 
-            // Cashflow priority: use inflows from Oxy Finance cash flow
-            const cashflowTotalPeriod = cashflowByMonth[monthName as keyof typeof cashflowByMonth] || 0;
-
-            if (cashflowTotalPeriod > 0) {
-              periodRealized += cashflowTotalPeriod * fraction;
+            // Daily revenue priority: sum actual daily values for the overlap period
+            if (hasDailyRevenueData) {
+              const overlapDaysList = eachDayOfInterval({ start: overlapStart, end: overlapEnd });
+              let dailyTotal = 0;
+              for (const day of overlapDaysList) {
+                const key = format(day, 'yyyy-MM-dd');
+                dailyTotal += dailyRevenueMap[key] || 0;
+              }
+              periodRealized += dailyTotal;
             } else if (isTotalOverride(monthName, year)) {
               // Value is total realized revenue — use directly, no setup/pontual added
               periodRealized += mrrBaseMonth * fraction;
