@@ -40,7 +40,7 @@ serve(async (req) => {
           endDate,
           'cnpjs[]': CNPJ_CLEAN,
         });
-        url = `${BASE_URL}/v2/dre/dre-table?${params}&${authParam}`;
+        url = `${BASE_URL}/v2/dre/dre-table?${params}`;
         fetchOptions = { method: 'GET', headers: authHeaders };
         break;
       }
