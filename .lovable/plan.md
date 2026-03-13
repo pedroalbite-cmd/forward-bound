@@ -1,62 +1,47 @@
 
 
-## Desbloquear Fevereiro e Adicionar Distribuicao de Diferenca nas Metas Monetarias
+## Diagnóstico: Por que a atribuição no dashboard está errada
 
-### Objetivo
-Permitir editar meses anteriormente bloqueados (como Fevereiro) e, ao alterar uma meta, mostrar a diferenca em relacao ao total anterior da BU com opcoes inteligentes de redistribuicao.
+Identifiquei **2 bugs** no código que explicam por que os dados que mapeamos manualmente não aparecem corretamente na tabela de campanhas.
 
-### Alteracoes
+### Bug 1: `detectChannel` não parseia UTM composto
 
-#### 1. Remover trava de meses (`MonetaryMetasTab.tsx`)
-- Remover a funcao `isMonthLocked` e a logica de `disabled` nos inputs. Todos os meses passam a ser editaveis.
-- Remover os indicadores visuais de cadeado.
+A função `detectChannel` (linha 45) verifica `isMetaCampaignId(card.campanha)` com o campo **raw** do CRM. Para strings compostas como `120238862305660418,utm_content=120238863142690418`, o regex `^\d{10,}$` **falha** por causa das vírgulas. Se o card também não tiver `fbclid` nem `Fonte` = ig/fb, ele cai em `organico` — quando deveria ser `meta_ads`.
 
-#### 2. Barra de diferenca com opcoes de distribuicao
-Quando o usuario altera o faturamento de um mes, o sistema calcula a diferenca entre o total antigo e o novo da BU selecionada. Se houver diferenca, exibe uma barra flutuante (similar a da imagem do Plan Growth) com:
+Resultado: vendas que vieram de Meta Ads aparecem como "Orgânico" na tabela.
 
-- **Informacao**: "Diferenca: +R$ 55.960 no O2 TAX" (ou valor negativo)
-- **Botao 1 - "Distribuir nos meses restantes"**: Divide a diferenca (com sinal invertido) igualmente entre todos os meses que NAO foram editados nesta sessao.
-- **Botao 2 - "Distribuir em periodo"**: Abre um popover/dropdown onde o usuario seleciona:
-  - Um quarter (Q1, Q2, Q3, Q4)
-  - Ou um range customizado (mes inicio -> mes fim)
-  - Ao confirmar, distribui a diferenca igualmente entre os meses do periodo selecionado (excluindo o mes que foi editado).
-- **Botao "Descartar"**: Reverte todas as alteracoes locais ao estado do banco.
+### Bug 2: AdSet lookup compara IDs numéricos contra nomes textuais
 
-#### 3. Logica de distribuicao
-- A diferenca eh calculada como: `totalAnterior - totalAtual` da BU (antes vs depois da edicao).
-- Se a diferenca for positiva (usuario reduziu um mes), ela eh somada aos meses alvo.
-- Se for negativa (usuario aumentou um mes), ela eh subtraida dos meses alvo.
-- A distribuicao eh feita igualmente (diferenca / qtd meses alvo), com arredondamento e ajuste do residuo no ultimo mes.
-- O total da BU se mantem constante apos redistribuicao.
+O `adSetFunnels` do CRM usa IDs numéricos como chave do conjunto (ex: `120238863142690418`), enquanto a API Meta retorna nomes textuais (ex: `NX_CONVERSAO_CFOaaS_EVENTO_MQL_Interesses`). O `lookupAdSetFunnel` tenta match parcial entre esses valores — que nunca dá match porque um é número puro e outro é texto.
 
-#### 4. Rastreamento de edicoes manuais
-- Manter um `Set<string>` de meses editados manualmente na sessao atual.
-- "Meses restantes" = meses que NAO estao nesse set.
-- Apos distribuir, os meses que receberam ajuste NAO sao marcados como editados (permitindo redistribuicoes subsequentes).
+Resultado: ao expandir uma campanha, os ad sets da API aparecem mas sem nenhuma métrica CRM (MQL, Venda, Receita ficam zerados).
 
-### Detalhes tecnicos
+### Solução
 
-**Arquivo**: `src/components/planning/MonetaryMetasTab.tsx`
+| Arquivo | Mudança |
+|---|---|
+| `useMarketingAttribution.ts` | 1. Na `detectChannel`: extrair o primeiro segmento antes da vírgula e testar com `isMetaCampaignId` (3 linhas). 2. No `adSetFunnels` memo: ao construir as chaves, tentar resolver IDs numéricos de conjunto para o nome da API via um lookup reverso (id→name), de forma que a chave use o mesmo nome que o `lookupAdSetFunnel` vai procurar. |
+| `CampaignsTable.tsx` | Nenhuma mudança necessária — os bugs são puramente na camada de dados. |
 
-**Estado adicional**:
-```text
-editedMonths: Set<string>     -- meses tocados pelo usuario
-previousBuTotal: number       -- total da BU antes das edicoes
-showDistribution: boolean     -- controla visibilidade da barra
-distributionPeriod: 'remaining' | 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'custom'
-customRange: [MonthType, MonthType]
+### Detalhes técnicos
+
+**Fix 1 — detectChannel:**
+```typescript
+// Antes da checagem isMetaCampaignId, extrair primeira parte
+const rawCampanha = (card.campanha || '').split(',')[0].trim();
+if (rawCampanha && isMetaCampaignId(rawCampanha)) return 'meta_ads';
 ```
 
-**Barra de distribuicao**: Renderizada como um `div` fixo no bottom (estilo identico ao floating bar do Plan Growth), contendo:
-- Badge com a diferenca formatada
-- Botoes de acao
-- Popover para selecao de periodo (usando Select ou RadioGroup)
+**Fix 2 — adSetFunnels key resolution:**
+No memo `adSetFunnels`, quando `info.conjunto` é um ID numérico Meta (10+ dígitos), buscar no `allApiCampaigns` → `adSets` (ou usar o `campaignNamesMap` estendido para ad sets) o nome real do conjunto. Se não encontrar, manter o ID como chave. Isso permite que o `lookupAdSetFunnel` faça match por nome.
 
-**Fluxo**:
-1. Usuario edita faturamento de Fev de R$ 135.960 para R$ 80.000
-2. Diferenca: R$ 55.960 (sobra para distribuir)
-3. Barra aparece: "1 alteracao | O2 TAX: +R$ 55.960"
-4. Usuario clica "Distribuir nos restantes" -> R$ 55.960 / 10 meses = R$ 5.596 adicionado a cada mes de Mar-Dez
-5. Ou clica "Distribuir em periodo" -> seleciona Q3 -> R$ 55.960 / 3 = R$ 18.653 em Jul, Ago, Set
-6. Total da BU permanece o mesmo de antes da edicao
+Como não temos um lookup de ad set names pré-carregado, a solução pragmática é inverter a lógica: no `lookupAdSetFunnel`, além de comparar por nome, **também comparar o ID do ad set da API** contra o valor numérico do CRM. Ou seja, adicionar ao `lookupAdSetFunnel` uma checagem: se o `adSet.id` (da API) === `normAdSet` (do CRM), retornar match.
+
+Isso requer passar os IDs dos ad sets para o lookup, ou ajustar o `CampaignRow` para fornecer o `adSet.id` ao `lookupAdSetFunnel`.
+
+### Resumo do impacto
+
+- Fix 1 resolve a classificação errada de canal (Orgânico → Meta Ads)
+- Fix 2 resolve as métricas CRM zeradas nos ad sets expandidos
+- Juntos, as 3 campanhas com vendas de fevereiro vão aparecer corretamente com drill-down funcional
 
