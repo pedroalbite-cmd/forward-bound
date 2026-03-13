@@ -121,6 +121,7 @@ function lookupAdSetFunnel(
   adSetName: string,
   channel: string,
   campaignId?: string,
+  adSetId?: string,
 ): CampaignFunnel | undefined {
   if (!adSetFunnels || adSetFunnels.size === 0) return undefined;
   const normCamp = normalizeName(campaignName);
@@ -156,9 +157,30 @@ function lookupAdSetFunnel(
     const campMatch = funnelCamp === normCamp || funnelCamp.includes(normCamp) || normCamp.includes(funnelCamp)
       || (campaignId && (funnelCamp === normalizeName(campaignId) || funnelCamp === normalizeName(campaignId.replace('google_', ''))));
     if (!campMatch) continue;
-    // Check adSet match (partial)
+    // Check adSet match (partial name OR numeric ID match)
     if (funnelAdSet.includes(normAdSet) || normAdSet.includes(funnelAdSet)) {
       return funnel;
+    }
+  }
+  
+  // Bug Fix 2: CRM stores numeric ad set IDs as conjunto, API provides names.
+  // If we have the API ad set's ID, scan funnel keys where the conjunto part matches it.
+  if (adSetId && campaignId) {
+    const normAdSetId = normalizeName(adSetId);
+    for (const [key, funnel] of adSetFunnels) {
+      const parts = key.split('::');
+      if (parts.length < 3) continue;
+      const funnelAdSetVal = parts[1];
+      const funnelChannel = parts[2];
+      if (funnelChannel !== channelId) continue;
+      const funnelCamp = parts[0];
+      const campMatch = funnelCamp === normalizeName(campaignId) || funnelCamp === normalizeName(campaignId.replace('google_', ''))
+        || funnelCamp === normCamp || funnelCamp.includes(normCamp) || normCamp.includes(funnelCamp);
+      if (!campMatch) continue;
+      // Match: the CRM conjunto (numeric ID) equals the API ad set's id
+      if (funnelAdSetVal === normAdSetId) {
+        return funnel;
+      }
     }
   }
   return undefined;
@@ -514,7 +536,7 @@ function CampaignRow({
   const proportionalFunnels = useMemo(() => {
     if (!adSets || adSets.length === 0 || !funnel || (funnel.vendas === 0 && funnel.mqls === 0)) return null;
     // Check if any ad set already has a direct CRM match
-    const anyMatch = adSets.some(a => lookupAdSetFunnel(adSetFunnels, campaign.name, a.name, campaign.channel, campaign.id));
+    const anyMatch = adSets.some(a => lookupAdSetFunnel(adSetFunnels, campaign.name, a.name, campaign.channel, campaign.id, a.id));
     if (anyMatch) return null; // use direct matches instead
     
     const filteredAdSets = adSets.filter(a => a.spend > 0);
@@ -543,7 +565,7 @@ function CampaignRow({
 
   // Resolve funnel for a sub-row: direct match first, then proportional fallback
   const getSubRowFunnel = (item: AdSetData): CampaignFunnel | undefined => {
-    const direct = lookupAdSetFunnel(adSetFunnels, campaign.name, item.name, campaign.channel, campaign.id);
+    const direct = lookupAdSetFunnel(adSetFunnels, campaign.name, item.name, campaign.channel, campaign.id, item.id);
     if (direct) return direct;
     return proportionalFunnels?.get(item.id);
   };

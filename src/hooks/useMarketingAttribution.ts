@@ -41,8 +41,9 @@ export function detectChannel(card: AttributionCard): ChannelId {
   if (fonte.includes('evento') || tipo.includes('evento') || origem.includes('evento')
     || fonte.includes('g4') || tipo.includes('g4') || origem.includes('g4')) return 'eventos';
 
-  // Meta Ads
-  if (card.campanha && isMetaCampaignId(card.campanha)) return 'meta_ads';
+  // Meta Ads — extract first segment before comma for composite UTM strings
+  const rawCampanha = (card.campanha || '').split(',')[0].trim();
+  if (rawCampanha && isMetaCampaignId(rawCampanha)) return 'meta_ads';
   if (card.fbclid) return 'meta_ads';
   if (fonte === 'ig' || fonte === 'fb' || fonte.includes('facebook') || fonte.includes('instagram') || fonte.includes('meta')) return 'meta_ads';
 
