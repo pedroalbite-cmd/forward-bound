@@ -46,8 +46,8 @@ export function FinancialTab() {
         </Alert>
       )}
 
-      <MetaVsRealized dreByBU={dreByBU} metasByBU={metasByBU} isLoading={isLoading || metasLoading} />
-      <DreTable dreByBU={dreByBU} isLoading={isLoading} />
+      <MetaVsRealized dreByBU={realizedDRE} metasByBU={metasByBU} isLoading={isLoading} />
+      <DreTable dreByBU={realizedDRE} isLoading={isLoading} />
       <CashflowChart data={cashflowChart} isLoading={isLoading} />
     </div>
   );
