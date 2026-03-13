@@ -44,7 +44,7 @@ serve(async (req) => {
           'cnpjs[]': CNPJ_CLEAN,
         });
         url = `${BASE_URL}/v2/dre/dre-table?${params}`;
-        fetchOptions = { method: 'GET', headers };
+        fetchOptions = { method: 'GET', headers: authHeaders };
         break;
       }
       case 'cashflow_details': {
