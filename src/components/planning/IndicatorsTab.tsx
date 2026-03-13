@@ -14,6 +14,7 @@ import { useMediaMetas } from "@/contexts/MediaMetasContext";
 import { useConsolidatedMetas, ConsolidatedMetricType } from "@/hooks/useConsolidatedMetas";
 import { useMrrBase } from "@/hooks/useMrrBase";
 import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
+import { useOxyFinance } from "@/hooks/useOxyFinance";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
 import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 import { useCloserMetas, BU_CLOSERS, BuType, CloserType } from "@/hooks/useCloserMetas";
