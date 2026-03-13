@@ -163,11 +163,10 @@ function lookupAdSetFunnel(
     }
   }
   
-  // Bug Fix 2: CRM stores numeric ad set IDs, API provides names.
-  // Scan all funnel keys where the ad set part is a numeric ID and compare against
-  // the adSetName which could be either an API name or an API id.
-  // This is the reverse lookup: check if any funnel key's conjunto IS the adSet's API id.
-  if (campaignId) {
+  // Bug Fix 2: CRM stores numeric ad set IDs as conjunto, API provides names.
+  // If we have the API ad set's ID, scan funnel keys where the conjunto part matches it.
+  if (adSetId && campaignId) {
+    const normAdSetId = normalizeName(adSetId);
     for (const [key, funnel] of adSetFunnels) {
       const parts = key.split('::');
       if (parts.length < 3) continue;
@@ -178,9 +177,10 @@ function lookupAdSetFunnel(
       const campMatch = funnelCamp === normalizeName(campaignId) || funnelCamp === normalizeName(campaignId.replace('google_', ''))
         || funnelCamp === normCamp || funnelCamp.includes(normCamp) || normCamp.includes(funnelCamp);
       if (!campMatch) continue;
-      // The CRM conjunto is a numeric ID — check if it matches the API ad set's id directly
-      // (adSetName here is from the API, but we also receive adSetId via the caller)
-      // Since we don't have adSetId param yet, skip for now — handled by new overload below
+      // Match: the CRM conjunto (numeric ID) equals the API ad set's id
+      if (funnelAdSetVal === normAdSetId) {
+        return funnel;
+      }
     }
   }
   return undefined;
