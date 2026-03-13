@@ -199,10 +199,24 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
     }
   }, [cashflowData]);
 
+  // Derive cashflowByMonth: month -> total inflows
+  const cashflowByMonth = useMemo<Record<MonthType, number>>(() => {
+    const result: Record<string, number> = {};
+    for (const m of MONTHS) result[m] = 0;
+    for (const point of cashflowChart) {
+      const month = point.month as MonthType;
+      if (MONTHS.includes(month)) {
+        result[month] += point.inflows;
+      }
+    }
+    return result as Record<MonthType, number>;
+  }, [cashflowChart]);
+
   return {
     dreByBU,
     dreRaw: dreData,
     cashflowChart,
+    cashflowByMonth,
     cashflowRaw: cashflowData,
     isLoading: dreLoading || cfLoading,
     error: (dreError || cfError) as Error | null,
