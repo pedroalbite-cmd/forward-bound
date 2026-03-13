@@ -2661,7 +2661,7 @@ export function IndicatorsTab() {
             meta={totalMeta - mrrBaseTotal}
             mrrBase={Math.round(mrrBaseTotal)}
             paceExpected={paceExpected}
-            isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading || isLoadingMrrBase}
+            isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading || isLoadingMrrBase || isLoadingDre}
             chartData={paceChartData}
           />
         );
