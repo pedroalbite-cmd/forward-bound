@@ -136,7 +136,7 @@ export function useEffectiveMetas(year: number = 2026): EffectiveMetasResult {
     }
 
     return { effectiveMetas, originalMetas, gapByMonth, rolloverLog };
-  }, [metas, realizedByBU, year]);
+  }, [metas, realizedByBU, dreByBU, year]);
 
   return {
     ...result,
