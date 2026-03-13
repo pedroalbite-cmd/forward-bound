@@ -39,11 +39,18 @@ export interface CashflowChartPoint {
   balance: number;
 }
 
+export interface DailyRevenueRow {
+  date: string;
+  total_inflows: number;
+  customer_count: number;
+}
+
 export interface OxyFinanceResult {
   dreByBU: Record<BuType, Record<MonthType, number>>;
   dreRaw: any;
   cashflowChart: CashflowChartPoint[];
   cashflowByMonth: Record<MonthType, number>;
+  dailyRevenue: DailyRevenueRow[];
   cashflowRaw: any;
   isLoading: boolean;
   error: Error | null;
