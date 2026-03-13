@@ -46,6 +46,8 @@ export interface DailyRevenueRow {
 
 export interface OxyFinanceResult {
   dreByBU: Record<BuType, Record<MonthType, number>>;
+  /** Receita bruta do grupo "Expansão" (oxy_hacker + franquia combinados) por mês */
+  expansaoByMonth: Record<MonthType, number>;
   dreRaw: any;
   cashflowChart: CashflowChartPoint[];
   cashflowByMonth: Record<MonthType, number>;
