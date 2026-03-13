@@ -27,6 +27,10 @@ export interface EffectiveMetasResult {
   gapByMonth: Record<string, Record<string, number>>;
   /** Log de rollover para auditoria */
   rolloverLog: RolloverLogEntry[];
+  /** Realizado DRE contábil por BU e mês (Oxy Finance) */
+  realizedDRE: Record<string, Record<string, number>>;
+  /** Realizado Pipefy (venda nova) por BU e mês */
+  realizedPipefy: Record<string, Record<string, number>>;
   /** Verifica se um mês está "fechado" (passado + tem dados) */
   isMonthClosed: (month: string) => boolean;
   isLoading: boolean;
