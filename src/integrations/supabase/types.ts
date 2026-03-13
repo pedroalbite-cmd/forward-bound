@@ -119,6 +119,33 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_revenue: {
+        Row: {
+          customer_count: number
+          date: string
+          id: string
+          synced_at: string
+          total_inflows: number
+          year: number
+        }
+        Insert: {
+          customer_count?: number
+          date: string
+          id?: string
+          synced_at?: string
+          total_inflows?: number
+          year: number
+        }
+        Update: {
+          customer_count?: number
+          date?: string
+          id?: string
+          synced_at?: string
+          total_inflows?: number
+          year?: number
+        }
+        Relationships: []
+      }
       funnel_realized: {
         Row: {
           bu: string

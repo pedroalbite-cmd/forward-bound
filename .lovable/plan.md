@@ -1,75 +1,62 @@
 
 
-## Usar `cashflow_details` para Faturamento Diário
+## Desbloquear Fevereiro e Adicionar Distribuicao de Diferenca nas Metas Monetarias
 
-### Qual API usar e por quê
+### Objetivo
+Permitir editar meses anteriormente bloqueados (como Fevereiro) e, ao alterar uma meta, mostrar a diferenca em relacao ao total anterior da BU com opcoes inteligentes de redistribuicao.
 
-| Endpoint | O que retorna | Granularidade |
-|---|---|---|
-| `cashflow_chart` | Entradas/Saídas/Saldo | **Mensal** (sempre agrega por mês) |
-| `cashflow_details` | Lista de clientes com valores recebidos | **Conforme o filtro de datas** |
+### Alteracoes
 
-**Decisão: `cashflow_details`** com `movimentType: 'R'` (Recebimentos).
+#### 1. Remover trava de meses (`MonetaryMetasTab.tsx`)
+- Remover a funcao `isMonthLocked` e a logica de `disabled` nos inputs. Todos os meses passam a ser editaveis.
+- Remover os indicadores visuais de cadeado.
 
-Testei chamando com `startDate=2026-01-02` e `endDate=2026-01-02` — retorna exatamente os clientes que pagaram naquele dia. Somando os valores temos o total recebido no dia. Exemplo: dia 02/Jan retornou 4 clientes somando R$ 56.721,49.
+#### 2. Barra de diferenca com opcoes de distribuicao
+Quando o usuario altera o faturamento de um mes, o sistema calcula a diferenca entre o total antigo e o novo da BU selecionada. Se houver diferenca, exibe uma barra flutuante (similar a da imagem do Plan Growth) com:
 
-O `cashflow_chart` não serve porque sempre agrega por mês, independente do range de datas.
+- **Informacao**: "Diferenca: +R$ 55.960 no O2 TAX" (ou valor negativo)
+- **Botao 1 - "Distribuir nos meses restantes"**: Divide a diferenca (com sinal invertido) igualmente entre todos os meses que NAO foram editados nesta sessao.
+- **Botao 2 - "Distribuir em periodo"**: Abre um popover/dropdown onde o usuario seleciona:
+  - Um quarter (Q1, Q2, Q3, Q4)
+  - Ou um range customizado (mes inicio -> mes fim)
+  - Ao confirmar, distribui a diferenca igualmente entre os meses do periodo selecionado (excluindo o mes que foi editado).
+- **Botao "Descartar"**: Reverte todas as alteracoes locais ao estado do banco.
 
-### Plano
+#### 3. Logica de distribuicao
+- A diferenca eh calculada como: `totalAnterior - totalAtual` da BU (antes vs depois da edicao).
+- Se a diferenca for positiva (usuario reduziu um mes), ela eh somada aos meses alvo.
+- Se for negativa (usuario aumentou um mes), ela eh subtraida dos meses alvo.
+- A distribuicao eh feita igualmente (diferenca / qtd meses alvo), com arredondamento e ajuste do residuo no ultimo mes.
+- O total da BU se mantem constante apos redistribuicao.
 
-**1. Criar tabela `daily_revenue`**
-```sql
-CREATE TABLE daily_revenue (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  date date NOT NULL UNIQUE,
-  total_inflows numeric NOT NULL DEFAULT 0,
-  customer_count integer NOT NULL DEFAULT 0,
-  year integer NOT NULL,
-  synced_at timestamptz NOT NULL DEFAULT now()
-);
-```
-Com RLS: leitura para autenticados, escrita via service role.
+#### 4. Rastreamento de edicoes manuais
+- Manter um `Set<string>` de meses editados manualmente na sessao atual.
+- "Meses restantes" = meses que NAO estao nesse set.
+- Apos distribuir, os meses que receberam ajuste NAO sao marcados como editados (permitindo redistribuicoes subsequentes).
 
-**2. Criar Edge Function `sync-daily-revenue`**
-- Recebe `startDate` e `endDate`
-- Itera dia a dia nesse range
-- Para cada dia, chama `cashflow_details` com `movimentType: 'R'`
-- Soma os `value` de todos os clientes retornados = total do dia
-- Faz upsert na tabela `daily_revenue`
-- Retorna resumo do sync
+### Detalhes tecnicos
 
-Para evitar excesso de chamadas, a função aceita um range (ex: mês atual) e sincroniza apenas os dias nesse período.
+**Arquivo**: `src/components/planning/MonetaryMetasTab.tsx`
 
-**3. Atualizar `useOxyFinance.ts`**
-- Adicionar query para buscar `daily_revenue` do banco
-- Expor `dailyRevenue: { date: string, total: number }[]`
-- Calcular `cashflowByMonth` a partir dos dados diários (soma por mês)
-
-**4. Atualizar o gráfico de Faturamento**
-- No `IndicatorsTab.tsx`: usar os totais mensais derivados da tabela `daily_revenue` em vez do endpoint `cashflow_chart`
-- Dados mais precisos pois vêm da soma dia a dia real
-
-### Fluxo
+**Estado adicional**:
 ```text
-sync-daily-revenue (Edge Function)
-  ├─ Para cada dia no range:
-  │   ├─ GET cashflow_details (startDate=dia, endDate=dia, movimentType=R)
-  │   ├─ Soma values de todos os clientes
-  │   └─ UPSERT daily_revenue (date, total_inflows, customer_count)
-  └─ Retorna resumo
-
-Frontend (useOxyFinance)
-  ├─ SELECT * FROM daily_revenue WHERE year = 2026
-  ├─ Agrupa por mês → cashflowByMonth
-  └─ Gráfico usa esses valores como "Realizado"
+editedMonths: Set<string>     -- meses tocados pelo usuario
+previousBuTotal: number       -- total da BU antes das edicoes
+showDistribution: boolean     -- controla visibilidade da barra
+distributionPeriod: 'remaining' | 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'custom'
+customRange: [MonthType, MonthType]
 ```
 
-### Arquivos
+**Barra de distribuicao**: Renderizada como um `div` fixo no bottom (estilo identico ao floating bar do Plan Growth), contendo:
+- Badge com a diferenca formatada
+- Botoes de acao
+- Popover para selecao de periodo (usando Select ou RadioGroup)
 
-| Arquivo | Ação |
-|---|---|
-| Migration SQL | **Criar** tabela `daily_revenue` + RLS |
-| `supabase/functions/sync-daily-revenue/index.ts` | **Criar** edge function de sync |
-| `src/hooks/useOxyFinance.ts` | **Editar** - buscar `daily_revenue` do banco, derivar `cashflowByMonth` |
-| `src/components/planning/IndicatorsTab.tsx` | **Editar** - usar dados da tabela |
+**Fluxo**:
+1. Usuario edita faturamento de Fev de R$ 135.960 para R$ 80.000
+2. Diferenca: R$ 55.960 (sobra para distribuir)
+3. Barra aparece: "1 alteracao | O2 TAX: +R$ 55.960"
+4. Usuario clica "Distribuir nos restantes" -> R$ 55.960 / 10 meses = R$ 5.596 adicionado a cada mes de Mar-Dez
+5. Ou clica "Distribuir em periodo" -> seleciona Q3 -> R$ 55.960 / 3 = R$ 18.653 em Jul, Ago, Set
+6. Total da BU permanece o mesmo de antes da edicao
 
