@@ -56,7 +56,7 @@ serve(async (req) => {
           isLate: String(isLate || false),
         });
         url = `${BASE_URL}/widgets/cash-flow/v2/card/details?${params}`;
-        fetchOptions = { method: 'GET', headers };
+        fetchOptions = { method: 'GET', headers: authHeaders };
         break;
       }
       case 'cashflow_chart': {
