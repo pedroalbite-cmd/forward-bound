@@ -2117,7 +2117,7 @@ export function IndicatorsTab() {
     if (indicator.key === 'faturamento') {
       const meta = getMetaMonetaryForIndicator(indicator);
       // Use the same value as the accelerator for consistency
-      const realizedFromCard = getRealizedMonetaryForIndicator({ key: 'faturamento', label: 'Faturamento', shortLabel: 'Fat.', format: 'currency' });
+      const realizedFromCard = getRealizedMonetaryForIndicator({ key: 'faturamento', label: 'Fat Incremento', shortLabel: 'Fat Inc.', format: 'currency' });
       const pctMeta = meta > 0 ? Math.round((realizedFromCard / meta) * 100) : 0;
       const pctMrr = realizedFromCard > 0 ? Math.round((totalMrr / realizedFromCard) * 100) : 0;
       const pctSetup = realizedFromCard > 0 ? Math.round((totalSetup / realizedFromCard) * 100) : 0;
