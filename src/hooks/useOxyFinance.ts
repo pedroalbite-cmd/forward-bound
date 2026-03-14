@@ -9,6 +9,8 @@ import { MONTHS } from "./useMonetaryMetas";
 const DRE_GROUP_TO_BU: Record<string, BuType> = {
   'CaaS': 'modelo_atual',
   'caas': 'modelo_atual',
+  'SaaS': 'modelo_atual',
+  'saas': 'modelo_atual',
   'Tax': 'o2_tax',
   'tax': 'o2_tax',
 };
