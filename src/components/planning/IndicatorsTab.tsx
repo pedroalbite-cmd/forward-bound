@@ -66,7 +66,7 @@ interface MonetaryIndicatorConfig {
 
 const monetaryIndicatorConfigs: MonetaryIndicatorConfig[] = [
   { key: 'sla', label: 'SLA', shortLabel: 'SLA', format: 'duration' },
-  { key: 'faturamento', label: 'Faturamento', shortLabel: 'Fat.', format: 'currency' },
+  { key: 'faturamento', label: 'Fat Incremento', shortLabel: 'Fat Inc.', format: 'currency' },
   { key: 'mrr', label: 'MRR', shortLabel: 'MRR', format: 'currency' },
   { key: 'setup', label: 'Setup', shortLabel: 'Setup', format: 'currency' },
   { key: 'pontual', label: 'Pontual', shortLabel: 'Pont.', format: 'currency' },
