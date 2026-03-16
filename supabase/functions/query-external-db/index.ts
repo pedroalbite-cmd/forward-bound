@@ -1,8 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
+import pg from "npm:pg@8.13.1";
+const { Client } = pg;
 
 interface CountRow {
-  total: number;
+  total: string;
 }
 
 const corsHeaders = {
@@ -67,12 +68,12 @@ Deno.serve(async (req) => {
 
     // Connect to external PostgreSQL database
     const client = new Client({
-      hostname: host,
+      host: host,
       port: parseInt(port),
       database: database,
       user: dbUser,
       password: password,
-      tls: { enabled: false },
+      ssl: false,
     });
 
     await client.connect();
@@ -80,15 +81,27 @@ Deno.serve(async (req) => {
 
     let result: Record<string, unknown>;
 
+    const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
+
+    const validateTable = async (tbl: string) => {
+      if (!validTables.includes(tbl)) {
+        await client.end();
+        return new Response(
+          JSON.stringify({ error: 'Invalid table name' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      return null;
+    };
+
     if (action === 'schema') {
-      // Get table schema (columns and types)
       const schemaQuery = `
         SELECT column_name, data_type, is_nullable, column_default
         FROM information_schema.columns
         WHERE table_name = $1
         ORDER BY ordinal_position
       `;
-      const schemaResult = await client.queryObject(schemaQuery, [table]);
+      const schemaResult = await client.query(schemaQuery, [table]);
       result = {
         action: 'schema',
         table,
@@ -96,22 +109,14 @@ Deno.serve(async (req) => {
       };
       console.log(`Schema for ${table}:`, result.columns);
     } else if (action === 'preview') {
-      // Get sample data
-      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
-      if (!validTables.includes(table)) {
-        await client.end();
-        return new Response(
-          JSON.stringify({ error: 'Invalid table name' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      const invalid = await validateTable(table);
+      if (invalid) return invalid;
 
       const dataQuery = `SELECT * FROM ${table} LIMIT $1`;
-      const dataResult = await client.queryObject(dataQuery, [limit]);
+      const dataResult = await client.query(dataQuery, [limit]);
       
-      // Get total count
       const countQuery = `SELECT COUNT(*) as total FROM ${table}`;
-      const countResult = await client.queryObject<CountRow>(countQuery);
+      const countResult = await client.query(countQuery);
       
       result = {
         action: 'preview',
@@ -122,18 +127,11 @@ Deno.serve(async (req) => {
       };
       console.log(`Preview for ${table}: ${result.previewRows} rows of ${result.totalRows} total`);
     } else if (action === 'count') {
-      // Just get count
-      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
-      if (!validTables.includes(table)) {
-        await client.end();
-        return new Response(
-          JSON.stringify({ error: 'Invalid table name' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      const invalid = await validateTable(table);
+      if (invalid) return invalid;
 
       const countQuery = `SELECT COUNT(*) as total FROM ${table}`;
-      const countResult = await client.queryObject<CountRow>(countQuery);
+      const countResult = await client.query(countQuery);
       
       result = {
         action: 'count',
@@ -142,21 +140,12 @@ Deno.serve(async (req) => {
       };
       console.log(`Count for ${table}: ${result.totalRows}`);
     } else if (action === 'query_period') {
-      // Query with date filtering for Modelo Atual
       const { startDate, endDate } = body;
-      
-      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
-      if (!validTables.includes(table)) {
-        await client.end();
-        return new Response(
-          JSON.stringify({ error: 'Invalid table name' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      const invalid = await validateTable(table);
+      if (invalid) return invalid;
 
       console.log(`Querying ${table} for period: ${startDate} to ${endDate}`);
 
-      // Query with date filter and ordering by most recent first
       const dataQuery = `
         SELECT * FROM ${table} 
         WHERE "Entrada" >= $1::timestamp 
@@ -164,15 +153,14 @@ Deno.serve(async (req) => {
         ORDER BY "Entrada" DESC 
         LIMIT $3 OFFSET $4
       `;
-      const dataResult = await client.queryObject(dataQuery, [startDate, endDate, limit, offset]);
+      const dataResult = await client.query(dataQuery, [startDate, endDate, limit, offset]);
       
-      // Count in period
       const countQuery = `
         SELECT COUNT(*) as total FROM ${table} 
         WHERE "Entrada" >= $1::timestamp 
         AND "Entrada" <= $2::timestamp
       `;
-      const countResult = await client.queryObject<CountRow>(countQuery, [startDate, endDate]);
+      const countResult = await client.query(countQuery, [startDate, endDate]);
       
       result = {
         action: 'query_period',
@@ -185,19 +173,10 @@ Deno.serve(async (req) => {
       };
       console.log(`Period query for ${table}: ${result.previewRows} rows of ${result.totalRows} total in period`);
     } else if (action === 'search') {
-      // Search by column (case insensitive for text, exact for ID)
       const { searchTerm, searchColumn = 'Título' } = body;
-      
-      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
-      if (!validTables.includes(table)) {
-        await client.end();
-        return new Response(
-          JSON.stringify({ error: 'Invalid table name' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      const invalid = await validateTable(table);
+      if (invalid) return invalid;
 
-      // Validate searchColumn to prevent SQL injection
       const allowedColumns = ['Título', 'ID', 'Empresa', 'Nome', 'Fase', 'Fase Atual', 'Campanha', 'Conjunto/grupo', 'Fonte', 'Origem do lead'];
       if (!allowedColumns.includes(searchColumn)) {
         await client.end();
@@ -209,7 +188,6 @@ Deno.serve(async (req) => {
 
       console.log(`Searching ${table} for term: ${searchTerm} in column: ${searchColumn}`);
 
-      // For ID column, use exact match; for others, use ILIKE
       let searchQuery: string;
       let searchPattern: string;
       
@@ -231,7 +209,7 @@ Deno.serve(async (req) => {
         searchPattern = `%${searchTerm}%`;
       }
       
-      const dataResult = await client.queryObject(searchQuery, [searchPattern, limit]);
+      const dataResult = await client.query(searchQuery, [searchPattern, limit]);
       
       result = {
         action: 'search',
@@ -243,15 +221,8 @@ Deno.serve(async (req) => {
       };
       console.log(`Search for "${searchTerm}" in column "${searchColumn}" of ${table}: ${result.totalRows} rows found`);
     } else if (action === 'stats') {
-      // Get table statistics for diagnostics
-      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
-      if (!validTables.includes(table)) {
-        await client.end();
-        return new Response(
-          JSON.stringify({ error: 'Invalid table name' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      const invalid = await validateTable(table);
+      if (invalid) return invalid;
 
       const statsQuery = `
         SELECT 
@@ -261,7 +232,7 @@ Deno.serve(async (req) => {
           COUNT(CASE WHEN "Entrada" >= '2026-01-01' THEN 1 END) as count_2026
         FROM ${table}
       `;
-      const statsResult = await client.queryObject(statsQuery);
+      const statsResult = await client.query(statsQuery);
       
       result = {
         action: 'stats',
@@ -270,7 +241,6 @@ Deno.serve(async (req) => {
       };
       console.log(`Stats for ${table}:`, result.stats);
     } else if (action === 'query_card_history') {
-      // Query full history for specific card IDs (used to find first phase entry)
       const { cardIds } = body;
       
       if (!Array.isArray(cardIds) || cardIds.length === 0) {
@@ -281,21 +251,13 @@ Deno.serve(async (req) => {
         );
       }
       
-      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
-      if (!validTables.includes(table)) {
-        await client.end();
-        return new Response(
-          JSON.stringify({ error: 'Invalid table name' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      const invalid = await validateTable(table);
+      if (invalid) return invalid;
       
-      // Limit to 500 IDs per request for safety
       const limitedIds = cardIds.slice(0, 500);
       
       console.log(`Querying full history for ${limitedIds.length} card IDs in ${table}`);
       
-      // Build parameterized query with placeholders
       const placeholders = limitedIds.map((_: string, i: number) => `$${i + 1}`).join(', ');
       const dataQuery = `
         SELECT * FROM ${table} 
@@ -303,7 +265,7 @@ Deno.serve(async (req) => {
         ORDER BY "Entrada" ASC
       `;
       
-      const dataResult = await client.queryObject(dataQuery, limitedIds);
+      const dataResult = await client.query(dataQuery, limitedIds);
       
       result = {
         action: 'query_card_history',
@@ -314,18 +276,9 @@ Deno.serve(async (req) => {
       };
       console.log(`Card history query: ${result.totalRows} total movements for ${limitedIds.length} cards`);
     } else if (action === 'query_period_by_signature') {
-      // Query with date filtering by "Data de assinatura do contrato"
-      // Used to capture sales signed in a period but moved to "Contrato assinado" later
       const { startDate, endDate } = body;
-      
-      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
-      if (!validTables.includes(table)) {
-        await client.end();
-        return new Response(
-          JSON.stringify({ error: 'Invalid table name' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      const invalid = await validateTable(table);
+      if (invalid) return invalid;
 
       console.log(`Querying ${table} by signature date for period: ${startDate} to ${endDate}`);
 
@@ -336,14 +289,14 @@ Deno.serve(async (req) => {
         ORDER BY "Data de assinatura do contrato" DESC 
         LIMIT $3 OFFSET $4
       `;
-      const dataResult = await client.queryObject(dataQuery, [startDate, endDate, limit, offset]);
+      const dataResult = await client.query(dataQuery, [startDate, endDate, limit, offset]);
       
       const countQuery = `
         SELECT COUNT(*) as total FROM ${table} 
         WHERE "Data de assinatura do contrato" >= $1::timestamp 
         AND "Data de assinatura do contrato" <= $2::timestamp
       `;
-      const countResult = await client.queryObject<CountRow>(countQuery, [startDate, endDate]);
+      const countResult = await client.query(countQuery, [startDate, endDate]);
       
       result = {
         action: 'query_period_by_signature',
@@ -356,18 +309,9 @@ Deno.serve(async (req) => {
       };
       console.log(`Signature date query for ${table}: ${result.previewRows} rows of ${result.totalRows} total in period`);
     } else if (action === 'query_period_by_creation') {
-      // Query with date filtering by "Data Criacao" (card creation date) instead of "Entrada"
-      // Used for MQL counting aligned with Pipefy criteria
       const { startDate, endDate } = body;
-      
-      const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
-      if (!validTables.includes(table)) {
-        await client.end();
-        return new Response(
-          JSON.stringify({ error: 'Invalid table name' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      const invalid = await validateTable(table);
+      if (invalid) return invalid;
 
       console.log(`Querying ${table} by creation date for period: ${startDate} to ${endDate}`);
 
@@ -378,14 +322,14 @@ Deno.serve(async (req) => {
         ORDER BY "Data Criação" DESC 
         LIMIT $3 OFFSET $4
       `;
-      const dataResult = await client.queryObject(dataQuery, [startDate, endDate, limit, offset]);
+      const dataResult = await client.query(dataQuery, [startDate, endDate, limit, offset]);
       
       const countQuery = `
         SELECT COUNT(*) as total FROM ${table} 
         WHERE "Data Criação" >= $1::timestamp 
         AND "Data Criação" <= $2::timestamp
       `;
-      const countResult = await client.queryObject<CountRow>(countQuery, [startDate, endDate]);
+      const countResult = await client.query(countQuery, [startDate, endDate]);
       
       result = {
         action: 'query_period_by_creation',
