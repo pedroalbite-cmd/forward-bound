@@ -366,7 +366,7 @@ export function usePlanGrowthData() {
   const realMrrBase: Record<string, number> = {
     Jan: 700000,
     Fev: 700000,
-    Mar: 756521.10,
+    Mar: 755000,
   };
 
   // Calculate MRR dynamics for Modelo Atual
