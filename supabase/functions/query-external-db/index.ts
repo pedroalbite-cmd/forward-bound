@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
+import pg from "npm:pg@8.13.1";
+const { Client } = pg;
 
 interface CountRow {
   total: number;
