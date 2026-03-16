@@ -68,12 +68,12 @@ Deno.serve(async (req) => {
 
     // Connect to external PostgreSQL database
     const client = new Client({
-      hostname: host,
+      host: host,
       port: parseInt(port),
       database: database,
       user: dbUser,
       password: password,
-      tls: { enabled: false },
+      ssl: false,
     });
 
     await client.connect();
