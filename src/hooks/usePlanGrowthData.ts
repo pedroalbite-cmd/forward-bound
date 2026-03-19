@@ -346,12 +346,12 @@ export function usePlanGrowthData() {
 
   // Calculate Modelo Atual monthly targets - prioritize DB
   const metasMensaisModeloAtual = useMemo(() => {
-    const dbMetas = getMetasFromDb('modelo_atual', true);
+    const dbMetas = getMetasFromDb('modelo_atual');
     if (dbMetas && Object.values(dbMetas).some(v => v > 0)) {
       return dbMetas;
     }
     return distributeQuarterlyToMonthly(metasTrimestrais);
-  }, [metas, effectiveMetas]);
+  }, [metas]);
 
   // Valores reais de MRR Base conhecidos (sobrescrevem projecao)
   const realMrrBase: Record<string, number> = {
