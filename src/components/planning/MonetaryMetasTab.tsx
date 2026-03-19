@@ -542,8 +542,12 @@ export function MonetaryMetasTab() {
                     })()}
                   </TableCell>
                 </TableRow>
-
-
+              </TableBody>
+            </Table>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
+        </CardContent>
+      </Card>
 
       {/* Distribution floating bar */}
       {showDistributionBar && (
