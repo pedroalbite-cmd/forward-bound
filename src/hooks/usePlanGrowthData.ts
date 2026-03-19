@@ -317,7 +317,6 @@ function calculateReverseFunnel(
 export function usePlanGrowthData() {
   const { setMetasPorBU, setFunnelData, isLoaded } = useMediaMetas();
   const { metas, isLoading: isLoadingMetas } = useMonetaryMetas();
-  const { effectiveMetas, isLoading: isLoadingEffective } = useEffectiveMetas();
   
   // Default values (same as MediaInvestmentTab)
   const mrrInicial = 700000;
