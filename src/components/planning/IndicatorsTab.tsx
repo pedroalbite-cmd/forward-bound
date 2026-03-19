@@ -157,6 +157,7 @@ interface RadialProgressCardProps {
   onClick?: () => void;
   isClickable?: boolean;
   isLoading?: boolean;
+  badge?: string;
 }
 
 const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = false, isLoading = false }: RadialProgressCardProps) => {
