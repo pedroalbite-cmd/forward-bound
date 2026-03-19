@@ -53,12 +53,16 @@ export function normalizeStr(s: string): string {
 }
 
 // Títulos de cards de teste (normalizados) que devem ser excluídos da contagem
-const TEST_CARD_TITLES = ['teste', '123', 'empresa teste', 'teste duda', 'joao'];
+const TEST_CARD_IDS = new Set([
+  '1320546949', // TESTE
+  '1320177174', // 123
+  '1308003007', // Empresa Teste
+  '1320175421', // teste duda
+]);
 
-export function isTestCard(titulo?: string): boolean {
-  if (!titulo) return false;
-  const normalized = normalizeStr(titulo);
-  return TEST_CARD_TITLES.includes(normalized);
+export function isTestCard(id?: string): boolean {
+  if (!id) return false;
+  return TEST_CARD_IDS.has(id);
 }
 
 const NORMALIZED_EXCLUDED_REASONS = MQL_EXCLUDED_LOSS_REASONS.map(normalizeStr);
@@ -373,7 +377,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
       for (const movement of mqlByCreation) {
         if (!movement.dataCriacao) continue;
         const creationTime = movement.dataCriacao.getTime();
-        if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(movement.faixaFaturamento) && !isTestCard(movement.titulo) && !seenIds.has(movement.id)) {
+        if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(movement.faixaFaturamento) && !isTestCard(movement.id) && !seenIds.has(movement.id)) {
           seenIds.add(movement.id);
         }
       }
