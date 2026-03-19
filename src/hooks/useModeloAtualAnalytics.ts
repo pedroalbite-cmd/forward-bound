@@ -369,7 +369,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       if (!indicator) continue;
       
       // Special validation for MQL (requires revenue >= 200k) - card-level exclusion
-      if (indicator === 'mql' && (!isMqlQualified(card.faixa) || excludedMqlIds.has(card.id))) continue;
+      if (indicator === 'mql' && !isMqlQualified(card.faixa)) continue;
       
       if (!firstEntries.has(card.id)) {
         firstEntries.set(card.id, new Map());
