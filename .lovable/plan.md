@@ -1,26 +1,37 @@
 
 
-## Investigar os 4 MQLs extras em Março (269 no sistema vs 265 no Pipefy)
+## Filtrar cards de teste da contagem de MQL
 
-### Diagnóstico até agora
+### Problema
+4 cards de teste (TESTE, 123, Empresa Teste, teste duda) estão inflando a contagem de MQL de 265 para 269.
 
-A tabela `pipefy_moviment_cfos` retorna **1637 linhas** para cards criados em março via `query_period_by_creation`. O sistema deduplica por ID e filtra por faixa ≥ R$ 200k, chegando a 269 cards únicos. O Pipefy mostra 265.
+### Solução
+Adicionar uma função `isTestCard` em `useModeloAtualMetas.ts` que identifica cards de teste pelo título, e aplicar esse filtro em todos os pontos de contagem de MQL.
 
-Já identifiquei pelo menos **1 card suspeito**: **ID 1320546949 "TESTE"** (empresa "TESTE", email `eduarda.rovani@o2inc.com.br`, criado 19/03/2026) — card de teste interno com faixa "Entre R$ 200 mil e R$ 350 mil".
+### Arquivos alterados
 
-### Plano de ação
+**1. `src/hooks/useModeloAtualMetas.ts`**
+- Criar função exportada `isTestCard(titulo: string): boolean` que verifica se o título normalizado é um dos valores de teste conhecidos: `teste`, `123`, `empresa teste`, `teste duda`, `joao`
+- Adicionar filtro `!isTestCard(movement.titulo)` no loop de `getQtyForPeriod` para MQL (linha 368)
 
-**1. Criar script para comparar IDs do Excel vs banco de dados**
-- Parsear o arquivo Excel enviado (`mql_duda_03-19-2026.xlsx`) usando Python/pandas para extrair a lista de IDs do relatório Pipefy
-- Executar query via edge function para obter todos os IDs únicos com faixa qualificável criados em março na `pipefy_moviment_cfos`
-- Fazer o diff: IDs que estão no sistema mas **não** estão no Excel = os 4 extras
-- Listar os 4 cards com nome, empresa, fase atual e motivo (teste, sync, etc.)
+**2. `src/hooks/useModeloAtualAnalytics.ts`**
+- Importar `isTestCard` de `useModeloAtualMetas`
+- Adicionar filtro `!isTestCard(card.titulo)` em `getCardsForIndicator` para MQL (linha 410)
+- Adicionar filtro em `getExcludedMqlCount` para não contar cards de teste como excluídos
+- Adicionar filtro em `firstEntryByCardAndIndicator` para MQL
 
-**2. Corrigir a contagem se necessário**
-- Se os 4 extras forem cards de teste ou dados incorretos: adicionar filtro para excluí-los (ex: ignorar cards com título "TESTE")
-- Se forem diferença de tabela (`pipefy_moviment_cfos` vs pipe nativo do Pipefy): documentar a causa e alinhar qual fonte é a correta
+### Detalhes técnicos
 
-### Resultado esperado
-- Lista exata dos 4 IDs extras com justificativa
-- Correção no código se os cards não deveriam ser contados
+```typescript
+// Títulos de cards de teste (normalizados)
+const TEST_CARD_TITLES = ['teste', '123', 'empresa teste', 'teste duda', 'joao'];
+
+export function isTestCard(titulo?: string): boolean {
+  if (!titulo) return false;
+  const normalized = normalizeStr(titulo);
+  return TEST_CARD_TITLES.includes(normalized);
+}
+```
+
+Resultado esperado: MQL março passa de 269 → 265, alinhado com o Pipefy.
 
