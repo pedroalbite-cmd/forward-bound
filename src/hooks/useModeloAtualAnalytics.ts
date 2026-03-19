@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DetailItem } from "@/components/planning/indicators/DetailSheet";
 import { IndicatorType } from "@/hooks/useFunnelRealized";
-import { isMqlQualified, isMqlExcludedByLoss, buildExcludedMqlCardIds } from "@/hooks/useModeloAtualMetas";
+import { isMqlQualified, isMqlExcludedByLoss, buildExcludedMqlCardIds, isTestCard } from "@/hooks/useModeloAtualMetas";
 
 export interface ModeloAtualCard {
   id: string;
@@ -407,7 +407,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         for (const card of mqlByCreation) {
           if (!card.dataCriacao) continue;
           const creationTime = card.dataCriacao.getTime();
-          if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa)) {
+          if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa) && !isTestCard(card.titulo)) {
             // Deduplicate by card ID - keep first occurrence
             if (!uniqueCards.has(card.id)) {
               uniqueCards.set(card.id, card);
@@ -573,7 +573,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     for (const card of mqlByCreation) {
       if (!card.dataCriacao) continue;
       const creationTime = card.dataCriacao.getTime();
-      if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa)) {
+      if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa) && !isTestCard(card.titulo)) {
         allMqlIds.add(card.id);
       }
     }
