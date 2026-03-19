@@ -48,11 +48,30 @@ export const MQL_EXCLUDED_LOSS_REASONS = [
   'Email/Telefone Inválido',
 ];
 
-// Verifica se o card deve ser excluído da contagem de MQL por estar perdido com motivo específico
+// Normalize string: trim, lowercase, remove accents, collapse whitespace
+function normalizeStr(s: string): string {
+  return s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+}
+
+const NORMALIZED_EXCLUDED_REASONS = MQL_EXCLUDED_LOSS_REASONS.map(normalizeStr);
+
+// Verifica se o card deve ser excluído da contagem de MQL por motivo de perda
 export function isMqlExcludedByLoss(faseAtual?: string, motivoPerda?: string): boolean {
   if (!motivoPerda) return false;
-  const normalizado = motivoPerda.trim().toLowerCase();
-  return MQL_EXCLUDED_LOSS_REASONS.some(r => r.toLowerCase() === normalizado);
+  const normalizado = normalizeStr(motivoPerda);
+  return NORMALIZED_EXCLUDED_REASONS.includes(normalizado);
+}
+
+// Build a Set of card IDs that should be excluded from MQL counting.
+// A card is excluded if ANY of its rows has an excluded loss reason.
+export function buildExcludedMqlCardIds(rows: Array<{ id: string; motivoPerda?: string }>): Set<string> {
+  const excluded = new Set<string>();
+  for (const row of rows) {
+    if (row.motivoPerda && isMqlExcludedByLoss(undefined, row.motivoPerda)) {
+      excluded.add(row.id);
+    }
+  }
+  return excluded;
 }
 
 interface ModeloAtualMetasResult {
@@ -332,18 +351,21 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
   const movements = data?.movements ?? [];
   const mqlByCreation = data?.mqlByCreation ?? [];
 
+  // Pre-compute excluded MQL card IDs (card-level: any row with excluded reason excludes the whole card)
+  const excludedMqlIds = buildExcludedMqlCardIds(mqlByCreation);
+
   // Get total qty for a specific indicator and date range
   const getQtyForPeriod = (indicator: ModeloAtualIndicator, start?: Date, end?: Date): number => {
     const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
     const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
 
-    // MQL: Use creation date logic (aligned with Pipefy)
+    // MQL: Use creation date logic (aligned with Pipefy) - card-level exclusion
     if (indicator === 'mql') {
       const seenIds = new Set<string>();
       for (const movement of mqlByCreation) {
         if (!movement.dataCriacao) continue;
         const creationTime = movement.dataCriacao.getTime();
-        if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(movement.faixaFaturamento) && !isMqlExcludedByLoss(movement.faseAtual, movement.motivoPerda) && !seenIds.has(movement.id)) {
+        if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(movement.faixaFaturamento) && !excludedMqlIds.has(movement.id) && !seenIds.has(movement.id)) {
           seenIds.add(movement.id);
         }
       }
@@ -423,13 +445,13 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
 
   // Helper: count unique cards for a time window
   const countForWindow = (indicator: ModeloAtualIndicator, windowStart: number, windowEnd: number): number => {
-    // MQL: Use creation date logic
+    // MQL: Use creation date logic - card-level exclusion
     if (indicator === 'mql') {
       const seenIds = new Set<string>();
       for (const m of mqlByCreation) {
         if (!m.dataCriacao) continue;
         const t = m.dataCriacao.getTime();
-        if (t >= windowStart && t <= windowEnd && isMqlQualified(m.faixaFaturamento) && !isMqlExcludedByLoss(m.faseAtual, m.motivoPerda) && !seenIds.has(m.id)) {
+        if (t >= windowStart && t <= windowEnd && isMqlQualified(m.faixaFaturamento) && !excludedMqlIds.has(m.id) && !seenIds.has(m.id)) {
           seenIds.add(m.id);
         }
       }

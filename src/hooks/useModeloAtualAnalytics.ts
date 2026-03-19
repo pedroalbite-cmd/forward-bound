@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DetailItem } from "@/components/planning/indicators/DetailSheet";
 import { IndicatorType } from "@/hooks/useFunnelRealized";
-import { isMqlQualified, isMqlExcludedByLoss } from "@/hooks/useModeloAtualMetas";
+import { isMqlQualified, isMqlExcludedByLoss, buildExcludedMqlCardIds } from "@/hooks/useModeloAtualMetas";
 
 export interface ModeloAtualCard {
   id: string;
@@ -353,6 +353,9 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
   const fullHistory = data?.fullHistory ?? [];
   const mqlByCreation = data?.mqlByCreation ?? [];
 
+  // Pre-compute excluded MQL card IDs at card level (any row with excluded reason excludes the whole card)
+  const excludedMqlIds = useMemo(() => buildExcludedMqlCardIds(mqlByCreation), [mqlByCreation]);
+
   // Build a map of FIRST entry for EACH indicator per card (using full history)
   // This ensures we count each indicator only once, in the month of first entry
   const firstEntryByCardAndIndicator = useMemo(() => {
@@ -365,8 +368,8 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       const indicator = PHASE_TO_INDICATOR[card.fase];
       if (!indicator) continue;
       
-      // Special validation for MQL (requires revenue >= 200k)
-      if (indicator === 'mql' && (!isMqlQualified(card.faixa) || isMqlExcludedByLoss(card.faseAtual, card.motivoPerda))) continue;
+      // Special validation for MQL (requires revenue >= 200k) - card-level exclusion
+      if (indicator === 'mql' && (!isMqlQualified(card.faixa) || excludedMqlIds.has(card.id))) continue;
       
       if (!firstEntries.has(card.id)) {
         firstEntries.set(card.id, new Map());
@@ -390,7 +393,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     
     console.log(`[useModeloAtualAnalytics] Built firstEntryByCardAndIndicator map for ${firstEntries.size} cards`);
     return firstEntries;
-  }, [fullHistory, cards]);
+  }, [fullHistory, cards, excludedMqlIds]);
 
   // Get cards for a specific indicator - UNIVERSAL FIRST-ENTRY LOGIC
   // MQL uses CREATION DATE logic (aligned with Pipefy): card created in period + faturamento >= 200k
@@ -399,12 +402,12 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       const uniqueCards = new Map<string, ModeloAtualCard>();
       
       if (indicator === 'mql') {
-        // MQL: Use creation date logic (aligned with Pipefy)
-        // Card created in the period + faturamento >= R$ 200k
+        // MQL: Use creation date logic (aligned with Pipefy) - card-level exclusion
+        // Card created in the period + faturamento >= R$ 200k + not excluded at card level
         for (const card of mqlByCreation) {
-        if (!card.dataCriacao) continue;
-        const creationTime = card.dataCriacao.getTime();
-        if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa) && !isMqlExcludedByLoss(card.faseAtual, card.motivoPerda)) {
+          if (!card.dataCriacao) continue;
+          const creationTime = card.dataCriacao.getTime();
+          if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa) && !excludedMqlIds.has(card.id)) {
             // Deduplicate by card ID - keep first occurrence
             if (!uniqueCards.has(card.id)) {
               uniqueCards.set(card.id, card);

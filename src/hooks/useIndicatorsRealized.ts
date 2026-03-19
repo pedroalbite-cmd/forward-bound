@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useO2TaxMetas } from "./useO2TaxMetas";
 import { useOxyHackerMetas } from "./useOxyHackerMetas";
 import { useExpansaoMetas } from "./useExpansaoMetas";
-import { isMqlQualified, isMqlExcludedByLoss } from "./useModeloAtualMetas";
+import { isMqlQualified, buildExcludedMqlCardIds } from "./useModeloAtualMetas";
 import { months, BUKey } from "@/components/planning/salesData";
 
 // Month name to month index (0-based)
@@ -204,13 +204,16 @@ async function fetchModeloAtualMonth(year: number, monthIndex: number, monthName
   const startTime = new Date(year, monthIndex, 1).getTime();
   const endTime = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999).getTime();
 
+  // Card-level MQL exclusion: any row with excluded reason excludes the whole card
+  const excludedMqlIds = buildExcludedMqlCardIds(mqlByCreation);
+
   const countIndicator = (indicator: string): number => {
     if (indicator === 'mql') {
       const seenIds = new Set<string>();
       for (const m of mqlByCreation) {
         if (!m.dataCriacao) continue;
         const t = m.dataCriacao.getTime();
-        if (t >= startTime && t <= endTime && isMqlQualified(m.faixaFaturamento) && !isMqlExcludedByLoss(m.faseAtual, m.motivoPerda)) {
+        if (t >= startTime && t <= endTime && isMqlQualified(m.faixaFaturamento) && !excludedMqlIds.has(m.id)) {
           seenIds.add(m.id);
         }
       }
