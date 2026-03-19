@@ -445,13 +445,13 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
 
   // Helper: count unique cards for a time window
   const countForWindow = (indicator: ModeloAtualIndicator, windowStart: number, windowEnd: number): number => {
-    // MQL: Use creation date logic
+    // MQL: Use creation date logic - card-level exclusion
     if (indicator === 'mql') {
       const seenIds = new Set<string>();
       for (const m of mqlByCreation) {
         if (!m.dataCriacao) continue;
         const t = m.dataCriacao.getTime();
-        if (t >= windowStart && t <= windowEnd && isMqlQualified(m.faixaFaturamento) && !isMqlExcludedByLoss(m.faseAtual, m.motivoPerda) && !seenIds.has(m.id)) {
+        if (t >= windowStart && t <= windowEnd && isMqlQualified(m.faixaFaturamento) && !excludedMqlIds.has(m.id) && !seenIds.has(m.id)) {
           seenIds.add(m.id);
         }
       }

@@ -402,12 +402,12 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       const uniqueCards = new Map<string, ModeloAtualCard>();
       
       if (indicator === 'mql') {
-        // MQL: Use creation date logic (aligned with Pipefy)
-        // Card created in the period + faturamento >= R$ 200k
+        // MQL: Use creation date logic (aligned with Pipefy) - card-level exclusion
+        // Card created in the period + faturamento >= R$ 200k + not excluded at card level
         for (const card of mqlByCreation) {
-        if (!card.dataCriacao) continue;
-        const creationTime = card.dataCriacao.getTime();
-        if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa) && !isMqlExcludedByLoss(card.faseAtual, card.motivoPerda)) {
+          if (!card.dataCriacao) continue;
+          const creationTime = card.dataCriacao.getTime();
+          if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa) && !excludedMqlIds.has(card.id)) {
             // Deduplicate by card ID - keep first occurrence
             if (!uniqueCards.has(card.id)) {
               uniqueCards.set(card.id, card);
