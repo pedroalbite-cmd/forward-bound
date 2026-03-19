@@ -47,10 +47,18 @@ export const MQL_EXCLUDED_LOSS_REASONS = [
   'Não é MQL, mas entrou como MQL',
   'Email/Telefone Inválido',
 ];
-
 // Normalize string: trim, lowercase, remove accents, collapse whitespace
-function normalizeStr(s: string): string {
+export function normalizeStr(s: string): string {
   return s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+}
+
+// Títulos de cards de teste (normalizados) que devem ser excluídos da contagem
+const TEST_CARD_TITLES = ['teste', '123', 'empresa teste', 'teste duda', 'joao'];
+
+export function isTestCard(titulo?: string): boolean {
+  if (!titulo) return false;
+  const normalized = normalizeStr(titulo);
+  return TEST_CARD_TITLES.includes(normalized);
 }
 
 const NORMALIZED_EXCLUDED_REASONS = MQL_EXCLUDED_LOSS_REASONS.map(normalizeStr);
