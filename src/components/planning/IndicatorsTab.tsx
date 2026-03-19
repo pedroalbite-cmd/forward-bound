@@ -212,6 +212,12 @@ const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = fals
           </div>
         )}
         <p className="text-sm text-muted-foreground mt-2">Meta: {formatNumber(meta)}</p>
+        {badge && (
+          <p className="text-xs text-amber-500 flex items-center gap-1 mt-1">
+            <AlertTriangle className="h-3 w-3" />
+            {badge}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
