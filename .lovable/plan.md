@@ -1,48 +1,26 @@
 
 
-## Mostrar contagem de MQLs excluídos no acelerômetro (sem remover do total)
+## Investigar os 4 MQLs extras em Março (269 no sistema vs 265 no Pipefy)
 
-### Mudança de comportamento
-Hoje os MQLs com motivos de exclusão são **removidos** da contagem. A nova lógica:
-- **Contar TODOS** os MQLs qualificados por faixa (≥ R$ 200k) no número principal
-- **Exibir um badge/anotação** no card do MQL mostrando quantos desses têm motivo de exclusão (ex: "3 excluídos")
+### Diagnóstico até agora
 
-### Arquivos alterados
+A tabela `pipefy_moviment_cfos` retorna **1637 linhas** para cards criados em março via `query_period_by_creation`. O sistema deduplica por ID e filtra por faixa ≥ R$ 200k, chegando a 269 cards únicos. O Pipefy mostra 265.
 
-**1. `src/hooks/useModeloAtualAnalytics.ts`**
-- Remover o filtro `excludedMqlIds` de `getCardsForIndicator('mql')` e de `firstEntryByCardAndIndicator` — MQLs excluídos voltam a ser contados
-- Expor uma nova função `getExcludedMqlCount()` que retorna a quantidade de cards MQL cujo ID está no `excludedMqlIds`
-- Retornar `getExcludedMqlCount` no objeto de retorno do hook
+Já identifiquei pelo menos **1 card suspeito**: **ID 1320546949 "TESTE"** (empresa "TESTE", email `eduarda.rovani@o2inc.com.br`, criado 19/03/2026) — card de teste interno com faixa "Entre R$ 200 mil e R$ 350 mil".
 
-**2. `src/hooks/useModeloAtualMetas.ts`**
-- Remover o filtro por `excludedMqlIds` em `getQtyForPeriod` e `countForWindow` para MQL — voltar a contar todos
-- Manter `buildExcludedMqlCardIds` e `isMqlExcludedByLoss` disponíveis (usados pelo analytics para calcular a contagem)
+### Plano de ação
 
-**3. `src/hooks/useIndicatorsRealized.ts`**
-- Remover o filtro de exclusão na contagem de MQL (se aplicável), mantendo consistência
+**1. Criar script para comparar IDs do Excel vs banco de dados**
+- Parsear o arquivo Excel enviado (`mql_duda_03-19-2026.xlsx`) usando Python/pandas para extrair a lista de IDs do relatório Pipefy
+- Executar query via edge function para obter todos os IDs únicos com faixa qualificável criados em março na `pipefy_moviment_cfos`
+- Fazer o diff: IDs que estão no sistema mas **não** estão no Excel = os 4 extras
+- Listar os 4 cards com nome, empresa, fase atual e motivo (teste, sync, etc.)
 
-**4. `src/components/planning/IndicatorsTab.tsx`**
-- Adicionar prop `badge?: string` ao componente `RadialProgressCard`
-- Renderizar o badge como um pequeno texto abaixo da meta (ex: `⚠ 3 excluídos`) com cor de alerta (amber/orange)
-- Na renderização do card MQL, calcular o total de excluídos somando de todas as BUs selecionadas e passar como badge
-- Exemplo visual: abaixo de "Meta: 120" aparece "⚠ 3 excluídos" em texto amber pequeno
+**2. Corrigir a contagem se necessário**
+- Se os 4 extras forem cards de teste ou dados incorretos: adicionar filtro para excluí-los (ex: ignorar cards com título "TESTE")
+- Se forem diferença de tabela (`pipefy_moviment_cfos` vs pipe nativo do Pipefy): documentar a causa e alinhar qual fonte é a correta
 
-### Detalhes técnicos
-
-```text
-┌──────────────────────┐
-│        MQLs          │
-│    ┌──────────┐      │
-│    │   125    │      │  ← total (inclui excluídos)
-│    │   104%   │      │
-│    └──────────┘      │
-│   Meta: 120          │
-│   ⚠ 3 excluídos     │  ← badge novo
-└──────────────────────┘
-```
-
-### O que NÃO muda
-- Lista de motivos de exclusão (`MQL_EXCLUDED_LOSS_REASONS`) permanece igual
-- Função `buildExcludedMqlCardIds` continua existindo para calcular o badge
-- Lógica de normalização de acentos permanece
+### Resultado esperado
+- Lista exata dos 4 IDs extras com justificativa
+- Correção no código se os cards não deveriam ser contados
 
