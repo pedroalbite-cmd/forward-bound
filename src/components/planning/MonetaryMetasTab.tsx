@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useMonetaryMetas, BuType, MonthType, BU_LABELS, isPontualOnlyBU, MONTHS } from '@/hooks/useMonetaryMetas';
 import { useMrrBase } from '@/hooks/useMrrBase';
-import { useEffectiveMetas } from '@/hooks/useEffectiveMetas';
+
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
