@@ -369,7 +369,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
       if (!indicator) continue;
       
       // Special validation for MQL (requires revenue >= 200k) - card-level exclusion
-      if (indicator === 'mql' && (!isMqlQualified(card.faixa) || excludedMqlIds.has(card.id))) continue;
+      if (indicator === 'mql' && !isMqlQualified(card.faixa)) continue;
       
       if (!firstEntries.has(card.id)) {
         firstEntries.set(card.id, new Map());
@@ -407,7 +407,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         for (const card of mqlByCreation) {
           if (!card.dataCriacao) continue;
           const creationTime = card.dataCriacao.getTime();
-          if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa) && !excludedMqlIds.has(card.id)) {
+          if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa)) {
             // Deduplicate by card ID - keep first occurrence
             if (!uniqueCards.has(card.id)) {
               uniqueCards.set(card.id, card);
@@ -566,6 +566,24 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     return result;
   };
 
+  // Count of MQL cards that have excluded loss reasons (for badge display)
+  const getExcludedMqlCount = useMemo(() => {
+    // Get all MQL cards (including excluded ones) and count how many are in excludedMqlIds
+    const allMqlIds = new Set<string>();
+    for (const card of mqlByCreation) {
+      if (!card.dataCriacao) continue;
+      const creationTime = card.dataCriacao.getTime();
+      if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa)) {
+        allMqlIds.add(card.id);
+      }
+    }
+    let count = 0;
+    for (const id of allMqlIds) {
+      if (excludedMqlIds.has(id)) count++;
+    }
+    return count;
+  }, [mqlByCreation, excludedMqlIds, startTime, endTime]);
+
   return {
     isLoading,
     error,
@@ -577,5 +595,6 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     getDetailItemsForIndicator,
     getDetailItemsWithFullHistory,
     getAverageSlaMinutes,
+    getExcludedMqlCount,
   };
 }

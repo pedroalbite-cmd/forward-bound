@@ -213,7 +213,7 @@ async function fetchModeloAtualMonth(year: number, monthIndex: number, monthName
       for (const m of mqlByCreation) {
         if (!m.dataCriacao) continue;
         const t = m.dataCriacao.getTime();
-        if (t >= startTime && t <= endTime && isMqlQualified(m.faixaFaturamento) && !excludedMqlIds.has(m.id)) {
+        if (t >= startTime && t <= endTime && isMqlQualified(m.faixaFaturamento)) {
           seenIds.add(m.id);
         }
       }

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Line, ComposedChart, RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
-import { RefreshCw, Loader2, BarChart3, TrendingUp, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { RefreshCw, Loader2, BarChart3, TrendingUp, ExternalLink, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
 import { useFunnelRealized, IndicatorType, BUType } from "@/hooks/useFunnelRealized";
 import { useModeloAtualMetas, ChartGrouping, ModeloAtualIndicator } from "@/hooks/useModeloAtualMetas";
 import { useExpansaoMetas, ExpansaoIndicator } from "@/hooks/useExpansaoMetas";
@@ -157,9 +157,10 @@ interface RadialProgressCardProps {
   onClick?: () => void;
   isClickable?: boolean;
   isLoading?: boolean;
+  badge?: string;
 }
 
-const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = false, isLoading = false }: RadialProgressCardProps) => {
+const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = false, isLoading = false, badge }: RadialProgressCardProps) => {
   const percentage = meta > 0 ? (realized / meta) * 100 : 0;
   
   // Nova lógica: Verde >= 100%, Amarelo 80-99%, Vermelho < 80%
@@ -211,6 +212,12 @@ const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = fals
           </div>
         )}
         <p className="text-sm text-muted-foreground mt-2">Meta: {formatNumber(meta)}</p>
+        {badge && (
+          <p className="text-xs text-amber-500 flex items-center gap-1 mt-1">
+            <AlertTriangle className="h-3 w-3" />
+            {badge}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -2452,6 +2459,9 @@ export function IndicatorsTab() {
             isClickable={true}
             isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading}
             onClick={() => handleRadialCardClick(indicator)}
+            badge={indicator.key === 'mql' && modeloAtualAnalytics.getExcludedMqlCount > 0
+              ? `${modeloAtualAnalytics.getExcludedMqlCount} excluídos`
+              : undefined}
           />
         ))}
       </div>
