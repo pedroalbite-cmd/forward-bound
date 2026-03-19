@@ -1,49 +1,59 @@
 
 
-## Problema: filtro por título está removendo cards reais
+## Perdidos e Motivos de Perda — Respeitar BU selecionada
 
-O filtro `isTestCard` usa títulos normalizados (`'teste'`, `'123'`, `'empresa teste'`, `'teste duda'`, `'joao'`), mas isso pode pegar cards reais que têm esses nomes. O resultado: removeu 6 cards em vez de 4, mostrando 263 em vez de 265.
+### Problema
+Os widgets `LostDealsWidget` e `LossReasonsWidget` usam **sempre** `useO2TaxAnalytics`, mostrando dados mockados para outras BUs. Deveriam puxar dados reais da BU correspondente.
 
-Por exemplo:
-- `'joao'` pode coincidir com um lead real chamado "João"
-- `'123'` pode coincidir com outro card real
+### Solução
 
-## Solução: filtrar por IDs específicos ao invés de títulos
+**1. Adicionar `getLostDeals` e `getLossReasons` em `useModeloAtualAnalytics.ts`**
+- Lógica idêntica à do O2 Tax: iterar `cards`, filtrar os que têm `faseAtual === 'Perdido'` ou `'Arquivado'` (ou `fase` equivalente), no período, deduplicar por ID
+- `getLostDeals`: retorna `{ count, totalValue, trend, cards }`
+- `getLossReasons`: agrupa por `motivoPerda`, calcula percentual, retorna array com `{ reason, count, percentage, cards, color }`
 
-Trocar a lógica para usar os **IDs exatos** dos 4 cards de teste identificados, que são seguros e não mudam:
+**2. Adicionar `getLostDeals` e `getLossReasons` em `useExpansaoAnalytics.ts`**
+- Mesma lógica, filtrando fases `'Perdido'` e `'Arquivado'`
 
-| ID | Título |
-|---|---|
-| `1320546949` | TESTE |
-| `1320177174` | 123 |
-| `1308003007` | Empresa Teste |
-| `1320175421` | teste duda |
+**3. Refatorar `LostDealsWidget.tsx`**
+- Importar os 3 hooks (`useModeloAtualAnalytics`, `useO2TaxAnalytics`, `useExpansaoAnalytics`)
+- Com base no `buKey`, chamar o hook correto e pegar `getLostDeals` + `toDetailItem`
+- Remover mock data
+- Para `buKey === 'all'` (consolidado), somar os dados de todos os hooks
 
-### Arquivos alterados
+**4. Refatorar `LossReasonsWidget.tsx`**
+- Mesma lógica: rotear para o hook correto com base no `buKey`
+- Remover mock data
+- Para consolidado, mesclar os `getLossReasons` de todos os hooks (agrupar por motivo)
 
-**1. `src/hooks/useModeloAtualMetas.ts`**
-- Substituir `TEST_CARD_TITLES` e `isTestCard(titulo)` por um `Set` de IDs: `TEST_CARD_IDS`
-- Exportar nova função `isTestCard(id: string): boolean` que verifica pelo ID
-- Atualizar filtro em `getQtyForPeriod` para usar `!isTestCard(movement.id)`
+### Detalhes de implementação
 
-**2. `src/hooks/useModeloAtualAnalytics.ts`**
-- Atualizar todas as chamadas de `isTestCard(card.titulo)` para `isTestCard(card.id)`
-
-### Código
-
+Nos hooks de analytics, a lógica de perdidos:
 ```typescript
-const TEST_CARD_IDS = new Set([
-  '1320546949', // TESTE
-  '1320177174', // 123
-  '1308003007', // Empresa Teste
-  '1320175421', // teste duda
-]);
-
-export function isTestCard(id?: string): boolean {
-  if (!id) return false;
-  return TEST_CARD_IDS.has(id);
-}
+const getLostDeals = useMemo(() => {
+  const lostCards = [];
+  const seenIds = new Set();
+  for (const card of cards) {
+    const isLost = card.faseAtual === 'Perdido' || card.faseAtual === 'Arquivado';
+    const inPeriod = card.dataEntrada.getTime() >= startTime && card.dataEntrada.getTime() <= endTime;
+    if (isLost && inPeriod && !seenIds.has(card.id)) {
+      lostCards.push(card);
+      seenIds.add(card.id);
+    }
+  }
+  return { count: lostCards.length, totalValue: lostCards.reduce((s,c) => s + c.valor, 0), trend: 0, cards: lostCards };
+}, [cards, startTime, endTime]);
 ```
 
-Resultado esperado: MQL março volta a 265, sem risco de filtrar cards reais.
+Nos widgets, seleção do hook por BU:
+- `modelo_atual` → `useModeloAtualAnalytics`
+- `o2_tax` → `useO2TaxAnalytics`
+- `oxy_hacker` / `franquia` → `useExpansaoAnalytics` (com o produto correto)
+- `all` → combinar resultados dos 3 hooks
+
+### Arquivos alterados
+1. `src/hooks/useModeloAtualAnalytics.ts` — adicionar `getLostDeals`, `getLossReasons`
+2. `src/hooks/useExpansaoAnalytics.ts` — adicionar `getLostDeals`, `getLossReasons`
+3. `src/components/planning/indicators/LostDealsWidget.tsx` — rotear para hook correto por BU
+4. `src/components/planning/indicators/LossReasonsWidget.tsx` — rotear para hook correto por BU
 
