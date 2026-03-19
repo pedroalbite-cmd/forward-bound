@@ -351,18 +351,21 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
   const movements = data?.movements ?? [];
   const mqlByCreation = data?.mqlByCreation ?? [];
 
+  // Pre-compute excluded MQL card IDs (card-level: any row with excluded reason excludes the whole card)
+  const excludedMqlIds = buildExcludedMqlCardIds(mqlByCreation);
+
   // Get total qty for a specific indicator and date range
   const getQtyForPeriod = (indicator: ModeloAtualIndicator, start?: Date, end?: Date): number => {
     const startTime = start ? new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime() : 0;
     const endTime = end ? new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime() : Date.now();
 
-    // MQL: Use creation date logic (aligned with Pipefy)
+    // MQL: Use creation date logic (aligned with Pipefy) - card-level exclusion
     if (indicator === 'mql') {
       const seenIds = new Set<string>();
       for (const movement of mqlByCreation) {
         if (!movement.dataCriacao) continue;
         const creationTime = movement.dataCriacao.getTime();
-        if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(movement.faixaFaturamento) && !isMqlExcludedByLoss(movement.faseAtual, movement.motivoPerda) && !seenIds.has(movement.id)) {
+        if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(movement.faixaFaturamento) && !excludedMqlIds.has(movement.id) && !seenIds.has(movement.id)) {
           seenIds.add(movement.id);
         }
       }
