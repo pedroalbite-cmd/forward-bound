@@ -160,7 +160,7 @@ interface RadialProgressCardProps {
   badge?: string;
 }
 
-const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = false, isLoading = false }: RadialProgressCardProps) => {
+const RadialProgressCard = ({ title, realized, meta, onClick, isClickable = false, isLoading = false, badge }: RadialProgressCardProps) => {
   const percentage = meta > 0 ? (realized / meta) * 100 : 0;
   
   // Nova lógica: Verde >= 100%, Amarelo 80-99%, Vermelho < 80%
