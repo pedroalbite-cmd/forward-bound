@@ -1,37 +1,49 @@
 
 
-## Filtrar cards de teste da contagem de MQL
+## Problema: filtro por título está removendo cards reais
 
-### Problema
-4 cards de teste (TESTE, 123, Empresa Teste, teste duda) estão inflando a contagem de MQL de 265 para 269.
+O filtro `isTestCard` usa títulos normalizados (`'teste'`, `'123'`, `'empresa teste'`, `'teste duda'`, `'joao'`), mas isso pode pegar cards reais que têm esses nomes. O resultado: removeu 6 cards em vez de 4, mostrando 263 em vez de 265.
 
-### Solução
-Adicionar uma função `isTestCard` em `useModeloAtualMetas.ts` que identifica cards de teste pelo título, e aplicar esse filtro em todos os pontos de contagem de MQL.
+Por exemplo:
+- `'joao'` pode coincidir com um lead real chamado "João"
+- `'123'` pode coincidir com outro card real
+
+## Solução: filtrar por IDs específicos ao invés de títulos
+
+Trocar a lógica para usar os **IDs exatos** dos 4 cards de teste identificados, que são seguros e não mudam:
+
+| ID | Título |
+|---|---|
+| `1320546949` | TESTE |
+| `1320177174` | 123 |
+| `1308003007` | Empresa Teste |
+| `1320175421` | teste duda |
 
 ### Arquivos alterados
 
 **1. `src/hooks/useModeloAtualMetas.ts`**
-- Criar função exportada `isTestCard(titulo: string): boolean` que verifica se o título normalizado é um dos valores de teste conhecidos: `teste`, `123`, `empresa teste`, `teste duda`, `joao`
-- Adicionar filtro `!isTestCard(movement.titulo)` no loop de `getQtyForPeriod` para MQL (linha 368)
+- Substituir `TEST_CARD_TITLES` e `isTestCard(titulo)` por um `Set` de IDs: `TEST_CARD_IDS`
+- Exportar nova função `isTestCard(id: string): boolean` que verifica pelo ID
+- Atualizar filtro em `getQtyForPeriod` para usar `!isTestCard(movement.id)`
 
 **2. `src/hooks/useModeloAtualAnalytics.ts`**
-- Importar `isTestCard` de `useModeloAtualMetas`
-- Adicionar filtro `!isTestCard(card.titulo)` em `getCardsForIndicator` para MQL (linha 410)
-- Adicionar filtro em `getExcludedMqlCount` para não contar cards de teste como excluídos
-- Adicionar filtro em `firstEntryByCardAndIndicator` para MQL
+- Atualizar todas as chamadas de `isTestCard(card.titulo)` para `isTestCard(card.id)`
 
-### Detalhes técnicos
+### Código
 
 ```typescript
-// Títulos de cards de teste (normalizados)
-const TEST_CARD_TITLES = ['teste', '123', 'empresa teste', 'teste duda', 'joao'];
+const TEST_CARD_IDS = new Set([
+  '1320546949', // TESTE
+  '1320177174', // 123
+  '1308003007', // Empresa Teste
+  '1320175421', // teste duda
+]);
 
-export function isTestCard(titulo?: string): boolean {
-  if (!titulo) return false;
-  const normalized = normalizeStr(titulo);
-  return TEST_CARD_TITLES.includes(normalized);
+export function isTestCard(id?: string): boolean {
+  if (!id) return false;
+  return TEST_CARD_IDS.has(id);
 }
 ```
 
-Resultado esperado: MQL março passa de 269 → 265, alinhado com o Pipefy.
+Resultado esperado: MQL março volta a 265, sem risco de filtrar cards reais.
 
