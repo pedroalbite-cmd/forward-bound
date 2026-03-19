@@ -573,7 +573,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     for (const card of mqlByCreation) {
       if (!card.dataCriacao) continue;
       const creationTime = card.dataCriacao.getTime();
-      if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa) && !isTestCard(card.titulo)) {
+      if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa) && !isTestCard(card.id)) {
         allMqlIds.add(card.id);
       }
     }
