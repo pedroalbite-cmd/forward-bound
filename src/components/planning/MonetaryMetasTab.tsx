@@ -421,41 +421,6 @@ export function MonetaryMetasTab() {
                   </TableCell>
                 </TableRow>
 
-                {/* Meta Efetiva Row - calculated with rollover */}
-                <TableRow className="bg-amber-500/10">
-                  <TableCell className="sticky left-0 bg-amber-500/10 z-10 font-semibold">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger className="flex items-center gap-1">
-                          ⚡ Meta Efetiva
-                          <Info className="h-3 w-3 text-muted-foreground" />
-                        </TooltipTrigger>
-                        <TooltipContent side="right" className="max-w-[250px]">
-                          <p className="text-xs">Meta original + gap acumulado dos meses anteriores que não bateram a meta.</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </TableCell>
-                  {MONTHS.map((month) => {
-                    const effective = effectiveMetas[selectedBu]?.[month] ?? 0;
-                    const original = getFaturamento(selectedBu, month);
-                    const hasRollover = effective > original && effective > 0;
-                    return (
-                      <TableCell key={`eff-${month}`} className="text-center text-sm">
-                        {effective > 0 ? (
-                          <span className={hasRollover ? 'font-bold text-amber-600 dark:text-amber-400' : ''}>
-                            {formatCompact(effective)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                    );
-                  })}
-                  <TableCell className="text-center font-bold bg-muted/30">
-                    {formatCurrency(MONTHS.reduce((s, m) => s + (effectiveMetas[selectedBu]?.[m] ?? 0), 0))}
-                  </TableCell>
-                </TableRow>
 
                 {/* Vendas Row */}
                 <TableRow>
