@@ -48,11 +48,30 @@ export const MQL_EXCLUDED_LOSS_REASONS = [
   'Email/Telefone Inválido',
 ];
 
-// Verifica se o card deve ser excluído da contagem de MQL por estar perdido com motivo específico
+// Normalize string: trim, lowercase, remove accents, collapse whitespace
+function normalizeStr(s: string): string {
+  return s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+}
+
+const NORMALIZED_EXCLUDED_REASONS = MQL_EXCLUDED_LOSS_REASONS.map(normalizeStr);
+
+// Verifica se o card deve ser excluído da contagem de MQL por motivo de perda
 export function isMqlExcludedByLoss(faseAtual?: string, motivoPerda?: string): boolean {
   if (!motivoPerda) return false;
-  const normalizado = motivoPerda.trim().toLowerCase();
-  return MQL_EXCLUDED_LOSS_REASONS.some(r => r.toLowerCase() === normalizado);
+  const normalizado = normalizeStr(motivoPerda);
+  return NORMALIZED_EXCLUDED_REASONS.includes(normalizado);
+}
+
+// Build a Set of card IDs that should be excluded from MQL counting.
+// A card is excluded if ANY of its rows has an excluded loss reason.
+export function buildExcludedMqlCardIds(rows: Array<{ id: string; motivoPerda?: string }>): Set<string> {
+  const excluded = new Set<string>();
+  for (const row of rows) {
+    if (row.motivoPerda && isMqlExcludedByLoss(undefined, row.motivoPerda)) {
+      excluded.add(row.id);
+    }
+  }
+  return excluded;
 }
 
 interface ModeloAtualMetasResult {
