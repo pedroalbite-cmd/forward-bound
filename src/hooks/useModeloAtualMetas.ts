@@ -50,9 +50,9 @@ export const MQL_EXCLUDED_LOSS_REASONS = [
 
 // Verifica se o card deve ser excluído da contagem de MQL por estar perdido com motivo específico
 export function isMqlExcludedByLoss(faseAtual?: string, motivoPerda?: string): boolean {
-  if (!faseAtual || !motivoPerda) return false;
+  if (!motivoPerda) return false;
   const normalizado = motivoPerda.trim().toLowerCase();
-  return faseAtual === 'Perdido' && MQL_EXCLUDED_LOSS_REASONS.some(r => r.toLowerCase() === normalizado);
+  return MQL_EXCLUDED_LOSS_REASONS.some(r => r.toLowerCase() === normalizado);
 }
 
 interface ModeloAtualMetasResult {
