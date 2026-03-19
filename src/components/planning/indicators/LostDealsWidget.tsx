@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingDown, XCircle, ExternalLink, Loader2 } from "lucide-react";
 import { DetailSheet, DetailItem, columnFormatters } from "./DetailSheet";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
+import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
+import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 
 interface LostDealsWidgetProps {
   buKey: string;
@@ -13,33 +15,49 @@ interface LostDealsWidgetProps {
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(value);
 
-// Mock data for non-O2 TAX BUs
-const mockLostDeals: DetailItem[] = [
-  { id: "1", name: "João Silva", company: "Tech Solutions Ltda", value: 25000, reason: "Preço", date: "2026-01-15", phase: "Proposta" },
-  { id: "2", name: "Maria Santos", company: "Inovação Digital SA", value: 45000, reason: "Timing", date: "2026-01-14", phase: "Proposta" },
-  { id: "3", name: "Pedro Costa", company: "Startup XYZ", value: 12000, reason: "Concorrência", date: "2026-01-13", phase: "RR" },
-];
-
 export function LostDealsWidget({ buKey, startDate, endDate }: LostDealsWidgetProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
-  
-  const isO2Tax = buKey === 'o2_tax';
-  const { getLostDeals, toDetailItem, isLoading } = useO2TaxAnalytics(startDate, endDate);
-  
-  const lostDeals = isO2Tax ? getLostDeals.count : mockLostDeals.length;
-  const lostValue = isO2Tax 
-    ? getLostDeals.totalValue 
-    : mockLostDeals.reduce((acc, deal) => acc + (deal.value || 0), 0);
-  const trend = isO2Tax ? getLostDeals.trend : -8;
 
-  const getDetailItems = (): DetailItem[] => {
-    if (isO2Tax) {
-      return getLostDeals.cards.map(toDetailItem);
+  const modeloAtualAnalytics = useModeloAtualAnalytics(startDate, endDate);
+  const o2TaxAnalytics = useO2TaxAnalytics(startDate, endDate);
+  const franquiaAnalytics = useExpansaoAnalytics(startDate, endDate, 'Franquia');
+  const oxyHackerAnalytics = useExpansaoAnalytics(startDate, endDate, 'Oxy Hacker');
+
+  const isLoading = modeloAtualAnalytics.isLoading || o2TaxAnalytics.isLoading || franquiaAnalytics.isLoading || oxyHackerAnalytics.isLoading;
+
+  // Aggregate lost deals based on selected BU(s)
+  const getAggregatedLostDeals = () => {
+    const sources: { getLostDeals: { count: number; totalValue: number; trend: number; cards: any[] }; toDetailItem: (card: any) => DetailItem }[] = [];
+
+    if (buKey === 'modelo_atual' || buKey === 'all') {
+      sources.push({ getLostDeals: modeloAtualAnalytics.getLostDeals, toDetailItem: modeloAtualAnalytics.toDetailItem });
     }
-    return mockLostDeals;
+    if (buKey === 'o2_tax' || buKey === 'all') {
+      sources.push({ getLostDeals: o2TaxAnalytics.getLostDeals, toDetailItem: o2TaxAnalytics.toDetailItem });
+    }
+    if (buKey === 'oxy_hacker' || buKey === 'all') {
+      sources.push({ getLostDeals: oxyHackerAnalytics.getLostDeals, toDetailItem: oxyHackerAnalytics.toDetailItem });
+    }
+    if (buKey === 'franquia' || buKey === 'all') {
+      sources.push({ getLostDeals: franquiaAnalytics.getLostDeals, toDetailItem: franquiaAnalytics.toDetailItem });
+    }
+
+    let totalCount = 0;
+    let totalValue = 0;
+    const allItems: DetailItem[] = [];
+
+    for (const source of sources) {
+      totalCount += source.getLostDeals.count;
+      totalValue += source.getLostDeals.totalValue;
+      allItems.push(...source.getLostDeals.cards.map(source.toDetailItem));
+    }
+
+    return { count: totalCount, totalValue, trend: 0, items: allItems };
   };
 
-  if (isO2Tax && isLoading) {
+  const aggregated = getAggregatedLostDeals();
+
+  if (isLoading) {
     return (
       <Card className="bg-card border-border h-full flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -64,16 +82,16 @@ export function LostDealsWidget({ buKey, startDate, endDate }: LostDealsWidgetPr
         </CardHeader>
         <CardContent className="pt-0">
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-foreground">{lostDeals}</span>
+            <span className="text-3xl font-bold text-foreground">{aggregated.count}</span>
             <span className="text-sm text-muted-foreground">perdidos</span>
           </div>
           <div className="mt-1">
-            <span className="text-lg font-semibold text-destructive">{formatCurrency(lostValue)}</span>
+            <span className="text-lg font-semibold text-destructive">{formatCurrency(aggregated.totalValue)}</span>
           </div>
-          {trend !== 0 && (
+          {aggregated.trend !== 0 && (
             <div className="flex items-center gap-1 mt-2">
               <TrendingDown className="h-4 w-4 text-chart-2" />
-              <span className="text-sm font-medium text-chart-2">{trend}%</span>
+              <span className="text-sm font-medium text-chart-2">{aggregated.trend}%</span>
               <span className="text-xs text-muted-foreground">vs período anterior</span>
             </div>
           )}
@@ -87,8 +105,8 @@ export function LostDealsWidget({ buKey, startDate, endDate }: LostDealsWidgetPr
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         title="Negócios Perdidos"
-        description={`${lostDeals} negócios perdidos totalizando ${formatCurrency(lostValue)}`}
-        items={getDetailItems()}
+        description={`${aggregated.count} negócios perdidos totalizando ${formatCurrency(aggregated.totalValue)}`}
+        items={aggregated.items}
         columns={[
           { key: "name", label: "Lead" },
           { key: "company", label: "Empresa" },

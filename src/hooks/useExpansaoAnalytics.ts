@@ -427,6 +427,77 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
     };
   }, [getCardsWithFullHistory, produto]);
 
+  // Get lost deals in period
+  const getLostDeals = useMemo(() => {
+    const lostCards: ExpansaoCard[] = [];
+    const seenIds = new Set<string>();
+    
+    for (const card of cards) {
+      const entryTime = card.dataEntrada.getTime();
+      if (
+        (card.fase === 'Perdido' || card.fase === 'Arquivado' || card.faseAtual === 'Perdido' || card.faseAtual === 'Arquivado') &&
+        entryTime >= startTime &&
+        entryTime <= endTime &&
+        !seenIds.has(card.id)
+      ) {
+        lostCards.push(card);
+        seenIds.add(card.id);
+      }
+    }
+    
+    const totalValue = lostCards.reduce((sum, card) => sum + card.valor, 0);
+    
+    return {
+      count: lostCards.length,
+      totalValue,
+      trend: 0,
+      cards: lostCards,
+    };
+  }, [cards, startTime, endTime]);
+
+  // Get loss reasons grouped
+  const getLossReasons = useMemo(() => {
+    const reasonMap = new Map<string, ExpansaoCard[]>();
+    const seenIds = new Set<string>();
+    
+    for (const card of cards) {
+      const entryTime = card.dataEntrada.getTime();
+      if (
+        (card.fase === 'Perdido' || card.fase === 'Arquivado' || card.faseAtual === 'Perdido' || card.faseAtual === 'Arquivado') &&
+        entryTime >= startTime &&
+        entryTime <= endTime &&
+        !seenIds.has(card.id)
+      ) {
+        const reason = card.motivoPerda || 'Não informado';
+        if (!reasonMap.has(reason)) {
+          reasonMap.set(reason, []);
+        }
+        reasonMap.get(reason)!.push(card);
+        seenIds.add(card.id);
+      }
+    }
+    
+    const CHART_COLORS = [
+      "hsl(var(--chart-1))",
+      "hsl(var(--chart-2))",
+      "hsl(var(--chart-3))",
+      "hsl(var(--chart-4))",
+      "hsl(var(--chart-5))",
+    ];
+    
+    const total = Array.from(reasonMap.values()).reduce((sum, arr) => sum + arr.length, 0);
+    
+    return Array.from(reasonMap.entries())
+      .map(([reason, cards], index) => ({
+        reason,
+        count: cards.length,
+        percentage: total > 0 ? Math.round((cards.length / total) * 100) : 0,
+        cards,
+        color: CHART_COLORS[index % CHART_COLORS.length],
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [cards, startTime, endTime]);
+
   return {
     isLoading,
     error,
@@ -436,5 +507,7 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
     getDetailItemsForIndicator,
     getDetailItemsWithFullHistory,
     getDealsWon,
+    getLostDeals,
+    getLossReasons,
   };
 }

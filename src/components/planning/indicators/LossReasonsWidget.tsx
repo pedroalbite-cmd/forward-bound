@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { DetailSheet, DetailItem, columnFormatters } from "./DetailSheet";
 import { useO2TaxAnalytics } from "@/hooks/useO2TaxAnalytics";
+import { useModeloAtualAnalytics } from "@/hooks/useModeloAtualAnalytics";
+import { useExpansaoAnalytics } from "@/hooks/useExpansaoAnalytics";
 
 interface LossReasonsWidgetProps {
   buKey: string;
@@ -11,19 +13,12 @@ interface LossReasonsWidgetProps {
   endDate: Date;
 }
 
-// Mock data for non-O2 TAX BUs
-const mockData = [
-  { reason: "Preço", count: 8, percentage: 35, color: "hsl(var(--chart-1))" },
-  { reason: "Timing", count: 6, percentage: 26, color: "hsl(var(--chart-2))" },
-  { reason: "Concorrência", count: 5, percentage: 22, color: "hsl(var(--chart-3))" },
-  { reason: "Sem resposta", count: 3, percentage: 13, color: "hsl(var(--chart-4))" },
-  { reason: "Outros", count: 1, percentage: 4, color: "hsl(var(--chart-5))" },
-];
-
-const mockLostByReason: DetailItem[] = [
-  { id: "1", name: "Tech Solutions", company: "João Silva", reason: "Preço", value: 25000, date: "2026-01-15" },
-  { id: "2", name: "Inovação Digital", company: "Maria Santos", reason: "Preço", value: 45000, date: "2026-01-14" },
-  { id: "3", name: "Startup XYZ", company: "Pedro Costa", reason: "Timing", value: 12000, date: "2026-01-13" },
+const CHART_COLORS = [
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
 ];
 
 const formatCurrency = (value: number) =>
@@ -32,11 +27,60 @@ const formatCurrency = (value: number) =>
 export function LossReasonsWidget({ buKey, startDate, endDate }: LossReasonsWidgetProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
-  
-  const isO2Tax = buKey === 'o2_tax';
-  const { getLossReasons, toDetailItem, isLoading } = useO2TaxAnalytics(startDate, endDate);
-  
-  const chartData = isO2Tax ? getLossReasons : mockData;
+
+  const modeloAtualAnalytics = useModeloAtualAnalytics(startDate, endDate);
+  const o2TaxAnalytics = useO2TaxAnalytics(startDate, endDate);
+  const franquiaAnalytics = useExpansaoAnalytics(startDate, endDate, 'Franquia');
+  const oxyHackerAnalytics = useExpansaoAnalytics(startDate, endDate, 'Oxy Hacker');
+
+  const isLoading = modeloAtualAnalytics.isLoading || o2TaxAnalytics.isLoading || franquiaAnalytics.isLoading || oxyHackerAnalytics.isLoading;
+
+  // Aggregate loss reasons based on selected BU(s)
+  const { chartData, allDetailItems } = useMemo(() => {
+    const reasonAgg = new Map<string, { count: number; items: DetailItem[] }>();
+
+    const addSource = (lossReasons: { reason: string; count: number; cards: any[] }[], toDetailItem: (card: any) => DetailItem) => {
+      for (const lr of lossReasons) {
+        const existing = reasonAgg.get(lr.reason) || { count: 0, items: [] };
+        existing.count += lr.count;
+        existing.items.push(...lr.cards.map(toDetailItem));
+        reasonAgg.set(lr.reason, existing);
+      }
+    };
+
+    if (buKey === 'modelo_atual' || buKey === 'all') {
+      addSource(modeloAtualAnalytics.getLossReasons, modeloAtualAnalytics.toDetailItem);
+    }
+    if (buKey === 'o2_tax' || buKey === 'all') {
+      addSource(o2TaxAnalytics.getLossReasons, o2TaxAnalytics.toDetailItem);
+    }
+    if (buKey === 'oxy_hacker' || buKey === 'all') {
+      addSource(oxyHackerAnalytics.getLossReasons, oxyHackerAnalytics.toDetailItem);
+    }
+    if (buKey === 'franquia' || buKey === 'all') {
+      addSource(franquiaAnalytics.getLossReasons, franquiaAnalytics.toDetailItem);
+    }
+
+    const total = Array.from(reasonAgg.values()).reduce((sum, r) => sum + r.count, 0);
+    
+    const chart = Array.from(reasonAgg.entries())
+      .map(([reason, data], index) => ({
+        reason,
+        count: data.count,
+        percentage: total > 0 ? Math.round((data.count / total) * 100) : 0,
+        color: CHART_COLORS[index % CHART_COLORS.length],
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    // Build a flat map of reason -> detail items
+    const allItems = new Map<string, DetailItem[]>();
+    for (const [reason, data] of reasonAgg.entries()) {
+      allItems.set(reason, data.items);
+    }
+
+    return { chartData: chart, allDetailItems: allItems };
+  }, [buKey, modeloAtualAnalytics.getLossReasons, o2TaxAnalytics.getLossReasons, oxyHackerAnalytics.getLossReasons, franquiaAnalytics.getLossReasons]);
+
   const total = chartData.reduce((acc, item) => acc + item.count, 0);
 
   const handleReasonClick = (reason: string) => {
@@ -45,20 +89,15 @@ export function LossReasonsWidget({ buKey, startDate, endDate }: LossReasonsWidg
   };
 
   const getFilteredItems = (): DetailItem[] => {
-    if (isO2Tax) {
-      const filtered = selectedReason 
-        ? getLossReasons.find(r => r.reason === selectedReason)?.cards || []
-        : getLossReasons.flatMap(r => r.cards);
-      return filtered.map(toDetailItem);
+    if (selectedReason) {
+      return allDetailItems.get(selectedReason) || [];
     }
-    return selectedReason 
-      ? mockLostByReason.filter(item => item.reason === selectedReason)
-      : mockLostByReason;
+    return Array.from(allDetailItems.values()).flat();
   };
 
   const filteredItems = getFilteredItems();
 
-  if (isO2Tax && isLoading) {
+  if (isLoading) {
     return (
       <Card className="bg-card border-border h-full flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
