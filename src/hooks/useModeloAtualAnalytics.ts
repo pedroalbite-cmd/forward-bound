@@ -566,6 +566,24 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     return result;
   };
 
+  // Count of MQL cards that have excluded loss reasons (for badge display)
+  const getExcludedMqlCount = useMemo(() => {
+    // Get all MQL cards (including excluded ones) and count how many are in excludedMqlIds
+    const allMqlIds = new Set<string>();
+    for (const card of mqlByCreation) {
+      if (!card.dataCriacao) continue;
+      const creationTime = card.dataCriacao.getTime();
+      if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa)) {
+        allMqlIds.add(card.id);
+      }
+    }
+    let count = 0;
+    for (const id of allMqlIds) {
+      if (excludedMqlIds.has(id)) count++;
+    }
+    return count;
+  }, [mqlByCreation, excludedMqlIds, startTime, endTime]);
+
   return {
     isLoading,
     error,
@@ -577,5 +595,6 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     getDetailItemsForIndicator,
     getDetailItemsWithFullHistory,
     getAverageSlaMinutes,
+    getExcludedMqlCount,
   };
 }
