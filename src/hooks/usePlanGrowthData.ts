@@ -324,15 +324,8 @@ export function usePlanGrowthData() {
   const churnMensal = 0.06;
   const retencaoVendas = 0.25;
 
-  // Helper: Get metas from database for a BU, with effective metas overlay
-  const getMetasFromDb = (bu: BuType, useEffective = false): Record<string, number> | null => {
-    // If using effective metas and they're available, use them directly
-    if (useEffective && effectiveMetas[bu]) {
-      const effMetas = effectiveMetas[bu];
-      const hasValues = Object.values(effMetas).some(v => v > 0);
-      if (hasValues) return { ...effMetas };
-    }
-
+  // Helper: Get metas from database for a BU (original values only)
+  const getMetasFromDb = (bu: BuType): Record<string, number> | null => {
     const buMetas = metas.filter(m => m.bu === bu);
     if (buMetas.length === 0) return null;
     
