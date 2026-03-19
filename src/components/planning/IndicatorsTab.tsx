@@ -2459,6 +2459,9 @@ export function IndicatorsTab() {
             isClickable={true}
             isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading}
             onClick={() => handleRadialCardClick(indicator)}
+            badge={indicator.key === 'mql' && modeloAtualAnalytics.getExcludedMqlCount > 0
+              ? `${modeloAtualAnalytics.getExcludedMqlCount} excluídos`
+              : undefined}
           />
         ))}
       </div>
