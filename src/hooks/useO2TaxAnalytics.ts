@@ -798,6 +798,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     getDetailItemsForIndicator,
     getDetailItemsWithFullHistory,
     getAverageSlaMinutes,
+    getExcludedMqlCount,
     toDetailItem,
   };
 }

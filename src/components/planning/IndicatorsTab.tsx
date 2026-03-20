@@ -2459,9 +2459,13 @@ export function IndicatorsTab() {
             isClickable={true}
             isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading}
             onClick={() => handleRadialCardClick(indicator)}
-            badge={indicator.key === 'mql' && includesModeloAtual && modeloAtualAnalytics.getExcludedMqlCount > 0
-              ? `${modeloAtualAnalytics.getExcludedMqlCount} excluídos`
-              : undefined}
+             badge={(() => {
+              if (indicator.key !== 'mql') return undefined;
+              const total = 
+                (includesModeloAtual ? modeloAtualAnalytics.getExcludedMqlCount : 0) +
+                (includesO2Tax ? o2TaxAnalytics.getExcludedMqlCount : 0);
+              return total > 0 ? `${total} excluídos` : undefined;
+            })()}
           />
         ))}
       </div>
