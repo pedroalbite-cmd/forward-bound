@@ -644,7 +644,32 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
       console.log(`[O2 TAX Analytics] getCardsForIndicator(${indicator}): ${uniqueCards.size} cards (first entry in period)`);
       return Array.from(uniqueCards.values());
     };
-  }, [firstEntryByCardAndIndicator, mqlByCreation, startTime, endTime]);
+  }, [firstEntryByCardAndIndicator, mqlByCreation, excludedMqlIds, startTime, endTime]);
+
+  // Count excluded MQLs in period (cards that WOULD be MQL but are excluded by loss reason)
+  const getExcludedMqlCount = useMemo(() => {
+    let count = 0;
+    for (const card of mqlByCreation) {
+      if (!card.dataCriacao) continue;
+      const creationTime = card.dataCriacao.getTime();
+      if (creationTime >= startTime && creationTime <= endTime && isO2TaxMqlQualified(card.faixa) && excludedMqlIds.has(card.id)) {
+        count++;
+      }
+    }
+    // Deduplicate by card ID
+    const seen = new Set<string>();
+    let dedupCount = 0;
+    for (const card of mqlByCreation) {
+      if (seen.has(card.id)) continue;
+      seen.add(card.id);
+      if (!card.dataCriacao) continue;
+      const creationTime = card.dataCriacao.getTime();
+      if (creationTime >= startTime && creationTime <= endTime && isO2TaxMqlQualified(card.faixa) && excludedMqlIds.has(card.id)) {
+        dedupCount++;
+      }
+    }
+    return dedupCount;
+  }, [mqlByCreation, excludedMqlIds, startTime, endTime]);
 
   // Get detail items for a specific indicator (for drill-down)
   // Uses the same FIRST ENTRY logic as getCardsForIndicator
