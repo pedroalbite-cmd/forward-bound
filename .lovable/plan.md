@@ -1,32 +1,37 @@
 
 
-## Subtrair excluídos da contagem de MQL e manter badge no acelerômetro
+## Badge "excluídos" deve respeitar BU selecionada
 
-### Problema atual
-A contagem de MQL inclui **todos** os cards qualificados, e o badge "X excluídos" é apenas informativo. O usuário quer que os cards com motivos de exclusão (Duplicado, Pessoa física, etc.) sejam **retirados** da contagem principal, mas o número de excluídos continue aparecendo embaixo no acelerômetro como "perdidos".
+### Problema
+O badge "80 excluídos" no acelerômetro de MQL usa sempre `modeloAtualAnalytics.getExcludedMqlCount`, independente de qual BU está selecionada. Resultado: aparece "80 excluídos" mesmo quando o usuário seleciona O2 TAX ou Oxy Hacker (que não têm lógica de exclusão de MQL).
 
 ### Solução
 
-**1. `src/hooks/useModeloAtualMetas.ts` — subtrair excluídos do `getQtyForPeriod`**
-- No bloco `if (indicator === 'mql')` (linha ~376), adicionar filtro `!excludedMqlIds.has(movement.id)` para não contar cards com motivos de exclusão
-- Resultado: a contagem do funil e do acelerômetro já virá sem os excluídos
+**`src/components/planning/IndicatorsTab.tsx`** — tornar o badge dinâmico:
+- Mostrar o badge de excluídos **apenas quando Modelo Atual está nas BUs selecionadas** (`includesModeloAtual`)
+- Se apenas O2 TAX, Oxy Hacker ou Franquia estiverem selecionadas, o badge não aparece (essas BUs não têm conceito de MQL excluído)
 
-**2. `src/hooks/useModeloAtualAnalytics.ts` — subtrair excluídos do `getCardsForIndicator`**
-- No bloco MQL do `getCardsForIndicator` (linha ~410), adicionar condição `!excludedMqlIds.has(card.id)` ao filtro existente
-- Isso faz com que o `getRealizedForIndicator` no IndicatorsTab já retorne o número correto (sem excluídos)
-- O `getExcludedMqlCount` continua calculando quantos foram excluídos (sem alteração)
+### Alteração
 
-**3. `src/components/planning/IndicatorsTab.tsx` — manter badge com contagem de perdidos/excluídos**
-- O badge já mostra `${getExcludedMqlCount} excluídos` — nenhuma alteração necessária aqui
-- O número principal do acelerômetro agora mostrará o total **sem** excluídos
-- O badge continuará mostrando quantos foram retirados
+Linha ~2462, trocar:
+```typescript
+badge={indicator.key === 'mql' && modeloAtualAnalytics.getExcludedMqlCount > 0
+  ? `${modeloAtualAnalytics.getExcludedMqlCount} excluídos`
+  : undefined}
+```
 
-### Resultado esperado
-- Acelerômetro MQL: número principal = MQLs qualificados **menos** excluídos
-- Badge abaixo: "X excluídos" continua visível
-- Março: 269 total - 4 teste - X excluídos = contagem final alinhada
+Por:
+```typescript
+badge={indicator.key === 'mql' && includesModeloAtual && modeloAtualAnalytics.getExcludedMqlCount > 0
+  ? `${modeloAtualAnalytics.getExcludedMqlCount} excluídos`
+  : undefined}
+```
 
-### Arquivos alterados
-1. `src/hooks/useModeloAtualMetas.ts` — 1 linha alterada no `getQtyForPeriod`
-2. `src/hooks/useModeloAtualAnalytics.ts` — 1 linha alterada no `getCardsForIndicator`
+### Resultado
+- BU Modelo Atual selecionada → badge mostra "X excluídos" (valor real calculado)
+- Consolidado (todas BUs) → badge mostra "X excluídos" (pois inclui Modelo Atual)
+- Apenas O2 TAX / Oxy Hacker / Franquia → sem badge (não se aplica)
+
+### Arquivo alterado
+1. `src/components/planning/IndicatorsTab.tsx` — 1 linha alterada
 
