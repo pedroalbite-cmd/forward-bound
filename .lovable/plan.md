@@ -1,59 +1,32 @@
 
 
-## Perdidos e Motivos de Perda — Respeitar BU selecionada
+## Subtrair excluídos da contagem de MQL e manter badge no acelerômetro
 
-### Problema
-Os widgets `LostDealsWidget` e `LossReasonsWidget` usam **sempre** `useO2TaxAnalytics`, mostrando dados mockados para outras BUs. Deveriam puxar dados reais da BU correspondente.
+### Problema atual
+A contagem de MQL inclui **todos** os cards qualificados, e o badge "X excluídos" é apenas informativo. O usuário quer que os cards com motivos de exclusão (Duplicado, Pessoa física, etc.) sejam **retirados** da contagem principal, mas o número de excluídos continue aparecendo embaixo no acelerômetro como "perdidos".
 
 ### Solução
 
-**1. Adicionar `getLostDeals` e `getLossReasons` em `useModeloAtualAnalytics.ts`**
-- Lógica idêntica à do O2 Tax: iterar `cards`, filtrar os que têm `faseAtual === 'Perdido'` ou `'Arquivado'` (ou `fase` equivalente), no período, deduplicar por ID
-- `getLostDeals`: retorna `{ count, totalValue, trend, cards }`
-- `getLossReasons`: agrupa por `motivoPerda`, calcula percentual, retorna array com `{ reason, count, percentage, cards, color }`
+**1. `src/hooks/useModeloAtualMetas.ts` — subtrair excluídos do `getQtyForPeriod`**
+- No bloco `if (indicator === 'mql')` (linha ~376), adicionar filtro `!excludedMqlIds.has(movement.id)` para não contar cards com motivos de exclusão
+- Resultado: a contagem do funil e do acelerômetro já virá sem os excluídos
 
-**2. Adicionar `getLostDeals` e `getLossReasons` em `useExpansaoAnalytics.ts`**
-- Mesma lógica, filtrando fases `'Perdido'` e `'Arquivado'`
+**2. `src/hooks/useModeloAtualAnalytics.ts` — subtrair excluídos do `getCardsForIndicator`**
+- No bloco MQL do `getCardsForIndicator` (linha ~410), adicionar condição `!excludedMqlIds.has(card.id)` ao filtro existente
+- Isso faz com que o `getRealizedForIndicator` no IndicatorsTab já retorne o número correto (sem excluídos)
+- O `getExcludedMqlCount` continua calculando quantos foram excluídos (sem alteração)
 
-**3. Refatorar `LostDealsWidget.tsx`**
-- Importar os 3 hooks (`useModeloAtualAnalytics`, `useO2TaxAnalytics`, `useExpansaoAnalytics`)
-- Com base no `buKey`, chamar o hook correto e pegar `getLostDeals` + `toDetailItem`
-- Remover mock data
-- Para `buKey === 'all'` (consolidado), somar os dados de todos os hooks
+**3. `src/components/planning/IndicatorsTab.tsx` — manter badge com contagem de perdidos/excluídos**
+- O badge já mostra `${getExcludedMqlCount} excluídos` — nenhuma alteração necessária aqui
+- O número principal do acelerômetro agora mostrará o total **sem** excluídos
+- O badge continuará mostrando quantos foram retirados
 
-**4. Refatorar `LossReasonsWidget.tsx`**
-- Mesma lógica: rotear para o hook correto com base no `buKey`
-- Remover mock data
-- Para consolidado, mesclar os `getLossReasons` de todos os hooks (agrupar por motivo)
-
-### Detalhes de implementação
-
-Nos hooks de analytics, a lógica de perdidos:
-```typescript
-const getLostDeals = useMemo(() => {
-  const lostCards = [];
-  const seenIds = new Set();
-  for (const card of cards) {
-    const isLost = card.faseAtual === 'Perdido' || card.faseAtual === 'Arquivado';
-    const inPeriod = card.dataEntrada.getTime() >= startTime && card.dataEntrada.getTime() <= endTime;
-    if (isLost && inPeriod && !seenIds.has(card.id)) {
-      lostCards.push(card);
-      seenIds.add(card.id);
-    }
-  }
-  return { count: lostCards.length, totalValue: lostCards.reduce((s,c) => s + c.valor, 0), trend: 0, cards: lostCards };
-}, [cards, startTime, endTime]);
-```
-
-Nos widgets, seleção do hook por BU:
-- `modelo_atual` → `useModeloAtualAnalytics`
-- `o2_tax` → `useO2TaxAnalytics`
-- `oxy_hacker` / `franquia` → `useExpansaoAnalytics` (com o produto correto)
-- `all` → combinar resultados dos 3 hooks
+### Resultado esperado
+- Acelerômetro MQL: número principal = MQLs qualificados **menos** excluídos
+- Badge abaixo: "X excluídos" continua visível
+- Março: 269 total - 4 teste - X excluídos = contagem final alinhada
 
 ### Arquivos alterados
-1. `src/hooks/useModeloAtualAnalytics.ts` — adicionar `getLostDeals`, `getLossReasons`
-2. `src/hooks/useExpansaoAnalytics.ts` — adicionar `getLostDeals`, `getLossReasons`
-3. `src/components/planning/indicators/LostDealsWidget.tsx` — rotear para hook correto por BU
-4. `src/components/planning/indicators/LossReasonsWidget.tsx` — rotear para hook correto por BU
+1. `src/hooks/useModeloAtualMetas.ts` — 1 linha alterada no `getQtyForPeriod`
+2. `src/hooks/useModeloAtualAnalytics.ts` — 1 linha alterada no `getCardsForIndicator`
 
