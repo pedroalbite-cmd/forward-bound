@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DetailItem } from "@/components/planning/indicators/DetailSheet";
+import { buildExcludedMqlCardIds } from "@/hooks/useModeloAtualMetas";
 import { IndicatorType } from "@/hooks/useFunnelRealized";
 
 export interface O2TaxCard {
@@ -266,6 +267,14 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
   const cards = data?.cards ?? [];
   const fullHistory = data?.fullHistory ?? [];
   const mqlByCreation = data?.mqlByCreation ?? [];
+
+  // Pre-compute excluded MQL card IDs (same logic as Modelo Atual)
+  const excludedMqlIds = useMemo(() => {
+    const historyToUse = fullHistory.length > 0 ? fullHistory : cards;
+    return buildExcludedMqlCardIds(
+      historyToUse.map(c => ({ id: c.id, motivoPerda: c.motivoPerda || undefined }))
+    );
+  }, [cards, fullHistory]);
 
   // Build a map of FIRST entry for EACH indicator per card (using full history)
   // This is used to determine if the card's first entry in a phase was in the selected period
@@ -592,18 +601,19 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
   // MQL uses CREATION DATE + revenue >= R$ 500k (aligned with Modelo Atual logic)
   const getCardsForIndicator = useMemo(() => {
     return (indicator: IndicatorType): O2TaxCard[] => {
-      // MQL: use creation date + revenue qualification
+      // MQL: use creation date + revenue qualification, excluding cards with excluded loss reasons
       if (indicator === 'mql') {
         const uniqueCards = new Map<string, O2TaxCard>();
         for (const card of mqlByCreation) {
           if (uniqueCards.has(card.id)) continue;
           if (!card.dataCriacao) continue;
+          if (excludedMqlIds.has(card.id)) continue;
           const creationTime = card.dataCriacao.getTime();
           if (creationTime >= startTime && creationTime <= endTime && isO2TaxMqlQualified(card.faixa)) {
             uniqueCards.set(card.id, card);
           }
         }
-        console.log(`[O2 TAX Analytics] getCardsForIndicator(mql): ${uniqueCards.size} cards (creation date + faixa >= 500k)`);
+        console.log(`[O2 TAX Analytics] getCardsForIndicator(mql): ${uniqueCards.size} cards (creation date + faixa >= 500k, ${excludedMqlIds.size} excluded)`);
         return Array.from(uniqueCards.values());
       }
 
@@ -634,7 +644,32 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
       console.log(`[O2 TAX Analytics] getCardsForIndicator(${indicator}): ${uniqueCards.size} cards (first entry in period)`);
       return Array.from(uniqueCards.values());
     };
-  }, [firstEntryByCardAndIndicator, mqlByCreation, startTime, endTime]);
+  }, [firstEntryByCardAndIndicator, mqlByCreation, excludedMqlIds, startTime, endTime]);
+
+  // Count excluded MQLs in period (cards that WOULD be MQL but are excluded by loss reason)
+  const getExcludedMqlCount = useMemo(() => {
+    let count = 0;
+    for (const card of mqlByCreation) {
+      if (!card.dataCriacao) continue;
+      const creationTime = card.dataCriacao.getTime();
+      if (creationTime >= startTime && creationTime <= endTime && isO2TaxMqlQualified(card.faixa) && excludedMqlIds.has(card.id)) {
+        count++;
+      }
+    }
+    // Deduplicate by card ID
+    const seen = new Set<string>();
+    let dedupCount = 0;
+    for (const card of mqlByCreation) {
+      if (seen.has(card.id)) continue;
+      seen.add(card.id);
+      if (!card.dataCriacao) continue;
+      const creationTime = card.dataCriacao.getTime();
+      if (creationTime >= startTime && creationTime <= endTime && isO2TaxMqlQualified(card.faixa) && excludedMqlIds.has(card.id)) {
+        dedupCount++;
+      }
+    }
+    return dedupCount;
+  }, [mqlByCreation, excludedMqlIds, startTime, endTime]);
 
   // Get detail items for a specific indicator (for drill-down)
   // Uses the same FIRST ENTRY logic as getCardsForIndicator
@@ -763,6 +798,7 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     getDetailItemsForIndicator,
     getDetailItemsWithFullHistory,
     getAverageSlaMinutes,
+    getExcludedMqlCount,
     toDetailItem,
   };
 }
