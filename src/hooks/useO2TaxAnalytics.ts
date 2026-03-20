@@ -268,6 +268,14 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
   const fullHistory = data?.fullHistory ?? [];
   const mqlByCreation = data?.mqlByCreation ?? [];
 
+  // Pre-compute excluded MQL card IDs (same logic as Modelo Atual)
+  const excludedMqlIds = useMemo(() => {
+    const historyToUse = fullHistory.length > 0 ? fullHistory : cards;
+    return buildExcludedMqlCardIds(
+      historyToUse.map(c => ({ id: c.id, motivoPerda: c.motivoPerda || undefined }))
+    );
+  }, [cards, fullHistory]);
+
   // Build a map of FIRST entry for EACH indicator per card (using full history)
   // This is used to determine if the card's first entry in a phase was in the selected period
   const firstEntryByCardAndIndicator = useMemo(() => {
