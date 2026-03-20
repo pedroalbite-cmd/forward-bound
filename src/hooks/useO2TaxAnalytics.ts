@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { DetailItem } from "@/components/planning/indicators/DetailSheet";
+import { buildExcludedMqlCardIds } from "@/hooks/useModeloAtualMetas";
 import { IndicatorType } from "@/hooks/useFunnelRealized";
 
 export interface O2TaxCard {
