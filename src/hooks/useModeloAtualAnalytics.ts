@@ -407,7 +407,7 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         for (const card of mqlByCreation) {
           if (!card.dataCriacao) continue;
           const creationTime = card.dataCriacao.getTime();
-          if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa) && !isTestCard(card.id)) {
+          if (creationTime >= startTime && creationTime <= endTime && isMqlQualified(card.faixa) && !isTestCard(card.id) && !excludedMqlIds.has(card.id)) {
             // Deduplicate by card ID - keep first occurrence
             if (!uniqueCards.has(card.id)) {
               uniqueCards.set(card.id, card);
