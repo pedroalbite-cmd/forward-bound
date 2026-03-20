@@ -601,18 +601,19 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
   // MQL uses CREATION DATE + revenue >= R$ 500k (aligned with Modelo Atual logic)
   const getCardsForIndicator = useMemo(() => {
     return (indicator: IndicatorType): O2TaxCard[] => {
-      // MQL: use creation date + revenue qualification
+      // MQL: use creation date + revenue qualification, excluding cards with excluded loss reasons
       if (indicator === 'mql') {
         const uniqueCards = new Map<string, O2TaxCard>();
         for (const card of mqlByCreation) {
           if (uniqueCards.has(card.id)) continue;
           if (!card.dataCriacao) continue;
+          if (excludedMqlIds.has(card.id)) continue;
           const creationTime = card.dataCriacao.getTime();
           if (creationTime >= startTime && creationTime <= endTime && isO2TaxMqlQualified(card.faixa)) {
             uniqueCards.set(card.id, card);
           }
         }
-        console.log(`[O2 TAX Analytics] getCardsForIndicator(mql): ${uniqueCards.size} cards (creation date + faixa >= 500k)`);
+        console.log(`[O2 TAX Analytics] getCardsForIndicator(mql): ${uniqueCards.size} cards (creation date + faixa >= 500k, ${excludedMqlIds.size} excluded)`);
         return Array.from(uniqueCards.values());
       }
 
