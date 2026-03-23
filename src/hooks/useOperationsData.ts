@@ -96,7 +96,7 @@ function processProjects(rows: ProjectCard[]) {
     const fase = card['Fase Atual'] || 'Desconhecida';
     phaseCount[fase] = (phaseCount[fase] || 0) + 1;
 
-    const cfo = card['CFO Responsavel'] || 'Sem CFO';
+    const cfo = card['CFO Responsavel'] || card['Responsavel'] || 'Sem CFO';
     if (!cfoMap[cfo]) cfoMap[cfo] = { clientes: 0, mrr: 0 };
     cfoMap[cfo].clientes += 1;
 
