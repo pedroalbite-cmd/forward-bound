@@ -6,7 +6,7 @@ import { NpsScoreCards } from './nps/NpsScoreCards';
 import { NpsDistributions } from './nps/NpsDistributions';
 import { CfoPerformanceTable } from './nps/CfoPerformanceTable';
 import { QualitativeFeedback } from './nps/QualitativeFeedback';
-import { ExecutiveSummary } from './nps/ExecutiveSummary';
+
 import { OperationsSection } from './nps/OperationsSection';
 import { useNpsData } from '@/hooks/useNpsData';
 import { ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
