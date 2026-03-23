@@ -496,6 +496,7 @@ export function useOperationsData() {
         cfoTaskSummary: rotinaData.cfoTaskSummary,
         setupByErp: setupData.setupByErp,
         satisfacaoDistribution: tratativaData.satisfacaoDistribution,
+        churnDossier: projectData.churnDossier,
       };
     },
     staleTime: 5 * 60 * 1000,
