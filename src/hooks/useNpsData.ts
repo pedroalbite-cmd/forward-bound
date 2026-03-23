@@ -66,16 +66,67 @@ export interface FeedbackItem {
   sentiment: 'Positivo' | 'Neutro' | 'Negativo';
 }
 
-async function fetchNpsData(): Promise<NpsCard[]> {
+interface CardConnection {
+  card_id: string;
+  connected_card_id: string;
+  connected_pipe_name: string;
+}
+
+interface CentralProjeto {
+  ID: string;
+  'Fase': string;
+  'Fase Atual': string;
+  'CFO Responsavel': string | null;
+}
+
+async function fetchNpsData(): Promise<{ npsRows: NpsCard[]; cfoMap: Record<string, string> }> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
-  const { data, error } = await supabase.functions.invoke('query-external-db', {
-    body: { table: 'pipefy_moviment_nps', action: 'preview', limit: 1000 },
+  // Fetch all 3 tables in parallel
+  const [npsRes, connRes, projRes] = await Promise.all([
+    supabase.functions.invoke('query-external-db', {
+      body: { table: 'pipefy_moviment_nps', action: 'preview', limit: 1000 },
+    }),
+    supabase.functions.invoke('query-external-db', {
+      body: { table: 'pipefy_card_connections', action: 'preview', limit: 5000 },
+    }),
+    supabase.functions.invoke('query-external-db', {
+      body: { table: 'pipefy_central_projetos', action: 'preview', limit: 2000 },
+    }),
+  ]);
+
+  if (npsRes.error) throw npsRes.error;
+
+  const npsRows: NpsCard[] = npsRes.data?.data || [];
+  const connections: CardConnection[] = connRes.data?.data || [];
+  const projetos: CentralProjeto[] = projRes.data?.data || [];
+
+  // Build CFO map: NPS card ID → CFO name
+  // Connection: card_id (central_projetos) → connected_card_id (NPS card)
+  // Filter connections for NPS pipe
+  const npsConnections = connections.filter(c =>
+    c.connected_pipe_name === '5.2 Pesquisa de Satisfação NPS'
+  );
+
+  // Build projeto CFO lookup (only current phase)
+  const projetoCfoMap: Record<string, string> = {};
+  projetos.forEach(p => {
+    if (p['Fase'] === p['Fase Atual'] && p['CFO Responsavel']) {
+      projetoCfoMap[p.ID] = p['CFO Responsavel'];
+    }
   });
 
-  if (error) throw error;
-  return data?.data || [];
+  // Map NPS card ID → CFO from connected project
+  const cfoMap: Record<string, string> = {};
+  npsConnections.forEach(conn => {
+    const cfo = projetoCfoMap[conn.card_id];
+    if (cfo) {
+      cfoMap[conn.connected_card_id] = cfo;
+    }
+  });
+
+  return { npsRows, cfoMap };
 }
 
 function parseNpsScore(val: string | null): number | null {
