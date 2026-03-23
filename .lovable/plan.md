@@ -1,22 +1,15 @@
 
 
-## Adicionar coluna "Diagnóstico" ao Dossiê de Churn
+## Remover KPI "Diagnóstico Perdido" e confirmar MRR
 
-### Contexto
-O campo `Valor Diagnostico` já existe na interface `ProjectCard` e vem do Pipefy. É um valor pontual (não recorrente como MRR). Precisa ser adicionado à interface do dossiê, ao processamento de dados e à tabela visual.
+### Confirmação sobre MRR
+O cálculo de MRR Perdido usa exclusivamente o campo `Valor CFOaaS` do Pipefy (`d.mrr = parseNumber(card['Valor CFOaaS'])`). **Não está misturado** com diagnóstico. O valor de R$ 96k reflete apenas MRR.
 
-### Alterações
+### Alteração em `src/components/planning/nps/ChurnDossierSection.tsx`
 
-**1. `src/hooks/useOperationsData.ts`**
-- Adicionar `diagnostico: number` na interface `ChurnDossierCard`
-- Na construção do objeto (linha 302), adicionar: `diagnostico: parseNumber(card['Valor Diagnostico'])`
+1. **Remover o KPI card "Diagnóstico Perdido"** (linhas 149-156)
+2. **Remover a variável `totalDiagnostico`** (linha 73) — não é mais usada
+3. **Ajustar o grid** de `grid-cols-5` para `grid-cols-4` nos KPI cards (linha 129)
 
-**2. `src/components/planning/nps/ChurnDossierSection.tsx`**
-- Adicionar coluna "Diagnóstico (R$)" na tabela, após "Setup (R$)" e antes de "MRR (R$)"
-- Exibir o valor formatado com `formatCurrency`
-- Adicionar o total de diagnóstico perdido nos KPI cards do topo
-
-### Arquivos modificados
-- `src/hooks/useOperationsData.ts` — interface + mapeamento
-- `src/components/planning/nps/ChurnDossierSection.tsx` — coluna na tabela + KPI
+A coluna "Diagnóstico (R$)" na tabela permanece — apenas o card de KPI do topo é removido.
 
