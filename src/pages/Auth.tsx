@@ -317,25 +317,12 @@ export default function Auth() {
             <form onSubmit={signupForm.handleSubmit(handleSignup)} className="space-y-4">
               <FormField
                 control={signupForm.control}
-                name="fullName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nome completo</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Seu nome" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={signupForm.control}
                 name="email"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="seu@email.com" {...field} />
+                      <Input type="email" placeholder="seu@email.com" autoComplete="email" className="text-foreground" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -349,7 +336,7 @@ export default function Auth() {
                     <FormLabel>Senha</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Input type={showSignupPassword ? "text" : "password"} placeholder="••••••" {...field} />
+                        <Input type={showSignupPassword ? "text" : "password"} placeholder="••••••" autoComplete="new-password" className="text-foreground" {...field} />
                         <Button
                           type="button"
                           variant="ghost"
@@ -358,34 +345,6 @@ export default function Auth() {
                           onClick={() => setShowSignupPassword(!showSignupPassword)}
                         >
                           {showSignupPassword ? (
-                            <EyeOff className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <Eye className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </Button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={signupForm.control}
-                name="confirmPassword"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Confirmar senha</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input type={showSignupConfirmPassword ? "text" : "password"} placeholder="••••••" {...field} />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                          onClick={() => setShowSignupConfirmPassword(!showSignupConfirmPassword)}
-                        >
-                          {showSignupConfirmPassword ? (
                             <EyeOff className="h-4 w-4 text-muted-foreground" />
                           ) : (
                             <Eye className="h-4 w-4 text-muted-foreground" />
