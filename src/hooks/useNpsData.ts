@@ -96,11 +96,10 @@ interface CentralProjeto {
   'CFO Responsavel': string | null;
 }
 
-async function fetchNpsData(): Promise<{ npsRows: NpsCard[]; cfoMap: Record<string, string> }> {
+async function fetchNpsData(): Promise<{ npsRows: NpsCard[]; cfoMap: Record<string, string>; npsPipeId: string; titleMap: Record<string, string> }> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
-  // Fetch all 3 tables in parallel
   const [npsRes, connRes, projRes] = await Promise.all([
     supabase.functions.invoke('query-external-db', {
       body: { table: 'pipefy_moviment_nps', action: 'preview', limit: 1000 },
@@ -119,31 +118,36 @@ async function fetchNpsData(): Promise<{ npsRows: NpsCard[]; cfoMap: Record<stri
   const connections: CardConnection[] = connRes.data?.data || [];
   const projetos: CentralProjeto[] = projRes.data?.data || [];
 
-  // Build CFO map: NPS card ID → CFO name
-  // Connection: card_id (central_projetos) → connected_card_id (NPS card)
-  // Filter connections for NPS pipe
   const npsConnections = connections.filter(c =>
     c.connected_pipe_name === '5.2 Pesquisa de Satisfação NPS'
   );
 
-  // Build projeto CFO lookup (only current phase)
+  // Extract NPS pipe ID from connections
+  const npsPipeId = npsConnections[0]?.connected_pipe_id || '';
+
+  // Build projeto CFO lookup and title lookup
   const projetoCfoMap: Record<string, string> = {};
+  const projetoTitleMap: Record<string, string> = {};
   projetos.forEach(p => {
     if (p['Fase'] === p['Fase Atual'] && p['CFO Responsavel']) {
       projetoCfoMap[p.ID] = p['CFO Responsavel'];
     }
-  });
-
-  // Map NPS card ID → CFO from connected project
-  const cfoMap: Record<string, string> = {};
-  npsConnections.forEach(conn => {
-    const cfo = projetoCfoMap[conn.card_id];
-    if (cfo) {
-      cfoMap[conn.connected_card_id] = cfo;
+    if (p['Fase'] === p['Fase Atual']) {
+      projetoTitleMap[p.ID] = p['Título'] || '';
     }
   });
 
-  return { npsRows, cfoMap };
+  // Map NPS card ID → CFO and title from connected project
+  const cfoMap: Record<string, string> = {};
+  const titleMap: Record<string, string> = {};
+  npsConnections.forEach(conn => {
+    const cfo = projetoCfoMap[conn.card_id];
+    if (cfo) cfoMap[conn.connected_card_id] = cfo;
+    const title = projetoTitleMap[conn.card_id];
+    if (title) titleMap[conn.connected_card_id] = title;
+  });
+
+  return { npsRows, cfoMap, npsPipeId, titleMap };
 }
 
 function parseNpsScore(val: string | null): number | null {
