@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 export const PIPEFY_PIPES = {
   CENTRAL_PROJETOS: '306756838',
   TRATATIVAS: '306731433',
+  SETUP: '306756834',
   // NPS pipe ID is extracted dynamically from connections data
 } as const;
 
