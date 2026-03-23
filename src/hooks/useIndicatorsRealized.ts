@@ -6,6 +6,7 @@ import { useO2TaxMetas } from "./useO2TaxMetas";
 import { useOxyHackerMetas } from "./useOxyHackerMetas";
 import { useExpansaoMetas } from "./useExpansaoMetas";
 import { isMqlQualified, buildExcludedMqlCardIds } from "./useModeloAtualMetas";
+import { fixPossibleDateInversion } from "./dateUtils";
 import { months, BUKey } from "@/components/planning/salesData";
 
 // Month name to month index (0-based)
@@ -139,7 +140,7 @@ async function fetchModeloAtualMonth(year: number, monthIndex: number, monthName
 
     let dataEntrada = parseDate(row['Entrada'] || row['entrada']) || new Date();
     const dataAssinatura = parseDateOnly(row['Data de assinatura do contrato']);
-    if (fase === 'Contrato assinado' && dataAssinatura) dataEntrada = dataAssinatura;
+    if (fase === 'Contrato assinado' && dataAssinatura) dataEntrada = fixPossibleDateInversion(dataAssinatura, dataEntrada);
 
     const valorMRR = parseNumericValue(row['Valor MRR'] || 0);
     const valorPontual = parseNumericValue(row['Valor Pontual'] || 0);
@@ -167,7 +168,7 @@ async function fetchModeloAtualMonth(year: number, monthIndex: number, monthName
 
     const dataAssinatura = parseDateOnly(row['Data de assinatura do contrato']);
     let dataEntrada = parseDate(row['Entrada'] || row['entrada']) || new Date();
-    if (fase === 'Contrato assinado' && dataAssinatura) dataEntrada = dataAssinatura;
+    if (fase === 'Contrato assinado' && dataAssinatura) dataEntrada = fixPossibleDateInversion(dataAssinatura, dataEntrada);
 
     const valorMRR = parseNumericValue(row['Valor MRR'] || 0);
     const valorPontual = parseNumericValue(row['Valor Pontual'] || 0);
