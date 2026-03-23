@@ -76,8 +76,8 @@ export function OperationsSection() {
     { icon: AlertTriangle, label: 'Em Tratativa', value: kpis.tratativasAtivas, color: 'text-amber-600 dark:text-amber-400' },
     { icon: UserMinus, label: 'Churn', value: kpis.churn, color: 'text-red-600 dark:text-red-400' },
     { icon: DollarSign, label: 'MRR Total', value: formatCurrency(kpis.mrrTotal), color: 'text-emerald-600 dark:text-emerald-400' },
-    { icon: ShieldCheck, label: 'Retenção', value: `${kpis.retencaoRate.toFixed(1)}%`, color: 'text-green-600 dark:text-green-400' },
-    { icon: TrendingDown, label: 'Tx Churn', value: `${kpis.churnRate.toFixed(1)}%`, color: kpis.churnRate > 10 ? 'text-destructive' : 'text-amber-600 dark:text-amber-400' },
+    { icon: ShieldCheck, label: 'Retenção', value: `${(kpis.retencaoRate ?? 0).toFixed(1)}%`, color: 'text-green-600 dark:text-green-400' },
+    { icon: TrendingDown, label: 'Tx Churn', value: `${(kpis.churnRate ?? 0).toFixed(1)}%`, color: (kpis.churnRate ?? 0) > 10 ? 'text-destructive' : 'text-amber-600 dark:text-amber-400' },
     { icon: ShieldAlert, label: 'MRR em Risco', value: formatCurrency(kpis.mrrEmRisco), color: kpis.mrrEmRisco > 0 ? 'text-destructive' : 'text-muted-foreground' },
   ];
 
