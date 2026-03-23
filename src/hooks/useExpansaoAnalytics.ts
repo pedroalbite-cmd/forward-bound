@@ -96,7 +96,7 @@ function parseRawCard(row: any, defaultTicket: number): ExpansaoCard {
   const fase = row['Fase'] || '';
   const dataAssinatura = parseDateOnly(row['Data de assinatura do contrato']);
   if (fase === 'Contrato assinado' && dataAssinatura) {
-    dataEntrada = dataAssinatura;
+    dataEntrada = fixPossibleDateInversion(dataAssinatura, dataEntrada);
   }
   
   // Calculate duration dynamically

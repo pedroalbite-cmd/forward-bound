@@ -323,7 +323,7 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
           const dataAssinatura = parseDateOnly(row['Data de assinatura do contrato']);
           let dataEntrada = parseDate(row['Entrada'] || row['entrada']) || new Date();
           if (fase === 'Contrato assinado' && dataAssinatura) {
-            dataEntrada = dataAssinatura;
+            dataEntrada = fixPossibleDateInversion(dataAssinatura, dataEntrada);
           }
           const valorMRR = parseNumericValue(row['Valor MRR'] || 0);
           const valorPontual = parseNumericValue(row['Valor Pontual'] || 0);

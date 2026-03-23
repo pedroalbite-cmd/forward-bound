@@ -124,7 +124,7 @@ export function useOxyHackerMetas(startDate?: Date, endDate?: Date) {
         // Para vendas (Contrato assinado), priorizar data de assinatura sobre data de entrada
         let dataEntrada = parseDate(row['Entrada']) || new Date();
         if (fase === 'Contrato assinado' && dataAssinatura) {
-          dataEntrada = dataAssinatura;
+          dataEntrada = fixPossibleDateInversion(dataAssinatura, dataEntrada);
         }
         
         const movement: OxyHackerMovement = {

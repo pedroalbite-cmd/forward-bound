@@ -131,7 +131,7 @@ function parseCardRow(row: Record<string, any>, skipPhaseFilter = false): Modelo
   // For "Contrato assinado" phase: override dataEntrada with dataAssinatura
   // This ensures sales are counted in the month they were signed, not when moved in Pipefy
   if (fase === 'Contrato assinado' && dataAssinatura) {
-    dataEntrada = dataAssinatura;
+    dataEntrada = fixPossibleDateInversion(dataAssinatura, dataEntrada);
   }
   const valorMRR = parseNumericValue(row['Valor MRR'] || row['valor_mrr'] || 0);
   const valorPontual = parseNumericValue(row['Valor Pontual'] || row['valor_pontual'] || 0);
