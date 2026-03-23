@@ -88,6 +88,36 @@ export interface SetupActive {
   atrasado: boolean;
 }
 
+export interface RotinaCard {
+  ID: string;
+  'Título': string;
+  'Fase': string;
+  'Fase Atual': string;
+  'Entrada': string;
+  'Saída': string | null;
+  'CFO Responsavel': string | null;
+  'Overdue': boolean | string | null;
+  'Data Prevista Entrega': string | null;
+  'Tipo de Entrega': string | null;
+  'Mes Referencia': string | null;
+}
+
+export interface RotinaAtrasada {
+  id: string;
+  empresa: string;
+  tipoEntrega: string;
+  dataPrevista: string;
+  diasAtraso: number;
+  faseAtual: string;
+}
+
+export interface CfoTaskSummary {
+  cfo: string;
+  totalAtivas: number;
+  atrasadas: number;
+  tarefas: RotinaAtrasada[];
+}
+
 export interface OperationsKpis {
   totalAtivos: number;
   emOnboarding: number;
@@ -98,6 +128,7 @@ export interface OperationsKpis {
   tratativasAtivas: number;
   emSetup: number;
   setupAtrasados: number;
+  tarefasAtrasadas: number;
 }
 
 async function fetchTableData(table: string, limit = 1000) {
@@ -245,19 +276,63 @@ function processSetup(rows: SetupCard[]) {
   };
 }
 
+const ROTINA_TERMINAL_PHASES = ['Entregue / Concluído', 'Arquivado', 'Arquivo'];
+
+function processRotinas(rows: RotinaCard[]): { cfoTaskSummary: CfoTaskSummary[]; tarefasAtrasadasTotal: number } {
+  const currentPhase = rows.filter(r => r['Fase'] === r['Fase Atual']);
+  const activeCards = currentPhase.filter(c => !ROTINA_TERMINAL_PHASES.includes(c['Fase Atual'] || ''));
+  const now = Date.now();
+
+  const cfoMap: Record<string, { totalAtivas: number; atrasadas: number; tarefas: RotinaAtrasada[] }> = {};
+
+  activeCards.forEach(card => {
+    const cfo = card['CFO Responsavel'] || 'Sem CFO';
+    if (!cfoMap[cfo]) cfoMap[cfo] = { totalAtivas: 0, atrasadas: 0, tarefas: [] };
+    cfoMap[cfo].totalAtivas += 1;
+
+    const isOverdue = card['Overdue'] === true || card['Overdue'] === 'true';
+    const dataPrevista = card['Data Prevista Entrega'];
+    const isPastDue = dataPrevista ? new Date(dataPrevista).getTime() < now : false;
+
+    if (isOverdue || isPastDue) {
+      const entrada = dataPrevista ? new Date(dataPrevista).getTime() : new Date(card['Entrada']).getTime();
+      const diasAtraso = Math.max(0, Math.round((now - entrada) / 86400000));
+      cfoMap[cfo].atrasadas += 1;
+      cfoMap[cfo].tarefas.push({
+        id: card.ID,
+        empresa: card['Título'] || '',
+        tipoEntrega: card['Tipo de Entrega'] || 'N/A',
+        dataPrevista: dataPrevista || 'N/A',
+        diasAtraso,
+        faseAtual: card['Fase Atual'] || '',
+      });
+    }
+  });
+
+  const cfoTaskSummary: CfoTaskSummary[] = Object.entries(cfoMap)
+    .map(([cfo, data]) => ({ cfo, ...data, tarefas: data.tarefas.sort((a, b) => b.diasAtraso - a.diasAtraso) }))
+    .sort((a, b) => b.atrasadas - a.atrasadas);
+
+  const tarefasAtrasadasTotal = cfoTaskSummary.reduce((sum, c) => sum + c.atrasadas, 0);
+
+  return { cfoTaskSummary, tarefasAtrasadasTotal };
+}
+
 export function useOperationsData() {
   return useQuery({
     queryKey: ['operations-data'],
     queryFn: async () => {
-      const [projetos, tratativas, setup] = await Promise.all([
+      const [projetos, tratativas, setup, rotinas] = await Promise.all([
         fetchTableData('pipefy_central_projetos'),
         fetchTableData('pipefy_moviment_tratativas'),
         fetchTableData('pipefy_moviment_setup'),
+        fetchTableData('pipefy_moviment_rotinas'),
       ]);
 
       const projectData = processProjects(projetos);
       const tratativaData = processTratativas(tratativas);
       const setupData = processSetup(setup);
+      const rotinaData = processRotinas(rotinas);
 
       const kpis: OperationsKpis = {
         totalAtivos: projectData.emOnboarding + projectData.emOperacao,
@@ -269,6 +344,7 @@ export function useOperationsData() {
         tratativasAtivas: tratativaData.ativas,
         emSetup: setupData.emSetup,
         setupAtrasados: setupData.setupAtrasados,
+        tarefasAtrasadas: rotinaData.tarefasAtrasadasTotal,
       };
 
       return {
@@ -280,6 +356,7 @@ export function useOperationsData() {
         decisaoCount: tratativaData.decisaoCount,
         motivoCount: tratativaData.motivoCount,
         setupAtivos: setupData.setupAtivos,
+        cfoTaskSummary: rotinaData.cfoTaskSummary,
       };
     },
     staleTime: 5 * 60 * 1000,
