@@ -1,6 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { NPS_METRICS, NPS_DISTRIBUTION } from './npsData';
+import { NpsMetrics, NpsDistributionData, CsatDistributionData, SeanEllisItem } from '@/hooks/useNpsData';
 import { CheckCircle2, XCircle, Target } from 'lucide-react';
 
 interface ScoreCardProps {
@@ -43,31 +43,41 @@ function ScoreCard({ title, score, suffix, description, meta, metaAtingida }: Sc
   );
 }
 
-export function NpsScoreCards() {
+interface Props {
+  metrics: NpsMetrics;
+  npsDistribution: NpsDistributionData;
+  csatDistribution: CsatDistributionData;
+  seanEllisDistribution: SeanEllisItem[];
+}
+
+export function NpsScoreCards({ metrics, npsDistribution, csatDistribution, seanEllisDistribution }: Props) {
+  const seTotal = seanEllisDistribution.reduce((s, i) => s + i.count, 0);
+  const seMuito = seanEllisDistribution.find(i => i.label.includes('Muito'))?.count || 0;
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <ScoreCard
         title="NPS"
-        score={NPS_METRICS.nps.score}
-        description={`${NPS_DISTRIBUTION.promotores.count} promotores, ${NPS_DISTRIBUTION.neutros.count} neutros, ${NPS_DISTRIBUTION.detratores.count} detratores`}
-        meta={NPS_METRICS.nps.meta}
-        metaAtingida={NPS_METRICS.nps.metaAtingida}
+        score={metrics.nps.score}
+        description={`${npsDistribution.promotores.count} promotores, ${npsDistribution.neutros.count} neutros, ${npsDistribution.detratores.count} detratores`}
+        meta={metrics.nps.meta}
+        metaAtingida={metrics.nps.metaAtingida}
       />
       <ScoreCard
         title="CSAT"
-        score={NPS_METRICS.csat.score}
+        score={metrics.csat.score}
         suffix="%"
-        description="18 de 22 respondentes satisfeitos"
-        meta={NPS_METRICS.csat.meta}
-        metaAtingida={NPS_METRICS.csat.metaAtingida}
+        description={`${csatDistribution.satisfeitos.count} de ${csatDistribution.satisfeitos.count + csatDistribution.neutros.count + csatDistribution.insatisfeitos.count} respondentes satisfeitos`}
+        meta={metrics.csat.meta}
+        metaAtingida={metrics.csat.metaAtingida}
       />
       <ScoreCard
         title="SEAN ELLIS SCORE"
-        score={NPS_METRICS.seanEllis.score}
+        score={metrics.seanEllis.score}
         suffix="%"
-        description="2 de 14 usuários ativos"
-        meta={NPS_METRICS.seanEllis.meta}
-        metaAtingida={NPS_METRICS.seanEllis.metaAtingida}
+        description={`${seMuito} de ${seTotal} muito desapontados`}
+        meta={metrics.seanEllis.meta}
+        metaAtingida={metrics.seanEllis.metaAtingida}
       />
     </div>
   );

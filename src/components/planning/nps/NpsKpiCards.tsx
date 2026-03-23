@@ -1,14 +1,18 @@
-import { NPS_GENERAL } from './npsData';
+import { NpsKpis } from '@/hooks/useNpsData';
 import { Users, MessageSquare, TrendingUp, Target } from 'lucide-react';
 
-const kpis = [
-  { icon: Users, label: 'Clientes Pesquisados', value: NPS_GENERAL.clientesPesquisados },
-  { icon: MessageSquare, label: 'Respostas', value: NPS_GENERAL.respostas },
-  { icon: TrendingUp, label: 'Taxa Resposta', value: `${NPS_GENERAL.taxaResposta}%` },
-  { icon: Target, label: 'CFOs Ativos', value: NPS_GENERAL.cfosAtivos },
-];
+interface Props {
+  data: NpsKpis;
+}
 
-export function NpsKpiCards() {
+export function NpsKpiCards({ data }: Props) {
+  const kpis = [
+    { icon: Users, label: 'Clientes Pesquisados', value: data.clientesPesquisados },
+    { icon: MessageSquare, label: 'Respostas', value: data.respostas },
+    { icon: TrendingUp, label: 'Taxa Resposta', value: `${data.taxaResposta}%` },
+    { icon: Target, label: 'CFOs Ativos', value: data.cfosAtivos },
+  ];
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {kpis.map((kpi) => {

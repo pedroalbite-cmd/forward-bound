@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
-import { CFO_PERFORMANCE } from './npsData';
+import { CfoPerformance } from '@/hooks/useNpsData';
 
 function getNpsColor(nps: number) {
   if (nps >= 75) return 'text-green-600 dark:text-green-400';
@@ -10,7 +10,11 @@ function getNpsColor(nps: number) {
   return 'text-red-600 dark:text-red-400';
 }
 
-export function CfoPerformanceTable() {
+interface Props {
+  data: CfoPerformance[];
+}
+
+export function CfoPerformanceTable({ data }: Props) {
   return (
     <div>
       <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -35,7 +39,7 @@ export function CfoPerformanceTable() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {CFO_PERFORMANCE.map(cfo => (
+              {data.map(cfo => (
                 <TableRow key={cfo.name}>
                   <TableCell className="font-medium text-sm">{cfo.name}</TableCell>
                   <TableCell className="text-center">{cfo.enviados}</TableCell>

@@ -1,6 +1,6 @@
 import { RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
 import { Card, CardContent } from '@/components/ui/card';
-import { NPS_METRICS } from './npsData';
+import { NpsMetrics } from '@/hooks/useNpsData';
 
 interface GaugeProps {
   title: string;
@@ -56,7 +56,11 @@ function Gauge({ title, value, suffix = '%', subtitle, meta, metaSuffix, maxValu
   );
 }
 
-export function NpsGauges() {
+interface Props {
+  data: NpsMetrics;
+}
+
+export function NpsGauges({ data }: Props) {
   return (
     <div>
       <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
@@ -66,22 +70,22 @@ export function NpsGauges() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Gauge
           title="Taxa de Resposta"
-          value={NPS_METRICS.taxaResposta.score}
+          value={data.taxaResposta.score}
           subtitle="Clientes > 3 meses"
-          meta={NPS_METRICS.taxaResposta.meta}
+          meta={data.taxaResposta.meta}
         />
         <Gauge
           title="CSAT Score"
-          value={NPS_METRICS.csat.score}
+          value={data.csat.score}
           subtitle="Notas 4 e 5"
-          meta={NPS_METRICS.csat.meta}
+          meta={data.csat.meta}
         />
         <Gauge
           title="NPS Score"
-          value={NPS_METRICS.nps.score}
+          value={data.nps.score}
           suffix=""
-          subtitle={NPS_METRICS.nps.label}
-          meta={NPS_METRICS.nps.meta}
+          subtitle={data.nps.label}
+          meta={data.nps.meta}
           metaSuffix=""
           maxValue={100}
         />

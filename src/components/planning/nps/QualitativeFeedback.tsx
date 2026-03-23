@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Badge } from '@/components/ui/badge';
-import { FEEDBACK, FeedbackItem } from './npsData';
-import { ChevronDown, MessageCircle, Quote } from 'lucide-react';
+import { FeedbackItem } from '@/hooks/useNpsData';
+import { ChevronDown, Quote } from 'lucide-react';
 
 const TABS = [
   { key: 'elogios', label: 'Elogio', color: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' },
@@ -28,11 +27,18 @@ function FeedbackCard({ item }: { item: FeedbackItem }) {
   );
 }
 
-export function QualitativeFeedback() {
+interface Props {
+  data: Record<string, FeedbackItem[]>;
+}
+
+export function QualitativeFeedback({ data }: Props) {
   const [activeTab, setActiveTab] = useState('elogios');
   const [open, setOpen] = useState(true);
 
-  const items = FEEDBACK[activeTab] || [];
+  const items = data[activeTab] || [];
+  const totalFeedback = Object.values(data).reduce((s, arr) => s + arr.length, 0);
+
+  if (totalFeedback === 0) return null;
 
   return (
     <div>
@@ -53,10 +59,9 @@ export function QualitativeFeedback() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <CardContent className="pt-0 space-y-4">
-              {/* Tab buttons */}
               <div className="flex flex-wrap gap-2">
                 {TABS.map(tab => {
-                  const count = FEEDBACK[tab.key]?.length || 0;
+                  const count = data[tab.key]?.length || 0;
                   return (
                     <button
                       key={tab.key}
@@ -70,11 +75,12 @@ export function QualitativeFeedback() {
                   );
                 })}
               </div>
-              {/* Cards */}
               <div className="grid gap-3">
-                {items.map((item, i) => (
+                {items.length > 0 ? items.map((item, i) => (
                   <FeedbackCard key={i} item={item} />
-                ))}
+                )) : (
+                  <p className="text-sm text-muted-foreground py-4 text-center">Nenhum feedback nesta categoria</p>
+                )}
               </div>
             </CardContent>
           </CollapsibleContent>
