@@ -64,6 +64,30 @@ export interface TratativaActive {
   faseAtual: string;
 }
 
+export interface SetupCard {
+  ID: string;
+  'Título': string;
+  'Fase': string;
+  'Fase Atual': string;
+  'Entrada': string;
+  'Saída': string | null;
+  'Duração (s)': number | null;
+  'CFO Responsavel': string | null;
+  'Implantador Oxy': string | null;
+  'Nome Empresa': string | null;
+  'Nome - Interlocução O2': string | null;
+  'Data Kickoff': string | null;
+}
+
+export interface SetupActive {
+  id: string;
+  empresa: string;
+  responsavel: string;
+  faseAtual: string;
+  diasEmSetup: number;
+  atrasado: boolean;
+}
+
 export interface OperationsKpis {
   totalAtivos: number;
   emOnboarding: number;
@@ -72,6 +96,8 @@ export interface OperationsKpis {
   churn: number;
   mrrTotal: number;
   tratativasAtivas: number;
+  emSetup: number;
+  setupAtrasados: number;
 }
 
 async function fetchTableData(table: string, limit = 1000) {
