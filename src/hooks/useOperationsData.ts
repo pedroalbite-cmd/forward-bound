@@ -152,6 +152,7 @@ export interface ChurnDossierCard {
   dataEncerramento: string;
   ltMeses: string;
   problemasOxy: string;
+  diagnostico: number;
 }
 
 export interface OperationsKpis {
