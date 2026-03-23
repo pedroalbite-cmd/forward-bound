@@ -383,6 +383,7 @@ function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>,
     cfoPerformance,
     feedback,
     seExcluded: currentCards.length - seTotal,
+    npsPipeId,
   };
 }
 
