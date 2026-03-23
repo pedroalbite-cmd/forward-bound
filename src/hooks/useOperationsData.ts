@@ -64,6 +64,30 @@ export interface TratativaActive {
   faseAtual: string;
 }
 
+export interface SetupCard {
+  ID: string;
+  'Título': string;
+  'Fase': string;
+  'Fase Atual': string;
+  'Entrada': string;
+  'Saída': string | null;
+  'Duração (s)': number | null;
+  'CFO Responsavel': string | null;
+  'Implantador Oxy': string | null;
+  'Nome Empresa': string | null;
+  'Nome - Interlocução O2': string | null;
+  'Data Kickoff': string | null;
+}
+
+export interface SetupActive {
+  id: string;
+  empresa: string;
+  responsavel: string;
+  faseAtual: string;
+  diasEmSetup: number;
+  atrasado: boolean;
+}
+
 export interface OperationsKpis {
   totalAtivos: number;
   emOnboarding: number;
@@ -72,6 +96,8 @@ export interface OperationsKpis {
   churn: number;
   mrrTotal: number;
   tratativasAtivas: number;
+  emSetup: number;
+  setupAtrasados: number;
 }
 
 async function fetchTableData(table: string, limit = 1000) {
@@ -190,17 +216,48 @@ function processTratativas(rows: TratativaCard[]) {
   };
 }
 
+const SETUP_TERMINAL_PHASES = ['Concluído', 'Churnou', 'Desistência', 'Arquivado'];
+
+function processSetup(rows: SetupCard[]) {
+  const currentPhase = rows.filter(r => r['Fase'] === r['Fase Atual']);
+  const now = Date.now();
+
+  const activeCards = currentPhase.filter(c => !SETUP_TERMINAL_PHASES.includes(c['Fase Atual'] || ''));
+
+  const setupAtivos: SetupActive[] = activeCards.map(card => {
+    const entrada = new Date(card['Entrada']).getTime();
+    const dias = Math.max(0, Math.round((now - entrada) / 86400000));
+    return {
+      id: card.ID,
+      empresa: card['Título'] || card['Nome Empresa'] || '',
+      responsavel: card['Nome - Interlocução O2'] || card['CFO Responsavel'] || 'N/A',
+      faseAtual: card['Fase Atual'] || '',
+      diasEmSetup: dias,
+      atrasado: dias > 90,
+    };
+  }).sort((a, b) => b.diasEmSetup - a.diasEmSetup);
+
+  return {
+    setupAtivos,
+    total: currentPhase.length,
+    emSetup: activeCards.length,
+    setupAtrasados: setupAtivos.filter(s => s.atrasado).length,
+  };
+}
+
 export function useOperationsData() {
   return useQuery({
     queryKey: ['operations-data'],
     queryFn: async () => {
-      const [projetos, tratativas] = await Promise.all([
+      const [projetos, tratativas, setup] = await Promise.all([
         fetchTableData('pipefy_central_projetos'),
         fetchTableData('pipefy_moviment_tratativas'),
+        fetchTableData('pipefy_moviment_setup'),
       ]);
 
       const projectData = processProjects(projetos);
       const tratativaData = processTratativas(tratativas);
+      const setupData = processSetup(setup);
 
       const kpis: OperationsKpis = {
         totalAtivos: projectData.emOnboarding + projectData.emOperacao,
@@ -210,6 +267,8 @@ export function useOperationsData() {
         churn: projectData.churn,
         mrrTotal: projectData.mrrTotal,
         tratativasAtivas: tratativaData.ativas,
+        emSetup: setupData.emSetup,
+        setupAtrasados: setupData.setupAtrasados,
       };
 
       return {
@@ -220,6 +279,7 @@ export function useOperationsData() {
         motivoChurnCount: tratativaData.motivoChurnCount,
         decisaoCount: tratativaData.decisaoCount,
         motivoCount: tratativaData.motivoCount,
+        setupAtivos: setupData.setupAtivos,
       };
     },
     staleTime: 5 * 60 * 1000,
