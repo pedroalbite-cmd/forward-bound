@@ -1,30 +1,44 @@
 
 
-## Corrigir URLs do Pipefy (404)
+## Adicionar Cards de Setup com alertas de >90 dias
 
-### Problema
+### Objetivo
 
-A URL montada como `https://app.pipefy.com/pipes/{pipeId}/cards/{cardId}` nao existe no Pipefy. O formato correto para abrir um card diretamente e:
+Buscar dados da tabela `pipefy_moviment_setup` para mostrar cards que estao em fases ativas de setup e destacar aqueles com mais de 90 dias sem finalizar.
 
-```
-https://app.pipefy.com/pipes/{pipeId}#cards/{cardId}
-```
+### Implementacao
 
-### Correcao
+**1. `src/hooks/useOperationsData.ts`**
 
-**Arquivo**: `src/components/planning/nps/PipefyCardLink.tsx`
+- Adicionar interface `SetupCard` com campos: `ID`, `Titulo`, `Fase`, `Fase Atual`, `Entrada`, `Saida`, `Duracao (s)`, `CFO Responsavel`, `Responsavel Implantacao` (ou campo equivalente)
+- Adicionar interface `SetupActive` com: `id`, `empresa`, `responsavel`, `faseAtual`, `diasEmSetup`, `atrasado` (boolean, >90 dias)
+- Criar funcao `processSetup(rows)`:
+  - Filtrar cards na fase atual (Fase === Fase Atual)
+  - Identificar fases ativas de setup (ex: "Kickoff", "Implantacao", "Treinamento", etc — preciso verificar os nomes reais das fases)
+  - Calcular dias desde entrada
+  - Marcar como atrasado se >90 dias
+  - Ordenar por dias decrescente
+- No `useOperationsData`, adicionar fetch de `pipefy_moviment_setup` no Promise.all
+- Retornar `setupAtivos` e `setupAtrasados` (count) nos dados
+- Adicionar KPI `emSetup` e `setupAtrasados` ao `OperationsKpis`
 
-Alterar a linha que monta a URL de:
-```typescript
-const url = `https://app.pipefy.com/pipes/${pipeId}/cards/${cardId}`;
-```
-Para:
-```typescript
-const url = `https://app.pipefy.com/pipes/${pipeId}#cards/${cardId}`;
-```
+**2. `src/components/planning/nps/OperationsSection.tsx`**
 
-Apenas 1 caractere muda (`/cards` vira `#cards`). Todos os links existentes (Central de Projetos, Tratativas, NPS) serao corrigidos automaticamente.
+- Adicionar KPI card "Em Setup" e "Setup >90d" na grade de KPIs
+- Adicionar tabela de "Setup Ativo" similar a tabela de tratativas ativas
+- Highlight em vermelho para cards com >90 dias
+- Cada linha com link para o card no Pipefy (preciso adicionar o pipe ID de setup ao `PIPEFY_PIPES`)
+
+**3. `src/components/planning/nps/PipefyCardLink.tsx`**
+
+- Adicionar `SETUP: '{pipeId}'` ao `PIPEFY_PIPES` (preciso descobrir o pipe ID — posso inferir dos dados ou usar um placeholder e pedir ao usuario)
+
+### Descoberta necessaria
+
+Preciso verificar quais campos e fases existem na tabela `pipefy_moviment_setup` antes de implementar. Vou buscar uma amostra dos dados para mapear os campos corretos e nomes de fases.
 
 ### Arquivos modificados
-- `src/components/planning/nps/PipefyCardLink.tsx` — corrigir formato da URL
+- `src/hooks/useOperationsData.ts` — nova interface, processamento de setup, fetch adicional
+- `src/components/planning/nps/OperationsSection.tsx` — KPIs + tabela de setup ativo
+- `src/components/planning/nps/PipefyCardLink.tsx` — adicionar pipe ID de setup
 
