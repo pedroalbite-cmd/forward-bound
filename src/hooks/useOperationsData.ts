@@ -231,6 +231,25 @@ function processProjects(rows: ProjectCard[]) {
   const churn = (phaseCount['Churn'] || 0) + (phaseCount['Atividades finalizadas'] || 0) + (phaseCount['Desistência'] || 0);
   const churnRate = (totalAtivos + churn) > 0 ? (churn / (totalAtivos + churn)) * 100 : 0;
 
+  // Churn Dossier
+  const churnCards = currentPhase.filter(c => c['Fase Atual'] === 'Churn');
+  const churnDossier: ChurnDossierCard[] = churnCards.map(card => ({
+    id: card.ID,
+    mesChurn: card['Mes do Churn'] || '',
+    cliente: card['Título'] || '',
+    setup: parseNumber(card['Valor Setup']),
+    mrr: parseNumber(card['Valor CFOaaS']),
+    motivoPrincipal: card['Motivo Principal do Churn'] || '',
+    motivosCancelamento: card['Motivos cancelamento'] || '',
+    cfo: card['CFO Responsavel'] || card['Responsavel'] || '',
+    produto: card['Produtos'] || '',
+    faseAtual: card['Fase Atual'] || '',
+    dataAssinatura: card['Data de assinatura do contrato'] || '',
+    dataEncerramento: card['Data encerramento'] || '',
+    ltMeses: card['LT (meses)'] || '',
+    problemasOxy: card['Problemas com a Oxy'] || '',
+  }));
+
   return {
     phaseCount,
     cfoDistribution,
@@ -243,6 +262,7 @@ function processProjects(rows: ProjectCard[]) {
     churn,
     churnRate,
     retencaoRate: 100 - churnRate,
+    churnDossier,
   };
 }
 
