@@ -188,7 +188,35 @@ function parseNumber(val: string | null | undefined): number {
   return parseFloat(cleaned) || 0;
 }
 
-function processProjects(rows: ProjectCard[]) {
+interface NpsCard {
+  ID: string;
+  'Título': string;
+  'Fase': string;
+  'Fase Atual': string;
+  'Nota NPS': string | null;
+  'Motivo da Nota': string | null;
+  'Comentarios': string | null;
+  'Sentimento Oxy': string | null;
+}
+
+function formatMonthYear(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return `${months[d.getMonth()]}/${d.getFullYear()}`;
+}
+
+function diffInMonths(start: string | null, end: string | null): string {
+  if (!start || !end) return '';
+  const s = new Date(start);
+  const e = new Date(end);
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return '';
+  const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+  return months > 0 ? String(months) : '';
+}
+
+function processProjects(rows: ProjectCard[], tratativas: TratativaCard[], npsRows: NpsCard[]) {
   const currentPhase = rows.filter(r => r['Fase'] === r['Fase Atual']);
 
   const phaseCount: Record<string, number> = {};
@@ -231,25 +259,58 @@ function processProjects(rows: ProjectCard[]) {
   const churn = (phaseCount['Churn'] || 0) + (phaseCount['Atividades finalizadas'] || 0) + (phaseCount['Desistência'] || 0);
   const churnRate = (totalAtivos + churn) > 0 ? (churn / (totalAtivos + churn)) * 100 : 0;
 
-  // Churn Dossier — usar mesmas fases do count de churn
+  // Churn Dossier — cruzar com tratativas e NPS
   const churnFases = ['Churn', 'Atividades finalizadas', 'Desistência'];
   const churnCards = currentPhase.filter(c => churnFases.includes(c['Fase Atual'] || ''));
-  const churnDossier: ChurnDossierCard[] = churnCards.map(card => ({
-    id: card.ID,
-    mesChurn: card['Mes do Churn'] || '',
-    cliente: card['Título'] || '',
-    setup: parseNumber(card['Valor Setup']),
-    mrr: parseNumber(card['Valor CFOaaS']),
-    motivoPrincipal: card['Motivo Principal do Churn'] || '',
-    motivosCancelamento: card['Motivos cancelamento'] || '',
-    cfo: card['CFO Responsavel'] || card['Responsavel'] || '',
-    produto: card['Produtos'] || '',
-    faseAtual: card['Fase Atual'] || '',
-    dataAssinatura: card['Data de assinatura do contrato'] || '',
-    dataEncerramento: card['Data encerramento'] || '',
-    ltMeses: card['LT (meses)'] || '',
-    problemasOxy: card['Problemas com a Oxy'] || '',
-  }));
+
+  // Mapa título → tratativa mais recente (fase atual do card na tratativa)
+  const tratativaCurrentPhase = tratativas.filter(r => r['Fase'] === r['Fase Atual']);
+  const tratativaMap = new Map<string, TratativaCard>();
+  tratativaCurrentPhase.forEach(t => {
+    const key = (t['Título'] || '').trim().toLowerCase();
+    if (key) tratativaMap.set(key, t);
+  });
+
+  // Mapa título → NPS (buscar detratores ou último feedback com comentário)
+  const npsCurrentPhase = npsRows.filter(r => r['Fase'] === r['Fase Atual']);
+  const npsMap = new Map<string, NpsCard>();
+  npsCurrentPhase.forEach(n => {
+    const key = (n['Título'] || '').trim().toLowerCase();
+    if (key && (n['Comentarios'] || n['Motivo da Nota'])) {
+      npsMap.set(key, n);
+    }
+  });
+
+  const churnDossier: ChurnDossierCard[] = churnCards.map(card => {
+    const key = (card['Título'] || '').trim().toLowerCase();
+    const trat = tratativaMap.get(key);
+    const nps = npsMap.get(key);
+
+    const dataAssinatura = card['Data de assinatura do contrato'] || '';
+    const dataEncerramento = trat?.['Saída'] ? new Date(trat['Saída']).toISOString().split('T')[0] : (card['Data encerramento'] || '');
+    const mesChurn = trat ? formatMonthYear(trat['Entrada']) : (card['Mes do Churn'] || '');
+    const ltMeses = diffInMonths(dataAssinatura, dataEncerramento) || (card['LT (meses)'] || '');
+
+    // Problemas com a Oxy: NPS comments (detractor feedback)
+    const problemasOxy = nps?.['Comentarios'] || nps?.['Motivo da Nota'] || card['Problemas com a Oxy'] || '';
+
+    return {
+      id: card.ID,
+      mesChurn,
+      cliente: card['Título'] || '',
+      setup: parseNumber(card['Valor Setup']),
+      mrr: parseNumber(card['Valor CFOaaS']),
+      motivoPrincipal: trat?.['Motivo'] || card['Motivo Principal do Churn'] || '',
+      motivosCancelamento: trat?.['Motivo Churn'] || card['Motivos cancelamento'] || '',
+      cfo: card['CFO Responsavel'] || card['Responsavel'] || '',
+      produto: card['Produtos'] || '',
+      faseAtual: card['Fase Atual'] || '',
+      dataAssinatura,
+      dataEncerramento,
+      ltMeses,
+      problemasOxy,
+    };
+  });
 
   return {
     phaseCount,
@@ -457,14 +518,15 @@ export function useOperationsData() {
   return useQuery({
     queryKey: ['operations-data'],
     queryFn: async () => {
-      const [projetos, tratativas, setup, rotinas] = await Promise.all([
+      const [projetos, tratativas, setup, rotinas, npsRows] = await Promise.all([
         fetchTableData('pipefy_central_projetos'),
         fetchTableData('pipefy_moviment_tratativas'),
         fetchTableData('pipefy_moviment_setup'),
         fetchTableData('pipefy_moviment_rotinas'),
+        fetchTableData('pipefy_moviment_nps'),
       ]);
 
-      const projectData = processProjects(projetos);
+      const projectData = processProjects(projetos, tratativas, npsRows);
       const tratativaData = processTratativas(tratativas);
       const setupData = processSetup(setup, projetos);
       const rotinaData = processRotinas(rotinas, projetos);
