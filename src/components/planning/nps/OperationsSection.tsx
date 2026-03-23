@@ -51,7 +51,7 @@ export function OperationsSection() {
     );
   }
 
-  const { kpis, cfoDistribution, tratativasAtivas, motivoChurnCount, motivoCount } = data;
+  const { kpis, cfoDistribution, tratativasAtivas = [], motivoChurnCount = {}, motivoCount = {} } = data;
 
   const kpiCards = [
     { icon: Users, label: 'Clientes Ativos', value: kpis.totalAtivos, color: 'text-primary' },
@@ -242,7 +242,7 @@ export function OperationsSection() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  {selectedCfo.clients.map((client, i) => (
+                  {(selectedCfo.clients || []).map((client, i) => (
                     <div key={i} className="flex items-center justify-between p-3 rounded-lg border bg-card">
                       <div className="space-y-0.5 min-w-0 flex-1">
                         <p className="text-sm font-medium text-foreground truncate">{client.titulo}</p>
