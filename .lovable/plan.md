@@ -1,42 +1,32 @@
 
 
-## Corrigir "Data de assinatura" e garantir todas as colunas preenchidas
+## Corrigir "Data de encerramento" no Dossiê de Churn
 
-### Diagnóstico
-Investiguei os dados reais de cada tabela:
+### Causa raiz
+Na linha 290, o código usa `trat?.['Saída']` para pegar a data de encerramento. Porém, o `trat` é o registro da **fase atual** da tratativa (filtrado por `Fase === Fase Atual` na linha 267). Para tratativas finalizadas (fase "Tratativa finalizada" ou "Arquivado"), o campo `Saída` é `null` porque o card ainda está nessa fase.
 
-| Coluna | Status atual | Fonte correta |
-|--------|-------------|---------------|
-| Mês do Churn | OK — vem da tratativa `Entrada` | `pipefy_moviment_tratativas` |
-| Motivo Principal | OK — vem da tratativa `Motivo` | `pipefy_moviment_tratativas` |
-| Motivos cancelamento | OK — vem da tratativa `Motivo Churn` | `pipefy_moviment_tratativas` |
-| Data encerramento | OK — vem da tratativa `Saída` | `pipefy_moviment_tratativas` |
-| **Data de assinatura** | **VAZIO** — o código tenta ler de `pipefy_central_projetos` onde o campo não existe | **`pipefy_db_clientes`** (campo `Data de assinatura do contrato`) |
-| LT (meses) | VAZIO (depende da data de assinatura) | Calculado |
-| Problemas com a Oxy | OK — vem do NPS | `pipefy_moviment_nps` |
+A data de encerramento correta é a **`Entrada`** na fase terminal — ou seja, quando o card entrou em "Tratativa finalizada".
 
-**Cadeia de cruzamento para Data de assinatura:**
-```text
-pipefy_central_projetos (card_id)
-  → pipefy_card_connections (card_id → connected_card_id WHERE connected_pipe_name='Clientes')
-    → pipefy_db_clientes (ID = connected_card_id → "Data de assinatura do contrato")
+### Alteração em `src/hooks/useOperationsData.ts`
+
+**Linha 290** — trocar a lógica de `dataEncerramento`:
+
+```typescript
+// ANTES:
+const dataEncerramento = trat?.['Saída'] 
+  ? new Date(trat['Saída']).toISOString().split('T')[0] 
+  : (card['Data encerramento'] || '');
+
+// DEPOIS:
+const dataEncerramento = trat?.['Saída'] 
+  ? new Date(trat['Saída']).toISOString().split('T')[0] 
+  : trat?.['Entrada'] 
+    ? new Date(trat['Entrada']).toISOString().split('T')[0] 
+    : (card['Data encerramento'] || '');
 ```
 
-### Alterações em `src/hooks/useOperationsData.ts`
-
-1. **Adicionar 2 fetches ao `Promise.all`**: `pipefy_db_clientes` e `pipefy_card_connections` (com limit 5000)
-2. **Construir mapa de data de assinatura**:
-   - De `pipefy_card_connections`: filtrar por `connected_pipe_name === 'Clientes'` → mapear `card_id → connected_card_id`
-   - De `pipefy_db_clientes`: mapear `ID → Data de assinatura do contrato`
-   - Resultado: `projetoCardId → dataAssinatura`
-3. **Passar esse mapa para `processProjects`** e usá-lo na construção do `churnDossier`
-4. **Corrigir linha 289**: em vez de `card['Data de assinatura do contrato']`, usar o mapa `assinaturaMap.get(card.ID)`
-
-### Resultado esperado
-- "Data de assinatura" preenchida para todos os clientes que têm registro em `pipefy_db_clientes`
-- "LT (meses)" calculado automaticamente a partir da diferença entre assinatura e encerramento
-- Demais colunas continuam funcionando como já estão
+Lógica: se `Saída` existe, usa ela. Senão, usa `Entrada` da fase atual (que é quando o card entrou na fase terminal). Fallback para o campo do projeto.
 
 ### Arquivo modificado
-- `src/hooks/useOperationsData.ts`
+- `src/hooks/useOperationsData.ts` — uma linha alterada
 
