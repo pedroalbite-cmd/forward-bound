@@ -16,7 +16,7 @@ interface Props {
 }
 
 export function PipefyCardLink({ pipeId, cardId, label = 'Abrir no Pipefy', variant = 'icon' }: Props) {
-  const url = `https://app.pipefy.com/pipes/${pipeId}/cards/${cardId}`;
+  const url = `https://app.pipefy.com/pipes/${pipeId}#cards/${cardId}`;
 
   if (variant === 'icon') {
     return (
