@@ -127,12 +127,14 @@ function parseCardRow(row: Record<string, any>, skipPhaseFilter = false): Modelo
   if (!skipPhaseFilter && !PHASE_TO_INDICATOR[fase]) return null;
 
   // Parse additional dates
-  const dataAssinatura = parseDateOnly(row['Data de assinatura do contrato']);
+  let correctedAssinatura = parseDateOnly(row['Data de assinatura do contrato']);
   
   // For "Contrato assinado" phase: override dataEntrada with dataAssinatura
-  // This ensures sales are counted in the month they were signed, not when moved in Pipefy
-  if (fase === 'Contrato assinado' && dataAssinatura) {
-    dataEntrada = fixPossibleDateInversion(dataAssinatura, dataEntrada);
+  // Also fix dataAssinatura so effectiveDate logic for 'venda' uses the corrected date
+  if (fase === 'Contrato assinado' && correctedAssinatura) {
+    const fixed = fixPossibleDateInversion(correctedAssinatura, dataEntrada);
+    dataEntrada = fixed;
+    correctedAssinatura = fixed;
   }
   const valorMRR = parseNumericValue(row['Valor MRR'] || row['valor_mrr'] || 0);
   const valorPontual = parseNumericValue(row['Valor Pontual'] || row['valor_pontual'] || 0);
