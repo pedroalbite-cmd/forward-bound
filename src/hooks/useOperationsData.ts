@@ -317,6 +317,7 @@ function processProjects(rows: ProjectCard[], tratativas: TratativaCard[], npsRo
       _refDate: refDate,
     };
   }).filter(c => c._refDate >= CHURN_CUTOFF)
+    .filter(c => c.motivoPrincipal || c.dataEncerramento || c.mesChurn)
     .map(({ _refDate, ...rest }) => rest);
 
   return {
