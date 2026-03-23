@@ -231,8 +231,9 @@ function processProjects(rows: ProjectCard[]) {
   const churn = (phaseCount['Churn'] || 0) + (phaseCount['Atividades finalizadas'] || 0) + (phaseCount['Desistência'] || 0);
   const churnRate = (totalAtivos + churn) > 0 ? (churn / (totalAtivos + churn)) * 100 : 0;
 
-  // Churn Dossier
-  const churnCards = currentPhase.filter(c => c['Fase Atual'] === 'Churn');
+  // Churn Dossier — usar mesmas fases do count de churn
+  const churnFases = ['Churn', 'Atividades finalizadas', 'Desistência'];
+  const churnCards = currentPhase.filter(c => churnFases.includes(c['Fase Atual'] || ''));
   const churnDossier: ChurnDossierCard[] = churnCards.map(card => ({
     id: card.ID,
     mesChurn: card['Mes do Churn'] || '',
