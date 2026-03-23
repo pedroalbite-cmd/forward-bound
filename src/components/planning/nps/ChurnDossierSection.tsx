@@ -146,15 +146,6 @@ export function ChurnDossierSection({ data }: Props) {
             <p className="text-2xl font-bold text-foreground">{formatCurrency(totalMrrPerdido)}</p>
           </CardContent>
         </Card>
-        <Card className="border-warning/30 bg-warning/5">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-[hsl(var(--warning))] mb-1">
-              <DollarSign className="h-4 w-4" />
-              <span className="text-xs font-medium uppercase tracking-wide">Diagnóstico Perdido</span>
-            </div>
-            <p className="text-2xl font-bold text-foreground">{formatCurrency(totalDiagnostico)}</p>
-          </CardContent>
-        </Card>
         <Card className="border-primary/30 bg-primary/5">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-primary mb-1">
