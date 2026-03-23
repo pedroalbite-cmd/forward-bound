@@ -349,8 +349,8 @@ export function useNpsData() {
   return useQuery({
     queryKey: ['nps-data'],
     queryFn: async () => {
-      const rows = await fetchNpsData();
-      return processNpsData(rows);
+      const { npsRows, cfoMap } = await fetchNpsData();
+      return processNpsData(npsRows, cfoMap);
     },
     staleTime: 5 * 60 * 1000,
   });
