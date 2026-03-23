@@ -1,42 +1,42 @@
 
 
-## Corrigir fontes de dados do Dossiê de Churn
+## Corrigir "Data de assinatura" e garantir todas as colunas preenchidas
 
-### Problema
-O dossiê puxa todos os campos do `pipefy_central_projetos`, mas na prática vários campos estão vazios nessa tabela. Os dados reais vêm de outras fontes:
+### Diagnóstico
+Investiguei os dados reais de cada tabela:
 
-| Campo | Fonte correta |
-|-------|--------------|
-| Mês do Churn | Mês da `Entrada` na tratativa |
-| Motivo Principal | `Motivo` da tratativa |
-| Motivos cancelamento | `Motivo Churn` da tratativa |
-| Data encerramento | `Saída` da tratativa |
-| Data de assinatura | Card conectado via `pipefy_card_connections` |
-| LT (meses) | Calculado: data encerramento - data assinatura |
-| Problemas com a Oxy | Comentários/feedback do NPS |
+| Coluna | Status atual | Fonte correta |
+|--------|-------------|---------------|
+| Mês do Churn | OK — vem da tratativa `Entrada` | `pipefy_moviment_tratativas` |
+| Motivo Principal | OK — vem da tratativa `Motivo` | `pipefy_moviment_tratativas` |
+| Motivos cancelamento | OK — vem da tratativa `Motivo Churn` | `pipefy_moviment_tratativas` |
+| Data encerramento | OK — vem da tratativa `Saída` | `pipefy_moviment_tratativas` |
+| **Data de assinatura** | **VAZIO** — o código tenta ler de `pipefy_central_projetos` onde o campo não existe | **`pipefy_db_clientes`** (campo `Data de assinatura do contrato`) |
+| LT (meses) | VAZIO (depende da data de assinatura) | Calculado |
+| Problemas com a Oxy | OK — vem do NPS | `pipefy_moviment_nps` |
 
-### Alterações
+**Cadeia de cruzamento para Data de assinatura:**
+```text
+pipefy_central_projetos (card_id)
+  → pipefy_card_connections (card_id → connected_card_id WHERE connected_pipe_name='Clientes')
+    → pipefy_db_clientes (ID = connected_card_id → "Data de assinatura do contrato")
+```
 
-**1. `src/hooks/useOperationsData.ts`**
+### Alterações em `src/hooks/useOperationsData.ts`
 
-- Buscar `pipefy_card_connections` e `pipefy_moviment_nps` no `Promise.all` (2 fetches adicionais)
-- Alterar `processProjects` para receber `tratativas`, `npsRows` e `connections` como parâmetros
-- Construir mapa `título → tratativa` cruzando por nome do cliente:
-  - `Entrada` (mês) → mês do churn
-  - `Motivo` → motivo principal
-  - `Motivo Churn` → motivos cancelamento
-  - `Saída` → data encerramento
-- Construir mapa de data de assinatura via `pipefy_card_connections` (card_id do projeto → connected_card com data)
-- Construir mapa `título → problemas` via NPS (usar `Comentarios` ou `Motivo da Nota` dos detratores)
-- Calcular LT em meses: `(dataEncerramento - dataAssinatura) / 30`
-- Usar campos do central_projetos como fallback quando os cruzamentos não retornarem dados
+1. **Adicionar 2 fetches ao `Promise.all`**: `pipefy_db_clientes` e `pipefy_card_connections` (com limit 5000)
+2. **Construir mapa de data de assinatura**:
+   - De `pipefy_card_connections`: filtrar por `connected_pipe_name === 'Clientes'` → mapear `card_id → connected_card_id`
+   - De `pipefy_db_clientes`: mapear `ID → Data de assinatura do contrato`
+   - Resultado: `projetoCardId → dataAssinatura`
+3. **Passar esse mapa para `processProjects`** e usá-lo na construção do `churnDossier`
+4. **Corrigir linha 289**: em vez de `card['Data de assinatura do contrato']`, usar o mapa `assinaturaMap.get(card.ID)`
 
-**2. Interface `TratativaCard`**
-- Já tem todos os campos necessários (`Motivo`, `Motivo Churn`, `Entrada`, `Saída`)
+### Resultado esperado
+- "Data de assinatura" preenchida para todos os clientes que têm registro em `pipefy_db_clientes`
+- "LT (meses)" calculado automaticamente a partir da diferença entre assinatura e encerramento
+- Demais colunas continuam funcionando como já estão
 
-**3. Sem alterações no componente UI**
-- `ChurnDossierSection.tsx` já exibe todas as 13 colunas — só os dados vão mudar
-
-### Arquivos modificados
-- `src/hooks/useOperationsData.ts` — cross-reference com tratativas, NPS e connections
+### Arquivo modificado
+- `src/hooks/useOperationsData.ts`
 
