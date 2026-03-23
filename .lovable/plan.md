@@ -1,32 +1,25 @@
 
 
-## Corrigir "Data de encerramento" no Dossiê de Churn
+## Problema
 
-### Causa raiz
-Na linha 290, o código usa `trat?.['Saída']` para pegar a data de encerramento. Porém, o `trat` é o registro da **fase atual** da tratativa (filtrado por `Fase === Fase Atual` na linha 267). Para tratativas finalizadas (fase "Tratativa finalizada" ou "Arquivado"), o campo `Saída` é `null` porque o card ainda está nessa fase.
+O Dossiê de Churn mostra linhas com quase todas as colunas vazias. Isso acontece porque muitos cards de churn no `pipefy_central_projetos` **não têm uma tratativa correspondente** no `pipefy_moviment_tratativas` (o match é feito por título). Sem tratativa, as colunas Mês do Churn, Motivo Principal, Motivos cancelamento e Data encerramento ficam vazias. Sem data de encerramento, o LT também fica vazio.
 
-A data de encerramento correta é a **`Entrada`** na fase terminal — ou seja, quando o card entrou em "Tratativa finalizada".
+## Solução
+
+Filtrar do dossiê as linhas que não têm dados mínimos úteis. Um registro só deve aparecer se tiver **pelo menos** um motivo principal OU uma data de encerramento preenchida.
 
 ### Alteração em `src/hooks/useOperationsData.ts`
 
-**Linha 290** — trocar a lógica de `dataEncerramento`:
+Na cadeia de `.filter()` (linha 319), adicionar uma segunda condição após o filtro de data:
 
 ```typescript
-// ANTES:
-const dataEncerramento = trat?.['Saída'] 
-  ? new Date(trat['Saída']).toISOString().split('T')[0] 
-  : (card['Data encerramento'] || '');
-
-// DEPOIS:
-const dataEncerramento = trat?.['Saída'] 
-  ? new Date(trat['Saída']).toISOString().split('T')[0] 
-  : trat?.['Entrada'] 
-    ? new Date(trat['Entrada']).toISOString().split('T')[0] 
-    : (card['Data encerramento'] || '');
+.filter(c => c._refDate >= CHURN_CUTOFF)
+.filter(c => c.motivoPrincipal || c.dataEncerramento || c.mesChurn)
+.map(({ _refDate, ...rest }) => rest);
 ```
 
-Lógica: se `Saída` existe, usa ela. Senão, usa `Entrada` da fase atual (que é quando o card entrou na fase terminal). Fallback para o campo do projeto.
+Isso remove linhas "fantasma" — cards que estão em fase de churn mas não têm nenhuma informação relevante cruzada das tratativas, NPS ou conexões.
 
 ### Arquivo modificado
-- `src/hooks/useOperationsData.ts` — uma linha alterada
+- `src/hooks/useOperationsData.ts` — adicionar filtro de completude na linha 319
 
