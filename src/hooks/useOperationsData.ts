@@ -137,6 +137,23 @@ export interface SatisfacaoDistribution {
   count: number;
 }
 
+export interface ChurnDossierCard {
+  id: string;
+  mesChurn: string;
+  cliente: string;
+  setup: number;
+  mrr: number;
+  motivoPrincipal: string;
+  motivosCancelamento: string;
+  cfo: string;
+  produto: string;
+  faseAtual: string;
+  dataAssinatura: string;
+  dataEncerramento: string;
+  ltMeses: string;
+  problemasOxy: string;
+}
+
 export interface OperationsKpis {
   totalAtivos: number;
   emOnboarding: number;
