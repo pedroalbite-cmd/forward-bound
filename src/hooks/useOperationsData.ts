@@ -128,6 +128,7 @@ export interface OperationsKpis {
   tratativasAtivas: number;
   emSetup: number;
   setupAtrasados: number;
+  tarefasAtrasadas: number;
 }
 
 async function fetchTableData(table: string, limit = 1000) {
