@@ -173,3 +173,14 @@
     @apply bg-card/80 backdrop-blur-sm border border-border/50;
   }
 }
+
+/* Force autofill text visibility */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: hsl(var(--foreground)) !important;
+  -webkit-box-shadow: 0 0 0 30px hsl(var(--background)) inset !important;
+  caret-color: hsl(var(--foreground)) !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
