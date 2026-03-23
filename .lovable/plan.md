@@ -1,15 +1,26 @@
 
 
-## Remover KPI "Diagnóstico Perdido" e confirmar MRR
+## Filtrar "Sem CFO" da Performance por CFO
 
-### Confirmação sobre MRR
-O cálculo de MRR Perdido usa exclusivamente o campo `Valor CFOaaS` do Pipefy (`d.mrr = parseNumber(card['Valor CFOaaS'])`). **Não está misturado** com diagnóstico. O valor de R$ 96k reflete apenas MRR.
+### Problema
+Cards NPS que não têm CFO mapeado (nem via conexão com Central de Projetos, nem nos campos do card) caem no bucket "Sem CFO" com 32 enviados e 27 respostas, poluindo a tabela de performance.
 
-### Alteração em `src/components/planning/nps/ChurnDossierSection.tsx`
+### Solução
 
-1. **Remover o KPI card "Diagnóstico Perdido"** (linhas 149-156)
-2. **Remover a variável `totalDiagnostico`** (linha 73) — não é mais usada
-3. **Ajustar o grid** de `grid-cols-5` para `grid-cols-4` nos KPI cards (linha 129)
+**Arquivo:** `src/hooks/useNpsData.ts`
 
-A coluna "Diagnóstico (R$)" na tabela permanece — apenas o card de KPI do topo é removido.
+Na linha 289, onde o fallback é `'Sem CFO'`, filtrar esses cards para que não apareçam na tabela de performance por CFO:
+
+```typescript
+currentCards.forEach(c => {
+  const cfo = externalCfoMap[c.ID] || c['CFO Responsavel'] || c['Responsavel Tratativa'];
+  if (!cfo) return; // Ignorar cards sem CFO identificado
+  // ... resto do código
+});
+```
+
+Isso remove a linha "Sem CFO" da tabela e mantém apenas CFOs reais. Os KPIs gerais (NPS, CSAT, etc.) continuam calculados com todos os cards — apenas a tabela de performance por CFO é afetada.
+
+### Arquivo modificado
+- `src/hooks/useNpsData.ts` — 2 linhas alteradas no loop de CFO aggregation
 
