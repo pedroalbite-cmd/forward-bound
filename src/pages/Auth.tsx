@@ -49,7 +49,6 @@ export default function Auth() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
-  const [showSignupConfirmPassword, setShowSignupConfirmPassword] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
   const [isProcessingRecovery, setIsProcessingRecovery] = useState(false);
