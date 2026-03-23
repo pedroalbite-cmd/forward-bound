@@ -258,8 +258,9 @@ export function useModeloAtualMetas(startDate?: Date, endDate?: Date) {
         const dataAssinatura = parseDateOnly(row['Data de assinatura do contrato']);
 
         // For 'Contrato assinado' phase: prioritize signature date over entry date
+        // Apply date inversion fix before using signature date
         if (fase === 'Contrato assinado' && dataAssinatura) {
-          dataEntrada = dataAssinatura;
+          dataEntrada = fixPossibleDateInversion(dataAssinatura, dataEntrada);
         }
 
         movements.push({
