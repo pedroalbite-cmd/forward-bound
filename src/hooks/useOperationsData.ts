@@ -97,7 +97,7 @@ function processProjects(rows: ProjectCard[]) {
   const currentPhase = rows.filter(r => r['Fase'] === r['Fase Atual']);
 
   const phaseCount: Record<string, number> = {};
-  const cfoMapAtivos: Record<string, { clientes: number; mrr: number }> = {};
+  const cfoMapAtivos: Record<string, { clientes: number; mrr: number; clients: CfoClient[] }> = {};
   let mrrTotal = 0;
 
   const fasesAtivas = ['Onboarding', 'Em Operação Recorrente'];
@@ -110,9 +110,15 @@ function processProjects(rows: ProjectCard[]) {
     const mrr = parseNumber(card['Valor CFOaaS']);
 
     if (fasesAtivas.includes(fase)) {
-      if (!cfoMapAtivos[cfo]) cfoMapAtivos[cfo] = { clientes: 0, mrr: 0 };
+      if (!cfoMapAtivos[cfo]) cfoMapAtivos[cfo] = { clientes: 0, mrr: 0, clients: [] };
       cfoMapAtivos[cfo].clientes += 1;
       cfoMapAtivos[cfo].mrr += mrr;
+      cfoMapAtivos[cfo].clients.push({
+        titulo: card['Título'] || '',
+        mrr,
+        cardId: card.ID,
+        fase,
+      });
       mrrTotal += mrr;
     }
   });
