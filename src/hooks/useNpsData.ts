@@ -50,6 +50,15 @@ export interface SeanEllisItem {
   color: string;
 }
 
+export interface CfoNpsCard {
+  titulo: string;
+  nota: number;
+  email: string;
+  cardId: string;
+  csat: number | null;
+  sentiment: 'Positivo' | 'Neutro' | 'Negativo';
+}
+
 export interface CfoPerformance {
   name: string;
   enviados: number;
@@ -58,12 +67,17 @@ export interface CfoPerformance {
   nps: number;
   csat: number;
   seanEllis: number | null;
+  cards: CfoNpsCard[];
 }
 
 export interface FeedbackItem {
   quote: string;
   npsScore: number;
   sentiment: 'Positivo' | 'Neutro' | 'Negativo';
+  email: string;
+  titulo: string;
+  cardId: string;
+  cfoName: string;
 }
 
 interface CardConnection {
