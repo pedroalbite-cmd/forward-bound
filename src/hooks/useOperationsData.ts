@@ -22,6 +22,7 @@ export interface ProjectCard {
   'Setor': string | null;
   'ERP': string | null;
   'UF': string | null;
+  'Responsavel': string | null;
 }
 
 export interface TratativaCard {
