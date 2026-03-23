@@ -283,21 +283,30 @@ function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>,
   };
 
   // CFO Performance
-  const cfoMap: Record<string, { enviados: number; withNps: { score: number }[]; csatScores: number[]; seClassifications: ReturnType<typeof classifySeanEllis>[] }> = {};
+  const cfoAggMap: Record<string, { enviados: number; withNps: { score: number; titulo: string; email: string; cardId: string; csat: number | null; sentiment: 'Positivo' | 'Neutro' | 'Negativo' }[]; csatScores: number[]; seClassifications: ReturnType<typeof classifySeanEllis>[] }> = {};
   
   currentCards.forEach(c => {
     const cfo = externalCfoMap[c.ID] || c['CFO Responsavel'] || c['Responsavel Tratativa'] || 'Sem CFO';
-    if (!cfoMap[cfo]) cfoMap[cfo] = { enviados: 0, withNps: [], csatScores: [], seClassifications: [] };
-    cfoMap[cfo].enviados++;
+    if (!cfoAggMap[cfo]) cfoAggMap[cfo] = { enviados: 0, withNps: [], csatScores: [], seClassifications: [] };
+    cfoAggMap[cfo].enviados++;
     
     const nps = parseNpsScore(c['Nota NPS']);
-    if (nps !== null) cfoMap[cfo].withNps.push({ score: nps });
+    if (nps !== null) {
+      cfoAggMap[cfo].withNps.push({
+        score: nps,
+        titulo: externalTitleMap[c.ID] || c['Título'] || '',
+        email: c['E-mail'] || '',
+        cardId: c.ID,
+        csat: parseCsatScore(c['Satisfacao Geral']),
+        sentiment: determineSentiment(nps),
+      });
+    }
     
     const csat = parseCsatScore(c['Satisfacao Geral']);
-    if (csat !== null) cfoMap[cfo].csatScores.push(csat);
+    if (csat !== null) cfoAggMap[cfo].csatScores.push(csat);
     
     const se = classifySeanEllis(c['Sentimento Oxy']);
-    if (se !== null) cfoMap[cfo].seClassifications.push(se);
+    if (se !== null) cfoAggMap[cfo].seClassifications.push(se);
   });
 
   const cfoPerformance: CfoPerformance[] = Object.entries(cfoMap).map(([name, data]) => {
