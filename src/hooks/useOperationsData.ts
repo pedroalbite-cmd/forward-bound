@@ -22,6 +22,7 @@ export interface ProjectCard {
   'Setor': string | null;
   'ERP': string | null;
   'UF': string | null;
+  'Responsavel': string | null;
 }
 
 export interface TratativaCard {
@@ -88,23 +89,27 @@ function processProjects(rows: ProjectCard[]) {
   const currentPhase = rows.filter(r => r['Fase'] === r['Fase Atual']);
 
   const phaseCount: Record<string, number> = {};
-  const cfoMap: Record<string, { clientes: number; mrr: number }> = {};
+  const cfoMapAtivos: Record<string, { clientes: number; mrr: number }> = {};
   let mrrTotal = 0;
+
+  const fasesAtivas = ['Onboarding', 'Em Operação Recorrente'];
 
   currentPhase.forEach(card => {
     const fase = card['Fase Atual'] || 'Desconhecida';
     phaseCount[fase] = (phaseCount[fase] || 0) + 1;
 
-    const cfo = card['CFO Responsavel'] || 'Sem CFO';
-    if (!cfoMap[cfo]) cfoMap[cfo] = { clientes: 0, mrr: 0 };
-    cfoMap[cfo].clientes += 1;
-
+    const cfo = card['CFO Responsavel'] || card['Responsavel'] || 'Sem CFO';
     const mrr = parseNumber(card['Valor CFOaaS']);
-    cfoMap[cfo].mrr += mrr;
-    mrrTotal += mrr;
+
+    if (fasesAtivas.includes(fase)) {
+      if (!cfoMapAtivos[cfo]) cfoMapAtivos[cfo] = { clientes: 0, mrr: 0 };
+      cfoMapAtivos[cfo].clientes += 1;
+      cfoMapAtivos[cfo].mrr += mrr;
+      mrrTotal += mrr;
+    }
   });
 
-  const cfoDistribution: CfoDistribution[] = Object.entries(cfoMap)
+  const cfoDistribution: CfoDistribution[] = Object.entries(cfoMapAtivos)
     .map(([cfo, data]) => ({ cfo, ...data }))
     .sort((a, b) => b.clientes - a.clientes);
 

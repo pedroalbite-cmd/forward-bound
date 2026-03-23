@@ -47,7 +47,7 @@ export function OperationsSection() {
     );
   }
 
-  const { kpis, cfoDistribution, tratativasAtivas, motivoChurnCount, motivoCount } = data;
+  const { kpis, cfoDistribution, tratativasAtivas, motivoChurnCount, motivoCount, phaseCount } = data;
 
   const kpiCards = [
     { icon: Users, label: 'Clientes Ativos', value: kpis.totalAtivos, color: 'text-primary' },
