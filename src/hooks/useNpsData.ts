@@ -309,7 +309,7 @@ function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>,
     if (se !== null) cfoAggMap[cfo].seClassifications.push(se);
   });
 
-  const cfoPerformance: CfoPerformance[] = Object.entries(cfoMap).map(([name, data]) => {
+  const cfoPerformance: CfoPerformance[] = Object.entries(cfoAggMap).map(([name, data]) => {
     const resp = data.withNps.length;
     const taxa = data.enviados > 0 ? Math.round((resp / data.enviados) * 100) : 0;
     
@@ -323,7 +323,16 @@ function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>,
     const cfeSeMuito = data.seClassifications.filter(s => s === 'muito_desapontado').length;
     const cfeSe = data.seClassifications.length > 0 ? Math.round((cfeSeMuito / data.seClassifications.length) * 100) : null;
 
-    return { name, enviados: data.enviados, respostas: resp, taxaResposta: taxa, nps: cfoNps, csat: cfoCsat, seanEllis: cfeSe };
+    const cards: CfoNpsCard[] = data.withNps.map(n => ({
+      titulo: n.titulo,
+      nota: n.score,
+      email: n.email,
+      cardId: n.cardId,
+      csat: n.csat,
+      sentiment: n.sentiment,
+    }));
+
+    return { name, enviados: data.enviados, respostas: resp, taxaResposta: taxa, nps: cfoNps, csat: cfoCsat, seanEllis: cfeSe, cards };
   }).sort((a, b) => b.nps - a.nps);
 
   // Feedback qualitativo
