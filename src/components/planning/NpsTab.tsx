@@ -8,17 +8,19 @@ import { CfoPerformanceTable } from './nps/CfoPerformanceTable';
 import { QualitativeFeedback } from './nps/QualitativeFeedback';
 import { ExecutiveSummary } from './nps/ExecutiveSummary';
 import { OperationsSection } from './nps/OperationsSection';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useNpsData } from '@/hooks/useNpsData';
+import { ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
 
 export function NpsTab() {
   const [npsOpen, setNpsOpen] = useState(false);
+  const { data: npsData, isLoading, error } = useNpsData();
 
   return (
     <div className="space-y-8">
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 mb-2">
-          <Badge variant="secondary">Q4 2025</Badge>
+          <Badge variant="secondary">2025</Badge>
           <Badge variant="outline">Customer Success</Badge>
         </div>
         <h1 className="text-3xl font-bold text-foreground">Customer Success — Operação & NPS</h1>
@@ -48,13 +50,39 @@ export function NpsTab() {
 
         {npsOpen && (
           <div className="space-y-8 animate-in fade-in-0 slide-in-from-top-2 duration-300">
-            <NpsKpiCards />
-            <NpsGauges />
-            <NpsScoreCards />
-            <NpsDistributions />
-            <CfoPerformanceTable />
-            <QualitativeFeedback />
-            <ExecutiveSummary />
+            {isLoading && (
+              <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span>Carregando dados NPS...</span>
+              </div>
+            )}
+            {error && (
+              <div className="flex items-center justify-center py-12 gap-2 text-destructive">
+                <AlertCircle className="h-5 w-5" />
+                <span>Erro ao carregar dados NPS: {(error as Error).message}</span>
+              </div>
+            )}
+            {npsData && (
+              <>
+                <NpsKpiCards data={npsData.kpis} />
+                <NpsGauges data={npsData.metrics} />
+                <NpsScoreCards
+                  metrics={npsData.metrics}
+                  npsDistribution={npsData.npsDistribution}
+                  csatDistribution={npsData.csatDistribution}
+                  seanEllisDistribution={npsData.seanEllisDistribution}
+                />
+                <NpsDistributions
+                  npsDistribution={npsData.npsDistribution}
+                  csatDistribution={npsData.csatDistribution}
+                  seanEllisDistribution={npsData.seanEllisDistribution}
+                  seExcluded={npsData.seExcluded}
+                />
+                <CfoPerformanceTable data={npsData.cfoPerformance} />
+                <QualitativeFeedback data={npsData.feedback} />
+                <ExecutiveSummary />
+              </>
+            )}
           </div>
         )}
       </div>
