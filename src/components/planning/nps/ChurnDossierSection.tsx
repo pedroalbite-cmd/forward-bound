@@ -70,7 +70,7 @@ export function ChurnDossierSection({ data }: Props) {
   }, [data, filterMotivo, filterCfo, filterMes]);
 
   const totalMrrPerdido = useMemo(() => filtered.reduce((s, d) => s + (d.mrr || 0), 0), [filtered]);
-  const totalDiagnostico = useMemo(() => filtered.reduce((s, d) => s + (d.diagnostico || 0), 0), [filtered]);
+  
   const avgLt = useMemo(() => {
     const lts = filtered.map(d => parseFloat(d.ltMeses)).filter(n => !isNaN(n) && n > 0);
     return lts.length ? (lts.reduce((a, b) => a + b, 0) / lts.length).toFixed(1) : '—';
