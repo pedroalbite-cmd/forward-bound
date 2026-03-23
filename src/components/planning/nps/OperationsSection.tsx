@@ -1,10 +1,13 @@
-import { useOperationsData } from '@/hooks/useOperationsData';
+import { useState } from 'react';
+import { useOperationsData, CfoDistribution } from '@/hooks/useOperationsData';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Users, UserCheck, AlertTriangle, UserMinus, DollarSign, ClipboardList } from 'lucide-react';
+import { Users, UserCheck, AlertTriangle, UserMinus, DollarSign, ClipboardList, ChevronRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { PipefyCardLink, PIPEFY_PIPES } from './PipefyCardLink';
 
 const COLORS = [
   'hsl(var(--primary))',
@@ -22,6 +25,7 @@ function formatCurrency(value: number) {
 
 export function OperationsSection() {
   const { data, isLoading, error } = useOperationsData();
+  const [selectedCfo, setSelectedCfo] = useState<CfoDistribution | null>(null);
 
   if (isLoading) {
     return (
@@ -47,7 +51,7 @@ export function OperationsSection() {
     );
   }
 
-  const { kpis, cfoDistribution, tratativasAtivas, motivoChurnCount, motivoCount, phaseCount } = data;
+  const { kpis, cfoDistribution, tratativasAtivas, motivoChurnCount, motivoCount } = data;
 
   const kpiCards = [
     { icon: Users, label: 'Clientes Ativos', value: kpis.totalAtivos, color: 'text-primary' },
@@ -90,7 +94,7 @@ export function OperationsSection() {
         {/* CFO Distribution Table */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Clientes por CFO</CardTitle>
+            <CardTitle className="text-base">Clientes por CFO — clique para ver lista</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="max-h-[300px] overflow-auto">
@@ -100,14 +104,22 @@ export function OperationsSection() {
                     <TableHead>CFO</TableHead>
                     <TableHead className="text-right">Clientes</TableHead>
                     <TableHead className="text-right">MRR</TableHead>
+                    <TableHead className="w-8" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {cfoDistribution.map((row) => (
-                    <TableRow key={row.cfo}>
+                    <TableRow
+                      key={row.cfo}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => setSelectedCfo(row)}
+                    >
                       <TableCell className="font-medium">{row.cfo}</TableCell>
                       <TableCell className="text-right">{row.clientes}</TableCell>
                       <TableCell className="text-right">{formatCurrency(row.mrr)}</TableCell>
+                      <TableCell>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -158,6 +170,7 @@ export function OperationsSection() {
                     <TableHead>CFO</TableHead>
                     <TableHead>Fase</TableHead>
                     <TableHead className="text-right">Dias</TableHead>
+                    <TableHead className="w-8" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -173,6 +186,9 @@ export function OperationsSection() {
                         <span className={t.diasEmTratativa > 30 ? 'text-destructive font-bold' : ''}>
                           {t.diasEmTratativa}d
                         </span>
+                      </TableCell>
+                      <TableCell>
+                        <PipefyCardLink pipeId={PIPEFY_PIPES.TRATATIVAS} cardId={t.id} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -205,6 +221,47 @@ export function OperationsSection() {
           </CardContent>
         </Card>
       )}
+
+      {/* CFO Client Drill-down Sheet */}
+      <Sheet open={!!selectedCfo} onOpenChange={() => setSelectedCfo(null)}>
+        <SheetContent className="sm:max-w-lg overflow-y-auto">
+          {selectedCfo && (
+            <>
+              <SheetHeader>
+                <SheetTitle>Clientes — {selectedCfo.cfo}</SheetTitle>
+              </SheetHeader>
+              <div className="mt-4 space-y-2">
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="text-center p-2 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground">Clientes</p>
+                    <p className="text-lg font-bold text-foreground">{selectedCfo.clientes}</p>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground">MRR Total</p>
+                    <p className="text-lg font-bold text-foreground">{formatCurrency(selectedCfo.mrr)}</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {selectedCfo.clients.map((client, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground truncate">{client.titulo}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{formatCurrency(client.mrr)}</span>
+                          <Badge variant="outline" className="text-[10px]">{client.fase}</Badge>
+                        </div>
+                      </div>
+                      <div className="shrink-0 ml-2">
+                        <PipefyCardLink pipeId={PIPEFY_PIPES.CENTRAL_PROJETOS} cardId={client.cardId} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

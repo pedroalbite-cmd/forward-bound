@@ -50,6 +50,15 @@ export interface SeanEllisItem {
   color: string;
 }
 
+export interface CfoNpsCard {
+  titulo: string;
+  nota: number;
+  email: string;
+  cardId: string;
+  csat: number | null;
+  sentiment: 'Positivo' | 'Neutro' | 'Negativo';
+}
+
 export interface CfoPerformance {
   name: string;
   enviados: number;
@@ -58,32 +67,40 @@ export interface CfoPerformance {
   nps: number;
   csat: number;
   seanEllis: number | null;
+  cards: CfoNpsCard[];
 }
 
 export interface FeedbackItem {
   quote: string;
   npsScore: number;
   sentiment: 'Positivo' | 'Neutro' | 'Negativo';
+  email: string;
+  titulo: string;
+  cardId: string;
+  cfoName: string;
 }
 
 interface CardConnection {
   card_id: string;
+  card_pipe_id: string;
   connected_card_id: string;
+  connected_pipe_id: string;
   connected_pipe_name: string;
+  connected_card_title: string;
 }
 
 interface CentralProjeto {
   ID: string;
+  'Título': string;
   'Fase': string;
   'Fase Atual': string;
   'CFO Responsavel': string | null;
 }
 
-async function fetchNpsData(): Promise<{ npsRows: NpsCard[]; cfoMap: Record<string, string> }> {
+async function fetchNpsData(): Promise<{ npsRows: NpsCard[]; cfoMap: Record<string, string>; npsPipeId: string; titleMap: Record<string, string> }> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
-  // Fetch all 3 tables in parallel
   const [npsRes, connRes, projRes] = await Promise.all([
     supabase.functions.invoke('query-external-db', {
       body: { table: 'pipefy_moviment_nps', action: 'preview', limit: 1000 },
@@ -102,31 +119,36 @@ async function fetchNpsData(): Promise<{ npsRows: NpsCard[]; cfoMap: Record<stri
   const connections: CardConnection[] = connRes.data?.data || [];
   const projetos: CentralProjeto[] = projRes.data?.data || [];
 
-  // Build CFO map: NPS card ID → CFO name
-  // Connection: card_id (central_projetos) → connected_card_id (NPS card)
-  // Filter connections for NPS pipe
   const npsConnections = connections.filter(c =>
     c.connected_pipe_name === '5.2 Pesquisa de Satisfação NPS'
   );
 
-  // Build projeto CFO lookup (only current phase)
+  // Extract NPS pipe ID from connections
+  const npsPipeId = npsConnections[0]?.connected_pipe_id || '';
+
+  // Build projeto CFO lookup and title lookup
   const projetoCfoMap: Record<string, string> = {};
+  const projetoTitleMap: Record<string, string> = {};
   projetos.forEach(p => {
     if (p['Fase'] === p['Fase Atual'] && p['CFO Responsavel']) {
       projetoCfoMap[p.ID] = p['CFO Responsavel'];
     }
-  });
-
-  // Map NPS card ID → CFO from connected project
-  const cfoMap: Record<string, string> = {};
-  npsConnections.forEach(conn => {
-    const cfo = projetoCfoMap[conn.card_id];
-    if (cfo) {
-      cfoMap[conn.connected_card_id] = cfo;
+    if (p['Fase'] === p['Fase Atual']) {
+      projetoTitleMap[p.ID] = p['Título'] || '';
     }
   });
 
-  return { npsRows, cfoMap };
+  // Map NPS card ID → CFO and title from connected project
+  const cfoMap: Record<string, string> = {};
+  const titleMap: Record<string, string> = {};
+  npsConnections.forEach(conn => {
+    const cfo = projetoCfoMap[conn.card_id];
+    if (cfo) cfoMap[conn.connected_card_id] = cfo;
+    const title = projetoTitleMap[conn.card_id];
+    if (title) titleMap[conn.connected_card_id] = title;
+  });
+
+  return { npsRows, cfoMap, npsPipeId, titleMap };
 }
 
 function parseNpsScore(val: string | null): number | null {
@@ -171,7 +193,7 @@ function getNpsLabel(score: number): string {
   return 'Crítico';
 }
 
-function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>) {
+function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>, externalTitleMap: Record<string, string>, npsPipeId: string) {
   // Only current phase cards (unique)
   const currentCards = rows.filter(r => r['Fase'] === r['Fase Atual']);
   
@@ -261,24 +283,33 @@ function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>)
   };
 
   // CFO Performance
-  const cfoMap: Record<string, { enviados: number; withNps: { score: number }[]; csatScores: number[]; seClassifications: ReturnType<typeof classifySeanEllis>[] }> = {};
+  const cfoAggMap: Record<string, { enviados: number; withNps: { score: number; titulo: string; email: string; cardId: string; csat: number | null; sentiment: 'Positivo' | 'Neutro' | 'Negativo' }[]; csatScores: number[]; seClassifications: ReturnType<typeof classifySeanEllis>[] }> = {};
   
   currentCards.forEach(c => {
     const cfo = externalCfoMap[c.ID] || c['CFO Responsavel'] || c['Responsavel Tratativa'] || 'Sem CFO';
-    if (!cfoMap[cfo]) cfoMap[cfo] = { enviados: 0, withNps: [], csatScores: [], seClassifications: [] };
-    cfoMap[cfo].enviados++;
+    if (!cfoAggMap[cfo]) cfoAggMap[cfo] = { enviados: 0, withNps: [], csatScores: [], seClassifications: [] };
+    cfoAggMap[cfo].enviados++;
     
     const nps = parseNpsScore(c['Nota NPS']);
-    if (nps !== null) cfoMap[cfo].withNps.push({ score: nps });
+    if (nps !== null) {
+      cfoAggMap[cfo].withNps.push({
+        score: nps,
+        titulo: externalTitleMap[c.ID] || c['Título'] || '',
+        email: c['E-mail'] || '',
+        cardId: c.ID,
+        csat: parseCsatScore(c['Satisfacao Geral']),
+        sentiment: determineSentiment(nps),
+      });
+    }
     
     const csat = parseCsatScore(c['Satisfacao Geral']);
-    if (csat !== null) cfoMap[cfo].csatScores.push(csat);
+    if (csat !== null) cfoAggMap[cfo].csatScores.push(csat);
     
     const se = classifySeanEllis(c['Sentimento Oxy']);
-    if (se !== null) cfoMap[cfo].seClassifications.push(se);
+    if (se !== null) cfoAggMap[cfo].seClassifications.push(se);
   });
 
-  const cfoPerformance: CfoPerformance[] = Object.entries(cfoMap).map(([name, data]) => {
+  const cfoPerformance: CfoPerformance[] = Object.entries(cfoAggMap).map(([name, data]) => {
     const resp = data.withNps.length;
     const taxa = data.enviados > 0 ? Math.round((resp / data.enviados) * 100) : 0;
     
@@ -292,7 +323,16 @@ function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>)
     const cfeSeMuito = data.seClassifications.filter(s => s === 'muito_desapontado').length;
     const cfeSe = data.seClassifications.length > 0 ? Math.round((cfeSeMuito / data.seClassifications.length) * 100) : null;
 
-    return { name, enviados: data.enviados, respostas: resp, taxaResposta: taxa, nps: cfoNps, csat: cfoCsat, seanEllis: cfeSe };
+    const cards: CfoNpsCard[] = data.withNps.map(n => ({
+      titulo: n.titulo,
+      nota: n.score,
+      email: n.email,
+      cardId: n.cardId,
+      csat: n.csat,
+      sentiment: n.sentiment,
+    }));
+
+    return { name, enviados: data.enviados, respostas: resp, taxaResposta: taxa, nps: cfoNps, csat: cfoCsat, seanEllis: cfeSe, cards };
   }).sort((a, b) => b.nps - a.nps);
 
   // Feedback qualitativo
@@ -315,7 +355,8 @@ function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>)
     if (comentarios && comentarios !== motivo) texts.push(comentarios);
     
     texts.forEach(text => {
-      const item: FeedbackItem = { quote: text, npsScore: nps, sentiment };
+      const cfo = externalCfoMap[c.ID] || c['CFO Responsavel'] || c['Responsavel Tratativa'] || 'Sem CFO';
+      const item: FeedbackItem = { quote: text, npsScore: nps, sentiment, email: c['E-mail'] || '', titulo: externalTitleMap[c.ID] || c['Título'] || '', cardId: c.ID, cfoName: cfo };
       
       if (nps >= 9) {
         feedback.elogios.push(item);
@@ -342,6 +383,7 @@ function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>)
     cfoPerformance,
     feedback,
     seExcluded: currentCards.length - seTotal,
+    npsPipeId,
   };
 }
 
@@ -349,8 +391,8 @@ export function useNpsData() {
   return useQuery({
     queryKey: ['nps-data'],
     queryFn: async () => {
-      const { npsRows, cfoMap } = await fetchNpsData();
-      return processNpsData(npsRows, cfoMap);
+      const { npsRows, cfoMap, npsPipeId, titleMap } = await fetchNpsData();
+      return processNpsData(npsRows, cfoMap, titleMap, npsPipeId);
     },
     staleTime: 5 * 60 * 1000,
   });
