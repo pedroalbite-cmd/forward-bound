@@ -295,6 +295,7 @@ export function ChurnDossierSection({ data }: Props) {
                   <TableHead className="whitespace-nowrap">Mês do Churn</TableHead>
                   <TableHead className="whitespace-nowrap">Cliente</TableHead>
                   <TableHead className="whitespace-nowrap text-right">Setup (R$)</TableHead>
+                  <TableHead className="whitespace-nowrap text-right">Diagnóstico (R$)</TableHead>
                   <TableHead className="whitespace-nowrap text-right">MRR (R$)</TableHead>
                   <TableHead className="whitespace-nowrap">Motivo Principal</TableHead>
                   <TableHead className="whitespace-nowrap">CFO</TableHead>
