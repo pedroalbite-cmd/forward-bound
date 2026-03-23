@@ -216,7 +216,7 @@ function diffInMonths(start: string | null, end: string | null): string {
   return months > 0 ? String(months) : '';
 }
 
-function processProjects(rows: ProjectCard[], tratativas: TratativaCard[], npsRows: NpsCard[]) {
+function processProjects(rows: ProjectCard[], tratativas: TratativaCard[], npsRows: NpsCard[], assinaturaMap: Map<string, string>) {
   const currentPhase = rows.filter(r => r['Fase'] === r['Fase Atual']);
 
   const phaseCount: Record<string, number> = {};
