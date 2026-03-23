@@ -527,11 +527,11 @@ export function useOperationsData() {
     queryKey: ['operations-data'],
     queryFn: async () => {
       const [projetos, tratativas, setup, rotinas, npsRows, clientes, connections] = await Promise.all([
-        fetchTableData('pipefy_central_projetos'),
-        fetchTableData('pipefy_moviment_tratativas'),
+        fetchTableData('pipefy_central_projetos', 5000),
+        fetchTableData('pipefy_moviment_tratativas', 5000),
         fetchTableData('pipefy_moviment_setup'),
         fetchTableData('pipefy_moviment_rotinas'),
-        fetchTableData('pipefy_moviment_nps'),
+        fetchTableData('pipefy_moviment_nps', 5000),
         fetchTableData('pipefy_db_clientes', 5000),
         fetchTableData('pipefy_card_connections', 5000),
       ]);
