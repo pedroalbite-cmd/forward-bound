@@ -216,7 +216,7 @@ function processTratativas(rows: TratativaCard[]) {
   };
 }
 
-const SETUP_TERMINAL_PHASES = ['Concluído', 'Churnou', 'Desistência', 'Arquivado'];
+const SETUP_TERMINAL_PHASES = ['Concluído', 'Churnou', 'Desistência', 'Arquivado', 'Arquivo'];
 
 function processSetup(rows: SetupCard[]) {
   const currentPhase = rows.filter(r => r['Fase'] === r['Fase Atual']);
