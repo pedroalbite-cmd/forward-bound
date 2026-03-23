@@ -91,6 +91,7 @@ interface CardConnection {
 
 interface CentralProjeto {
   ID: string;
+  'Título': string;
   'Fase': string;
   'Fase Atual': string;
   'CFO Responsavel': string | null;
