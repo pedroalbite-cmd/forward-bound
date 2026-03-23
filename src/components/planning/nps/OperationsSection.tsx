@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Users, UserCheck, AlertTriangle, UserMinus, DollarSign, ClipboardList, ChevronRight } from 'lucide-react';
+import { Users, UserCheck, AlertTriangle, UserMinus, DollarSign, ClipboardList, ChevronRight, Settings, Clock } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { PipefyCardLink, PIPEFY_PIPES } from './PipefyCardLink';
 
@@ -31,8 +31,8 @@ export function OperationsSection() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-48" />
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+          {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="h-24" />
           ))}
         </div>
@@ -51,12 +51,14 @@ export function OperationsSection() {
     );
   }
 
-  const { kpis, cfoDistribution, tratativasAtivas = [], motivoChurnCount = {}, motivoCount = {} } = data;
+  const { kpis, cfoDistribution, tratativasAtivas = [], motivoChurnCount = {}, motivoCount = {}, setupAtivos = [] } = data;
 
   const kpiCards = [
     { icon: Users, label: 'Clientes Ativos', value: kpis.totalAtivos, color: 'text-primary' },
     { icon: UserCheck, label: 'Em Operação', value: kpis.emOperacao, color: 'text-green-600 dark:text-green-400' },
     { icon: ClipboardList, label: 'Onboarding', value: kpis.emOnboarding, color: 'text-blue-600 dark:text-blue-400' },
+    { icon: Settings, label: 'Em Setup', value: kpis.emSetup, color: 'text-indigo-600 dark:text-indigo-400' },
+    { icon: Clock, label: 'Setup >90d', value: kpis.setupAtrasados, color: kpis.setupAtrasados > 0 ? 'text-destructive' : 'text-muted-foreground' },
     { icon: AlertTriangle, label: 'Em Tratativa', value: kpis.tratativasAtivas, color: 'text-amber-600 dark:text-amber-400' },
     { icon: UserMinus, label: 'Churn', value: kpis.churn, color: 'text-red-600 dark:text-red-400' },
     { icon: DollarSign, label: 'MRR Total', value: formatCurrency(kpis.mrrTotal), color: 'text-emerald-600 dark:text-emerald-400' },
@@ -73,7 +75,7 @@ export function OperationsSection() {
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         {kpiCards.map((kpi) => {
           const Icon = kpi.icon;
           return (
@@ -153,6 +155,54 @@ export function OperationsSection() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Setup Ativo Table */}
+      {setupAtivos.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              Setup Ativo ({setupAtivos.length})
+              {kpis.setupAtrasados > 0 && (
+                <Badge variant="destructive" className="text-[10px]">
+                  {kpis.setupAtrasados} com +90 dias
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="max-h-[400px] overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Empresa</TableHead>
+                    <TableHead>Responsável</TableHead>
+                    <TableHead>Fase</TableHead>
+                    <TableHead className="text-right">Dias</TableHead>
+                    <TableHead className="w-8" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {setupAtivos.map((s) => (
+                    <TableRow key={s.id} className={s.atrasado ? 'bg-destructive/5' : ''}>
+                      <TableCell className="font-medium">{s.empresa}</TableCell>
+                      <TableCell>{s.responsavel}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{s.faseAtual}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        <span className={s.atrasado ? 'text-destructive font-bold' : ''}>
+                          {s.diasEmSetup}d
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <PipefyCardLink pipeId={PIPEFY_PIPES.SETUP} cardId={s.id} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tratativas Ativas Table */}
       {tratativasAtivas.length > 0 && (
