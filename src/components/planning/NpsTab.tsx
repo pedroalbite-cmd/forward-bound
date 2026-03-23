@@ -80,7 +80,7 @@ export function NpsTab() {
                 />
                 <CfoPerformanceTable data={npsData.cfoPerformance} npsPipeId={npsData.npsPipeId} />
                 <QualitativeFeedback data={npsData.feedback} npsPipeId={npsData.npsPipeId} />
-                <ExecutiveSummary />
+                
               </>
             )}
           </div>
