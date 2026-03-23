@@ -19,13 +19,8 @@ const loginSchema = z.object({
 });
 
 const signupSchema = z.object({
-  fullName: z.string().trim().min(2, 'Nome deve ter pelo menos 2 caracteres').max(100, 'Nome muito longo'),
   email: z.string().trim().email('Email inválido').max(255, 'Email muito longo'),
   password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres').max(100, 'Senha muito longa'),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: 'Senhas não conferem',
-  path: ['confirmPassword'],
 });
 
 const forgotPasswordSchema = z.object({
@@ -54,7 +49,6 @@ export default function Auth() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
-  const [showSignupConfirmPassword, setShowSignupConfirmPassword] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
   const [isProcessingRecovery, setIsProcessingRecovery] = useState(false);
@@ -101,7 +95,7 @@ export default function Auth() {
 
   const signupForm = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { fullName: '', email: '', password: '', confirmPassword: '' },
+    defaultValues: { email: '', password: '' },
   });
 
   const forgotPasswordForm = useForm<ForgotPasswordFormValues>({
@@ -132,7 +126,7 @@ export default function Auth() {
 
   const handleSignup = async (values: SignupFormValues) => {
     setIsSubmitting(true);
-    const { error } = await signUp(values.email, values.password, values.fullName);
+    const { error } = await signUp(values.email, values.password, '');
     setIsSubmitting(false);
 
     if (error) {
@@ -323,25 +317,12 @@ export default function Auth() {
             <form onSubmit={signupForm.handleSubmit(handleSignup)} className="space-y-4">
               <FormField
                 control={signupForm.control}
-                name="fullName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nome completo</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Seu nome" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={signupForm.control}
                 name="email"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="seu@email.com" {...field} />
+                      <Input type="email" placeholder="seu@email.com" autoComplete="email" className="text-foreground" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -355,7 +336,7 @@ export default function Auth() {
                     <FormLabel>Senha</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Input type={showSignupPassword ? "text" : "password"} placeholder="••••••" {...field} />
+                        <Input type={showSignupPassword ? "text" : "password"} placeholder="••••••" autoComplete="new-password" className="text-foreground" {...field} />
                         <Button
                           type="button"
                           variant="ghost"
@@ -364,34 +345,6 @@ export default function Auth() {
                           onClick={() => setShowSignupPassword(!showSignupPassword)}
                         >
                           {showSignupPassword ? (
-                            <EyeOff className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <Eye className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </Button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={signupForm.control}
-                name="confirmPassword"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Confirmar senha</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input type={showSignupConfirmPassword ? "text" : "password"} placeholder="••••••" {...field} />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                          onClick={() => setShowSignupConfirmPassword(!showSignupConfirmPassword)}
-                        >
-                          {showSignupConfirmPassword ? (
                             <EyeOff className="h-4 w-4 text-muted-foreground" />
                           ) : (
                             <Eye className="h-4 w-4 text-muted-foreground" />
@@ -426,7 +379,7 @@ export default function Auth() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="seu@email.com" {...field} />
+                      <Input type="email" placeholder="seu@email.com" autoComplete="email" className="text-foreground" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -440,7 +393,7 @@ export default function Auth() {
                     <FormLabel>Senha</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Input type={showLoginPassword ? "text" : "password"} placeholder="••••••" {...field} />
+                        <Input type={showLoginPassword ? "text" : "password"} placeholder="••••••" autoComplete="current-password" className="text-foreground" {...field} />
                         <Button
                           type="button"
                           variant="ghost"
