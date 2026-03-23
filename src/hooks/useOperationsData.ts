@@ -286,7 +286,7 @@ function processProjects(rows: ProjectCard[], tratativas: TratativaCard[], npsRo
     const trat = tratativaMap.get(key);
     const nps = npsMap.get(key);
 
-    const dataAssinatura = card['Data de assinatura do contrato'] || '';
+    const dataAssinatura = assinaturaMap.get(card.ID) || card['Data de assinatura do contrato'] || '';
     const dataEncerramento = trat?.['Saída'] ? new Date(trat['Saída']).toISOString().split('T')[0] : (card['Data encerramento'] || '');
     const mesChurn = trat ? formatMonthYear(trat['Entrada']) : (card['Mes do Churn'] || '');
     const ltMeses = diffInMonths(dataAssinatura, dataEncerramento) || (card['LT (meses)'] || '');
