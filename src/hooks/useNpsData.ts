@@ -66,16 +66,67 @@ export interface FeedbackItem {
   sentiment: 'Positivo' | 'Neutro' | 'Negativo';
 }
 
-async function fetchNpsData(): Promise<NpsCard[]> {
+interface CardConnection {
+  card_id: string;
+  connected_card_id: string;
+  connected_pipe_name: string;
+}
+
+interface CentralProjeto {
+  ID: string;
+  'Fase': string;
+  'Fase Atual': string;
+  'CFO Responsavel': string | null;
+}
+
+async function fetchNpsData(): Promise<{ npsRows: NpsCard[]; cfoMap: Record<string, string> }> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
-  const { data, error } = await supabase.functions.invoke('query-external-db', {
-    body: { table: 'pipefy_moviment_nps', action: 'preview', limit: 1000 },
+  // Fetch all 3 tables in parallel
+  const [npsRes, connRes, projRes] = await Promise.all([
+    supabase.functions.invoke('query-external-db', {
+      body: { table: 'pipefy_moviment_nps', action: 'preview', limit: 1000 },
+    }),
+    supabase.functions.invoke('query-external-db', {
+      body: { table: 'pipefy_card_connections', action: 'preview', limit: 5000 },
+    }),
+    supabase.functions.invoke('query-external-db', {
+      body: { table: 'pipefy_central_projetos', action: 'preview', limit: 2000 },
+    }),
+  ]);
+
+  if (npsRes.error) throw npsRes.error;
+
+  const npsRows: NpsCard[] = npsRes.data?.data || [];
+  const connections: CardConnection[] = connRes.data?.data || [];
+  const projetos: CentralProjeto[] = projRes.data?.data || [];
+
+  // Build CFO map: NPS card ID → CFO name
+  // Connection: card_id (central_projetos) → connected_card_id (NPS card)
+  // Filter connections for NPS pipe
+  const npsConnections = connections.filter(c =>
+    c.connected_pipe_name === '5.2 Pesquisa de Satisfação NPS'
+  );
+
+  // Build projeto CFO lookup (only current phase)
+  const projetoCfoMap: Record<string, string> = {};
+  projetos.forEach(p => {
+    if (p['Fase'] === p['Fase Atual'] && p['CFO Responsavel']) {
+      projetoCfoMap[p.ID] = p['CFO Responsavel'];
+    }
   });
 
-  if (error) throw error;
-  return data?.data || [];
+  // Map NPS card ID → CFO from connected project
+  const cfoMap: Record<string, string> = {};
+  npsConnections.forEach(conn => {
+    const cfo = projetoCfoMap[conn.card_id];
+    if (cfo) {
+      cfoMap[conn.connected_card_id] = cfo;
+    }
+  });
+
+  return { npsRows, cfoMap };
 }
 
 function parseNpsScore(val: string | null): number | null {
@@ -120,7 +171,7 @@ function getNpsLabel(score: number): string {
   return 'Crítico';
 }
 
-function processNpsData(rows: NpsCard[]) {
+function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>) {
   // Only current phase cards (unique)
   const currentCards = rows.filter(r => r['Fase'] === r['Fase Atual']);
   
@@ -133,8 +184,8 @@ function processNpsData(rows: NpsCard[]) {
   const respostas = withNps.length;
   const taxaResposta = totalPesquisados > 0 ? Math.round((respostas / totalPesquisados) * 100) : 0;
 
-  // Unique CFOs
-  const cfos = new Set(currentCards.map(c => c['CFO Responsavel'] || c['Responsavel Tratativa']).filter(Boolean));
+  // Unique CFOs (prefer external map, fallback to card fields)
+  const cfos = new Set(currentCards.map(c => externalCfoMap[c.ID] || c['CFO Responsavel'] || c['Responsavel Tratativa']).filter(Boolean));
   const cfosAtivos = cfos.size;
 
   // NPS Distribution
@@ -213,7 +264,7 @@ function processNpsData(rows: NpsCard[]) {
   const cfoMap: Record<string, { enviados: number; withNps: { score: number }[]; csatScores: number[]; seClassifications: ReturnType<typeof classifySeanEllis>[] }> = {};
   
   currentCards.forEach(c => {
-    const cfo = c['CFO Responsavel'] || c['Responsavel Tratativa'] || 'Sem CFO';
+    const cfo = externalCfoMap[c.ID] || c['CFO Responsavel'] || c['Responsavel Tratativa'] || 'Sem CFO';
     if (!cfoMap[cfo]) cfoMap[cfo] = { enviados: 0, withNps: [], csatScores: [], seClassifications: [] };
     cfoMap[cfo].enviados++;
     
@@ -298,8 +349,8 @@ export function useNpsData() {
   return useQuery({
     queryKey: ['nps-data'],
     queryFn: async () => {
-      const rows = await fetchNpsData();
-      return processNpsData(rows);
+      const { npsRows, cfoMap } = await fetchNpsData();
+      return processNpsData(npsRows, cfoMap);
     },
     staleTime: 5 * 60 * 1000,
   });
