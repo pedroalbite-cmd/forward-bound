@@ -126,7 +126,7 @@ export default function Auth() {
 
   const handleSignup = async (values: SignupFormValues) => {
     setIsSubmitting(true);
-    const { error } = await signUp(values.email, values.password, values.fullName);
+    const { error } = await signUp(values.email, values.password, '');
     setIsSubmitting(false);
 
     if (error) {
