@@ -126,7 +126,7 @@ export function ChurnDossierSection({ data }: Props) {
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card className="border-destructive/30 bg-destructive/5">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-destructive mb-1">
