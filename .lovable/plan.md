@@ -1,39 +1,69 @@
 
 
-## Fix: dataAssinatura not corrected on card objects
+## Seção de Operação na aba NPS
 
-### Root cause
+### O que será feito
 
-The `fixPossibleDateInversion` was applied to correct `dataEntrada`, but the `dataAssinatura` field on the card object still holds the original wrong date (e.g., `2026-09-03`). 
+Adicionar uma seção completa de **Operação** na aba NPS com dados em tempo real do banco externo, cobrindo visão geral dos clientes e tratativas. O conteúdo atual de NPS ficará em um bloco colapsável (clicável para mostrar/esconder).
 
-In `useModeloAtualAnalytics.ts`, the counting logic for 'venda' explicitly uses `card.dataAssinatura` as the effective date (lines 383-386 and 433-435), completely bypassing the corrected `dataEntrada`:
+### Layout final da aba NPS
 
-```typescript
-const effectiveDate = indicator === 'venda' 
-  ? (card.dataAssinatura || card.dataEntrada)  // ← uses uncorrected 2026-09-03
-  : card.dataEntrada;
+```text
+┌─────────────────────────────────────┐
+│  Header (Q4 2025 / Customer Success)│
+├─────────────────────────────────────┤
+│  ▼ Operação (seção nova, aberta)    │
+│  ┌─ KPIs: Clientes ativos,         │
+│  │  Em onboarding, Em tratativa,    │
+│  │  Churn, MRR total               │
+│  ├─ Distribuição por fase (barras)  │
+│  ├─ Clientes por CFO (tabela)      │
+│  ├─ Tratativas ativas (tabela)     │
+│  │  Motivo, Decisão, Tempo médio   │
+│  └─ Motivos de churn (gráfico)     │
+├─────────────────────────────────────┤
+│  ▼ NPS (colapsável, fechado)        │
+│  ┌─ NpsKpiCards                     │
+│  ├─ NpsGauges                       │
+│  ├─ NpsScoreCards                   │
+│  ├─ NpsDistributions                │
+│  ├─ CfoPerformanceTable             │
+│  ├─ QualitativeFeedback             │
+│  └─ ExecutiveSummary                │
+└─────────────────────────────────────┘
 ```
 
-So even though `dataEntrada` was fixed to March, the venda counting still uses September from `dataAssinatura`.
+### Alterações
 
-### Fix (1 file)
+**1. Edge Function — `supabase/functions/query-external-db/index.ts`**
+- Adicionar `pipefy_central_projetos`, `pipefy_moviment_tratativas`, `pipefy_db_clientes`, `pipefy_db_pessoas` ao array `validTables`
 
-**`src/hooks/useModeloAtualAnalytics.ts`** — In `parseCardRow`, also update `dataAssinatura` with the corrected value when the fix is applied:
+**2. Novo hook — `src/hooks/useOperationsData.ts`**
+- Buscar dados de `pipefy_central_projetos` (cards na fase atual) e `pipefy_moviment_tratativas` (tratativas ativas)
+- Calcular KPIs: clientes por fase, MRR total, distribuição por CFO
+- Calcular métricas de tratativas: ativos por motivo, decisões finais, tempo médio por fase
 
-```typescript
-// Line 130: make dataAssinatura mutable
-let correctedAssinatura = dataAssinatura;
+**3. Novo componente — `src/components/planning/nps/OperationsSection.tsx`**
+- KPI cards: Total clientes ativos, Em onboarding, Em tratativa, Churn
+- Tabela de distribuição por CFO (nome, qtd clientes, MRR)
+- Tabela de tratativas ativas (empresa, motivo, CFO responsável, dias em tratativa)
+- Distribuição de motivos de churn (barras horizontais)
 
-// Line 134-136: fix both dataEntrada AND dataAssinatura
-if (fase === 'Contrato assinado' && dataAssinatura) {
-  const fixed = fixPossibleDateInversion(dataAssinatura, dataEntrada);
-  dataEntrada = fixed;
-  correctedAssinatura = fixed;
-}
+**4. Alterar — `src/components/planning/NpsTab.tsx`**
+- Importar `OperationsSection` e `Collapsible`
+- Adicionar `OperationsSection` no topo
+- Envolver todo o conteúdo NPS existente em um `Collapsible` com trigger clicável "Resultados NPS" (inicialmente fechado)
 
-// Line 166: use correctedAssinatura instead of dataAssinatura
-dataAssinatura: correctedAssinatura,
-```
+### Dados que serão buscados
 
-This ensures the `effectiveDate` logic for venda also uses the corrected date, placing ServiPromo and Infinit in March where they belong.
+**pipefy_central_projetos** (WHERE "Fase" = "Fase Atual"):
+- Fase atual → contagem por fase (Onboarding, Em Operação Recorrente, Em Tratativa, Churn)
+- CFO Responsavel → agrupamento
+- Valor CFOaaS → soma MRR
+- Produtos → segmentação
+
+**pipefy_moviment_tratativas** (WHERE "Fase" = "Fase Atual"):
+- Título, CFO Responsavel, Motivo, Decisao Final, Motivo Churn
+- Duração na fase atual (tempo em tratativa)
+- Fase Atual → distribuição (Em Tratativa com CS, Plano de Ação, etc.)
 
