@@ -336,7 +336,7 @@ export default function Auth() {
                     <FormLabel>Senha</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Input type={showSignupPassword ? "text" : "password"} placeholder="••••••" autoComplete="new-password" className="text-foreground" {...field} />
+                        <Input type={showSignupPassword ? "text" : "password"} placeholder="••••••" autoComplete="new-password" {...field} value={field.value ?? ''} />
                         <Button
                           type="button"
                           variant="ghost"
