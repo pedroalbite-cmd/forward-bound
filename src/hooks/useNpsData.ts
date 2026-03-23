@@ -184,8 +184,8 @@ function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>)
   const respostas = withNps.length;
   const taxaResposta = totalPesquisados > 0 ? Math.round((respostas / totalPesquisados) * 100) : 0;
 
-  // Unique CFOs
-  const cfos = new Set(currentCards.map(c => c['CFO Responsavel'] || c['Responsavel Tratativa']).filter(Boolean));
+  // Unique CFOs (prefer external map, fallback to card fields)
+  const cfos = new Set(currentCards.map(c => externalCfoMap[c.ID] || c['CFO Responsavel'] || c['Responsavel Tratativa']).filter(Boolean));
   const cfosAtivos = cfos.size;
 
   // NPS Distribution
