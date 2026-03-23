@@ -422,7 +422,7 @@ export function useOperationsData() {
       const projectData = processProjects(projetos);
       const tratativaData = processTratativas(tratativas);
       const setupData = processSetup(setup, projetos);
-      const rotinaData = processRotinas(rotinas);
+      const rotinaData = processRotinas(rotinas, projetos);
 
       const kpis: OperationsKpis = {
         totalAtivos: projectData.emOnboarding + projectData.emOperacao,
