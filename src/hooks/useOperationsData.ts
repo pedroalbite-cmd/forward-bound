@@ -88,6 +88,36 @@ export interface SetupActive {
   atrasado: boolean;
 }
 
+export interface RotinaCard {
+  ID: string;
+  'Título': string;
+  'Fase': string;
+  'Fase Atual': string;
+  'Entrada': string;
+  'Saída': string | null;
+  'CFO Responsavel': string | null;
+  'Overdue': boolean | string | null;
+  'Data Prevista Entrega': string | null;
+  'Tipo de Entrega': string | null;
+  'Mes Referencia': string | null;
+}
+
+export interface RotinaAtrasada {
+  id: string;
+  empresa: string;
+  tipoEntrega: string;
+  dataPrevista: string;
+  diasAtraso: number;
+  faseAtual: string;
+}
+
+export interface CfoTaskSummary {
+  cfo: string;
+  totalAtivas: number;
+  atrasadas: number;
+  tarefas: RotinaAtrasada[];
+}
+
 export interface OperationsKpis {
   totalAtivos: number;
   emOnboarding: number;
