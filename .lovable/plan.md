@@ -1,69 +1,53 @@
 
 
-## Seção de Operação na aba NPS
+## Investigacao completa
 
-### O que será feito
+### 1. Por que 108 clientes aparecem "Sem CFO"
 
-Adicionar uma seção completa de **Operação** na aba NPS com dados em tempo real do banco externo, cobrindo visão geral dos clientes e tratativas. O conteúdo atual de NPS ficará em um bloco colapsável (clicável para mostrar/esconder).
+A tabela `pipefy_central_projetos` tem dois campos de responsavel:
+- **"CFO Responsavel"** — nome curto (ex: "Douglas Schossler"). Este e o campo usado hoje no codigo.
+- **"Responsavel"** — nome completo (ex: "Douglas Pinheiro Schossler"). Sempre preenchido quando o outro esta.
 
-### Layout final da aba NPS
+O problema: o codigo conta TODOS os 260 cards unicos (filtro `Fase === Fase Atual`), incluindo cards em fases como **Churn, Atividades finalizadas, Desistencia, Arquivado**. Muitos desses cards antigos nunca tiveram o campo "CFO Responsavel" preenchido no Pipefy. Isso nao e um bug — sao cards antigos/inativos onde o campo realmente esta vazio.
 
-```text
-┌─────────────────────────────────────┐
-│  Header (Q4 2025 / Customer Success)│
-├─────────────────────────────────────┤
-│  ▼ Operação (seção nova, aberta)    │
-│  ┌─ KPIs: Clientes ativos,         │
-│  │  Em onboarding, Em tratativa,    │
-│  │  Churn, MRR total               │
-│  ├─ Distribuição por fase (barras)  │
-│  ├─ Clientes por CFO (tabela)      │
-│  ├─ Tratativas ativas (tabela)     │
-│  │  Motivo, Decisão, Tempo médio   │
-│  └─ Motivos de churn (gráfico)     │
-├─────────────────────────────────────┤
-│  ▼ NPS (colapsável, fechado)        │
-│  ┌─ NpsKpiCards                     │
-│  ├─ NpsGauges                       │
-│  ├─ NpsScoreCards                   │
-│  ├─ NpsDistributions                │
-│  ├─ CfoPerformanceTable             │
-│  ├─ QualitativeFeedback             │
-│  └─ ExecutiveSummary                │
-└─────────────────────────────────────┘
-```
+**Correcao proposta:**
+- Usar "Responsavel" como fallback quando "CFO Responsavel" estiver vazio
+- Na tabela de distribuicao por CFO, separar ou filtrar por fase ativa (Onboarding + Em Operacao Recorrente) para dar visibilidade real
 
-### Alterações
+### 2. Operacao esta 100% do banco de dados?
 
-**1. Edge Function — `supabase/functions/query-external-db/index.ts`**
-- Adicionar `pipefy_central_projetos`, `pipefy_moviment_tratativas`, `pipefy_db_clientes`, `pipefy_db_pessoas` ao array `validTables`
+Sim. O `useOperationsData.ts` busca dados exclusivamente via edge function `query-external-db` das tabelas `pipefy_central_projetos` e `pipefy_moviment_tratativas`. Nenhum dado e hardcoded.
 
-**2. Novo hook — `src/hooks/useOperationsData.ts`**
-- Buscar dados de `pipefy_central_projetos` (cards na fase atual) e `pipefy_moviment_tratativas` (tratativas ativas)
-- Calcular KPIs: clientes por fase, MRR total, distribuição por CFO
-- Calcular métricas de tratativas: ativos por motivo, decisões finais, tempo médio por fase
+### 3. Vincular NPS ao banco de dados
 
-**3. Novo componente — `src/components/planning/nps/OperationsSection.tsx`**
-- KPI cards: Total clientes ativos, Em onboarding, Em tratativa, Churn
-- Tabela de distribuição por CFO (nome, qtd clientes, MRR)
-- Tabela de tratativas ativas (empresa, motivo, CFO responsável, dias em tratativa)
-- Distribuição de motivos de churn (barras horizontais)
+**Nao existe tabela de NPS no banco externo.** As 5 tabelas disponiveis sao:
+- `pipefy_central_projetos` — fases de projeto, CFO, valores
+- `pipefy_moviment_tratativas` — tratativas com clientes
+- `pipefy_db_clientes` — cadastro de clientes (CNPJ, contato, ERP)
+- `pipefy_db_pessoas` — time/CFOs (nome, cargo, email)
+- `pipefy_card_connections` — relacionamentos entre cards
 
-**4. Alterar — `src/components/planning/NpsTab.tsx`**
-- Importar `OperationsSection` e `Collapsible`
-- Adicionar `OperationsSection` no topo
-- Envolver todo o conteúdo NPS existente em um `Collapsible` com trigger clicável "Resultados NPS" (inicialmente fechado)
+Nenhuma contem scores NPS, CSAT, Sean Ellis, ou respostas de pesquisa. Hoje o NPS esta 100% hardcoded no arquivo `npsData.ts`.
 
-### Dados que serão buscados
+**O que falta para vincular o NPS:**
+Voce precisa ter uma tabela (no banco externo ou no banco Cloud) com os dados da pesquisa NPS. Essa tabela precisaria conter pelo menos:
+- Cliente / empresa
+- CFO responsavel
+- Score NPS (0-10)
+- Score CSAT (1-5)
+- Score Sean Ellis
+- Feedback texto
+- Data da pesquisa
+- Trimestre/periodo
 
-**pipefy_central_projetos** (WHERE "Fase" = "Fase Atual"):
-- Fase atual → contagem por fase (Onboarding, Em Operação Recorrente, Em Tratativa, Churn)
-- CFO Responsavel → agrupamento
-- Valor CFOaaS → soma MRR
-- Produtos → segmentação
+**Pergunta:** Esses dados de NPS existem em algum outro lugar (planilha Google, Pipefy, outro sistema)? Preciso saber a fonte para poder conectar.
 
-**pipefy_moviment_tratativas** (WHERE "Fase" = "Fase Atual"):
-- Título, CFO Responsavel, Motivo, Decisao Final, Motivo Churn
-- Duração na fase atual (tempo em tratativa)
-- Fase Atual → distribuição (Em Tratativa com CS, Plano de Ação, etc.)
+### Plano de correcao imediata (Sem CFO)
+
+**1. `src/hooks/useOperationsData.ts`**
+- Linha 98: usar fallback `card['CFO Responsavel'] || card['Responsavel'] || 'Sem CFO'`
+- Adicionar campo "Responsavel" a interface `ProjectCard`
+
+**2. `src/components/planning/nps/OperationsSection.tsx`**
+- Na tabela de CFOs, adicionar coluna de "Fase" ou filtrar para mostrar apenas clientes ativos por padrao
 
