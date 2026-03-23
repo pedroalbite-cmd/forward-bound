@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
 
     let result: Record<string, unknown>;
 
-    const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos'];
+    const validTables = ['pipefy_cards', 'pipefy_cards_expansao', 'pipefy_cards_movements', 'pipefy_cards_movements_expansao', 'pipefy_moviment_cfos', 'pipefy_central_projetos', 'pipefy_moviment_tratativas', 'pipefy_db_clientes', 'pipefy_db_pessoas'];
 
     const validateTable = async (tbl: string) => {
       if (!validTables.includes(tbl)) {
