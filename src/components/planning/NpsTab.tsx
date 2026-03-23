@@ -78,8 +78,8 @@ export function NpsTab() {
                   seanEllisDistribution={npsData.seanEllisDistribution}
                   seExcluded={npsData.seExcluded}
                 />
-                <CfoPerformanceTable data={npsData.cfoPerformance} />
-                <QualitativeFeedback data={npsData.feedback} />
+                <CfoPerformanceTable data={npsData.cfoPerformance} npsPipeId={npsData.npsPipeId} />
+                <QualitativeFeedback data={npsData.feedback} npsPipeId={npsData.npsPipeId} />
                 <ExecutiveSummary />
               </>
             )}
