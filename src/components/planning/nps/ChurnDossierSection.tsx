@@ -70,7 +70,7 @@ export function ChurnDossierSection({ data }: Props) {
   }, [data, filterMotivo, filterCfo, filterMes]);
 
   const totalMrrPerdido = useMemo(() => filtered.reduce((s, d) => s + (d.mrr || 0), 0), [filtered]);
-  const totalDiagnostico = useMemo(() => filtered.reduce((s, d) => s + (d.diagnostico || 0), 0), [filtered]);
+  
   const avgLt = useMemo(() => {
     const lts = filtered.map(d => parseFloat(d.ltMeses)).filter(n => !isNaN(n) && n > 0);
     return lts.length ? (lts.reduce((a, b) => a + b, 0) / lts.length).toFixed(1) : '—';
@@ -126,7 +126,7 @@ export function ChurnDossierSection({ data }: Props) {
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border-destructive/30 bg-destructive/5">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-destructive mb-1">
@@ -144,15 +144,6 @@ export function ChurnDossierSection({ data }: Props) {
               <span className="text-xs font-medium uppercase tracking-wide">MRR Perdido</span>
             </div>
             <p className="text-2xl font-bold text-foreground">{formatCurrency(totalMrrPerdido)}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-warning/30 bg-warning/5">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-[hsl(var(--warning))] mb-1">
-              <DollarSign className="h-4 w-4" />
-              <span className="text-xs font-medium uppercase tracking-wide">Diagnóstico Perdido</span>
-            </div>
-            <p className="text-2xl font-bold text-foreground">{formatCurrency(totalDiagnostico)}</p>
           </CardContent>
         </Card>
         <Card className="border-primary/30 bg-primary/5">
