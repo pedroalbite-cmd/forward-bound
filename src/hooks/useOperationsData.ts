@@ -354,15 +354,24 @@ function processSetup(rows: SetupCard[], projetos: ProjectCard[]) {
 
 const ROTINA_TERMINAL_PHASES = ['Entregue / Concluído', 'Arquivado', 'Arquivo'];
 
-function processRotinas(rows: RotinaCard[]): { cfoTaskSummary: CfoTaskSummary[]; tarefasAtrasadasTotal: number } {
+function processRotinas(rows: RotinaCard[], projetos: ProjectCard[]): { cfoTaskSummary: CfoTaskSummary[]; tarefasAtrasadasTotal: number } {
   const currentPhase = rows.filter(r => r['Fase'] === r['Fase Atual']);
   const activeCards = currentPhase.filter(c => !ROTINA_TERMINAL_PHASES.includes(c['Fase Atual'] || ''));
   const now = Date.now();
 
+  // Build fallback map from projects: titulo → CFO
+  const cfoFallbackMap = new Map<string, string>();
+  projetos.forEach(p => {
+    const titulo = (p['Título'] || '').trim().toLowerCase();
+    const cfo = p['CFO Responsavel'] || p['Responsavel'];
+    if (titulo && cfo) cfoFallbackMap.set(titulo, cfo);
+  });
+
   const cfoMap: Record<string, { totalAtivas: number; atrasadas: number; tarefas: RotinaAtrasada[] }> = {};
 
   activeCards.forEach(card => {
-    const cfo = card['CFO Responsavel'] || 'Sem CFO';
+    const titulo = (card['Título'] || '').trim().toLowerCase();
+    const cfo = card['CFO Responsavel'] || cfoFallbackMap.get(titulo) || 'Sem CFO';
     if (!cfoMap[cfo]) cfoMap[cfo] = { totalAtivas: 0, atrasadas: 0, tarefas: [] };
     cfoMap[cfo].totalAtivas += 1;
 
