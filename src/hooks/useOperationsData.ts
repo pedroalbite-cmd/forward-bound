@@ -315,6 +315,7 @@ function processProjects(rows: ProjectCard[], tratativas: TratativaCard[], npsRo
       dataEncerramento,
       ltMeses,
       problemasOxy,
+      diagnostico: parseNumber(card['Valor Diagnostico']),
       _refDate: refDate,
     };
   }).filter(c => c._refDate >= CHURN_CUTOFF)

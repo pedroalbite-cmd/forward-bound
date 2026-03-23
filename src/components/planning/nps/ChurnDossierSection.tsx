@@ -374,7 +374,7 @@ export function ChurnDossierSection({ data }: Props) {
                       </TableRow>
                       {isExpanded && (
                         <TableRow key={`${row.id}-details`} className="bg-muted/30">
-                          <TableCell colSpan={13} className="p-4">
+                          <TableCell colSpan={14} className="p-4">
                             <div className="grid md:grid-cols-2 gap-4 text-sm">
                               <div>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Motivos de Cancelamento</p>
