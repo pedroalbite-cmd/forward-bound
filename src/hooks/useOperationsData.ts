@@ -88,6 +88,12 @@ export interface SetupActive {
   atrasado: boolean;
 }
 
+export interface SetupByErp {
+  erp: string;
+  mediaDias: number;
+  count: number;
+}
+
 export interface RotinaCard {
   ID: string;
   'Título': string;
@@ -115,7 +121,13 @@ export interface CfoTaskSummary {
   cfo: string;
   totalAtivas: number;
   atrasadas: number;
+  taxaEntrega: number;
   tarefas: RotinaAtrasada[];
+}
+
+export interface SatisfacaoDistribution {
+  nota: string;
+  count: number;
 }
 
 export interface OperationsKpis {
@@ -129,6 +141,9 @@ export interface OperationsKpis {
   emSetup: number;
   setupAtrasados: number;
   tarefasAtrasadas: number;
+  churnRate: number;
+  retencaoRate: number;
+  mrrEmRisco: number;
 }
 
 async function fetchTableData(table: string, limit = 1000) {
@@ -150,12 +165,12 @@ function parseNumber(val: string | null | undefined): number {
 }
 
 function processProjects(rows: ProjectCard[]) {
-  // Filter to current phase only (unique cards)
   const currentPhase = rows.filter(r => r['Fase'] === r['Fase Atual']);
 
   const phaseCount: Record<string, number> = {};
   const cfoMapAtivos: Record<string, { clientes: number; mrr: number; clients: CfoClient[] }> = {};
   let mrrTotal = 0;
+  let mrrEmRisco = 0;
 
   const fasesAtivas = ['Onboarding', 'Em Operação Recorrente'];
 
@@ -178,21 +193,32 @@ function processProjects(rows: ProjectCard[]) {
       });
       mrrTotal += mrr;
     }
+
+    if (fase === 'Em Tratativa') {
+      mrrEmRisco += mrr;
+    }
   });
 
   const cfoDistribution: CfoDistribution[] = Object.entries(cfoMapAtivos)
     .map(([cfo, data]) => ({ cfo, ...data }))
     .sort((a, b) => b.clientes - a.clientes);
 
+  const totalAtivos = (phaseCount['Onboarding'] || 0) + (phaseCount['Em Operação Recorrente'] || 0);
+  const churn = (phaseCount['Churn'] || 0) + (phaseCount['Atividades finalizadas'] || 0) + (phaseCount['Desistência'] || 0);
+  const churnRate = (totalAtivos + churn) > 0 ? (churn / (totalAtivos + churn)) * 100 : 0;
+
   return {
     phaseCount,
     cfoDistribution,
     mrrTotal,
+    mrrEmRisco,
     totalCards: currentPhase.length,
     emOnboarding: phaseCount['Onboarding'] || 0,
     emOperacao: phaseCount['Em Operação Recorrente'] || 0,
     emTratativa: phaseCount['Em Tratativa'] || 0,
-    churn: (phaseCount['Churn'] || 0) + (phaseCount['Atividades finalizadas'] || 0) + (phaseCount['Desistência'] || 0),
+    churn,
+    churnRate,
+    retencaoRate: 100 - churnRate,
   };
 }
 
@@ -216,7 +242,6 @@ function processTratativas(rows: TratativaCard[]) {
     };
   }).sort((a, b) => b.diasEmTratativa - a.diasEmTratativa);
 
-  // Motivos de churn
   const finalizadas = currentPhase.filter(c =>
     c['Fase Atual'] === 'Tratativa finalizada' || c['Fase Atual'] === 'Arquivado'
   );
@@ -230,12 +255,23 @@ function processTratativas(rows: TratativaCard[]) {
     decisaoCount[decisao] = (decisaoCount[decisao] || 0) + 1;
   });
 
-  // Motivo distribuição (de todos com motivo)
   const motivoCount: Record<string, number> = {};
   currentPhase.forEach(card => {
     const motivo = card['Motivo'] || 'Não informado';
     motivoCount[motivo] = (motivoCount[motivo] || 0) + 1;
   });
+
+  // Satisfação do Cliente nas tratativas finalizadas
+  const satisfacaoCount: Record<string, number> = {};
+  finalizadas.forEach(card => {
+    const sat = card['Satisfacao do Cliente'];
+    if (sat && sat.trim()) {
+      satisfacaoCount[sat.trim()] = (satisfacaoCount[sat.trim()] || 0) + 1;
+    }
+  });
+  const satisfacaoDistribution: SatisfacaoDistribution[] = Object.entries(satisfacaoCount)
+    .map(([nota, count]) => ({ nota, count }))
+    .sort((a, b) => b.count - a.count);
 
   return {
     tratativasAtivas,
@@ -244,12 +280,13 @@ function processTratativas(rows: TratativaCard[]) {
     motivoChurnCount,
     decisaoCount,
     motivoCount,
+    satisfacaoDistribution,
   };
 }
 
 const SETUP_TERMINAL_PHASES = ['Concluído', 'Churnou', 'Desistência', 'Arquivado', 'Arquivo'];
 
-function processSetup(rows: SetupCard[]) {
+function processSetup(rows: SetupCard[], projetos: ProjectCard[]) {
   const currentPhase = rows.filter(r => r['Fase'] === r['Fase Atual']);
   const now = Date.now();
 
@@ -268,11 +305,50 @@ function processSetup(rows: SetupCard[]) {
     };
   }).sort((a, b) => b.diasEmSetup - a.diasEmSetup);
 
+  // Tempo médio de setup por ERP (dos concluídos)
+  const erpMap = new Map<string, string>();
+  projetos.forEach(p => {
+    const titulo = p['Título'];
+    const erp = p['ERP'];
+    if (titulo && erp) erpMap.set(titulo.trim().toLowerCase(), erp.trim());
+  });
+
+  // For concluded setups, calculate total duration
+  const concludedCards = currentPhase.filter(c => c['Fase Atual'] === 'Concluído');
+  const erpDurations: Record<string, number[]> = {};
+
+  concludedCards.forEach(card => {
+    const titulo = (card['Título'] || card['Nome Empresa'] || '').trim().toLowerCase();
+    const erp = erpMap.get(titulo) || 'Não Informado';
+    
+    // Use Duração (s) if available, otherwise calculate from Entrada to now
+    let dias = 0;
+    if (card['Duração (s)'] && card['Duração (s)'] > 0) {
+      dias = Math.round(card['Duração (s)'] / 86400);
+    } else {
+      const entrada = new Date(card['Entrada']).getTime();
+      const saida = card['Saída'] ? new Date(card['Saída']).getTime() : now;
+      dias = Math.max(0, Math.round((saida - entrada) / 86400000));
+    }
+
+    if (!erpDurations[erp]) erpDurations[erp] = [];
+    erpDurations[erp].push(dias);
+  });
+
+  const setupByErp: SetupByErp[] = Object.entries(erpDurations)
+    .map(([erp, durations]) => ({
+      erp,
+      mediaDias: Math.round(durations.reduce((a, b) => a + b, 0) / durations.length),
+      count: durations.length,
+    }))
+    .sort((a, b) => b.mediaDias - a.mediaDias);
+
   return {
     setupAtivos,
     total: currentPhase.length,
     emSetup: activeCards.length,
     setupAtrasados: setupAtivos.filter(s => s.atrasado).length,
+    setupByErp,
   };
 }
 
@@ -310,7 +386,12 @@ function processRotinas(rows: RotinaCard[]): { cfoTaskSummary: CfoTaskSummary[];
   });
 
   const cfoTaskSummary: CfoTaskSummary[] = Object.entries(cfoMap)
-    .map(([cfo, data]) => ({ cfo, ...data, tarefas: data.tarefas.sort((a, b) => b.diasAtraso - a.diasAtraso) }))
+    .map(([cfo, data]) => ({
+      cfo,
+      ...data,
+      taxaEntrega: data.totalAtivas > 0 ? Math.round(((data.totalAtivas - data.atrasadas) / data.totalAtivas) * 100) : 100,
+      tarefas: data.tarefas.sort((a, b) => b.diasAtraso - a.diasAtraso),
+    }))
     .sort((a, b) => b.atrasadas - a.atrasadas);
 
   const tarefasAtrasadasTotal = cfoTaskSummary.reduce((sum, c) => sum + c.atrasadas, 0);
@@ -331,7 +412,7 @@ export function useOperationsData() {
 
       const projectData = processProjects(projetos);
       const tratativaData = processTratativas(tratativas);
-      const setupData = processSetup(setup);
+      const setupData = processSetup(setup, projetos);
       const rotinaData = processRotinas(rotinas);
 
       const kpis: OperationsKpis = {
@@ -345,6 +426,9 @@ export function useOperationsData() {
         emSetup: setupData.emSetup,
         setupAtrasados: setupData.setupAtrasados,
         tarefasAtrasadas: rotinaData.tarefasAtrasadasTotal,
+        churnRate: projectData.churnRate,
+        retencaoRate: projectData.retencaoRate,
+        mrrEmRisco: projectData.mrrEmRisco,
       };
 
       return {
@@ -357,6 +441,8 @@ export function useOperationsData() {
         motivoCount: tratativaData.motivoCount,
         setupAtivos: setupData.setupAtivos,
         cfoTaskSummary: rotinaData.cfoTaskSummary,
+        setupByErp: setupData.setupByErp,
+        satisfacaoDistribution: tratativaData.satisfacaoDistribution,
       };
     },
     staleTime: 5 * 60 * 1000,
