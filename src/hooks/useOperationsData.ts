@@ -281,6 +281,9 @@ function processProjects(rows: ProjectCard[], tratativas: TratativaCard[], npsRo
     }
   });
 
+  // Filtro: apenas churns a partir de Outubro/2025
+  const CHURN_CUTOFF = new Date('2025-10-01').getTime();
+
   const churnDossier: ChurnDossierCard[] = churnCards.map(card => {
     const key = (card['Título'] || '').trim().toLowerCase();
     const trat = tratativaMap.get(key);
@@ -291,8 +294,10 @@ function processProjects(rows: ProjectCard[], tratativas: TratativaCard[], npsRo
     const mesChurn = trat ? formatMonthYear(trat['Entrada']) : (card['Mes do Churn'] || '');
     const ltMeses = diffInMonths(dataAssinatura, dataEncerramento) || (card['LT (meses)'] || '');
 
-    // Problemas com a Oxy: NPS comments (detractor feedback)
     const problemasOxy = nps?.['Comentarios'] || nps?.['Motivo da Nota'] || card['Problemas com a Oxy'] || '';
+
+    // Determinar data de referência para filtro
+    const refDate = trat?.['Entrada'] ? new Date(trat['Entrada']).getTime() : (card['Entrada'] ? new Date(card['Entrada']).getTime() : 0);
 
     return {
       id: card.ID,
@@ -309,8 +314,10 @@ function processProjects(rows: ProjectCard[], tratativas: TratativaCard[], npsRo
       dataEncerramento,
       ltMeses,
       problemasOxy,
+      _refDate: refDate,
     };
-  });
+  }).filter(c => c._refDate >= CHURN_CUTOFF)
+    .map(({ _refDate, ...rest }) => rest);
 
   return {
     phaseCount,
