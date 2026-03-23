@@ -82,8 +82,11 @@ export interface FeedbackItem {
 
 interface CardConnection {
   card_id: string;
+  card_pipe_id: string;
   connected_card_id: string;
+  connected_pipe_id: string;
   connected_pipe_name: string;
+  connected_card_title: string;
 }
 
 interface CentralProjeto {
