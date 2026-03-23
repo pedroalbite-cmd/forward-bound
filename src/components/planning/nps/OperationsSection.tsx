@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useOperationsData, CfoDistribution } from '@/hooks/useOperationsData';
+import { useOperationsData, CfoDistribution, CfoTaskSummary } from '@/hooks/useOperationsData';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Users, UserCheck, AlertTriangle, UserMinus, DollarSign, ClipboardList, ChevronRight, Settings, Clock } from 'lucide-react';
+import { Users, UserCheck, AlertTriangle, UserMinus, DollarSign, ClipboardList, ChevronRight, Settings, Clock, ListChecks } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { PipefyCardLink, PIPEFY_PIPES } from './PipefyCardLink';
 
@@ -26,13 +26,14 @@ function formatCurrency(value: number) {
 export function OperationsSection() {
   const { data, isLoading, error } = useOperationsData();
   const [selectedCfo, setSelectedCfo] = useState<CfoDistribution | null>(null);
+  const [selectedCfoTasks, setSelectedCfoTasks] = useState<CfoTaskSummary | null>(null);
 
   if (isLoading) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-48" />
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-          {Array.from({ length: 8 }).map((_, i) => (
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-3">
+          {Array.from({ length: 9 }).map((_, i) => (
             <Skeleton key={i} className="h-24" />
           ))}
         </div>
@@ -51,7 +52,7 @@ export function OperationsSection() {
     );
   }
 
-  const { kpis, cfoDistribution, tratativasAtivas = [], motivoChurnCount = {}, motivoCount = {}, setupAtivos = [] } = data;
+  const { kpis, cfoDistribution, tratativasAtivas = [], motivoChurnCount = {}, motivoCount = {}, setupAtivos = [], cfoTaskSummary = [] } = data;
 
   const kpiCards = [
     { icon: Users, label: 'Clientes Ativos', value: kpis.totalAtivos, color: 'text-primary' },
@@ -59,6 +60,7 @@ export function OperationsSection() {
     { icon: ClipboardList, label: 'Onboarding', value: kpis.emOnboarding, color: 'text-blue-600 dark:text-blue-400' },
     { icon: Settings, label: 'Em Setup', value: kpis.emSetup, color: 'text-indigo-600 dark:text-indigo-400' },
     { icon: Clock, label: 'Setup >90d', value: kpis.setupAtrasados, color: kpis.setupAtrasados > 0 ? 'text-destructive' : 'text-muted-foreground' },
+    { icon: ListChecks, label: 'Tarefas Atrasadas', value: kpis.tarefasAtrasadas, color: kpis.tarefasAtrasadas > 0 ? 'text-destructive' : 'text-muted-foreground' },
     { icon: AlertTriangle, label: 'Em Tratativa', value: kpis.tratativasAtivas, color: 'text-amber-600 dark:text-amber-400' },
     { icon: UserMinus, label: 'Churn', value: kpis.churn, color: 'text-red-600 dark:text-red-400' },
     { icon: DollarSign, label: 'MRR Total', value: formatCurrency(kpis.mrrTotal), color: 'text-emerald-600 dark:text-emerald-400' },
@@ -75,7 +77,7 @@ export function OperationsSection() {
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-9 gap-3">
         {kpiCards.map((kpi) => {
           const Icon = kpi.icon;
           return (
@@ -130,6 +132,49 @@ export function OperationsSection() {
           </CardContent>
         </Card>
 
+        {/* Tarefas por CFO */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Tarefas por CFO — clique para ver atrasadas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="max-h-[300px] overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>CFO</TableHead>
+                    <TableHead className="text-right">Ativas</TableHead>
+                    <TableHead className="text-right">Atrasadas</TableHead>
+                    <TableHead className="w-8" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cfoTaskSummary.map((row) => (
+                    <TableRow
+                      key={row.cfo}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => setSelectedCfoTasks(row)}
+                    >
+                      <TableCell className="font-medium">{row.cfo}</TableCell>
+                      <TableCell className="text-right">{row.totalAtivas}</TableCell>
+                      <TableCell className="text-right">
+                        <span className={row.atrasadas > 0 ? 'text-destructive font-bold' : ''}>
+                          {row.atrasadas}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Motivos das Tratativas */}
         <Card>
           <CardHeader className="pb-3">
@@ -154,6 +199,29 @@ export function OperationsSection() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
+
+        {/* Motivos de Churn */}
+        {motivoChurnData.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Motivos de Churn (Tratativas Finalizadas)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={motivoChurnData} layout="vertical" margin={{ left: 20, right: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
+                  <YAxis dataKey="name" type="category" width={160} tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }} />
+                  <Tooltip
+                    contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
+                    labelStyle={{ color: 'hsl(var(--foreground))' }}
+                  />
+                  <Bar dataKey="value" fill="hsl(var(--destructive))" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Setup Ativo Table */}
@@ -249,29 +317,6 @@ export function OperationsSection() {
         </Card>
       )}
 
-      {/* Motivos de Churn */}
-      {motivoChurnData.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Motivos de Churn (Tratativas Finalizadas)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={motivoChurnData} layout="vertical" margin={{ left: 20, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis type="number" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                <YAxis dataKey="name" type="category" width={160} tick={{ fill: 'hsl(var(--foreground))', fontSize: 11 }} />
-                <Tooltip
-                  contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
-                  labelStyle={{ color: 'hsl(var(--foreground))' }}
-                />
-                <Bar dataKey="value" fill="hsl(var(--destructive))" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      )}
-
       {/* CFO Client Drill-down Sheet */}
       <Sheet open={!!selectedCfo} onOpenChange={() => setSelectedCfo(null)}>
         <SheetContent className="sm:max-w-lg overflow-y-auto">
@@ -307,6 +352,52 @@ export function OperationsSection() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* CFO Tasks Drill-down Sheet */}
+      <Sheet open={!!selectedCfoTasks} onOpenChange={() => setSelectedCfoTasks(null)}>
+        <SheetContent className="sm:max-w-lg overflow-y-auto">
+          {selectedCfoTasks && (
+            <>
+              <SheetHeader>
+                <SheetTitle>Tarefas Atrasadas — {selectedCfoTasks.cfo}</SheetTitle>
+              </SheetHeader>
+              <div className="mt-4 space-y-2">
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="text-center p-2 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground">Ativas</p>
+                    <p className="text-lg font-bold text-foreground">{selectedCfoTasks.totalAtivas}</p>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground">Atrasadas</p>
+                    <p className="text-lg font-bold text-destructive">{selectedCfoTasks.atrasadas}</p>
+                  </div>
+                </div>
+                {selectedCfoTasks.tarefas.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Nenhuma tarefa atrasada 🎉</p>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedCfoTasks.tarefas.map((tarefa, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                        <div className="space-y-0.5 min-w-0 flex-1">
+                          <p className="text-sm font-medium text-foreground truncate">{tarefa.empresa}</p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                            <Badge variant="outline" className="text-[10px]">{tarefa.tipoEntrega}</Badge>
+                            <span>Previsto: {tarefa.dataPrevista !== 'N/A' ? new Date(tarefa.dataPrevista).toLocaleDateString('pt-BR') : 'N/A'}</span>
+                            <span className="text-destructive font-bold">{tarefa.diasAtraso}d atraso</span>
+                          </div>
+                        </div>
+                        <div className="shrink-0 ml-2">
+                          <PipefyCardLink pipeId={PIPEFY_PIPES.ROTINAS} cardId={tarefa.id} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )}
