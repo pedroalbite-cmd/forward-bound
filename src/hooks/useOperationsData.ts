@@ -41,10 +41,18 @@ export interface TratativaCard {
   'Responsavel pela Tratativa': string | null;
 }
 
+export interface CfoClient {
+  titulo: string;
+  mrr: number;
+  cardId: string;
+  fase: string;
+}
+
 export interface CfoDistribution {
   cfo: string;
   clientes: number;
   mrr: number;
+  clients: CfoClient[];
 }
 
 export interface TratativaActive {
