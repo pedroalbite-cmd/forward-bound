@@ -322,7 +322,7 @@ export default function Auth() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="seu@email.com" autoComplete="email" className="text-foreground" {...field} />
+                      <Input type="email" placeholder="seu@email.com" autoComplete="email" {...field} value={field.value ?? ''} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -336,7 +336,7 @@ export default function Auth() {
                     <FormLabel>Senha</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Input type={showSignupPassword ? "text" : "password"} placeholder="••••••" autoComplete="new-password" className="text-foreground" {...field} />
+                        <Input type={showSignupPassword ? "text" : "password"} placeholder="••••••" autoComplete="new-password" {...field} value={field.value ?? ''} />
                         <Button
                           type="button"
                           variant="ghost"
@@ -379,7 +379,7 @@ export default function Auth() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="seu@email.com" autoComplete="email" className="text-foreground" {...field} />
+                      <Input type="email" placeholder="seu@email.com" autoComplete="email" {...field} value={field.value ?? ''} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -393,7 +393,7 @@ export default function Auth() {
                     <FormLabel>Senha</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Input type={showLoginPassword ? "text" : "password"} placeholder="••••••" autoComplete="current-password" className="text-foreground" {...field} />
+                        <Input type={showLoginPassword ? "text" : "password"} placeholder="••••••" autoComplete="current-password" {...field} value={field.value ?? ''} />
                         <Button
                           type="button"
                           variant="ghost"
