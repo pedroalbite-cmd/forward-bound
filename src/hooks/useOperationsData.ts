@@ -188,7 +188,35 @@ function parseNumber(val: string | null | undefined): number {
   return parseFloat(cleaned) || 0;
 }
 
-function processProjects(rows: ProjectCard[]) {
+interface NpsCard {
+  ID: string;
+  'Título': string;
+  'Fase': string;
+  'Fase Atual': string;
+  'Nota NPS': string | null;
+  'Motivo da Nota': string | null;
+  'Comentarios': string | null;
+  'Sentimento Oxy': string | null;
+}
+
+function formatMonthYear(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return `${months[d.getMonth()]}/${d.getFullYear()}`;
+}
+
+function diffInMonths(start: string | null, end: string | null): string {
+  if (!start || !end) return '';
+  const s = new Date(start);
+  const e = new Date(end);
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return '';
+  const months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+  return months > 0 ? String(months) : '';
+}
+
+function processProjects(rows: ProjectCard[], tratativas: TratativaCard[], npsRows: NpsCard[]) {
   const currentPhase = rows.filter(r => r['Fase'] === r['Fase Atual']);
 
   const phaseCount: Record<string, number> = {};
