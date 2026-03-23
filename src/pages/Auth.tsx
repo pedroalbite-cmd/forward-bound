@@ -95,7 +95,7 @@ export default function Auth() {
 
   const signupForm = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { fullName: '', email: '', password: '', confirmPassword: '' },
+    defaultValues: { email: '', password: '' },
   });
 
   const forgotPasswordForm = useForm<ForgotPasswordFormValues>({
