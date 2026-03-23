@@ -355,7 +355,8 @@ function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>,
     if (comentarios && comentarios !== motivo) texts.push(comentarios);
     
     texts.forEach(text => {
-      const item: FeedbackItem = { quote: text, npsScore: nps, sentiment };
+      const cfo = externalCfoMap[c.ID] || c['CFO Responsavel'] || c['Responsavel Tratativa'] || 'Sem CFO';
+      const item: FeedbackItem = { quote: text, npsScore: nps, sentiment, email: c['E-mail'] || '', titulo: externalTitleMap[c.ID] || c['Título'] || '', cardId: c.ID, cfoName: cfo };
       
       if (nps >= 9) {
         feedback.elogios.push(item);
