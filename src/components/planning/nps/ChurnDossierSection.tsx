@@ -88,7 +88,7 @@ export function ChurnDossierSection({ data }: Props) {
                     {row.problemasOxy || '—'}
                   </TableCell>
                   <TableCell>
-                    <PipefyCardLink pipeId={PIPEFY_PIPES.CENTRAL} cardId={row.id} />
+                    <PipefyCardLink pipeId={PIPEFY_PIPES.CENTRAL_PROJETOS} cardId={row.id} />
                   </TableCell>
                 </TableRow>
               ))}
