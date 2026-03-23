@@ -286,7 +286,8 @@ function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>,
   const cfoAggMap: Record<string, { enviados: number; withNps: { score: number; titulo: string; email: string; cardId: string; csat: number | null; sentiment: 'Positivo' | 'Neutro' | 'Negativo' }[]; csatScores: number[]; seClassifications: ReturnType<typeof classifySeanEllis>[] }> = {};
   
   currentCards.forEach(c => {
-    const cfo = externalCfoMap[c.ID] || c['CFO Responsavel'] || c['Responsavel Tratativa'] || 'Sem CFO';
+    const cfo = externalCfoMap[c.ID] || c['CFO Responsavel'] || c['Responsavel Tratativa'];
+    if (!cfo) return; // Ignorar cards sem CFO identificado
     if (!cfoAggMap[cfo]) cfoAggMap[cfo] = { enviados: 0, withNps: [], csatScores: [], seClassifications: [] };
     cfoAggMap[cfo].enviados++;
     
