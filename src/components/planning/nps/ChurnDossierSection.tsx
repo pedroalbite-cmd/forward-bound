@@ -335,6 +335,7 @@ export function ChurnDossierSection({ data }: Props) {
                           </a>
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap font-mono text-xs">{formatCurrency(row.setup)}</TableCell>
+                        <TableCell className="text-right whitespace-nowrap font-mono text-xs">{formatCurrency(row.diagnostico)}</TableCell>
                         <TableCell className={`text-right whitespace-nowrap font-mono text-xs ${highMrr ? 'font-bold text-destructive' : ''}`}>
                           {formatCurrency(row.mrr)}
                         </TableCell>
