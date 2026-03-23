@@ -1,21 +1,21 @@
 
 
-## Corrigir Pipe ID do Setup (404 nos links)
+## Corrigir filtro de fases terminais do Setup
 
 ### Problema
 
-O pipe ID `306756834` usado para Setup está errado. Verifiquei na tabela `pipefy_card_connections` e o pipe correto de Setup é:
-
-- **"3. Setup"** → pipe ID `304026589`
+Cards com fase "Arquivo" ainda aparecem na tabela de Setup Ativo. O filtro atual só exclui "Arquivado", mas a fase real nos dados pode ser "Arquivo".
 
 ### Correção
 
-**Arquivo**: `src/components/planning/nps/PipefyCardLink.tsx`
+**Arquivo**: `src/hooks/useOperationsData.ts` (linha 219)
 
-Alterar `SETUP: '306756834'` para `SETUP: '304026589'`.
+Adicionar `'Arquivo'` à lista de fases terminais:
 
-Uma linha, um arquivo.
+```typescript
+const SETUP_TERMINAL_PHASES = ['Concluído', 'Churnou', 'Desistência', 'Arquivado', 'Arquivo'];
+```
 
 ### Arquivos modificados
-- `src/components/planning/nps/PipefyCardLink.tsx` — corrigir pipe ID do Setup
+- `src/hooks/useOperationsData.ts` — adicionar "Arquivo" às fases terminais
 
