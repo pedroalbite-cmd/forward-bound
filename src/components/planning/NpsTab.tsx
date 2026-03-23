@@ -6,14 +6,18 @@ import { NpsScoreCards } from './nps/NpsScoreCards';
 import { NpsDistributions } from './nps/NpsDistributions';
 import { CfoPerformanceTable } from './nps/CfoPerformanceTable';
 import { QualitativeFeedback } from './nps/QualitativeFeedback';
+import { ChurnDossierSection } from './nps/ChurnDossierSection';
 
 import { OperationsSection } from './nps/OperationsSection';
 import { useNpsData } from '@/hooks/useNpsData';
+import { useOperationsData } from '@/hooks/useOperationsData';
 import { ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
 
 export function NpsTab() {
   const [npsOpen, setNpsOpen] = useState(false);
+  const [churnOpen, setChurnOpen] = useState(false);
   const { data: npsData, isLoading, error } = useNpsData();
+  const { data: opsData } = useOperationsData();
 
   return (
     <div className="space-y-8">
@@ -33,6 +37,26 @@ export function NpsTab() {
           📊 Operação
         </h2>
         <OperationsSection />
+      </div>
+
+      {/* Dossiê de Churn - Collapsible */}
+      <div className="space-y-4">
+        <button
+          onClick={() => setChurnOpen(!churnOpen)}
+          className="flex items-center gap-2 text-xl font-semibold text-foreground hover:text-primary transition-colors w-full text-left"
+        >
+          {churnOpen ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+          📉 Dossiê de Churn
+          <Badge variant="outline" className="ml-2 text-xs font-normal">
+            {churnOpen ? 'Clique para fechar' : 'Clique para abrir'}
+          </Badge>
+        </button>
+
+        {churnOpen && (
+          <div className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
+            <ChurnDossierSection data={opsData?.churnDossier || []} />
+          </div>
+        )}
       </div>
 
       {/* NPS Section - Collapsible */}
