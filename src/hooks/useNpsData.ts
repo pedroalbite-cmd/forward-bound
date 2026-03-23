@@ -171,7 +171,7 @@ function getNpsLabel(score: number): string {
   return 'Crítico';
 }
 
-function processNpsData(rows: NpsCard[]) {
+function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>) {
   // Only current phase cards (unique)
   const currentCards = rows.filter(r => r['Fase'] === r['Fase Atual']);
   
