@@ -1,40 +1,22 @@
 
 
-## Adicionar Dossiê de Churn com toggle colapsável
+## Investigar e corrigir dados do Dossiê de Churn
 
-### Objetivo
-Criar uma seção "Dossiê de Churn" colapsável (igual ao "Resultados NPS") com tabela mostrando todos os cards em fase Churn da `pipefy_central_projetos`, com as mesmas colunas do Pipefy.
-
-### Dados
-Os dados já são carregados via `fetchTableData('pipefy_central_projetos')` no `useOperationsData`. Preciso apenas:
-1. Expandir a interface `ProjectCard` com os campos de churn que faltam
-2. Processar e retornar os cards em fase Churn
-3. Exibir na UI
-
-### Colunas da tabela (conforme screenshots)
-Mês do Churn | Cliente | Setup (R$) | MRR (R$) | Motivo Principal do Churn | Motivos cancelamento | CFO do projeto | Produto | Fase atual | Data assinatura | Data encerramento | LT (meses) | Problemas com a Oxy
+### Problema provável
+O componente tem todas as 13 colunas implementadas. O problema mais provável é que os dados não estão chegando porque o filtro `Fase Atual === 'Churn'` pode não corresponder ao nome exato da fase no Pipefy.
 
 ### Alterações
 
 **1. `src/hooks/useOperationsData.ts`**
-- Adicionar campos à interface `ProjectCard`: `Mes do Churn`, `Setup (R$)` ou `Valor Setup`, `Motivo Principal do Churn`, `Motivos cancelamento`, `Data de assinatura do contrato`, `Data encerramento`, `LT (meses)`, `Problemas com a Oxy`
-- Criar interface `ChurnDossierCard` com os campos normalizados
-- Em `processProjects`, filtrar cards com `Fase Atual === 'Churn'` e montar lista de `ChurnDossierCard`
-- Retornar `churnDossier` nos dados
+- Adicionar log temporário ou ampliar o filtro de churn para incluir variações do nome da fase (ex: "Churn", "Churnou", "Churn - Encerrado")
+- Verificar se o campo `Fase Atual` realmente contém "Churn" nos dados brutos
+- Atualmente na linha do `processProjects`, o churn count usa: `phaseCount['Churn'] || 0` + `phaseCount['Atividades finalizadas'] || 0` + `phaseCount['Desistência'] || 0`, mas o dossiê só filtra por `'Churn'`
+- **Corrigir**: incluir também "Atividades finalizadas" e "Desistência" no filtro do dossiê, ou pelo menos usar o mesmo critério do count de churn
 
-**2. `src/components/planning/NpsTab.tsx`**
-- Adicionar seção colapsável "Dossiê de Churn" (toggle igual ao NPS) entre Operação e Resultados NPS
-- Dentro, renderizar tabela com scroll horizontal e todas as colunas
-- Badges coloridos para Motivo Principal (Financeiro, Atendimento, Problema na Oxy, etc.)
-- Link Pipefy em cada linha
+**2. Validação dos dados**
+- O filtro `currentPhase` já remove registros onde `Fase !== Fase Atual`, garantindo apenas o estado atual
+- Se o problema persistir, pode ser necessário verificar via query direta quais fases existem nos dados
 
-**3. `src/components/planning/nps/ChurnDossierSection.tsx`** (novo)
-- Componente separado com a tabela do dossiê
-- Recebe `churnDossier` como prop do `useOperationsData`
-- Tabela com scroll, badges, formatação de moeda, link Pipefy
-
-### Arquivos modificados
-- `src/hooks/useOperationsData.ts` — interface expandida, processamento de churn dossier
-- `src/components/planning/NpsTab.tsx` — nova seção colapsável
-- `src/components/planning/nps/ChurnDossierSection.tsx` — novo componente
+### Arquivo modificado
+- `src/hooks/useOperationsData.ts` — ampliar filtro do churnDossier para incluir mesmas fases usadas no count de churn
 
