@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { NpsKpiCards } from './nps/NpsKpiCards';
 import { NpsGauges } from './nps/NpsGauges';
@@ -6,8 +7,12 @@ import { NpsDistributions } from './nps/NpsDistributions';
 import { CfoPerformanceTable } from './nps/CfoPerformanceTable';
 import { QualitativeFeedback } from './nps/QualitativeFeedback';
 import { ExecutiveSummary } from './nps/ExecutiveSummary';
+import { OperationsSection } from './nps/OperationsSection';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 export function NpsTab() {
+  const [npsOpen, setNpsOpen] = useState(false);
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -16,17 +21,43 @@ export function NpsTab() {
           <Badge variant="secondary">Q4 2025</Badge>
           <Badge variant="outline">Customer Success</Badge>
         </div>
-        <h1 className="text-3xl font-bold text-foreground">Resultados da Pesquisa NPS</h1>
-        <p className="text-muted-foreground mt-1">Apresentação Executiva — O2 Inc.</p>
+        <h1 className="text-3xl font-bold text-foreground">Customer Success — Operação & NPS</h1>
+        <p className="text-muted-foreground mt-1">Visão completa de operação e satisfação — O2 Inc.</p>
       </div>
 
-      <NpsKpiCards />
-      <NpsGauges />
-      <NpsScoreCards />
-      <NpsDistributions />
-      <CfoPerformanceTable />
-      <QualitativeFeedback />
-      <ExecutiveSummary />
+      {/* Operação Section */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
+          📊 Operação
+        </h2>
+        <OperationsSection />
+      </div>
+
+      {/* NPS Section - Collapsible */}
+      <div className="space-y-4">
+        <button
+          onClick={() => setNpsOpen(!npsOpen)}
+          className="flex items-center gap-2 text-xl font-semibold text-foreground hover:text-primary transition-colors w-full text-left"
+        >
+          {npsOpen ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+          📋 Resultados NPS
+          <Badge variant="outline" className="ml-2 text-xs font-normal">
+            {npsOpen ? 'Clique para fechar' : 'Clique para abrir'}
+          </Badge>
+        </button>
+
+        {npsOpen && (
+          <div className="space-y-8 animate-in fade-in-0 slide-in-from-top-2 duration-300">
+            <NpsKpiCards />
+            <NpsGauges />
+            <NpsScoreCards />
+            <NpsDistributions />
+            <CfoPerformanceTable />
+            <QualitativeFeedback />
+            <ExecutiveSummary />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
