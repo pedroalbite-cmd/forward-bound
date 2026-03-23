@@ -23,6 +23,13 @@ export interface ProjectCard {
   'ERP': string | null;
   'UF': string | null;
   'Responsavel': string | null;
+  'Mes do Churn': string | null;
+  'Motivo Principal do Churn': string | null;
+  'Motivos cancelamento': string | null;
+  'Data de assinatura do contrato': string | null;
+  'Data encerramento': string | null;
+  'LT (meses)': string | null;
+  'Problemas com a Oxy': string | null;
 }
 
 export interface TratativaCard {
