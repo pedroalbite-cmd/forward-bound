@@ -15,7 +15,8 @@ import { ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
 
 export function NpsTab() {
   const [npsOpen, setNpsOpen] = useState(false);
-  const [churnOpen, setChurnOpen] = useState(false);
+  const [churnOpen, setChurnOpen] = useState(true);
+  const [opsOpen, setOpsOpen] = useState(false);
   const { data: npsData, isLoading, error } = useNpsData();
   const { data: opsData } = useOperationsData();
 
@@ -31,15 +32,7 @@ export function NpsTab() {
         <p className="text-muted-foreground mt-1">Visão completa de operação e satisfação — O2 Inc.</p>
       </div>
 
-      {/* Operação Section */}
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-          📊 Operação
-        </h2>
-        <OperationsSection />
-      </div>
-
-      {/* Dossiê de Churn - Collapsible */}
+      {/* Dossiê de Churn - No topo, aberto por padrão */}
       <div className="space-y-4">
         <button
           onClick={() => setChurnOpen(!churnOpen)}
@@ -55,6 +48,26 @@ export function NpsTab() {
         {churnOpen && (
           <div className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
             <ChurnDossierSection data={opsData?.churnDossier || []} />
+          </div>
+        )}
+      </div>
+
+      {/* Operação Section - Collapsible */}
+      <div className="space-y-4">
+        <button
+          onClick={() => setOpsOpen(!opsOpen)}
+          className="flex items-center gap-2 text-xl font-semibold text-foreground hover:text-primary transition-colors w-full text-left"
+        >
+          {opsOpen ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+          📊 Operação
+          <Badge variant="outline" className="ml-2 text-xs font-normal">
+            {opsOpen ? 'Clique para fechar' : 'Clique para abrir'}
+          </Badge>
+        </button>
+
+        {opsOpen && (
+          <div className="animate-in fade-in-0 slide-in-from-top-2 duration-300">
+            <OperationsSection />
           </div>
         )}
       </div>
