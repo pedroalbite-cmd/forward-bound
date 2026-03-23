@@ -1,25 +1,33 @@
 
 
-## Problema
+## Por que só aparece 2026
 
-O Dossiê de Churn mostra linhas com quase todas as colunas vazias. Isso acontece porque muitos cards de churn no `pipefy_central_projetos` **não têm uma tratativa correspondente** no `pipefy_moviment_tratativas` (o match é feito por título). Sem tratativa, as colunas Mês do Churn, Motivo Principal, Motivos cancelamento e Data encerramento ficam vazias. Sem data de encerramento, o LT também fica vazio.
+A query que busca `pipefy_central_projetos` usa `action: 'preview'` com `LIMIT 1000` e **sem ORDER BY**. Como a tabela tem mais de 1000 linhas, o PostgreSQL retorna as primeiras 1000 em ordem interna (geralmente as mais recentes inseridas). Cards de Out/Nov/Dez 2025 ficam de fora.
+
+O mesmo problema pode afetar `pipefy_moviment_tratativas` e `pipefy_moviment_nps` (também limitadas a 1000).
 
 ## Solução
 
-Filtrar do dossiê as linhas que não têm dados mínimos úteis. Um registro só deve aparecer se tiver **pelo menos** um motivo principal OU uma data de encerramento preenchida.
+Aumentar o limit das tabelas relevantes para o Dossiê de Churn para garantir que cubra dados desde Out/2025.
 
 ### Alteração em `src/hooks/useOperationsData.ts`
 
-Na cadeia de `.filter()` (linha 319), adicionar uma segunda condição após o filtro de data:
+Na função `useOperationsData()` (linha 529-536), aumentar os limits:
 
 ```typescript
-.filter(c => c._refDate >= CHURN_CUTOFF)
-.filter(c => c.motivoPrincipal || c.dataEncerramento || c.mesChurn)
-.map(({ _refDate, ...rest }) => rest);
+const [projetos, tratativas, setup, rotinas, npsRows, clientes, connections] = await Promise.all([
+  fetchTableData('pipefy_central_projetos', 5000),   // era 1000
+  fetchTableData('pipefy_moviment_tratativas', 5000), // era 1000
+  fetchTableData('pipefy_moviment_setup'),
+  fetchTableData('pipefy_moviment_rotinas'),
+  fetchTableData('pipefy_moviment_nps', 5000),        // era 1000
+  fetchTableData('pipefy_db_clientes', 5000),
+  fetchTableData('pipefy_card_connections', 5000),
+]);
 ```
 
-Isso remove linhas "fantasma" — cards que estão em fase de churn mas não têm nenhuma informação relevante cruzada das tratativas, NPS ou conexões.
+Isso garante que todas as linhas (incluindo Oct-Dec 2025) sejam retornadas.
 
 ### Arquivo modificado
-- `src/hooks/useOperationsData.ts` — adicionar filtro de completude na linha 319
+- `src/hooks/useOperationsData.ts` — 3 linhas alteradas nos limits de fetch
 
