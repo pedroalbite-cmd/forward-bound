@@ -165,7 +165,7 @@ function parseCardRow(row: Record<string, any>, skipPhaseFilter = false): Modelo
     dataEntrada,
     dataSaida,
     dataCriacao,
-    dataAssinatura,
+    dataAssinatura: correctedAssinatura,
     valorMRR,
     valorPontual,
     valorEducacao,
