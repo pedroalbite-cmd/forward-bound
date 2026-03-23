@@ -216,7 +216,7 @@ function diffInMonths(start: string | null, end: string | null): string {
   return months > 0 ? String(months) : '';
 }
 
-function processProjects(rows: ProjectCard[], tratativas: TratativaCard[], npsRows: NpsCard[]) {
+function processProjects(rows: ProjectCard[], tratativas: TratativaCard[], npsRows: NpsCard[], assinaturaMap: Map<string, string>) {
   const currentPhase = rows.filter(r => r['Fase'] === r['Fase Atual']);
 
   const phaseCount: Record<string, number> = {};
@@ -286,7 +286,7 @@ function processProjects(rows: ProjectCard[], tratativas: TratativaCard[], npsRo
     const trat = tratativaMap.get(key);
     const nps = npsMap.get(key);
 
-    const dataAssinatura = card['Data de assinatura do contrato'] || '';
+    const dataAssinatura = assinaturaMap.get(card.ID) || card['Data de assinatura do contrato'] || '';
     const dataEncerramento = trat?.['Saída'] ? new Date(trat['Saída']).toISOString().split('T')[0] : (card['Data encerramento'] || '');
     const mesChurn = trat ? formatMonthYear(trat['Entrada']) : (card['Mes do Churn'] || '');
     const ltMeses = diffInMonths(dataAssinatura, dataEncerramento) || (card['LT (meses)'] || '');
@@ -518,15 +518,36 @@ export function useOperationsData() {
   return useQuery({
     queryKey: ['operations-data'],
     queryFn: async () => {
-      const [projetos, tratativas, setup, rotinas, npsRows] = await Promise.all([
+      const [projetos, tratativas, setup, rotinas, npsRows, clientes, connections] = await Promise.all([
         fetchTableData('pipefy_central_projetos'),
         fetchTableData('pipefy_moviment_tratativas'),
         fetchTableData('pipefy_moviment_setup'),
         fetchTableData('pipefy_moviment_rotinas'),
         fetchTableData('pipefy_moviment_nps'),
+        fetchTableData('pipefy_db_clientes', 5000),
+        fetchTableData('pipefy_card_connections', 5000),
       ]);
 
-      const projectData = processProjects(projetos, tratativas, npsRows);
+      // Build assinatura map: projeto card_id → data de assinatura
+      const connToClient = new Map<string, string>();
+      (connections as any[]).forEach((c: any) => {
+        if (c['connected_pipe_name'] === 'Clientes') {
+          connToClient.set(String(c['card_id']), String(c['connected_card_id']));
+        }
+      });
+      const clienteDataMap = new Map<string, string>();
+      (clientes as any[]).forEach((c: any) => {
+        if (c['ID'] && c['Data de assinatura do contrato']) {
+          clienteDataMap.set(String(c['ID']), c['Data de assinatura do contrato']);
+        }
+      });
+      const assinaturaMap = new Map<string, string>();
+      connToClient.forEach((clientId, cardId) => {
+        const data = clienteDataMap.get(clientId);
+        if (data) assinaturaMap.set(cardId, data);
+      });
+
+      const projectData = processProjects(projetos, tratativas, npsRows, assinaturaMap);
       const tratativaData = processTratativas(tratativas);
       const setupData = processSetup(setup, projetos);
       const rotinaData = processRotinas(rotinas, projetos);
