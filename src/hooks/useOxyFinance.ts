@@ -44,6 +44,11 @@ export interface DailyRevenueRow {
   date: string;
   total_inflows: number;
   customer_count: number;
+  caas: number;
+  saas: number;
+  expansao: number;
+  tax: number;
+  source: string;
 }
 
 export interface OxyFinanceResult {
@@ -141,8 +146,9 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('daily_revenue')
-        .select('date, total_inflows, customer_count')
+        .select('date, total_inflows, customer_count, caas, saas, expansao, tax, source')
         .eq('year', year)
+        .eq('source', 'dre')
         .order('date', { ascending: true });
       if (error) throw error;
       return data;
@@ -253,6 +259,11 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
       date: row.date,
       total_inflows: Number(row.total_inflows || 0),
       customer_count: Number(row.customer_count || 0),
+      caas: Number(row.caas || 0),
+      saas: Number(row.saas || 0),
+      expansao: Number(row.expansao || 0),
+      tax: Number(row.tax || 0),
+      source: row.source || 'cashflow',
     }));
   }, [dailyRevenueData]);
 

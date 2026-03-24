@@ -427,15 +427,32 @@ export function IndicatorsTab() {
   const { getMrrBaseForMonth, isTotalOverride, isLoading: isLoadingMrrBase } = useMrrBase();
   const { cashflowByMonth, dailyRevenue, isLoading: isLoadingDre } = useOxyFinance(currentYear);
 
-  // Build a lookup map: date string -> total_inflows for daily granularity
+  // Build a lookup map: date string -> { caas, saas, expansao, tax, total_inflows }
   const dailyRevenueMap = useMemo(() => {
-    const map: Record<string, number> = {};
+    const map: Record<string, { caas: number; saas: number; expansao: number; tax: number; total_inflows: number }> = {};
     for (const row of dailyRevenue) {
-      map[row.date] = row.total_inflows;
+      map[row.date] = {
+        caas: row.caas,
+        saas: row.saas,
+        expansao: row.expansao,
+        tax: row.tax,
+        total_inflows: row.total_inflows,
+      };
     }
     return map;
   }, [dailyRevenue]);
   const hasDailyRevenueData = dailyRevenue.length > 0;
+
+  // Helper to sum daily revenue for a date filtering by selected BUs
+  const getDailyRevenueForBUs = (dateKey: string): number => {
+    const row = dailyRevenueMap[dateKey];
+    if (!row) return 0;
+    let total = 0;
+    if (selectedBUs.includes('modelo_atual')) total += row.caas + row.saas;
+    if (selectedBUs.includes('o2_tax')) total += row.tax;
+    if (selectedBUs.includes('oxy_hacker') || selectedBUs.includes('franquia')) total += row.expansao;
+    return total;
+  };
   
   // Get closer metas for filtering goals by closer percentage
   const { getFilteredMeta } = useCloserMetas(currentYear);
@@ -2545,7 +2562,7 @@ export function IndicatorsTab() {
             let dailyTotal = 0;
             for (const day of overlapDaysList) {
               const key = format(day, 'yyyy-MM-dd');
-              dailyTotal += dailyRevenueMap[key] || 0;
+              dailyTotal += getDailyRevenueForBUs(key);
             }
             totalRealized += dailyTotal;
           } else if (isTotalOverride(monthName, year)) {
@@ -2621,7 +2638,7 @@ export function IndicatorsTab() {
               let dailyTotal = 0;
               for (const day of overlapDaysList) {
                 const key = format(day, 'yyyy-MM-dd');
-                dailyTotal += dailyRevenueMap[key] || 0;
+                dailyTotal += getDailyRevenueForBUs(key);
               }
               periodRealized += dailyTotal;
             } else if (isTotalOverride(monthName, year)) {
