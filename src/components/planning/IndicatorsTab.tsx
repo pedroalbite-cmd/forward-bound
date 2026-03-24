@@ -2653,15 +2653,13 @@ export function IndicatorsTab() {
               periodRealized += (mrrBaseMonth * fraction) + spRealized;
             }
 
-            // Meta setup+pontual
-            let metaSetup = 0;
-            let metaPontual = 0;
+            // Meta: faturamento total do Plan Growth por BU selecionada
+            let metaFaturamento = 0;
             selectedBUs.forEach(bu => {
               const buKey = bu as import("@/hooks/useCloserMetas").BuType;
-              metaSetup += getConsolidatedMeta(buKey, monthName as any, 'setup').value;
-              metaPontual += getConsolidatedMeta(buKey, monthName as any, 'pontual').value;
+              metaFaturamento += getConsolidatedMeta(buKey, monthName as any, 'faturamento').value;
             });
-            periodMeta += (mrrBaseMonth * fraction) + ((metaSetup + metaPontual) * fraction);
+            periodMeta += metaFaturamento * fraction;
           }
 
           cumulativeRealized += periodRealized;
