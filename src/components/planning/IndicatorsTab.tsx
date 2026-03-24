@@ -450,7 +450,6 @@ export function IndicatorsTab() {
     let total = 0;
     if (selectedBUs.includes('modelo_atual')) total += row.caas + row.saas;
     if (selectedBUs.includes('o2_tax')) total += row.tax;
-    if (selectedBUs.includes('oxy_hacker') || selectedBUs.includes('franquia')) total += row.expansao;
     return total;
   };
   
