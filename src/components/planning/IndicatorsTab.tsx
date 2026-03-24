@@ -2653,11 +2653,11 @@ export function IndicatorsTab() {
               periodRealized += (mrrBaseMonth * fraction) + spRealized;
             }
 
-            // Meta: faturamento total do Plan Growth por BU selecionada
+            // Meta: faturamentoMeta (total = MRR Base + A Vender) do Plan Growth via metasPorBU
             let metaFaturamento = 0;
             selectedBUs.forEach(bu => {
-              const buKey = bu as import("@/hooks/useCloserMetas").BuType;
-              metaFaturamento += getConsolidatedMeta(buKey, monthName as any, 'faturamento').value;
+              const buKey = bu as keyof typeof metasPorBU;
+              metaFaturamento += metasPorBU[buKey]?.[monthName] ?? 0;
             });
             periodMeta += metaFaturamento * fraction;
           }
