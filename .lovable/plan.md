@@ -1,45 +1,31 @@
 
 
-## Usar Meta de Faturamento do Plan Growth no Gráfico de Faturamento
+## Corrigir Meta do Gráfico de Faturamento: usar "Meta" total, não "A Vender"
 
-### Problema atual
-O gráfico RevenuePaceChart calcula a meta como `MRR Base + Meta Setup + Meta Pontual` (componentes separados). O usuário quer que use a coluna **"Meta" (faturamento)** diretamente do Plan Growth / monetary_metas, somando as BUs selecionadas.
+### Problema
+O gráfico RevenuePaceChart está usando `getConsolidatedMeta(bu, month, 'faturamento')` que retorna `monthData.faturamento` do contexto. Esse valor é populado como `faturamentoVender` (A Vender / incremento), não como a Meta total. Para Março do Modelo Atual, mostra ~R$500k em vez de R$1.334.000.
 
-### O que será feito
+### Cadeia do problema
+1. `usePlanGrowthData.ts` linha 453: `faturamento: Math.round(d.faturamentoVender)` ← publica o "A Vender"
+2. O campo `faturamentoMeta` (= MRR Base + A Vender) existe no cálculo mas nunca é publicado no contexto
+3. `useConsolidatedMetas` linha 75: `case 'faturamento': return faturamento` ← retorna o "A Vender"
 
-**Arquivo: `src/components/planning/IndicatorsTab.tsx`**
+### Alterações — somente no gráfico de Faturamento
 
-Na seção do RevenuePaceChart (linhas ~2545-2700), substituir o cálculo da meta:
+**Não vamos alterar** `useConsolidatedMetas` nem o contexto (para não quebrar acelerômetros e outros componentes que usam `faturamento` como "A Vender").
 
-**De** (atual):
-```typescript
-// Meta: MRR base pro-rata + meta setup + meta pontual
-let metaSetupMonth = 0;
-let metaPontualMonth = 0;
-selectedBUs.forEach(bu => {
-  metaSetupMonth += getConsolidatedMeta(bu, monthName, 'setup').value;
-  metaPontualMonth += getConsolidatedMeta(bu, monthName, 'pontual').value;
-});
-totalMeta += (mrrBaseMonth * fraction) + ((metaSetupMonth + metaPontualMonth) * fraction);
-```
+**Arquivo 1: `src/contexts/MediaMetasContext.tsx`**
+- Adicionar `faturamentoMeta?: number` ao `FunnelDataItem`
 
-**Para** (novo):
-```typescript
-// Meta: faturamento total do Plan Growth por BU selecionada
-let metaFaturamentoMonth = 0;
-selectedBUs.forEach(bu => {
-  metaFaturamentoMonth += getConsolidatedMeta(bu, monthName, 'faturamento').value;
-});
-totalMeta += metaFaturamentoMonth * fraction;
-```
+**Arquivo 2: `src/hooks/usePlanGrowthData.ts`**
+- Na linha 453, adicionar campo: `faturamentoMeta: Math.round(d.faturamentoMeta)`
+- Fazer o mesmo para o2Tax, oxyHacker e franquia (para essas BUs, faturamentoMeta = faturamento pois não têm MRR base)
 
-A mesma substituição será aplicada nas 3 ocorrências dentro do bloco do RevenuePaceChart:
-1. Cálculo do `totalMeta` para o header (linhas ~2580-2588)
-2. Cálculo do `periodMeta` para os dados do gráfico (linhas ~2659-2666)
-3. Ajuste do `mrrBaseTotal` no header (linhas ~2680-2698) — não será mais necessário subtrair MRR base do header, já que o faturamento já é o valor total
+**Arquivo 3: `src/components/planning/IndicatorsTab.tsx`**
+- Somente no bloco do RevenuePaceChart (linhas ~2580-2662), em vez de chamar `getConsolidatedMeta(bu, month, 'faturamento')`, ler diretamente `funnelData[buKey].find(d => d.month === monthName)?.faturamentoMeta`
+- Aplicar nas 2 ocorrências (totalMeta no header e periodMeta no gráfico)
 
-### Impacto
-- O gráfico mostrará a meta de faturamento real do Plan Growth
-- Ao selecionar múltiplas BUs, as metas serão somadas
-- A linha "Meta Acumulada" no gráfico refletirá os valores do banco de dados (monetary_metas)
+### Resultado
+- O gráfico de Faturamento mostrará R$1.334.000 (Meta total) em vez de R$500k (A Vender)
+- Acelerômetros e demais componentes continuam inalterados
 
