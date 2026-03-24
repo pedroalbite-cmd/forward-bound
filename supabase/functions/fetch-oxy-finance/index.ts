@@ -22,7 +22,8 @@ serve(async (req) => {
       });
     }
 
-    const { action, startDate, endDate, movimentType, isLate } = await req.json();
+    const body = await req.json();
+    const { action, startDate, endDate, movimentType, isLate } = body;
     console.log(`Action: ${action}, startDate: ${startDate}, endDate: ${endDate}`);
 
     const authHeaders: Record<string, string> = {
@@ -63,6 +64,17 @@ serve(async (req) => {
           'cnpjs[]': CNPJ_FORMATTED,
         });
         url = `${BASE_URL}/widgets/cash-flow/charts/fluxo-caixa?${params}`;
+        fetchOptions = { method: 'GET', headers: authHeaders };
+        break;
+      }
+      case 'dre_categories': {
+        const groupIds = body.groupIds || ['bed1718d-e54f-4341-abe0-22ae7f04a26a'];
+        const params = new URLSearchParams({ startDate, endDate });
+        for (const gid of groupIds) {
+          params.append('groupIds[]', gid);
+        }
+        params.append('cnpjs[]', CNPJ_FORMATTED);
+        url = `${BASE_URL}/v2/dre/dre-table-categories?${params}`;
         fetchOptions = { method: 'GET', headers: authHeaders };
         break;
       }
