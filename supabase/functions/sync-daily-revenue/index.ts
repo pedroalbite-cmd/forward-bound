@@ -123,12 +123,9 @@ serve(async (req) => {
                 const bu = mapGroupToBU(group.label || '');
                 if (!bu) continue;
 
-                // Sum all period values for this day (should be just one)
+              // Use only the first entry (the second is a duplicate "Total")
                 const entries = Array.isArray(group.data) ? group.data : [];
-                let value = 0;
-                for (const entry of entries) {
-                  value += Number(entry.value || 0);
-                }
+                const value = entries.length > 0 ? Number(entries[0].value || 0) : 0;
 
                 if (bu === 'caas') caas = value;
                 else if (bu === 'saas') saas = value;
