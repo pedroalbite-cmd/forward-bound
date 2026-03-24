@@ -2537,6 +2537,14 @@ export function IndicatorsTab() {
           allSetupPontualCards.push(...getSetupPontualCardsForBU(bu));
         });
 
+        // Pipefy cards only for oxy_hacker/franquia (these BUs always use Pipefy, not DRE)
+        const pipefyExpansaoCards: { date: Date; setup: number; pontual: number }[] = [];
+        const pipefyBUs = selectedBUs.filter(bu => bu === 'oxy_hacker' || bu === 'franquia');
+        pipefyBUs.forEach(bu => {
+          pipefyExpansaoCards.push(...getSetupPontualCardsForBU(bu));
+        });
+        const hasDreBUs = selectedBUs.some(bu => bu === 'modelo_atual' || bu === 'o2_tax');
+
         // Calculate total realized and total meta for header
         let totalRealized = 0;
         let totalMeta = 0;
