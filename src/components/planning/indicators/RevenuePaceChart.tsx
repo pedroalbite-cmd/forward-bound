@@ -97,8 +97,8 @@ export function RevenuePaceChart({ realized, meta, mrrBase, isLoading, chartData
                       name === 'Realizado Acumulado' ? 'Realizado Acumulado' : 'Meta Acumulada'
                     ]}
                   />
-                  <Area type="monotone" dataKey="realizado" stroke="hsl(var(--chart-2))" strokeWidth={2} fill="url(#revenuePaceGradient)" name="Realizado Acumulado" />
-                  <Line type="monotone" dataKey="meta" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} name="Meta Acumulada" />
+                  <Area type="natural" dataKey="realizado" stroke="hsl(var(--chart-2))" strokeWidth={2.5} fill="url(#revenuePaceGradient)" name="Realizado Acumulado" dot={{ r: 2, fill: "hsl(var(--chart-2))" }} />
+                  <Line type="natural" dataKey="meta" stroke="hsl(var(--chart-1))" strokeWidth={2.5} dot={false} strokeDasharray="6 3" name="Meta Acumulada" />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
