@@ -22,7 +22,8 @@ serve(async (req) => {
       });
     }
 
-    const { action, startDate, endDate, movimentType, isLate } = await req.json();
+    const body = await req.json();
+    const { action, startDate, endDate, movimentType, isLate } = body;
     console.log(`Action: ${action}, startDate: ${startDate}, endDate: ${endDate}`);
 
     const authHeaders: Record<string, string> = {
