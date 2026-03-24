@@ -1,26 +1,45 @@
 
 
-## Passo 1: Explorar a API DRE detalhado (categorias) da Expansão
+## Usar Meta de Faturamento do Plan Growth no Gráfico de Faturamento
 
-### Contexto
-A tabela `daily_revenue` já tem colunas `caas`, `saas`, `expansao`, `tax`. O plano é **adicionar duas colunas** (`oxy_hacker` e `franquia`) nessa mesma tabela, preenchidas via o endpoint detalhado da API. Assim mantemos a mesma estrutura e o frontend consome tudo do mesmo lugar.
+### Problema atual
+O gráfico RevenuePaceChart calcula a meta como `MRR Base + Meta Setup + Meta Pontual` (componentes separados). O usuário quer que use a coluna **"Meta" (faturamento)** diretamente do Plan Growth / monetary_metas, somando as BUs selecionadas.
 
-Mas antes de mexer no banco ou no sync, precisamos entender o output do endpoint detalhado.
+### O que será feito
 
-### O que será feito agora
+**Arquivo: `src/components/planning/IndicatorsTab.tsx`**
 
-**Arquivo:** `supabase/functions/fetch-oxy-finance/index.ts`
+Na seção do RevenuePaceChart (linhas ~2545-2700), substituir o cálculo da meta:
 
-Adicionar um novo case `'dre_categories'` no switch (antes do `default`):
+**De** (atual):
+```typescript
+// Meta: MRR base pro-rata + meta setup + meta pontual
+let metaSetupMonth = 0;
+let metaPontualMonth = 0;
+selectedBUs.forEach(bu => {
+  metaSetupMonth += getConsolidatedMeta(bu, monthName, 'setup').value;
+  metaPontualMonth += getConsolidatedMeta(bu, monthName, 'pontual').value;
+});
+totalMeta += (mrrBaseMonth * fraction) + ((metaSetupMonth + metaPontualMonth) * fraction);
+```
 
-- Chama `GET /v2/dre/dre-table-categories` com:
-  - `groupIds[]=bed1718d-e54f-4341-abe0-22ae7f04a26a` (grupo Expansão)
-  - `cnpjs[]=23.813.779/0001-60` (formato com pontuação, conforme URL fornecida)
-  - `startDate` e `endDate` recebidos do body
-- Retorna o response bruto com logs detalhados (já existentes no código)
+**Para** (novo):
+```typescript
+// Meta: faturamento total do Plan Growth por BU selecionada
+let metaFaturamentoMonth = 0;
+selectedBUs.forEach(bu => {
+  metaFaturamentoMonth += getConsolidatedMeta(bu, monthName, 'faturamento').value;
+});
+totalMeta += metaFaturamentoMonth * fraction;
+```
 
-**Após o deploy**, chamarei o endpoint com range de 1 dia para analisar a estrutura do JSON nos logs e identificar onde aparecem "Micro Franqueado" e "Franquia".
+A mesma substituição será aplicada nas 3 ocorrências dentro do bloco do RevenuePaceChart:
+1. Cálculo do `totalMeta` para o header (linhas ~2580-2588)
+2. Cálculo do `periodMeta` para os dados do gráfico (linhas ~2659-2666)
+3. Ajuste do `mrrBaseTotal` no header (linhas ~2680-2698) — não será mais necessário subtrair MRR base do header, já que o faturamento já é o valor total
 
-### Nenhuma outra alteração neste passo
-Sem migração de banco, sem alteração no sync, sem alteração no frontend. Apenas a adição do case exploratório.
+### Impacto
+- O gráfico mostrará a meta de faturamento real do Plan Growth
+- Ao selecionar múltiplas BUs, as metas serão somadas
+- A linha "Meta Acumulada" no gráfico refletirá os valores do banco de dados (monetary_metas)
 
