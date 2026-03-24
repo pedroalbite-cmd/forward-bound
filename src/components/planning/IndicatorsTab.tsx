@@ -2690,9 +2690,9 @@ export function IndicatorsTab() {
 
         return (
           <RevenuePaceChart
-            realized={totalRealized - mrrBaseTotal}
-            meta={totalMeta - mrrBaseTotal}
-            mrrBase={Math.round(mrrBaseTotal)}
+            realized={totalRealized}
+            meta={totalMeta}
+            mrrBase={0}
             paceExpected={paceExpected}
             isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading || isLoadingMrrBase || isLoadingDre}
             chartData={paceChartData}
