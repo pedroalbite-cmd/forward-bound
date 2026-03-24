@@ -2577,15 +2577,13 @@ export function IndicatorsTab() {
             totalRealized += (mrrBaseMonth * fraction) + monthSetupPontual;
           }
 
-          // Meta: MRR base pro-rata + meta setup + meta pontual for all selected BUs
-          let metaSetupMonth = 0;
-          let metaPontualMonth = 0;
+          // Meta: faturamento total do Plan Growth por BU selecionada
+          let metaFaturamentoMonth = 0;
           selectedBUs.forEach(bu => {
             const buKey = bu as import("@/hooks/useCloserMetas").BuType;
-            metaSetupMonth += getConsolidatedMeta(buKey, monthName as any, 'setup').value;
-            metaPontualMonth += getConsolidatedMeta(buKey, monthName as any, 'pontual').value;
+            metaFaturamentoMonth += getConsolidatedMeta(buKey, monthName as any, 'faturamento').value;
           });
-          totalMeta += (mrrBaseMonth * fraction) + ((metaSetupMonth + metaPontualMonth) * fraction);
+          totalMeta += metaFaturamentoMonth * fraction;
         }
 
         const paceFraction = daysInPeriod > 0 ? daysElapsed / daysInPeriod : 0;
@@ -2655,15 +2653,13 @@ export function IndicatorsTab() {
               periodRealized += (mrrBaseMonth * fraction) + spRealized;
             }
 
-            // Meta setup+pontual
-            let metaSetup = 0;
-            let metaPontual = 0;
+            // Meta: faturamento total do Plan Growth por BU selecionada
+            let metaFaturamento = 0;
             selectedBUs.forEach(bu => {
               const buKey = bu as import("@/hooks/useCloserMetas").BuType;
-              metaSetup += getConsolidatedMeta(buKey, monthName as any, 'setup').value;
-              metaPontual += getConsolidatedMeta(buKey, monthName as any, 'pontual').value;
+              metaFaturamento += getConsolidatedMeta(buKey, monthName as any, 'faturamento').value;
             });
-            periodMeta += (mrrBaseMonth * fraction) + ((metaSetup + metaPontual) * fraction);
+            periodMeta += metaFaturamento * fraction;
           }
 
           cumulativeRealized += periodRealized;
@@ -2694,9 +2690,9 @@ export function IndicatorsTab() {
 
         return (
           <RevenuePaceChart
-            realized={totalRealized - mrrBaseTotal}
-            meta={totalMeta - mrrBaseTotal}
-            mrrBase={Math.round(mrrBaseTotal)}
+            realized={totalRealized}
+            meta={totalMeta}
+            mrrBase={0}
             paceExpected={paceExpected}
             isLoading={o2TaxAnalytics.isLoading || modeloAtualAnalytics.isLoading || isLoadingMrrBase || isLoadingDre}
             chartData={paceChartData}
