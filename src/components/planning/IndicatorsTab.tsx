@@ -665,13 +665,25 @@ export function IndicatorsTab() {
   // Generate chart labels based on grouping
   const getChartLabels = (): string[] => {
     if (grouping === 'daily') {
-      return eachDayOfInterval({ start: startDate, end: endDate }).map(day => 
-        format(day, "d")
-      );
+      let lastMonth = -1;
+      return eachDayOfInterval({ start: startDate, end: endDate }).map(day => {
+        const m = day.getMonth();
+        if (m !== lastMonth) {
+          lastMonth = m;
+          return format(day, "d/MM");
+        }
+        return format(day, "d");
+      });
     } else if (grouping === 'weekly') {
+      let lastMonth = -1;
       const numWeeks = Math.ceil(daysInPeriod / 7);
       return Array.from({ length: numWeeks }, (_, i) => {
         const weekStart = addDays(startDate, i * 7);
+        const m = weekStart.getMonth();
+        if (m !== lastMonth) {
+          lastMonth = m;
+          return format(weekStart, "d/MM");
+        }
         return format(weekStart, "d");
       });
     } else {

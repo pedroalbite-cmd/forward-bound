@@ -73,7 +73,7 @@ export function RevenuePaceChart({ realized, meta, mrrBase, isLoading, chartData
         </CollapsibleTrigger>
         <CollapsibleContent>
           <CardContent className="pt-0">
-            <div className="h-72">
+            <div className="h-96">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <defs>
@@ -83,7 +83,7 @@ export function RevenuePaceChart({ realized, meta, mrrBase, isLoading, chartData
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} interval="preserveStartEnd" angle={-45} textAnchor="end" height={50} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} tickFormatter={(value) => formatCompactCurrency(value)} />
                   <Tooltip
                     contentStyle={{
@@ -97,8 +97,8 @@ export function RevenuePaceChart({ realized, meta, mrrBase, isLoading, chartData
                       name === 'Realizado Acumulado' ? 'Realizado Acumulado' : 'Meta Acumulada'
                     ]}
                   />
-                  <Area type="monotone" dataKey="realizado" stroke="hsl(var(--chart-2))" strokeWidth={2} fill="url(#revenuePaceGradient)" name="Realizado Acumulado" />
-                  <Line type="monotone" dataKey="meta" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} name="Meta Acumulada" />
+                  <Area type="natural" dataKey="realizado" stroke="hsl(var(--chart-2))" strokeWidth={2.5} fill="url(#revenuePaceGradient)" name="Realizado Acumulado" dot={{ r: 2, fill: "hsl(var(--chart-2))" }} />
+                  <Line type="natural" dataKey="meta" stroke="hsl(var(--chart-1))" strokeWidth={2.5} dot={false} strokeDasharray="6 3" name="Meta Acumulada" />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
