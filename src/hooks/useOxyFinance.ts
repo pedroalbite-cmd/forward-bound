@@ -146,8 +146,9 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('daily_revenue')
-        .select('date, total_inflows, customer_count')
+        .select('date, total_inflows, customer_count, caas, saas, expansao, tax, source')
         .eq('year', year)
+        .eq('source', 'dre')
         .order('date', { ascending: true });
       if (error) throw error;
       return data;
