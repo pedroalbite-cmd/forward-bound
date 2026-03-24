@@ -2562,7 +2562,7 @@ export function IndicatorsTab() {
             let dailyTotal = 0;
             for (const day of overlapDaysList) {
               const key = format(day, 'yyyy-MM-dd');
-              dailyTotal += dailyRevenueMap[key] || 0;
+              dailyTotal += getDailyRevenueForBUs(key);
             }
             totalRealized += dailyTotal;
           } else if (isTotalOverride(monthName, year)) {
