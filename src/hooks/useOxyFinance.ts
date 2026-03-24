@@ -259,6 +259,11 @@ export function useOxyFinance(year: number = 2026): OxyFinanceResult {
       date: row.date,
       total_inflows: Number(row.total_inflows || 0),
       customer_count: Number(row.customer_count || 0),
+      caas: Number(row.caas || 0),
+      saas: Number(row.saas || 0),
+      expansao: Number(row.expansao || 0),
+      tax: Number(row.tax || 0),
+      source: row.source || 'cashflow',
     }));
   }, [dailyRevenueData]);
 
