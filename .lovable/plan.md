@@ -1,30 +1,29 @@
 
 
-## Franquia e Oxy Hacker: usar dados de vendas do Pipefy no gráfico de Faturamento
+## Melhorar legenda do eixo X e dar mais "vida" ao gráfico de Faturamento
 
-### Problema
-Atualmente, quando `hasDailyRevenueData` é true, o gráfico usa `getDailyRevenueForBUs` para **todas** as BUs — inclusive Oxy Hacker e Franquia, que pegam o valor da coluna `expansao` da tabela `daily_revenue` (DRE). O usuário quer que essas duas BUs usem os dados de vendas do Pipefy (valor + data de assinatura do contrato), da mesma forma que já funciona no fallback (`allSetupPontualCards`).
+### Problemas identificados
 
-### Solução
+1. **Legenda confusa no eixo X**: Com 3 meses selecionados e agrupamento diário, os labels mostram apenas o número do dia (1, 8, 15, 22, 29, 5, 12, 19, 26...) sem indicar o mês. Impossível saber de qual mês é cada dia.
 
-**Arquivo: `src/components/planning/IndicatorsTab.tsx`**
+2. **Gráfico pequeno e "estático"**: Altura fixa de `h-72` (288px) comprime tudo, fazendo as curvas parecerem uniformes e sem destaque visual.
 
-Separar o cálculo do realizado em duas partes:
+### Alterações
 
-1. **BUs com dados DRE** (modelo_atual, o2_tax): continuam usando `getDailyRevenueForBUs` quando `hasDailyRevenueData` é true
-2. **BUs com dados Pipefy** (oxy_hacker, franquia): sempre usam os cards de venda do Pipefy (já disponíveis via `oxyHackerAnalytics` e `franquiaAnalytics`)
+**Arquivo 1: `src/components/planning/IndicatorsTab.tsx`** — labels do eixo X
 
-**Alterações concretas:**
+- No `getChartLabels`, para agrupamento `daily`: mudar de `format(day, "d")` para incluir o mês quando o dia é 1 ou quando troca de mês (ex: "1 Jan", "15", "22", "1 Fev", "8"...)
+- Alternativa mais limpa: usar `format(day, "d/MM")` para mostrar dia/mês em todos os pontos, e no XAxis do gráfico, usar `interval` para não sobrecarregar (mostrar a cada N labels)
 
-- Modificar `getDailyRevenueForBUs` para **não incluir** `row.expansao` (remover linhas de oxy_hacker/franquia)
-- Criar flag `hasDreBUs` = selectedBUs inclui modelo_atual ou o2_tax
-- Criar `pipefy BUs` = filtrar selectedBUs para oxy_hacker/franquia
-- Nos dois loops de cálculo (header e chart data), além do daily revenue para BUs DRE, **sempre somar** os cards de venda do Pipefy para oxy_hacker e franquia no período
+**Arquivo 2: `src/components/planning/indicators/RevenuePaceChart.tsx`** — altura e visual
 
-Isso garante que o realizado de Franquia e Oxy Hacker venha dos cards do Pipefy com data de assinatura, enquanto Modelo Atual e O2 TAX continuam vindo do DRE.
+- Aumentar altura de `h-72` para `h-96` (384px) — mais espaço vertical para as curvas "respirarem"
+- Mudar `type="monotone"` para `type="natural"` no Area e Line — curvas mais orgânicas com movimento natural
+- Aumentar `strokeWidth` da área para 2.5 e do Line da meta para 2.5
+- Adicionar dots nos pontos da linha realizada (`dot={{ r: 2 }}`) para dar textura visual
+- No XAxis, adicionar `interval="preserveStartEnd"` e `angle={-45}` com `textAnchor="end"` quando houver muitos labels, ou usar `tick` customizado que mostra "d/MMM" apenas em pontos-chave
 
-### Arquivos alterados
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/planning/IndicatorsTab.tsx` | Separar lógica de realizado: DRE para modelo_atual/o2_tax, Pipefy para oxy_hacker/franquia |
+### Resultado
+- Labels claros indicando dia + mês (ex: "1/Jan", "15/Jan", "1/Fev")
+- Gráfico mais alto e com curvas mais orgânicas, dando sensação de movimento real
 
