@@ -121,26 +121,41 @@ export type Database = {
       }
       daily_revenue: {
         Row: {
+          caas: number
           customer_count: number
           date: string
+          expansao: number
           id: string
+          saas: number
+          source: string
           synced_at: string
+          tax: number
           total_inflows: number
           year: number
         }
         Insert: {
+          caas?: number
           customer_count?: number
           date: string
+          expansao?: number
           id?: string
+          saas?: number
+          source?: string
           synced_at?: string
+          tax?: number
           total_inflows?: number
           year: number
         }
         Update: {
+          caas?: number
           customer_count?: number
           date?: string
+          expansao?: number
           id?: string
+          saas?: number
+          source?: string
           synced_at?: string
+          tax?: number
           total_inflows?: number
           year?: number
         }
