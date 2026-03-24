@@ -66,6 +66,17 @@ serve(async (req) => {
         fetchOptions = { method: 'GET', headers: authHeaders };
         break;
       }
+      case 'dre_categories': {
+        const groupIds = body.groupIds || ['bed1718d-e54f-4341-abe0-22ae7f04a26a'];
+        const params = new URLSearchParams({ startDate, endDate });
+        for (const gid of groupIds) {
+          params.append('groupIds[]', gid);
+        }
+        params.append('cnpjs[]', CNPJ_FORMATTED);
+        url = `${BASE_URL}/v2/dre/dre-table-categories?${params}`;
+        fetchOptions = { method: 'GET', headers: authHeaders };
+        break;
+      }
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
