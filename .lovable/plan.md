@@ -1,31 +1,30 @@
 
 
-## Corrigir Meta do Gráfico de Faturamento: usar "Meta" total, não "A Vender"
+## Franquia e Oxy Hacker: usar dados de vendas do Pipefy no gráfico de Faturamento
 
 ### Problema
-O gráfico RevenuePaceChart está usando `getConsolidatedMeta(bu, month, 'faturamento')` que retorna `monthData.faturamento` do contexto. Esse valor é populado como `faturamentoVender` (A Vender / incremento), não como a Meta total. Para Março do Modelo Atual, mostra ~R$500k em vez de R$1.334.000.
+Atualmente, quando `hasDailyRevenueData` é true, o gráfico usa `getDailyRevenueForBUs` para **todas** as BUs — inclusive Oxy Hacker e Franquia, que pegam o valor da coluna `expansao` da tabela `daily_revenue` (DRE). O usuário quer que essas duas BUs usem os dados de vendas do Pipefy (valor + data de assinatura do contrato), da mesma forma que já funciona no fallback (`allSetupPontualCards`).
 
-### Cadeia do problema
-1. `usePlanGrowthData.ts` linha 453: `faturamento: Math.round(d.faturamentoVender)` ← publica o "A Vender"
-2. O campo `faturamentoMeta` (= MRR Base + A Vender) existe no cálculo mas nunca é publicado no contexto
-3. `useConsolidatedMetas` linha 75: `case 'faturamento': return faturamento` ← retorna o "A Vender"
+### Solução
 
-### Alterações — somente no gráfico de Faturamento
+**Arquivo: `src/components/planning/IndicatorsTab.tsx`**
 
-**Não vamos alterar** `useConsolidatedMetas` nem o contexto (para não quebrar acelerômetros e outros componentes que usam `faturamento` como "A Vender").
+Separar o cálculo do realizado em duas partes:
 
-**Arquivo 1: `src/contexts/MediaMetasContext.tsx`**
-- Adicionar `faturamentoMeta?: number` ao `FunnelDataItem`
+1. **BUs com dados DRE** (modelo_atual, o2_tax): continuam usando `getDailyRevenueForBUs` quando `hasDailyRevenueData` é true
+2. **BUs com dados Pipefy** (oxy_hacker, franquia): sempre usam os cards de venda do Pipefy (já disponíveis via `oxyHackerAnalytics` e `franquiaAnalytics`)
 
-**Arquivo 2: `src/hooks/usePlanGrowthData.ts`**
-- Na linha 453, adicionar campo: `faturamentoMeta: Math.round(d.faturamentoMeta)`
-- Fazer o mesmo para o2Tax, oxyHacker e franquia (para essas BUs, faturamentoMeta = faturamento pois não têm MRR base)
+**Alterações concretas:**
 
-**Arquivo 3: `src/components/planning/IndicatorsTab.tsx`**
-- Somente no bloco do RevenuePaceChart (linhas ~2580-2662), em vez de chamar `getConsolidatedMeta(bu, month, 'faturamento')`, ler diretamente `funnelData[buKey].find(d => d.month === monthName)?.faturamentoMeta`
-- Aplicar nas 2 ocorrências (totalMeta no header e periodMeta no gráfico)
+- Modificar `getDailyRevenueForBUs` para **não incluir** `row.expansao` (remover linhas de oxy_hacker/franquia)
+- Criar flag `hasDreBUs` = selectedBUs inclui modelo_atual ou o2_tax
+- Criar `pipefy BUs` = filtrar selectedBUs para oxy_hacker/franquia
+- Nos dois loops de cálculo (header e chart data), além do daily revenue para BUs DRE, **sempre somar** os cards de venda do Pipefy para oxy_hacker e franquia no período
 
-### Resultado
-- O gráfico de Faturamento mostrará R$1.334.000 (Meta total) em vez de R$500k (A Vender)
-- Acelerômetros e demais componentes continuam inalterados
+Isso garante que o realizado de Franquia e Oxy Hacker venha dos cards do Pipefy com data de assinatura, enquanto Modelo Atual e O2 TAX continuam vindo do DRE.
+
+### Arquivos alterados
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/planning/IndicatorsTab.tsx` | Separar lógica de realizado: DRE para modelo_atual/o2_tax, Pipefy para oxy_hacker/franquia |
 
