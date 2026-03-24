@@ -7,7 +7,19 @@ const corsHeaders = {
 };
 
 const BASE_URL = 'https://api.oxy.finance';
+const CNPJ_CLEAN = '23813779000160';
 const CNPJ_FORMATTED = '23.813.779/0001-60';
+
+// Mapping DRE group labels to BU columns
+function mapGroupToBU(label: string): 'caas' | 'saas' | 'expansao' | 'tax' | null {
+  const lower = label.toLowerCase();
+  if (lower === 'caas') return 'caas';
+  if (lower === 'saas') return 'saas';
+  if (lower === 'tax') return 'tax';
+  const normalized = lower.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (normalized === 'expansao') return 'expansao';
+  return null;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -26,14 +38,17 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { startDate, endDate } = await req.json();
+    const body = await req.json();
+    const { startDate, endDate, source } = body;
+
     if (!startDate || !endDate) {
       return new Response(JSON.stringify({ error: 'startDate and endDate are required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    console.log(`Syncing daily revenue from ${startDate} to ${endDate}`);
+    const syncSource = source || 'cashflow';
+    console.log(`Syncing daily revenue (source=${syncSource}) from ${startDate} to ${endDate}`);
 
     const authHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -50,69 +65,169 @@ serve(async (req) => {
       current.setUTCDate(current.getUTCDate() + 1);
     }
 
-    console.log(`Processing ${dates.length} days`);
+    // Cache check: find which days already exist in the DB for this source
+    const { data: existingRows } = await supabase
+      .from('daily_revenue')
+      .select('date')
+      .eq('source', syncSource)
+      .gte('date', startDate)
+      .lte('date', endDate);
 
-    const results: { date: string; total_inflows: number; customer_count: number }[] = [];
+    const existingDates = new Set((existingRows || []).map((r: any) => r.date));
+    const missingDates = dates.filter(d => !existingDates.has(d));
+
+    console.log(`Total days: ${dates.length}, already cached: ${existingDates.size}, to fetch: ${missingDates.length}`);
+
+    if (missingDates.length === 0) {
+      return new Response(JSON.stringify({
+        synced: 0,
+        cached: existingDates.size,
+        errors: 0,
+        message: 'All days already in cache',
+        dateRange: { startDate, endDate },
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    const results: any[] = [];
     let errors = 0;
 
-    // Process in batches of 5 to avoid rate limits
-    for (let i = 0; i < dates.length; i += 5) {
-      const batch = dates.slice(i, i + 5);
-      const batchResults = await Promise.all(
-        batch.map(async (day) => {
-          try {
-            const params = new URLSearchParams({
-              startDate: day,
-              endDate: day,
-              'cnpjs[]': CNPJ_FORMATTED,
-              movimentType: 'R',
-              isLate: 'false',
-            });
-            const url = `${BASE_URL}/widgets/cash-flow/v2/card/details?${params}`;
-            const response = await fetch(url, { method: 'GET', headers: authHeaders });
-            const text = await response.text();
+    if (syncSource === 'dre') {
+      // DRE mode: fetch /v2/dre/dre-table per day, extract RB by BU
+      for (let i = 0; i < missingDates.length; i += 5) {
+        const batch = missingDates.slice(i, i + 5);
+        const batchResults = await Promise.all(
+          batch.map(async (day) => {
+            try {
+              const params = new URLSearchParams({
+                startDate: day,
+                endDate: day,
+                'cnpjs[]': CNPJ_CLEAN,
+              });
+              const url = `${BASE_URL}/v2/dre/dre-table?${params}`;
+              const response = await fetch(url, { method: 'GET', headers: authHeaders });
+              const text = await response.text();
 
-            if (!response.ok) {
-              console.error(`Error fetching ${day}: ${response.status} ${text.substring(0, 200)}`);
+              if (!response.ok) {
+                console.error(`Error fetching DRE ${day}: ${response.status} ${text.substring(0, 200)}`);
+                errors++;
+                return null;
+              }
+
+              const data = JSON.parse(text);
+              const groups = data?.groups || [];
+
+              let caas = 0, saas = 0, expansao = 0, tax = 0;
+
+              for (const group of groups) {
+                if (group.code !== 'RB') continue;
+                const bu = mapGroupToBU(group.label || '');
+                if (!bu) continue;
+
+                // Sum all period values for this day (should be just one)
+                const entries = Array.isArray(group.data) ? group.data : [];
+                let value = 0;
+                for (const entry of entries) {
+                  value += Number(entry.value || 0);
+                }
+
+                if (bu === 'caas') caas = value;
+                else if (bu === 'saas') saas = value;
+                else if (bu === 'expansao') expansao = value;
+                else if (bu === 'tax') tax = value;
+              }
+
+              const totalInflows = caas + saas + expansao + tax;
+
+              return {
+                date: day,
+                total_inflows: totalInflows,
+                customer_count: 0,
+                caas, saas, expansao, tax,
+                source: 'dre',
+                year: parseInt(day.split('-')[0], 10),
+                synced_at: new Date().toISOString(),
+              };
+            } catch (e) {
+              console.error(`Exception fetching DRE ${day}:`, e);
               errors++;
               return null;
             }
+          })
+        );
 
-            const data = JSON.parse(text);
-            // Response: { data: [ { label: "Customer", data: [ { period: "Total", value: X } ] } ] }
-            const customers = Array.isArray(data) ? data : data?.data || [];
-            let totalInflows = 0;
-            let customerCount = 0;
+        for (const r of batchResults) {
+          if (r) results.push(r);
+        }
 
-            if (Array.isArray(customers)) {
-              for (const customer of customers) {
-                const entries = customer.data || [];
-                // Get the "Total" entry for this customer
-                const totalEntry = entries.find((e: any) => e.period === 'Total');
-                const value = Number(totalEntry?.value || 0);
-                if (value > 0) {
-                  totalInflows += value;
-                  customerCount++;
+        if (i + 5 < missingDates.length) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
+      }
+    } else {
+      // Cashflow mode (original behavior)
+      for (let i = 0; i < missingDates.length; i += 5) {
+        const batch = missingDates.slice(i, i + 5);
+        const batchResults = await Promise.all(
+          batch.map(async (day) => {
+            try {
+              const params = new URLSearchParams({
+                startDate: day,
+                endDate: day,
+                'cnpjs[]': CNPJ_FORMATTED,
+                movimentType: 'R',
+                isLate: 'false',
+              });
+              const url = `${BASE_URL}/widgets/cash-flow/v2/card/details?${params}`;
+              const response = await fetch(url, { method: 'GET', headers: authHeaders });
+              const text = await response.text();
+
+              if (!response.ok) {
+                console.error(`Error fetching cashflow ${day}: ${response.status} ${text.substring(0, 200)}`);
+                errors++;
+                return null;
+              }
+
+              const data = JSON.parse(text);
+              const customers = Array.isArray(data) ? data : data?.data || [];
+              let totalInflows = 0;
+              let customerCount = 0;
+
+              if (Array.isArray(customers)) {
+                for (const customer of customers) {
+                  const entries = customer.data || [];
+                  const totalEntry = entries.find((e: any) => e.period === 'Total');
+                  const value = Number(totalEntry?.value || 0);
+                  if (value > 0) {
+                    totalInflows += value;
+                    customerCount++;
+                  }
                 }
               }
+
+              return {
+                date: day,
+                total_inflows: totalInflows,
+                customer_count: customerCount,
+                caas: 0, saas: 0, expansao: 0, tax: 0,
+                source: 'cashflow',
+                year: parseInt(day.split('-')[0], 10),
+                synced_at: new Date().toISOString(),
+              };
+            } catch (e) {
+              console.error(`Exception fetching cashflow ${day}:`, e);
+              errors++;
+              return null;
             }
+          })
+        );
 
-            return { date: day, total_inflows: totalInflows, customer_count: customerCount };
-          } catch (e) {
-            console.error(`Exception fetching ${day}:`, e);
-            errors++;
-            return null;
-          }
-        })
-      );
+        for (const r of batchResults) {
+          if (r) results.push(r);
+        }
 
-      for (const r of batchResults) {
-        if (r) results.push(r);
-      }
-
-      // Small delay between batches
-      if (i + 5 < dates.length) {
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        if (i + 5 < missingDates.length) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
       }
     }
 
@@ -120,17 +235,9 @@ serve(async (req) => {
 
     // Upsert all results
     if (results.length > 0) {
-      const rows = results.map((r) => ({
-        date: r.date,
-        total_inflows: r.total_inflows,
-        customer_count: r.customer_count,
-        year: parseInt(r.date.split('-')[0], 10),
-        synced_at: new Date().toISOString(),
-      }));
-
       const { error: upsertError } = await supabase
         .from('daily_revenue')
-        .upsert(rows, { onConflict: 'date' });
+        .upsert(results, { onConflict: 'date,source' });
 
       if (upsertError) {
         console.error('Upsert error:', upsertError);
@@ -142,9 +249,11 @@ serve(async (req) => {
 
     const summary = {
       synced: results.length,
+      cached: existingDates.size,
       errors,
       totalInflows: results.reduce((s, r) => s + r.total_inflows, 0),
       dateRange: { startDate, endDate },
+      source: syncSource,
     };
 
     console.log('Sync complete:', JSON.stringify(summary));
