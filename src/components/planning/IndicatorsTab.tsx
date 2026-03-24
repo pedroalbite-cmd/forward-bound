@@ -450,7 +450,6 @@ export function IndicatorsTab() {
     let total = 0;
     if (selectedBUs.includes('modelo_atual')) total += row.caas + row.saas;
     if (selectedBUs.includes('o2_tax')) total += row.tax;
-    if (selectedBUs.includes('oxy_hacker') || selectedBUs.includes('franquia')) total += row.expansao;
     return total;
   };
   
@@ -2538,6 +2537,14 @@ export function IndicatorsTab() {
           allSetupPontualCards.push(...getSetupPontualCardsForBU(bu));
         });
 
+        // Pipefy cards only for oxy_hacker/franquia (these BUs always use Pipefy, not DRE)
+        const pipefyExpansaoCards: { date: Date; setup: number; pontual: number }[] = [];
+        const pipefyBUs = selectedBUs.filter(bu => bu === 'oxy_hacker' || bu === 'franquia');
+        pipefyBUs.forEach(bu => {
+          pipefyExpansaoCards.push(...getSetupPontualCardsForBU(bu));
+        });
+        const hasDreBUs = selectedBUs.some(bu => bu === 'modelo_atual' || bu === 'o2_tax');
+
         // Calculate total realized and total meta for header
         let totalRealized = 0;
         let totalMeta = 0;
@@ -2556,25 +2563,30 @@ export function IndicatorsTab() {
 
           const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
 
-          // Daily revenue priority: sum actual daily values for the overlap period
-          if (hasDailyRevenueData) {
+          // Pipefy cards for oxy_hacker/franquia — always added regardless of DRE
+          const mStart = new Date(overlapStart.getFullYear(), overlapStart.getMonth(), overlapStart.getDate()).getTime();
+          const mEnd = new Date(overlapEnd.getFullYear(), overlapEnd.getMonth(), overlapEnd.getDate(), 23, 59, 59, 999).getTime();
+          const pipefyRealized = pipefyExpansaoCards
+            .filter(c => c.date.getTime() >= mStart && c.date.getTime() <= mEnd)
+            .reduce((sum, c) => sum + c.setup + c.pontual, 0);
+
+          // DRE for modelo_atual/o2_tax
+          if (hasDailyRevenueData && hasDreBUs) {
             const overlapDaysList = eachDayOfInterval({ start: overlapStart, end: overlapEnd });
             let dailyTotal = 0;
             for (const day of overlapDaysList) {
               const key = format(day, 'yyyy-MM-dd');
               dailyTotal += getDailyRevenueForBUs(key);
             }
-            totalRealized += dailyTotal;
+            totalRealized += dailyTotal + pipefyRealized;
           } else if (isTotalOverride(monthName, year)) {
-            totalRealized += mrrBaseMonth * fraction;
+            totalRealized += (mrrBaseMonth * fraction) + pipefyRealized;
           } else {
-            // Fallback: MRR base pro-rata + actual setup + actual pontual
-            const mStart = new Date(overlapStart.getFullYear(), overlapStart.getMonth(), overlapStart.getDate()).getTime();
-            const mEnd = new Date(overlapEnd.getFullYear(), overlapEnd.getMonth(), overlapEnd.getDate(), 23, 59, 59, 999).getTime();
-            const monthSetupPontual = allSetupPontualCards
+            // Fallback: MRR base pro-rata + actual setup + actual pontual (all BUs)
+            const allCardsRealized = allSetupPontualCards
               .filter(c => c.date.getTime() >= mStart && c.date.getTime() <= mEnd)
               .reduce((sum, c) => sum + c.setup + c.pontual, 0);
-            totalRealized += (mrrBaseMonth * fraction) + monthSetupPontual;
+            totalRealized += (mrrBaseMonth * fraction) + allCardsRealized;
           }
 
           // Meta: faturamentoMeta (total = MRR Base + A Vender) do Plan Growth via metasPorBU
@@ -2630,26 +2642,29 @@ export function IndicatorsTab() {
 
             const mrrBaseMonth = getMrrBaseForMonth(monthName, year);
 
-            // Daily revenue priority: sum actual daily values for the overlap period
-            if (hasDailyRevenueData) {
+            // Pipefy cards for oxy_hacker/franquia — always added
+            const pStart = new Date(overlapStart.getFullYear(), overlapStart.getMonth(), overlapStart.getDate()).getTime();
+            const pEnd = new Date(overlapEnd.getFullYear(), overlapEnd.getMonth(), overlapEnd.getDate(), 23, 59, 59, 999).getTime();
+            const pipefyPeriodRealized = pipefyExpansaoCards
+              .filter(c => c.date.getTime() >= pStart && c.date.getTime() <= pEnd)
+              .reduce((sum, c) => sum + c.setup + c.pontual, 0);
+
+            // DRE for modelo_atual/o2_tax
+            if (hasDailyRevenueData && hasDreBUs) {
               const overlapDaysList = eachDayOfInterval({ start: overlapStart, end: overlapEnd });
               let dailyTotal = 0;
               for (const day of overlapDaysList) {
                 const key = format(day, 'yyyy-MM-dd');
                 dailyTotal += getDailyRevenueForBUs(key);
               }
-              periodRealized += dailyTotal;
+              periodRealized += dailyTotal + pipefyPeriodRealized;
             } else if (isTotalOverride(monthName, year)) {
-              // Value is total realized revenue — use directly, no setup/pontual added
-              periodRealized += mrrBaseMonth * fraction;
+              periodRealized += (mrrBaseMonth * fraction) + pipefyPeriodRealized;
             } else {
-              // Realized setup+pontual in this overlap
-              const pStart = new Date(overlapStart.getFullYear(), overlapStart.getMonth(), overlapStart.getDate()).getTime();
-              const pEnd = new Date(overlapEnd.getFullYear(), overlapEnd.getMonth(), overlapEnd.getDate(), 23, 59, 59, 999).getTime();
+              // Fallback: all BUs via Pipefy cards
               const spRealized = allSetupPontualCards
                 .filter(c => c.date.getTime() >= pStart && c.date.getTime() <= pEnd)
                 .reduce((sum, c) => sum + c.setup + c.pontual, 0);
-
               periodRealized += (mrrBaseMonth * fraction) + spRealized;
             }
 
