@@ -44,6 +44,11 @@ export interface DailyRevenueRow {
   date: string;
   total_inflows: number;
   customer_count: number;
+  caas: number;
+  saas: number;
+  expansao: number;
+  tax: number;
+  source: string;
 }
 
 export interface OxyFinanceResult {
