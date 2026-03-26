@@ -1,36 +1,46 @@
 
 
-## Corrigir cache de dados diários DRE: re-sincronizar dias recentes
+## Agendar sync automática de faturamento DRE a cada 12 horas
 
-### Problema
-A Edge Function `sync-daily-revenue` usa um cache "write-once": se um dia já existe no banco, ele nunca é atualizado. Isso significa que se a sync rodou no dia 15/03, os dias 1-15 de março foram gravados, mas vendas que entraram retroativamente (ex: uma venda no dia 10 registrada depois do dia 15) nunca são capturadas. Os dados ficam "congelados" na primeira sync.
-
-### Solução
-Adicionar um parâmetro `forceRefreshDays` na Edge Function que força a re-busca dos últimos N dias, mesmo que já existam no cache. A lógica:
-
-1. **Novo parâmetro `forceRefreshDays`** (default: 7) — sempre re-busca os últimos 7 dias do range, deletando os registros antigos antes do upsert
-2. **Dias mais antigos** continuam usando o cache normal (se já existe, não busca de novo)
+### O que será feito
+Criar um cron job no banco de dados usando `pg_cron` + `pg_net` que chama a Edge Function `sync-daily-revenue` automaticamente a cada 12 horas (00:00 e 12:00 UTC), enviando como parâmetros o primeiro e último dia do mês corrente, com `source: 'dre'` e `forceRefreshDays` alto o suficiente para cobrir o mês inteiro (~31 dias).
 
 ### Alterações
 
-**Arquivo: `supabase/functions/sync-daily-revenue/index.ts`**
+1. **Habilitar extensões `pg_cron` e `pg_net`** no banco (via SQL)
 
-- Aceitar `forceRefreshDays` no body (default 7)
-- Calcular a data de corte: `hoje - forceRefreshDays`
-- Separar as datas em dois grupos:
-  - **Datas "frescas"** (>= corte): sempre re-buscar da API, deletar do banco antes do upsert
-  - **Datas "antigas"** (< corte): manter lógica de cache atual (skip se já existe)
-- Deletar os registros "frescos" existentes antes de processar
-- O upsert final já funciona para ambos os grupos
+2. **Criar o cron job** via SQL (não migration, pois contém dados específicos do projeto):
+   - Schedule: `0 0,12 * * *` (meia-noite e meio-dia UTC)
+   - Chama `sync-daily-revenue` via `net.http_post` com body dinâmico que calcula `startDate` = primeiro dia do mês atual e `endDate` = hoje, `source = 'dre'`, `forceRefreshDays = 31`
+   - Isso garante que **todos os dias do mês corrente** sejam re-sincronizados a cada execução
 
+3. **Ajustar a Edge Function** para aceitar chamadas sem body JSON (quando `forceRefreshDays=31`, todos os dias do mês são tratados como "frescos" e re-buscados da API)
+
+### Detalhes técnicos
+
+```sql
+-- Habilitar extensões
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- Cron: a cada 12h, sync do mês atual inteiro
+SELECT cron.schedule(
+  'sync-daily-revenue-dre-12h',
+  '0 0,12 * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://dgwmwmofyaxstykwuzxh.supabase.co/functions/v1/sync-daily-revenue',
+    headers := '{"Content-Type":"application/json","Authorization":"Bearer <anon_key>"}'::jsonb,
+    body := jsonb_build_object(
+      'startDate', to_char(date_trunc('month', now()), 'YYYY-MM-DD'),
+      'endDate', to_char(now(), 'YYYY-MM-DD'),
+      'source', 'dre',
+      'forceRefreshDays', 31
+    )
+  );
+  $$
+);
 ```
-Exemplo: sync de 01/01 a 26/03, forceRefreshDays=7
-- Dias 01/01 a 19/03: usa cache (não busca se já existe)
-- Dias 20/03 a 26/03: deleta do banco e re-busca da API
-```
 
-### Resultado
-- Dados dos últimos 7 dias sempre atualizados a cada sync
-- Dados históricos continuam cacheados eficientemente
-- Sem mudança no frontend — apenas a Edge Function fica mais inteligente
+Com `forceRefreshDays=31`, todos os dias do mês serão deletados do cache e re-buscados da API DRE, garantindo que vendas retroativas sejam sempre capturadas.
 
