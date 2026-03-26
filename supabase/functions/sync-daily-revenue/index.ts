@@ -281,7 +281,8 @@ serve(async (req) => {
 
     const summary = {
       synced: results.length,
-      cached: existingDates.size,
+      cached: existingOldDates.size,
+      freshRefreshed: freshDates.length,
       errors,
       totalInflows: results.reduce((s, r) => s + r.total_inflows, 0),
       dateRange: { startDate, endDate },
