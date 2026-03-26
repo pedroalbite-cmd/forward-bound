@@ -39,7 +39,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { startDate, endDate, source } = body;
+    const { startDate, endDate, source, forceRefreshDays = 7 } = body;
 
     if (!startDate || !endDate) {
       return new Response(JSON.stringify({ error: 'startDate and endDate are required' }), {
@@ -48,7 +48,7 @@ serve(async (req) => {
     }
 
     const syncSource = source || 'cashflow';
-    console.log(`Syncing daily revenue (source=${syncSource}) from ${startDate} to ${endDate}`);
+    console.log(`Syncing daily revenue (source=${syncSource}) from ${startDate} to ${endDate}, forceRefreshDays=${forceRefreshDays}`);
 
     const authHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -65,23 +65,58 @@ serve(async (req) => {
       current.setUTCDate(current.getUTCDate() + 1);
     }
 
-    // Cache check: find which days already exist in the DB for this source
-    const { data: existingRows } = await supabase
-      .from('daily_revenue')
-      .select('date')
-      .eq('source', syncSource)
-      .gte('date', startDate)
-      .lte('date', endDate);
+    // Calculate the freshness cutoff date
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const cutoffDate = new Date(today);
+    cutoffDate.setUTCDate(cutoffDate.getUTCDate() - forceRefreshDays);
+    const cutoffStr = cutoffDate.toISOString().split('T')[0];
 
-    const existingDates = new Set((existingRows || []).map((r: any) => r.date));
-    const missingDates = dates.filter(d => !existingDates.has(d));
+    // Split dates into "fresh" (must re-fetch) and "old" (can use cache)
+    const freshDates = dates.filter(d => d >= cutoffStr);
+    const oldDates = dates.filter(d => d < cutoffStr);
 
-    console.log(`Total days: ${dates.length}, already cached: ${existingDates.size}, to fetch: ${missingDates.length}`);
+    // Delete fresh dates from DB so they get re-fetched
+    if (freshDates.length > 0) {
+      const { error: delError } = await supabase
+        .from('daily_revenue')
+        .delete()
+        .eq('source', syncSource)
+        .gte('date', freshDates[0])
+        .lte('date', freshDates[freshDates.length - 1]);
+
+      if (delError) {
+        console.error('Error deleting fresh dates:', delError);
+      } else {
+        console.log(`Deleted ${freshDates.length} fresh dates (>= ${cutoffStr}) for re-fetch`);
+      }
+    }
+
+    // Cache check: only for old dates
+    const existingOldDates = new Set<string>();
+    if (oldDates.length > 0) {
+      const { data: existingRows } = await supabase
+        .from('daily_revenue')
+        .select('date')
+        .eq('source', syncSource)
+        .gte('date', oldDates[0])
+        .lte('date', oldDates[oldDates.length - 1]);
+
+      for (const r of (existingRows || [])) {
+        existingOldDates.add(r.date);
+      }
+    }
+
+    // Dates to fetch = old dates not in cache + all fresh dates
+    const oldMissing = oldDates.filter(d => !existingOldDates.has(d));
+    const missingDates = [...oldMissing, ...freshDates];
+
+    console.log(`Total days: ${dates.length}, old cached: ${existingOldDates.size}, old missing: ${oldMissing.length}, fresh (forced): ${freshDates.length}, to fetch: ${missingDates.length}`);
 
     if (missingDates.length === 0) {
       return new Response(JSON.stringify({
         synced: 0,
-        cached: existingDates.size,
+        cached: existingOldDates.size,
         errors: 0,
         message: 'All days already in cache',
         dateRange: { startDate, endDate },
