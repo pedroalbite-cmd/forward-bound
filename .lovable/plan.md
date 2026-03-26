@@ -1,29 +1,36 @@
 
 
-## Melhorar legenda do eixo X e dar mais "vida" ao gráfico de Faturamento
+## Corrigir cache de dados diários DRE: re-sincronizar dias recentes
 
-### Problemas identificados
+### Problema
+A Edge Function `sync-daily-revenue` usa um cache "write-once": se um dia já existe no banco, ele nunca é atualizado. Isso significa que se a sync rodou no dia 15/03, os dias 1-15 de março foram gravados, mas vendas que entraram retroativamente (ex: uma venda no dia 10 registrada depois do dia 15) nunca são capturadas. Os dados ficam "congelados" na primeira sync.
 
-1. **Legenda confusa no eixo X**: Com 3 meses selecionados e agrupamento diário, os labels mostram apenas o número do dia (1, 8, 15, 22, 29, 5, 12, 19, 26...) sem indicar o mês. Impossível saber de qual mês é cada dia.
+### Solução
+Adicionar um parâmetro `forceRefreshDays` na Edge Function que força a re-busca dos últimos N dias, mesmo que já existam no cache. A lógica:
 
-2. **Gráfico pequeno e "estático"**: Altura fixa de `h-72` (288px) comprime tudo, fazendo as curvas parecerem uniformes e sem destaque visual.
+1. **Novo parâmetro `forceRefreshDays`** (default: 7) — sempre re-busca os últimos 7 dias do range, deletando os registros antigos antes do upsert
+2. **Dias mais antigos** continuam usando o cache normal (se já existe, não busca de novo)
 
 ### Alterações
 
-**Arquivo 1: `src/components/planning/IndicatorsTab.tsx`** — labels do eixo X
+**Arquivo: `supabase/functions/sync-daily-revenue/index.ts`**
 
-- No `getChartLabels`, para agrupamento `daily`: mudar de `format(day, "d")` para incluir o mês quando o dia é 1 ou quando troca de mês (ex: "1 Jan", "15", "22", "1 Fev", "8"...)
-- Alternativa mais limpa: usar `format(day, "d/MM")` para mostrar dia/mês em todos os pontos, e no XAxis do gráfico, usar `interval` para não sobrecarregar (mostrar a cada N labels)
+- Aceitar `forceRefreshDays` no body (default 7)
+- Calcular a data de corte: `hoje - forceRefreshDays`
+- Separar as datas em dois grupos:
+  - **Datas "frescas"** (>= corte): sempre re-buscar da API, deletar do banco antes do upsert
+  - **Datas "antigas"** (< corte): manter lógica de cache atual (skip se já existe)
+- Deletar os registros "frescos" existentes antes de processar
+- O upsert final já funciona para ambos os grupos
 
-**Arquivo 2: `src/components/planning/indicators/RevenuePaceChart.tsx`** — altura e visual
-
-- Aumentar altura de `h-72` para `h-96` (384px) — mais espaço vertical para as curvas "respirarem"
-- Mudar `type="monotone"` para `type="natural"` no Area e Line — curvas mais orgânicas com movimento natural
-- Aumentar `strokeWidth` da área para 2.5 e do Line da meta para 2.5
-- Adicionar dots nos pontos da linha realizada (`dot={{ r: 2 }}`) para dar textura visual
-- No XAxis, adicionar `interval="preserveStartEnd"` e `angle={-45}` com `textAnchor="end"` quando houver muitos labels, ou usar `tick` customizado que mostra "d/MMM" apenas em pontos-chave
+```
+Exemplo: sync de 01/01 a 26/03, forceRefreshDays=7
+- Dias 01/01 a 19/03: usa cache (não busca se já existe)
+- Dias 20/03 a 26/03: deleta do banco e re-busca da API
+```
 
 ### Resultado
-- Labels claros indicando dia + mês (ex: "1/Jan", "15/Jan", "1/Fev")
-- Gráfico mais alto e com curvas mais orgânicas, dando sensação de movimento real
+- Dados dos últimos 7 dias sempre atualizados a cada sync
+- Dados históricos continuam cacheados eficientemente
+- Sem mudança no frontend — apenas a Edge Function fica mais inteligente
 
