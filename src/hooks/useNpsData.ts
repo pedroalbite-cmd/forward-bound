@@ -95,6 +95,7 @@ interface CentralProjeto {
   'Fase': string;
   'Fase Atual': string;
   'CFO Responsavel': string | null;
+  'Produtos': string | null;
 }
 
 async function fetchNpsData(): Promise<{ npsRows: NpsCard[]; cfoMap: Record<string, string>; npsPipeId: string; titleMap: Record<string, string> }> {
