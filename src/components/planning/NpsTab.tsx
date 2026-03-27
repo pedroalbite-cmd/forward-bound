@@ -45,10 +45,17 @@ export function NpsTab() {
   // Extract unique produtos and cfos from raw data
   const { produtos, cfos } = useMemo(() => {
     if (!npsData?.raw) return { produtos: [], cfos: [] };
-    const { produtoMap, cfoMap } = npsData.raw;
+    const { produtoMap, cfoMap, npsRows } = npsData.raw;
+
+    const allCfos = new Set(Object.values(cfoMap));
+    npsRows.forEach(c => {
+      const cfo = c['CFO Responsavel'] || c['Responsavel Tratativa'];
+      if (cfo) allCfos.add(cfo);
+    });
+
     return {
-      produtos: [...new Set(Object.values(produtoMap))].sort(),
-      cfos: [...new Set(Object.values(cfoMap))].sort(),
+      produtos: [...new Set(Object.values(produtoMap))].filter(Boolean).sort(),
+      cfos: [...allCfos].filter(Boolean).sort(),
     };
   }, [npsData?.raw]);
 
@@ -71,12 +78,10 @@ export function NpsTab() {
 
     // Filter by CFO
     if (selectedCfos.length > 0) {
-      const matchingIds = new Set(
-        Object.entries(cfoMap)
-          .filter(([, c]) => selectedCfos.includes(c))
-          .map(([id]) => id)
-      );
-      filtered = filtered.filter(c => matchingIds.has(c.ID));
+      filtered = filtered.filter(c => {
+        const cfo = cfoMap[c.ID] || c['CFO Responsavel'] || c['Responsavel Tratativa'];
+        return cfo ? selectedCfos.includes(cfo) : false;
+      });
     }
 
     // Filter by date range
