@@ -276,49 +276,48 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
     return firstEntries;
   }, [cards, fullHistory, produto]);
 
-  // Get cards for a specific indicator (using FIRST ENTRY logic)
+  // Get cards for a specific indicator (EVERY ENTRY logic)
+  // Counts every movement whose phase matches the indicator and dataEntrada is in the period
   const getCardsForIndicator = useMemo(() => {
     return (indicator: IndicatorType): ExpansaoCard[] => {
-      console.log(`[${produto} Analytics] getCardsForIndicator(${indicator}): checking ${firstEntryByCardAndIndicator.size} cards`);
-      
-      const uniqueCards = new Map<string, ExpansaoCard>();
-      
       // Para leads/mql: funil cumulativo - qualquer card no pipe é um lead
       const isLeadOrMql = indicator === 'leads' || indicator === 'mql';
       const indicatorsToCheck = isLeadOrMql
         ? ['leads', 'mql', 'rm', 'rr', 'proposta', 'venda'] as IndicatorType[]
         : [indicator];
       
-      for (const ind of indicatorsToCheck) {
-        const isAdvancedIndicator = ind !== 'leads' && ind !== 'mql';
-
-        for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
-          // Para indicadores avançados no contexto leads/mql:
-          // só incluir se o card NÃO tem entrada 'leads' nem 'mql' no histórico
-          // (ou seja, foi importado direto numa fase avançada)
-          if (isLeadOrMql && isAdvancedIndicator) {
-            if (indicatorMap.has('leads') || indicatorMap.has('mql')) continue;
-          }
-
-          const firstEntry = indicatorMap.get(ind);
-          if (!firstEntry) continue;
-          
-          const entryTime = firstEntry.dataEntrada.getTime();
-          
-          // Only include if FIRST entry was in selected period
-          if (entryTime >= startTime && entryTime <= endTime) {
-            const existing = uniqueCards.get(cardId);
-            if (!existing || firstEntry.dataEntrada < existing.dataEntrada) {
-              uniqueCards.set(cardId, firstEntry);
-            }
+      // Combine cards + fullHistory, dedup by id+fase+entrada
+      const allMovements = [...cards, ...(fullHistory.length > 0 ? fullHistory : [])];
+      const seenKeys = new Set<string>();
+      const result: ExpansaoCard[] = [];
+      
+      for (const card of allMovements) {
+        const cardIndicator = PHASE_TO_INDICATOR[card.fase];
+        if (!cardIndicator || !indicatorsToCheck.includes(cardIndicator)) continue;
+        
+        // Para indicadores avançados no contexto leads/mql:
+        // só incluir se o card NÃO tem entrada 'leads' nem 'mql' no histórico
+        const isAdvancedIndicator = cardIndicator !== 'leads' && cardIndicator !== 'mql';
+        if (isLeadOrMql && isAdvancedIndicator) {
+          const cardHistory = firstEntryByCardAndIndicator.get(card.id);
+          if (cardHistory && (cardHistory.has('leads') || cardHistory.has('mql'))) continue;
+        }
+        
+        const entryTime = card.dataEntrada.getTime();
+        if (entryTime >= startTime && entryTime <= endTime) {
+          // Dedup same movement but allow same card in different entries
+          const key = `${card.id}|${card.fase}|${entryTime}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            result.push(card);
           }
         }
       }
       
-      console.log(`[${produto} Analytics] getCardsForIndicator(${indicator}): ${uniqueCards.size} cards (first entry in period)`);
-      return Array.from(uniqueCards.values());
+      console.log(`[${produto} Analytics] getCardsForIndicator(${indicator}): ${result.length} entries (every entry)`);
+      return result;
     };
-  }, [firstEntryByCardAndIndicator, startTime, endTime, produto]);
+  }, [cards, fullHistory, firstEntryByCardAndIndicator, startTime, endTime, produto]);
 
   // Helper function to convert ExpansaoCard to DetailItem
   const toDetailItem = (card: ExpansaoCard): DetailItem => ({
