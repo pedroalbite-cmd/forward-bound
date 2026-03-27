@@ -200,7 +200,7 @@ function getNpsLabel(score: number): string {
   return 'Crítico';
 }
 
-function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>, externalTitleMap: Record<string, string>, npsPipeId: string) {
+export function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>, externalTitleMap: Record<string, string>, npsPipeId: string) {
   // Only current phase cards (unique)
   const currentCards = rows.filter(r => r['Fase'] === r['Fase Atual']);
   
