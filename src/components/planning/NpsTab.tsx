@@ -119,6 +119,22 @@ export function NpsTab() {
         <p className="text-muted-foreground mt-1">Visão completa de operação e satisfação — O2 Inc.</p>
       </div>
 
+      {/* Filters - always visible */}
+      {(displayData || isLoading) && (
+        <NpsFilters
+          produtos={produtos}
+          cfos={cfos}
+          selectedProdutos={selectedProdutos}
+          selectedCfos={selectedCfos}
+          selectedPeriod={selectedPeriod}
+          dateRange={dateRange}
+          onProdutosChange={setSelectedProdutos}
+          onCfosChange={setSelectedCfos}
+          onPeriodChange={handlePeriodChange}
+          onClear={handleClearFilters}
+        />
+      )}
+
       {/* Dossiê de Churn - No topo, aberto por padrão */}
       <div className="space-y-4">
         <button
@@ -188,19 +204,6 @@ export function NpsTab() {
             )}
             {displayData && (
               <>
-                {/* Filters */}
-                <NpsFilters
-                  produtos={produtos}
-                  cfos={cfos}
-                  selectedProdutos={selectedProdutos}
-                  selectedCfos={selectedCfos}
-                  selectedPeriod={selectedPeriod}
-                  dateRange={dateRange}
-                  onProdutosChange={setSelectedProdutos}
-                  onCfosChange={setSelectedCfos}
-                  onPeriodChange={handlePeriodChange}
-                  onClear={handleClearFilters}
-                />
 
                 <NpsKpiCards data={displayData.kpis} />
                 <NpsGauges data={displayData.metrics} />
