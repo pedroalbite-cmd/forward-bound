@@ -113,7 +113,8 @@ export function NpsTab() {
   };
 
   // Use filtered data when filters are active, otherwise use original
-  const hasFilters = selectedProdutos.length > 0 || selectedCfos.length > 0 || selectedPeriod !== 'all';
+  const hasDateFilter = Boolean(dateRange?.from && dateRange?.to);
+  const hasFilters = selectedProdutos.length > 0 || selectedCfos.length > 0 || hasDateFilter || selectedYear !== 'all';
   const displayData = hasFilters ? filteredNpsData : npsData;
 
   return (
