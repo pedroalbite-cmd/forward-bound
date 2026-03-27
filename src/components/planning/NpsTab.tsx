@@ -137,10 +137,12 @@ export function NpsTab() {
           selectedProdutos={selectedProdutos}
           selectedCfos={selectedCfos}
           selectedPeriod={selectedPeriod}
+          selectedYear={selectedYear}
           dateRange={dateRange}
           onProdutosChange={setSelectedProdutos}
           onCfosChange={setSelectedCfos}
           onPeriodChange={handlePeriodChange}
+          onYearChange={setSelectedYear}
           onClear={handleClearFilters}
         />
       )}

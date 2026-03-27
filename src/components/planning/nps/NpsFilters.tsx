@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MultiSelect } from '@/components/ui/multi-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CalendarIcon, Filter, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,10 +17,12 @@ interface NpsFiltersProps {
   selectedProdutos: string[];
   selectedCfos: string[];
   selectedPeriod: string;
+  selectedYear: string;
   dateRange: DateRange | undefined;
   onProdutosChange: (val: string[]) => void;
   onCfosChange: (val: string[]) => void;
   onPeriodChange: (period: string, range?: DateRange) => void;
+  onYearChange: (year: string) => void;
   onClear: () => void;
 }
 
@@ -31,21 +34,26 @@ const PERIOD_PRESETS = [
   { label: 'Q4', value: 'q4', months: [9, 10, 11] },
 ];
 
+const YEAR_OPTIONS = ['all', '2026', '2025', '2024'];
+
 export function NpsFilters({
   produtos,
   cfos,
   selectedProdutos,
   selectedCfos,
   selectedPeriod,
+  selectedYear,
   dateRange,
   onProdutosChange,
   onCfosChange,
   onPeriodChange,
+  onYearChange,
   onClear,
 }: NpsFiltersProps) {
   const [calendarOpen, setCalendarOpen] = useState(false);
 
-  const hasFilters = selectedProdutos.length > 0 || selectedCfos.length > 0 || selectedPeriod !== 'all';
+  const hasDateFilter = Boolean(dateRange?.from && dateRange?.to);
+  const hasFilters = selectedProdutos.length > 0 || selectedCfos.length > 0 || hasDateFilter || selectedYear !== 'all';
 
   const produtoOptions = produtos.map(p => ({ label: p, value: p }));
   const cfoOptions = cfos.map(c => ({ label: c, value: c }));
@@ -55,12 +63,37 @@ export function NpsFilters({
       onPeriodChange('all', undefined);
       return;
     }
-    const year = new Date().getFullYear();
+    const year = selectedYear !== 'all' ? parseInt(selectedYear) : new Date().getFullYear();
     const preset = PERIOD_PRESETS.find(p => p.value === value);
     if (preset?.months) {
       const from = new Date(year, preset.months[0], 1);
-      const to = new Date(year, preset.months[2] + 1, 0);
+      const to = new Date(year, preset.months[2] + 1, 0, 23, 59, 59);
       onPeriodChange(value, { from, to });
+    }
+  };
+
+  const handleYearChange = (year: string) => {
+    onYearChange(year);
+    if (year === 'all') {
+      // If a quarter was selected, clear the period
+      if (selectedPeriod !== 'all' && selectedPeriod !== 'custom') {
+        onPeriodChange('all', undefined);
+      }
+    } else if (selectedPeriod !== 'all' && selectedPeriod !== 'custom') {
+      // Re-calculate quarter range with new year
+      const preset = PERIOD_PRESETS.find(p => p.value === selectedPeriod);
+      if (preset?.months) {
+        const y = parseInt(year);
+        const from = new Date(y, preset.months[0], 1);
+        const to = new Date(y, preset.months[2] + 1, 0, 23, 59, 59);
+        onPeriodChange(selectedPeriod, { from, to });
+      }
+    } else if (selectedPeriod === 'all' && year !== 'all') {
+      // Year-only filter: set range to full year
+      const y = parseInt(year);
+      const from = new Date(y, 0, 1);
+      const to = new Date(y, 11, 31, 23, 59, 59);
+      onPeriodChange('year', { from, to });
     }
   };
 
@@ -74,6 +107,20 @@ export function NpsFilters({
   return (
     <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/30 rounded-lg border border-border">
       <Filter className="h-4 w-4 text-muted-foreground" />
+
+      {/* Year filter */}
+      <Select value={selectedYear} onValueChange={handleYearChange}>
+        <SelectTrigger className="w-[100px] h-8 text-xs">
+          <SelectValue placeholder="Ano" />
+        </SelectTrigger>
+        <SelectContent>
+          {YEAR_OPTIONS.map(y => (
+            <SelectItem key={y} value={y}>
+              {y === 'all' ? 'Todos' : y}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       {/* Produto filter */}
       <div className="min-w-[180px]">
@@ -146,13 +193,16 @@ export function NpsFilters({
       {/* Active filter badges */}
       {hasFilters && (
         <div className="flex flex-wrap gap-1 ml-auto">
+          {selectedYear !== 'all' && (
+            <Badge variant="secondary" className="text-xs">{selectedYear}</Badge>
+          )}
           {selectedProdutos.map(p => (
             <Badge key={p} variant="secondary" className="text-xs">{p}</Badge>
           ))}
           {selectedCfos.map(c => (
             <Badge key={c} variant="secondary" className="text-xs">{c}</Badge>
           ))}
-          {selectedPeriod !== 'all' && (
+          {selectedPeriod !== 'all' && selectedPeriod !== 'year' && hasDateFilter && (
             <Badge variant="secondary" className="text-xs">
               {selectedPeriod === 'custom' ? 'Período personalizado' : selectedPeriod.toUpperCase()}
             </Badge>
