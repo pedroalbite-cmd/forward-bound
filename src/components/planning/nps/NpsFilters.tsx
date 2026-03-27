@@ -89,10 +89,9 @@ export function NpsFilters({
       <div className="min-w-[180px]">
         <MultiSelect
           options={cfoOptions}
-          onValueChange={onCfosChange}
-          defaultValue={selectedCfos}
+          onSelectionChange={onCfosChange}
+          selected={selectedCfos}
           placeholder="CFO"
-          maxCount={1}
         />
       </div>
 
