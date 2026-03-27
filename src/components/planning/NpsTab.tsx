@@ -85,12 +85,14 @@ export function NpsTab() {
       });
     }
 
-    // Filter by date range
+    // Filter by date range (only when both from and to are set)
     if (dateRange?.from && dateRange?.to) {
+      const start = startOfDay(dateRange.from);
+      const end = endOfDay(dateRange.to);
       filtered = filtered.filter(c => {
         const d = parseEntradaDate(c['Entrada']);
         if (!d) return false;
-        return isWithinInterval(d, { start: dateRange.from!, end: dateRange.to! });
+        return isWithinInterval(d, { start, end });
       });
     }
 
