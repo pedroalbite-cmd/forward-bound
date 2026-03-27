@@ -1,58 +1,32 @@
 
+Objetivo: corrigir o filtro de período do NPS para que realmente altere os indicadores quando o usuário escolhe ano/quarter/faixa de data.
 
-## Corrigir filtros NPS que não alteram os indicadores
+1) Erros identificados no código atual
+- `Q1/Q2/Q3/Q4` usam sempre `new Date().getFullYear()` em `NpsFilters.tsx`, então os quarters ficam presos ao ano atual (2026), não ao ano que o usuário quer analisar (ex.: 2025).
+- Em `NpsTab.tsx`, `hasFilters` considera `selectedPeriod !== 'all'` mesmo sem intervalo completo (`from` e `to`), então parece “filtro ativo” mas a lista não é filtrada.
+- O filtro por data usa `end` no início do dia (`00:00`), podendo excluir registros do último dia selecionado.
 
-### Problemas identificados
+2) Correção proposta
+- Em `NpsTab.tsx`:
+  - Criar `hasDateFilter = Boolean(dateRange?.from && dateRange?.to)`.
+  - Trocar `hasFilters` para usar `hasDateFilter` (e não apenas `selectedPeriod`).
+  - Aplicar filtro de data somente quando `hasDateFilter` for true.
+  - Normalizar intervalo para incluir o dia final inteiro (`startOfDay(from)` até `endOfDay(to)`).
+- Em `NpsFilters.tsx`:
+  - Adicionar filtro de **Ano** (ex.: Todos, 2026, 2025, 2024) e passar isso para o cálculo de quarter.
+  - Fazer Q1/Q2/Q3/Q4 usarem o ano selecionado (não o ano do relógio).
+  - Se período customizado estiver incompleto, não marcar como filtro efetivo.
+- Em `NpsTab.tsx` (UX):
+  - Exibir feedback claro quando o filtro retornar 0 resultados (ex.: “Nenhum card no período selecionado”), evitando sensação de que “não mudou nada”.
 
-**1. Filtro de CFO incompleto**: O `cfoMap` (vindo das connections) só contém CFOs de cards NPS que têm conexão com projetos na Central. Porém, `processNpsData` usa um fallback: `cfoMap[id] || card['CFO Responsavel'] || card['Responsavel Tratativa']`. O filtro atual ignora esses fallbacks, então cards com CFO apenas nos campos próprios são excluídos.
+3) Arquivos a ajustar
+- `src/components/planning/NpsTab.tsx`
+  - Lógica de `hasFilters`, `filteredNpsData`, normalização de datas, estado de ano selecionado e empty state.
+- `src/components/planning/nps/NpsFilters.tsx`
+  - UI/handlers de Ano + quarter baseado no ano selecionado + validação de período custom.
 
-**2. Lista de opções do filtro incompleta**: As opções do dropdown de CFO vêm apenas de `Object.values(cfoMap)`, perdendo CFOs que existem apenas nos campos do card. O mesmo vale para Produto.
-
-**3. Filtro de Produto esparso**: O `produtoMap` só mapeia cards via connections. Cards sem conexão não aparecem no filtro, tornando-o pouco útil.
-
-### Solução
-
-Enriquecer os maps no `NpsTab.tsx` com dados dos próprios cards antes de usar nos filtros:
-
-**Arquivo: `src/components/planning/NpsTab.tsx`**
-
-1. No `useMemo` que extrai `produtos` e `cfos` (linhas 46-53):
-   - Para CFOs: combinar valores do `cfoMap` + campos `CFO Responsavel` / `Responsavel Tratativa` de cada card no `npsRows`
-   - Para Produtos: combinar valores do `produtoMap` + garantir cobertura
-
-2. No `useMemo` do `filteredNpsData` (linhas 56-92):
-   - Filtro de CFO: verificar `cfoMap[c.ID]` OU `c['CFO Responsavel']` OU `c['Responsavel Tratativa']` contra os CFOs selecionados (mesmo fallback que `processNpsData` usa)
-   - Filtro de Produto: verificar `produtoMap[c.ID]` contra os produtos selecionados
-
-### Mudanças concretas
-
-```typescript
-// 1. Extrair opções completas de CFO (map + campos do card)
-const { produtos, cfos } = useMemo(() => {
-  if (!npsData?.raw) return { produtos: [], cfos: [] };
-  const { produtoMap, cfoMap, npsRows } = npsData.raw;
-  
-  const allCfos = new Set(Object.values(cfoMap));
-  npsRows.forEach(c => {
-    const cfo = c['CFO Responsavel'] || c['Responsavel Tratativa'];
-    if (cfo) allCfos.add(cfo);
-  });
-  
-  return {
-    produtos: [...new Set(Object.values(produtoMap))].filter(Boolean).sort(),
-    cfos: [...allCfos].filter(Boolean).sort(),
-  };
-}, [npsData?.raw]);
-
-// 2. Filtro de CFO usando mesma lógica de fallback
-if (selectedCfos.length > 0) {
-  filtered = filtered.filter(c => {
-    const cfo = cfoMap[c.ID] || c['CFO Responsavel'] || c['Responsavel Tratativa'];
-    return cfo ? selectedCfos.includes(cfo) : false;
-  });
-}
-```
-
-### Arquivo alterado
-- `src/components/planning/NpsTab.tsx` — corrigir lógica dos dois `useMemo` (opções + filtragem)
-
+4) Critérios de aceite (teste funcional)
+- Selecionar um ano sem dados deve zerar KPIs e exibir estado “sem resultados”.
+- Trocar de 2026 para 2025 deve alterar números visivelmente.
+- Q1/Q2/Q3/Q4 devem responder ao ano escolhido.
+- Filtro custom só deve impactar quando tiver data inicial e final válidas.
