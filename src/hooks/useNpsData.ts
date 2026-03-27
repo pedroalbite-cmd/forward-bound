@@ -95,9 +95,10 @@ interface CentralProjeto {
   'Fase': string;
   'Fase Atual': string;
   'CFO Responsavel': string | null;
+  'Produtos': string | null;
 }
 
-async function fetchNpsData(): Promise<{ npsRows: NpsCard[]; cfoMap: Record<string, string>; npsPipeId: string; titleMap: Record<string, string> }> {
+async function fetchNpsData(): Promise<{ npsRows: NpsCard[]; cfoMap: Record<string, string>; npsPipeId: string; titleMap: Record<string, string>; produtoMap: Record<string, string> }> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
@@ -123,32 +124,38 @@ async function fetchNpsData(): Promise<{ npsRows: NpsCard[]; cfoMap: Record<stri
     c.connected_pipe_name === '5.2 Pesquisa de Satisfação NPS'
   );
 
-  // Extract NPS pipe ID from connections
   const npsPipeId = npsConnections[0]?.connected_pipe_id || '';
 
-  // Build projeto CFO lookup and title lookup
+  // Build projeto CFO, title, and produto lookups
   const projetoCfoMap: Record<string, string> = {};
   const projetoTitleMap: Record<string, string> = {};
+  const projetoProdutoMap: Record<string, string> = {};
   projetos.forEach(p => {
     if (p['Fase'] === p['Fase Atual'] && p['CFO Responsavel']) {
       projetoCfoMap[p.ID] = p['CFO Responsavel'];
     }
     if (p['Fase'] === p['Fase Atual']) {
       projetoTitleMap[p.ID] = p['Título'] || '';
+      if (p['Produtos']) {
+        projetoProdutoMap[p.ID] = p['Produtos'];
+      }
     }
   });
 
-  // Map NPS card ID → CFO and title from connected project
+  // Map NPS card ID → CFO, title, and produto from connected project
   const cfoMap: Record<string, string> = {};
   const titleMap: Record<string, string> = {};
+  const produtoMap: Record<string, string> = {};
   npsConnections.forEach(conn => {
     const cfo = projetoCfoMap[conn.card_id];
     if (cfo) cfoMap[conn.connected_card_id] = cfo;
     const title = projetoTitleMap[conn.card_id];
     if (title) titleMap[conn.connected_card_id] = title;
+    const produto = projetoProdutoMap[conn.card_id];
+    if (produto) produtoMap[conn.connected_card_id] = produto;
   });
 
-  return { npsRows, cfoMap, npsPipeId, titleMap };
+  return { npsRows, cfoMap, npsPipeId, titleMap, produtoMap };
 }
 
 function parseNpsScore(val: string | null): number | null {
@@ -193,7 +200,7 @@ function getNpsLabel(score: number): string {
   return 'Crítico';
 }
 
-function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>, externalTitleMap: Record<string, string>, npsPipeId: string) {
+export function processNpsData(rows: NpsCard[], externalCfoMap: Record<string, string>, externalTitleMap: Record<string, string>, npsPipeId: string) {
   // Only current phase cards (unique)
   const currentCards = rows.filter(r => r['Fase'] === r['Fase Atual']);
   
@@ -392,8 +399,9 @@ export function useNpsData() {
   return useQuery({
     queryKey: ['nps-data'],
     queryFn: async () => {
-      const { npsRows, cfoMap, npsPipeId, titleMap } = await fetchNpsData();
-      return processNpsData(npsRows, cfoMap, titleMap, npsPipeId);
+      const { npsRows, cfoMap, npsPipeId, titleMap, produtoMap } = await fetchNpsData();
+      const processed = processNpsData(npsRows, cfoMap, titleMap, npsPipeId);
+      return { ...processed, raw: { npsRows, cfoMap, titleMap, produtoMap, npsPipeId } };
     },
     staleTime: 5 * 60 * 1000,
   });
