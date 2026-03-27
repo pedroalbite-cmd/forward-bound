@@ -204,19 +204,6 @@ export function NpsTab() {
             )}
             {displayData && (
               <>
-                {/* Filters */}
-                <NpsFilters
-                  produtos={produtos}
-                  cfos={cfos}
-                  selectedProdutos={selectedProdutos}
-                  selectedCfos={selectedCfos}
-                  selectedPeriod={selectedPeriod}
-                  dateRange={dateRange}
-                  onProdutosChange={setSelectedProdutos}
-                  onCfosChange={setSelectedCfos}
-                  onPeriodChange={handlePeriodChange}
-                  onClear={handleClearFilters}
-                />
 
                 <NpsKpiCards data={displayData.kpis} />
                 <NpsGauges data={displayData.metrics} />
