@@ -468,7 +468,14 @@ function processSetup(rows: SetupCard[], projetos: ProjectCard[]) {
   };
 }
 
-const ROTINA_TERMINAL_PHASES = ['Entregue / Concluído', 'Arquivado', 'Arquivo'];
+const ROTINA_TERMINAL_PHASES = [
+  'Entregue / Concluído',
+  'Concluído',
+  'Cancelada',
+  'Cancelado',
+  'Arquivado',
+  'Arquivo',
+];
 
 function processRotinas(rows: RotinaCard[], projetos: ProjectCard[]): { cfoTaskSummary: CfoTaskSummary[]; tarefasAtrasadasTotal: number } {
   const currentPhase = rows.filter(r => r['Fase'] === r['Fase Atual']);
