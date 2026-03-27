@@ -108,6 +108,7 @@ export function NpsTab() {
     setSelectedProdutos([]);
     setSelectedCfos([]);
     setSelectedPeriod('all');
+    setSelectedYear('all');
     setDateRange(undefined);
   };
 
