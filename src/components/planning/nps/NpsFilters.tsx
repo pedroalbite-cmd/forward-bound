@@ -79,10 +79,9 @@ export function NpsFilters({
       <div className="min-w-[180px]">
         <MultiSelect
           options={produtoOptions}
-          onValueChange={onProdutosChange}
-          defaultValue={selectedProdutos}
+          onSelectionChange={onProdutosChange}
+          selected={selectedProdutos}
           placeholder="Produto"
-          maxCount={1}
         />
       </div>
 
