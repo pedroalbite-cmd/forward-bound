@@ -78,12 +78,10 @@ export function NpsTab() {
 
     // Filter by CFO
     if (selectedCfos.length > 0) {
-      const matchingIds = new Set(
-        Object.entries(cfoMap)
-          .filter(([, c]) => selectedCfos.includes(c))
-          .map(([id]) => id)
-      );
-      filtered = filtered.filter(c => matchingIds.has(c.ID));
+      filtered = filtered.filter(c => {
+        const cfo = cfoMap[c.ID] || c['CFO Responsavel'] || c['Responsavel Tratativa'];
+        return cfo ? selectedCfos.includes(cfo) : false;
+      });
     }
 
     // Filter by date range
