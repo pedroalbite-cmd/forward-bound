@@ -14,7 +14,7 @@ import { useNpsData, processNpsData, NpsCard } from '@/hooks/useNpsData';
 import { useOperationsData } from '@/hooks/useOperationsData';
 import { ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
-import { parseISO, isWithinInterval } from 'date-fns';
+import { parseISO, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 
 function parseEntradaDate(entrada: string | null | undefined): Date | null {
   if (!entrada) return null;
