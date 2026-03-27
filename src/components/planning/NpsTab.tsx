@@ -214,6 +214,12 @@ export function NpsTab() {
                 <span>Erro ao carregar dados NPS: {(error as Error).message}</span>
               </div>
             )}
+            {hasFilters && !displayData && !isLoading && (
+              <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
+                <AlertCircle className="h-5 w-5" />
+                <span>Nenhum card encontrado para os filtros selecionados.</span>
+              </div>
+            )}
             {displayData && (
               <>
 
