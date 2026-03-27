@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { NpsKpiCards } from './nps/NpsKpiCards';
 import { NpsGauges } from './nps/NpsGauges';
@@ -7,11 +7,27 @@ import { NpsDistributions } from './nps/NpsDistributions';
 import { CfoPerformanceTable } from './nps/CfoPerformanceTable';
 import { QualitativeFeedback } from './nps/QualitativeFeedback';
 import { ChurnDossierSection } from './nps/ChurnDossierSection';
+import { NpsFilters } from './nps/NpsFilters';
 
 import { OperationsSection } from './nps/OperationsSection';
-import { useNpsData } from '@/hooks/useNpsData';
+import { useNpsData, processNpsData, NpsCard } from '@/hooks/useNpsData';
 import { useOperationsData } from '@/hooks/useOperationsData';
 import { ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
+import { DateRange } from 'react-day-picker';
+import { parseISO, isWithinInterval } from 'date-fns';
+
+function parseEntradaDate(entrada: string | null | undefined): Date | null {
+  if (!entrada) return null;
+  try {
+    // Try DD/MM/YYYY format
+    const parts = entrada.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (parts) return new Date(+parts[3], +parts[2] - 1, +parts[1]);
+    // Try ISO format
+    return parseISO(entrada);
+  } catch {
+    return null;
+  }
+}
 
 export function NpsTab() {
   const [npsOpen, setNpsOpen] = useState(false);
@@ -19,6 +35,77 @@ export function NpsTab() {
   const [opsOpen, setOpsOpen] = useState(false);
   const { data: npsData, isLoading, error } = useNpsData();
   const { data: opsData } = useOperationsData();
+
+  // Filter state
+  const [selectedProdutos, setSelectedProdutos] = useState<string[]>([]);
+  const [selectedCfos, setSelectedCfos] = useState<string[]>([]);
+  const [selectedPeriod, setSelectedPeriod] = useState('all');
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+
+  // Extract unique produtos and cfos from raw data
+  const { produtos, cfos } = useMemo(() => {
+    if (!npsData?.raw) return { produtos: [], cfos: [] };
+    const { produtoMap, cfoMap } = npsData.raw;
+    return {
+      produtos: [...new Set(Object.values(produtoMap))].sort(),
+      cfos: [...new Set(Object.values(cfoMap))].sort(),
+    };
+  }, [npsData?.raw]);
+
+  // Filtered and processed NPS data
+  const filteredNpsData = useMemo(() => {
+    if (!npsData?.raw) return null;
+    const { npsRows, cfoMap, titleMap, produtoMap, npsPipeId } = npsData.raw;
+
+    let filtered: NpsCard[] = npsRows;
+
+    // Filter by produto
+    if (selectedProdutos.length > 0) {
+      const matchingIds = new Set(
+        Object.entries(produtoMap)
+          .filter(([, p]) => selectedProdutos.includes(p))
+          .map(([id]) => id)
+      );
+      filtered = filtered.filter(c => matchingIds.has(c.ID));
+    }
+
+    // Filter by CFO
+    if (selectedCfos.length > 0) {
+      const matchingIds = new Set(
+        Object.entries(cfoMap)
+          .filter(([, c]) => selectedCfos.includes(c))
+          .map(([id]) => id)
+      );
+      filtered = filtered.filter(c => matchingIds.has(c.ID));
+    }
+
+    // Filter by date range
+    if (dateRange?.from && dateRange?.to) {
+      filtered = filtered.filter(c => {
+        const d = parseEntradaDate(c['Entrada']);
+        if (!d) return false;
+        return isWithinInterval(d, { start: dateRange.from!, end: dateRange.to! });
+      });
+    }
+
+    return processNpsData(filtered, cfoMap, titleMap, npsPipeId);
+  }, [npsData?.raw, selectedProdutos, selectedCfos, dateRange]);
+
+  const handlePeriodChange = (period: string, range?: DateRange) => {
+    setSelectedPeriod(period);
+    setDateRange(range);
+  };
+
+  const handleClearFilters = () => {
+    setSelectedProdutos([]);
+    setSelectedCfos([]);
+    setSelectedPeriod('all');
+    setDateRange(undefined);
+  };
+
+  // Use filtered data when filters are active, otherwise use original
+  const hasFilters = selectedProdutos.length > 0 || selectedCfos.length > 0 || selectedPeriod !== 'all';
+  const displayData = hasFilters ? filteredNpsData : npsData;
 
   return (
     <div className="space-y-8">
@@ -99,25 +186,38 @@ export function NpsTab() {
                 <span>Erro ao carregar dados NPS: {(error as Error).message}</span>
               </div>
             )}
-            {npsData && (
+            {displayData && (
               <>
-                <NpsKpiCards data={npsData.kpis} />
-                <NpsGauges data={npsData.metrics} />
+                {/* Filters */}
+                <NpsFilters
+                  produtos={produtos}
+                  cfos={cfos}
+                  selectedProdutos={selectedProdutos}
+                  selectedCfos={selectedCfos}
+                  selectedPeriod={selectedPeriod}
+                  dateRange={dateRange}
+                  onProdutosChange={setSelectedProdutos}
+                  onCfosChange={setSelectedCfos}
+                  onPeriodChange={handlePeriodChange}
+                  onClear={handleClearFilters}
+                />
+
+                <NpsKpiCards data={displayData.kpis} />
+                <NpsGauges data={displayData.metrics} />
                 <NpsScoreCards
-                  metrics={npsData.metrics}
-                  npsDistribution={npsData.npsDistribution}
-                  csatDistribution={npsData.csatDistribution}
-                  seanEllisDistribution={npsData.seanEllisDistribution}
+                  metrics={displayData.metrics}
+                  npsDistribution={displayData.npsDistribution}
+                  csatDistribution={displayData.csatDistribution}
+                  seanEllisDistribution={displayData.seanEllisDistribution}
                 />
                 <NpsDistributions
-                  npsDistribution={npsData.npsDistribution}
-                  csatDistribution={npsData.csatDistribution}
-                  seanEllisDistribution={npsData.seanEllisDistribution}
-                  seExcluded={npsData.seExcluded}
+                  npsDistribution={displayData.npsDistribution}
+                  csatDistribution={displayData.csatDistribution}
+                  seanEllisDistribution={displayData.seanEllisDistribution}
+                  seExcluded={displayData.seExcluded}
                 />
-                <CfoPerformanceTable data={npsData.cfoPerformance} npsPipeId={npsData.npsPipeId} />
-                <QualitativeFeedback data={npsData.feedback} npsPipeId={npsData.npsPipeId} />
-                
+                <CfoPerformanceTable data={displayData.cfoPerformance} npsPipeId={displayData.npsPipeId} />
+                <QualitativeFeedback data={displayData.feedback} npsPipeId={displayData.npsPipeId} />
               </>
             )}
           </div>
