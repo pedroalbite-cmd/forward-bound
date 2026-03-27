@@ -398,15 +398,15 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
     return firstEntries;
   }, [fullHistory, cards, excludedMqlIds]);
 
-  // Get cards for a specific indicator - UNIVERSAL FIRST-ENTRY LOGIC
+  // Get cards for a specific indicator - EVERY ENTRY LOGIC
   // MQL uses CREATION DATE logic (aligned with Pipefy): card created in period + faturamento >= 200k
+  // All other indicators: count EVERY movement whose phase matches and dataEntrada is in period
   const getCardsForIndicator = useMemo(() => {
     return (indicator: IndicatorType): ModeloAtualCard[] => {
-      const uniqueCards = new Map<string, ModeloAtualCard>();
-      
       if (indicator === 'mql') {
         // MQL: Use creation date logic (aligned with Pipefy) - card-level exclusion
         // Card created in the period + faturamento >= R$ 200k + not excluded at card level
+        const uniqueCards = new Map<string, ModeloAtualCard>();
         for (const card of mqlByCreation) {
           if (!card.dataCriacao) continue;
           const creationTime = card.dataCriacao.getTime();
@@ -421,34 +421,39 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         return Array.from(uniqueCards.values());
       }
       
-      // For all other indicators: use FIRST-ENTRY logic
+      // For all other indicators: EVERY ENTRY in the period
       const indicatorsToCheck: IndicatorType[] = indicator === 'leads' 
         ? ['leads', 'mql']
         : [indicator];
       
-      for (const ind of indicatorsToCheck) {
-        for (const [cardId, indicatorMap] of firstEntryByCardAndIndicator.entries()) {
-          const firstEntry = indicatorMap.get(ind);
-          if (!firstEntry) continue;
-          
-          // For venda: use dataAssinatura as effective date when available
-          const effectiveTime = (ind === 'venda' && firstEntry.dataAssinatura)
-            ? firstEntry.dataAssinatura.getTime()
-            : firstEntry.dataEntrada.getTime();
-          
-          if (effectiveTime >= startTime && effectiveTime <= endTime) {
-            const existing = uniqueCards.get(cardId);
-            if (!existing || firstEntry.dataEntrada < existing.dataEntrada) {
-              uniqueCards.set(cardId, firstEntry);
-            }
+      // Combine cards + fullHistory, dedup by id+fase+entrada to avoid double-counting same movement
+      const allMovements = [...cards, ...fullHistory];
+      const seenKeys = new Set<string>();
+      const result: ModeloAtualCard[] = [];
+      
+      for (const card of allMovements) {
+        const cardIndicator = PHASE_TO_INDICATOR[card.fase];
+        if (!cardIndicator || !indicatorsToCheck.includes(cardIndicator)) continue;
+        
+        // For venda: use dataAssinatura as effective date when available
+        const effectiveTime = (cardIndicator === 'venda' && card.dataAssinatura)
+          ? card.dataAssinatura.getTime()
+          : card.dataEntrada.getTime();
+        
+        if (effectiveTime >= startTime && effectiveTime <= endTime) {
+          // Dedup same movement (same card, same phase, same entry date) but allow same card in different entries
+          const key = `${card.id}|${card.fase}|${card.dataEntrada.getTime()}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            result.push(card);
           }
         }
       }
       
-      console.log(`[useModeloAtualAnalytics] getCardsForIndicator ${indicator}: ${uniqueCards.size} cards`);
-      return Array.from(uniqueCards.values());
+      console.log(`[useModeloAtualAnalytics] getCardsForIndicator ${indicator}: ${result.length} entries (every entry)`);
+      return result;
     };
-  }, [firstEntryByCardAndIndicator, mqlByCreation, startTime, endTime]);
+  }, [cards, fullHistory, mqlByCreation, excludedMqlIds, startTime, endTime]);
 
   // Get cards for leads - now uses actual data from database
   const getLeadsCards = useMemo(() => {
