@@ -442,7 +442,8 @@ export function useModeloAtualAnalytics(startDate: Date, endDate: Date) {
         
         if (effectiveTime >= startTime && effectiveTime <= endTime) {
           // Dedup same movement (same card, same phase, same entry date) but allow same card in different entries
-          const key = `${card.id}|${card.fase}|${card.dataEntrada.getTime()}`;
+          const month = `${card.dataEntrada.getFullYear()}-${card.dataEntrada.getMonth()}`;
+          const key = `${card.id}|${card.fase}|${month}`;
           if (!seenKeys.has(key)) {
             seenKeys.add(key);
             result.push(card);
