@@ -370,10 +370,121 @@ export function useO2TaxAnalytics(startDate: Date, endDate: Date) {
     };
   }, [cards]);
 
-  // Get deals won in period (every entry logic - delegated to getCardsForIndicator)
-  // NOTE: getDealsWon is computed after getCardsForIndicator is defined below
-  
-  // Get no shows placeholder - will be computed after getCardsForIndicator
+  // Get cards for a specific indicator - EVERY ENTRY LOGIC
+  // MQL uses CREATION DATE + revenue >= R$ 500k
+  // All other indicators: count EVERY movement whose phase matches and dataEntrada is in period
+  const getCardsForIndicator = useMemo(() => {
+    return (indicator: IndicatorType): O2TaxCard[] => {
+      // MQL: use creation date + revenue qualification
+      if (indicator === 'mql') {
+        const uniqueCards = new Map<string, O2TaxCard>();
+        for (const card of mqlByCreation) {
+          if (uniqueCards.has(card.id)) continue;
+          if (!card.dataCriacao) continue;
+          if (excludedMqlIds.has(card.id)) continue;
+          const creationTime = card.dataCriacao.getTime();
+          if (creationTime >= startTime && creationTime <= endTime && isO2TaxMqlQualified(card.faixa)) {
+            uniqueCards.set(card.id, card);
+          }
+        }
+        console.log(`[O2 TAX Analytics] getCardsForIndicator(mql): ${uniqueCards.size} cards (creation date + faixa >= 500k, ${excludedMqlIds.size} excluded)`);
+        return Array.from(uniqueCards.values());
+      }
+
+      // For all other indicators: EVERY ENTRY in the period
+      const indicatorsToCheck = indicator === 'leads' 
+        ? ['leads', 'mql'] as IndicatorType[]
+        : [indicator];
+      
+      const allMovements = [...cards, ...fullHistory];
+      const seenKeys = new Set<string>();
+      const result: O2TaxCard[] = [];
+      
+      for (const card of allMovements) {
+        const cardIndicator = PHASE_TO_INDICATOR[card.fase];
+        if (!cardIndicator || !indicatorsToCheck.includes(cardIndicator)) continue;
+        
+        const entryTime = card.dataEntrada.getTime();
+        if (entryTime >= startTime && entryTime <= endTime) {
+          const key = `${card.id}|${card.fase}|${entryTime}`;
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            result.push(card);
+          }
+        }
+      }
+      
+      console.log(`[O2 TAX Analytics] getCardsForIndicator(${indicator}): ${result.length} entries (every entry)`);
+      return result;
+    };
+  }, [cards, fullHistory, mqlByCreation, excludedMqlIds, startTime, endTime]);
+
+  // Get deals won in period (using getCardsForIndicator)
+  const getDealsWon = useMemo(() => {
+    const wonCards = getCardsForIndicator('venda');
+    const totalValue = wonCards.reduce((sum, card) => sum + card.valor, 0);
+    return {
+      count: wonCards.length,
+      totalValue,
+      trend: 0,
+      cards: wonCards,
+    };
+  }, [getCardsForIndicator]);
+
+  // Get meetings (RM) by revenue range
+  const getMeetingsByRevenue = useMemo((): RevenueRangeData[] => {
+    const rmCards = getCardsForIndicator('rm');
+    const rangeMap = new Map<string, O2TaxCard[]>();
+    
+    for (const card of rmCards) {
+      const range = card.faixa || 'Não informado';
+      if (!rangeMap.has(range)) rangeMap.set(range, []);
+      rangeMap.get(range)!.push(card);
+    }
+    
+    const total = rmCards.length;
+    return Array.from(rangeMap.entries())
+      .map(([range, cards], index) => ({
+        range,
+        count: cards.length,
+        percentage: total > 0 ? Math.round((cards.length / total) * 100) : 0,
+        cards,
+        color: CHART_COLORS[index % CHART_COLORS.length],
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [getCardsForIndicator]);
+
+  // Get no shows (RM without RR in period) - uses unique card IDs
+  const getNoShows = useMemo(() => {
+    const rmCards = getCardsForIndicator('rm');
+    const rrCards = getCardsForIndicator('rr');
+    
+    const rmIds = new Set(rmCards.map(c => c.id));
+    const rrIds = new Set(rrCards.map(c => c.id));
+    
+    const noShowIds = Array.from(rmIds).filter(id => !rrIds.has(id));
+    const noShowCards = rmCards.filter(c => noShowIds.includes(c.id));
+    // Deduplicate noShowCards by id (keep first)
+    const seen = new Set<string>();
+    const dedupNoShow = noShowCards.filter(c => {
+      if (seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
+    });
+    
+    const rate = rmIds.size > 0 ? Math.round((noShowIds.length / rmIds.size) * 100) : 0;
+    return {
+      count: noShowIds.length,
+      rate,
+      totalMeetings: rmIds.size,
+      cards: dedupNoShow,
+    };
+  }, [getCardsForIndicator]);
+
+  // Get leads
+  const getLeads = useMemo(() => {
+    return getCardsForIndicator('leads');
+  }, [getCardsForIndicator]);
 
   // Get lost deals in period
   const getLostDeals = useMemo(() => {
