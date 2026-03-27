@@ -40,6 +40,7 @@ export function NpsTab() {
   const [selectedProdutos, setSelectedProdutos] = useState<string[]>([]);
   const [selectedCfos, setSelectedCfos] = useState<string[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState('all');
+  const [selectedYear, setSelectedYear] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   // Extract unique produtos and cfos from raw data
