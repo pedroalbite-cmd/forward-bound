@@ -14,7 +14,7 @@ import { useNpsData, processNpsData, NpsCard } from '@/hooks/useNpsData';
 import { useOperationsData } from '@/hooks/useOperationsData';
 import { ChevronDown, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
-import { parseISO, isWithinInterval } from 'date-fns';
+import { parseISO, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 
 function parseEntradaDate(entrada: string | null | undefined): Date | null {
   if (!entrada) return null;
@@ -40,6 +40,7 @@ export function NpsTab() {
   const [selectedProdutos, setSelectedProdutos] = useState<string[]>([]);
   const [selectedCfos, setSelectedCfos] = useState<string[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState('all');
+  const [selectedYear, setSelectedYear] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
   // Extract unique produtos and cfos from raw data
@@ -84,12 +85,14 @@ export function NpsTab() {
       });
     }
 
-    // Filter by date range
+    // Filter by date range (only when both from and to are set)
     if (dateRange?.from && dateRange?.to) {
+      const start = startOfDay(dateRange.from);
+      const end = endOfDay(dateRange.to);
       filtered = filtered.filter(c => {
         const d = parseEntradaDate(c['Entrada']);
         if (!d) return false;
-        return isWithinInterval(d, { start: dateRange.from!, end: dateRange.to! });
+        return isWithinInterval(d, { start, end });
       });
     }
 
@@ -105,11 +108,13 @@ export function NpsTab() {
     setSelectedProdutos([]);
     setSelectedCfos([]);
     setSelectedPeriod('all');
+    setSelectedYear('all');
     setDateRange(undefined);
   };
 
   // Use filtered data when filters are active, otherwise use original
-  const hasFilters = selectedProdutos.length > 0 || selectedCfos.length > 0 || selectedPeriod !== 'all';
+  const hasDateFilter = Boolean(dateRange?.from && dateRange?.to);
+  const hasFilters = selectedProdutos.length > 0 || selectedCfos.length > 0 || hasDateFilter || selectedYear !== 'all';
   const displayData = hasFilters ? filteredNpsData : npsData;
 
   return (
@@ -132,10 +137,12 @@ export function NpsTab() {
           selectedProdutos={selectedProdutos}
           selectedCfos={selectedCfos}
           selectedPeriod={selectedPeriod}
+          selectedYear={selectedYear}
           dateRange={dateRange}
           onProdutosChange={setSelectedProdutos}
           onCfosChange={setSelectedCfos}
           onPeriodChange={handlePeriodChange}
+          onYearChange={setSelectedYear}
           onClear={handleClearFilters}
         />
       )}
@@ -205,6 +212,12 @@ export function NpsTab() {
               <div className="flex items-center justify-center py-12 gap-2 text-destructive">
                 <AlertCircle className="h-5 w-5" />
                 <span>Erro ao carregar dados NPS: {(error as Error).message}</span>
+              </div>
+            )}
+            {hasFilters && !displayData && !isLoading && (
+              <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
+                <AlertCircle className="h-5 w-5" />
+                <span>Nenhum card encontrado para os filtros selecionados.</span>
               </div>
             )}
             {displayData && (
