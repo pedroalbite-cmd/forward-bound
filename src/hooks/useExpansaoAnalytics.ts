@@ -306,7 +306,8 @@ export function useExpansaoAnalytics(startDate: Date, endDate: Date, produto: 'F
         const entryTime = card.dataEntrada.getTime();
         if (entryTime >= startTime && entryTime <= endTime) {
           // Dedup same movement but allow same card in different entries
-          const key = `${card.id}|${card.fase}|${entryTime}`;
+          const month = `${card.dataEntrada.getFullYear()}-${card.dataEntrada.getMonth()}`;
+          const key = `${card.id}|${card.fase}|${month}`;
           if (!seenKeys.has(key)) {
             seenKeys.add(key);
             result.push(card);
