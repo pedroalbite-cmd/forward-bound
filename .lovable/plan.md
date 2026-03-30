@@ -1,25 +1,44 @@
 
 
-## Diagnóstico: Replicar filtro exato do acelerômetro no banco
+## Diagnóstico: Listar os 16 cards de "Proposta Enviada" Franquia em março/2026
 
 ### Problema
-O sistema mostra 315 MQLs, o Pipefy exporta 307. Preciso executar no banco externo a **mesma lógica** do `useModeloAtualAnalytics.ts` para identificar exatamente quais cards compõem os 315.
+O sistema mostra **16 propostas enviadas** para Franquia em março. O Pipefy exporta **5**. Precisamos identificar exatamente quais são os 16 e por que cada um está lá.
 
-### Lógica do sistema (código atual)
-1. **Fonte**: `pipefy_moviment_cfos` com `"Data Criação"` entre 2026-03-01 e 2026-03-31
-2. **Filtro faturamento**: `"Faixa de faturamento mensal"` IN ('Entre R$ 200 mil e R$ 350 mil', 'Entre R$ 350 mil e R$ 500 mil', 'Entre R$ 500 mil e R$ 1 milhão', 'Entre R$ 1 milhão e R$ 5 milhões', 'Acima de R$ 5 milhões')
-3. **Exclusão teste**: IDs NOT IN ('1320546949', '1320177174', '1308003007', '1320175421')
-4. **Exclusão motivo perda**: Qualquer row do card com motivo IN ('Duplicado', 'Pessoa física, fora do ICP', 'Não é uma demanda real', 'Buscando parceria', 'Quer soluções para cliente', 'Não é MQL, mas entrou como MQL', 'Email/Telefone Inválido') exclui o card inteiro
-5. **Dedup**: Por ID do card (unique cards)
+### Causa da diferença (já explicada antes)
+O sistema conta **throughput** (todos os cards que ENTRARAM nas fases de proposta durante março), enquanto o Pipefy mostra **snapshot** (cards ATUALMENTE nessa fase). Cards que avançaram para Ganho/Perdido saem do Pipefy mas permanecem no sistema.
+
+Além disso, o sistema agrega **3 fases** como "proposta":
+- `Proposta enviada / Follow Up`
+- `Enviar proposta`
+- `Enviar para assinatura`
 
 ### Plano de ação
-Usar a action `mql_diagnosis` já existente na edge function `query-external-db` (criada na mensagem anterior) para executar exatamente essa lógica no banco e obter a lista de cards. Depois comparar com os 307 títulos do Excel para identificar:
-- Cards no sistema mas **não** no Pipefy (os 8+ extras)
-- Cards no Pipefy mas **não** no sistema (se houver)
 
-### Execução
-1. Chamar `query-external-db` com `action: mql_diagnosis`, passando os títulos do Excel para comparação server-side
-2. Gerar relatório com a diferença exata
+**Passo 1: Adicionar action `proposta_diagnosis` na edge function `query-external-db`**
 
-Sem alteração de código — apenas execução de query diagnóstica e processamento do Excel.
+Nova action que executa:
+```sql
+SELECT "ID", "Título", "Fase", "Fase Atual", "Entrada", "Saída", "Produtos",
+       "Taxa de franquia", "Valor MRR", "Valor Pontual", "Valor Setup",
+       "Closer responsável", "Motivo da perda"
+FROM pipefy_cards_movements_expansao
+WHERE "Produtos" = 'Franquia'
+  AND "Fase" IN ('Proposta enviada / Follow Up', 'Enviar proposta', 'Enviar para assinatura')
+  AND "Entrada" >= '2026-03-01T00:00:00'
+  AND "Entrada" <= '2026-03-31T23:59:59'
+ORDER BY "Entrada" ASC
+```
+
+Depois aplica a mesma deduplicação mensal do sistema (chave: `ID|Fase|Mês`) e retorna a lista completa com título, fase de entrada, fase atual e valor de cada card.
+
+**Passo 2: Executar a query e gerar relatório**
+
+Chamar a edge function e exibir os 16 cards com:
+- ID, Título, Fase que entrou (qual das 3), Fase Atual (onde está agora), Data de entrada, Valor, Closer
+
+Isso mostrará exatamente quais dos 16 já viraram venda, quais foram perdidos, e quais ainda estão em proposta (os 5 do Pipefy).
+
+### Alteração
+Apenas na edge function `query-external-db/index.ts` — adicionar a action `proposta_diagnosis` (similar à `mql_diagnosis` já existente).
 
