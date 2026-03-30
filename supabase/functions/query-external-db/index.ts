@@ -402,10 +402,99 @@ Deno.serve(async (req) => {
         comparison,
       };
       console.log(`MQL diagnosis: ${allCards.length} total, ${qualified.length} qualified, ${testExcluded.length} test, ${lossExcluded.length} loss-excluded, ${netMqls.length} net`);
+    } else if (action === 'proposta_diagnosis') {
+      const { startDate, endDate, produto, fases } = body;
+      const invalid = await validateTable(table);
+      if (invalid) return invalid;
+
+      const targetFases = fases || ['Proposta enviada / Follow Up', 'Enviar proposta', 'Enviar para assinatura'];
+      const targetProduto = produto || 'Franquia';
+
+      console.log(`Proposta diagnosis: ${table}, produto=${targetProduto}, fases=${targetFases.join(',')}, period=${startDate} to ${endDate}`);
+
+      const fasePlaceholders = targetFases.map((_: string, i: number) => `$${i + 3}`).join(', ');
+      const dataQuery = `
+        SELECT "ID", "Título", "Fase", "Fase Atual", "Entrada", "Saída", "Produtos",
+               "Taxa de franquia", "Valor MRR", "Valor Pontual", "Valor Setup",
+               "Closer responsável", "Motivo da perda"
+        FROM ${table}
+        WHERE "Produtos" = $1
+          AND "Fase" IN (${fasePlaceholders})
+          AND "Entrada" >= $${targetFases.length + 3}::timestamp
+          AND "Entrada" <= $${targetFases.length + 4}::timestamp
+        ORDER BY "Entrada" ASC
+      `;
+      const params = [targetProduto, ...targetFases, startDate, endDate];
+      // Remove unused param slot - fix: produto is $1, fases start at $3 but we need $2 gap
+      // Actually let's simplify:
+      const simpleQuery = `
+        SELECT "ID", "Título", "Fase", "Fase Atual", "Entrada", "Saída", "Produtos",
+               "Taxa de franquia", "Valor MRR", "Valor Pontual", "Valor Setup",
+               "Closer responsável", "Motivo da perda"
+        FROM ${table}
+        WHERE "Produtos" = $1
+          AND "Entrada" >= $2::timestamp
+          AND "Entrada" <= $3::timestamp
+        ORDER BY "Entrada" ASC
+      `;
+      const rawResult = await client.query(simpleQuery, [targetProduto, startDate, endDate]);
+      
+      // Filter by fases in code (cleaner than dynamic placeholders)
+      const faseSet = new Set(targetFases);
+      const filtered = rawResult.rows.filter((r: Record<string, unknown>) => faseSet.has(r['Fase'] as string));
+
+      // Deduplicate: key = ID|Fase|Month (same as system)
+      const seen = new Set<string>();
+      const deduplicated = filtered.filter((r: Record<string, unknown>) => {
+        const entrada = new Date(r['Entrada'] as string);
+        const monthKey = `${entrada.getFullYear()}-${String(entrada.getMonth() + 1).padStart(2, '0')}`;
+        const key = `${r['ID']}|${r['Fase']}|${monthKey}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      // Group by unique card ID to show summary
+      const cardMap = new Map<string, Record<string, unknown>[]>();
+      for (const row of deduplicated) {
+        const id = row['ID'] as string;
+        if (!cardMap.has(id)) cardMap.set(id, []);
+        cardMap.get(id)!.push(row);
+      }
+
+      const cards = Array.from(cardMap.entries()).map(([id, rows]) => ({
+        id,
+        titulo: rows[0]['Título'],
+        faseAtual: rows[0]['Fase Atual'],
+        closer: rows[0]['Closer responsável'],
+        motivoPerda: rows[0]['Motivo da perda'],
+        taxaFranquia: rows[0]['Taxa de franquia'],
+        valorMRR: rows[0]['Valor MRR'],
+        valorPontual: rows[0]['Valor Pontual'],
+        valorSetup: rows[0]['Valor Setup'],
+        movements: rows.map(r => ({
+          fase: r['Fase'],
+          entrada: r['Entrada'],
+          saida: r['Saída'],
+        })),
+      }));
+
+      result = {
+        action: 'proposta_diagnosis',
+        produto: targetProduto,
+        fases: targetFases,
+        startDate,
+        endDate,
+        totalMovements: filtered.length,
+        uniqueMovementsAfterDedup: deduplicated.length,
+        uniqueCards: cards.length,
+        cards,
+      };
+      console.log(`Proposta diagnosis: ${filtered.length} movements, ${deduplicated.length} after dedup, ${cards.length} unique cards`);
     } else {
       await client.end();
       return new Response(
-        JSON.stringify({ error: 'Invalid action. Use: schema, preview, count, query_period, query_period_by_creation, query_period_by_signature, search, stats, query_card_history, or mql_diagnosis' }),
+        JSON.stringify({ error: 'Invalid action' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
