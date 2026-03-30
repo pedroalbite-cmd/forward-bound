@@ -1,44 +1,23 @@
 
 
-## Diagnóstico: Listar os 16 cards de "Proposta Enviada" Franquia em março/2026
+## Exportar Schema SQL Completo para Migração
 
-### Problema
-O sistema mostra **16 propostas enviadas** para Franquia em março. O Pipefy exporta **5**. Precisamos identificar exatamente quais são os 16 e por que cada um está lá.
+### Situação atual
+O arquivo `database-backup/full-backup.sql` já contém quase tudo, mas está **desatualizado** — foi gerado em 16/03 e faltam as colunas adicionadas em 24/03 na tabela `daily_revenue` (`caas`, `saas`, `expansao`, `tax`, `source`).
 
-### Causa da diferença (já explicada antes)
-O sistema conta **throughput** (todos os cards que ENTRARAM nas fases de proposta durante março), enquanto o Pipefy mostra **snapshot** (cards ATUALMENTE nessa fase). Cards que avançaram para Ganho/Perdido saem do Pipefy mas permanecem no sistema.
+### Plano
+Gerar um arquivo SQL atualizado em `/mnt/documents/` com:
 
-Além disso, o sistema agrega **3 fases** como "proposta":
-- `Proposta enviada / Follow Up`
-- `Enviar proposta`
-- `Enviar para assinatura`
+1. **Enum types** (`app_role`)
+2. **Todas as 12 tabelas** com schema atual completo (incluindo colunas `caas`, `saas`, `expansao`, `tax`, `source` em `daily_revenue`)
+3. **Funções** (`has_role`, `handle_new_user`, `update_sales_realized_updated_at`, `save_redistribution_session`, `rollback_redistribution_session`)
+4. **Trigger instructions** (handle_new_user on auth.users)
+5. **RLS Enable + todas as policies**
+6. **Constraints** (`daily_revenue_date_source_key UNIQUE`)
+7. **Dados** de configuração (profiles, user_roles, user_tab_permissions, monetary_metas, closer_metas, sales_realized, mrr_base_monthly) — com nota para atualizar UUIDs
 
-### Plano de ação
+O arquivo será gerado via script combinando o `full-backup.sql` existente com as migrações mais recentes, produzindo um SQL completo e pronto para executar no SQL Editor de um novo projeto Supabase.
 
-**Passo 1: Adicionar action `proposta_diagnosis` na edge function `query-external-db`**
-
-Nova action que executa:
-```sql
-SELECT "ID", "Título", "Fase", "Fase Atual", "Entrada", "Saída", "Produtos",
-       "Taxa de franquia", "Valor MRR", "Valor Pontual", "Valor Setup",
-       "Closer responsável", "Motivo da perda"
-FROM pipefy_cards_movements_expansao
-WHERE "Produtos" = 'Franquia'
-  AND "Fase" IN ('Proposta enviada / Follow Up', 'Enviar proposta', 'Enviar para assinatura')
-  AND "Entrada" >= '2026-03-01T00:00:00'
-  AND "Entrada" <= '2026-03-31T23:59:59'
-ORDER BY "Entrada" ASC
-```
-
-Depois aplica a mesma deduplicação mensal do sistema (chave: `ID|Fase|Mês`) e retorna a lista completa com título, fase de entrada, fase atual e valor de cada card.
-
-**Passo 2: Executar a query e gerar relatório**
-
-Chamar a edge function e exibir os 16 cards com:
-- ID, Título, Fase que entrou (qual das 3), Fase Atual (onde está agora), Data de entrada, Valor, Closer
-
-Isso mostrará exatamente quais dos 16 já viraram venda, quais foram perdidos, e quais ainda estão em proposta (os 5 do Pipefy).
-
-### Alteração
-Apenas na edge function `query-external-db/index.ts` — adicionar a action `proposta_diagnosis` (similar à `mql_diagnosis` já existente).
+### Saída
+`/mnt/documents/full-schema-export-2026-03-30.sql` — arquivo SQL único para migração.
 
