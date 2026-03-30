@@ -341,10 +341,66 @@ Deno.serve(async (req) => {
         data: dataResult.rows,
       };
       console.log(`Creation date query for ${table}: ${result.previewRows} rows of ${result.totalRows} total in period`);
+    } else if (action === 'mql_diagnosis') {
+      const { startDate, endDate, pipefyTitles } = body;
+      const invalid = await validateTable(table);
+      if (invalid) return invalid;
+
+      const testIds = ['1320546949', '1320177174', '1308003007', '1320175421'];
+      const excludedLosses = ['Duplicado', 'Pessoa física, fora do ICP', 'Não é uma demanda real',
+        'Buscando parceria', 'Quer soluções para cliente', 'Não é MQL, mas entrou como MQL', 'Email/Telefone Inválido'];
+      const qualifyingFaixas = ['Entre R$ 200 mil e R$ 350 mil', 'Entre R$ 350 mil e R$ 500 mil',
+        'Entre R$ 500 mil e R$ 1 milhão', 'Entre R$ 1 milhão e R$ 5 milhões', 'Acima de R$ 5 milhões'];
+
+      const dataQuery = `
+        SELECT "ID",
+               MAX("Título") as titulo,
+               array_agg(DISTINCT "Faixa de faturamento mensal") FILTER (WHERE "Faixa de faturamento mensal" IS NOT NULL) as faixas,
+               array_agg(DISTINCT "Motivo da perda") FILTER (WHERE "Motivo da perda" IS NOT NULL) as motivos_perda,
+               MAX("Fase Atual") as fase_atual
+        FROM ${table}
+        WHERE "Data Criação" >= $1::timestamp AND "Data Criação" <= $2::timestamp
+        GROUP BY "ID"
+      `;
+      const dataResult = await client.query(dataQuery, [startDate, endDate]);
+
+      const allCards = dataResult.rows as Array<{ID: string; titulo: string; faixas: string[] | null; motivos_perda: string[] | null; fase_atual: string}>;
+      
+      const qualified = allCards.filter(c => (c.faixas || []).some(f => qualifyingFaixas.includes(f)));
+      const testExcluded = qualified.filter(c => testIds.includes(c.ID));
+      const lossExcluded = qualified.filter(c => !testIds.includes(c.ID) && (c.motivos_perda || []).some(m => excludedLosses.includes(m)));
+      const netMqls = qualified.filter(c => !testIds.includes(c.ID) && !(c.motivos_perda || []).some(m => excludedLosses.includes(m)));
+
+      // Compare with Pipefy titles if provided
+      let comparison = null;
+      if (pipefyTitles && Array.isArray(pipefyTitles)) {
+        const pipefySet = new Set(pipefyTitles.map((t: string) => t.trim()));
+        const systemTitles = netMqls.map(c => (c.titulo || '').trim());
+        const systemSet = new Set(systemTitles);
+        
+        const onlySystem = netMqls.filter(c => !pipefySet.has((c.titulo || '').trim()));
+        const onlyPipefy = pipefyTitles.filter((t: string) => !systemSet.has(t.trim()));
+        
+        comparison = {
+          onlyInSystem: onlySystem.map(c => ({ id: c.ID, titulo: c.titulo, faixas: c.faixas, motivos: c.motivos_perda, fase: c.fase_atual })),
+          onlyInPipefy: onlyPipefy,
+        };
+      }
+
+      result = {
+        action: 'mql_diagnosis',
+        totalUniqueCards: allCards.length,
+        qualifiedCount: qualified.length,
+        testExcluded: testExcluded.map(c => ({ id: c.ID, titulo: c.titulo })),
+        lossExcluded: lossExcluded.map(c => ({ id: c.ID, titulo: c.titulo, motivos: c.motivos_perda })),
+        netMqlCount: netMqls.length,
+        comparison,
+      };
+      console.log(`MQL diagnosis: ${allCards.length} total, ${qualified.length} qualified, ${testExcluded.length} test, ${lossExcluded.length} loss-excluded, ${netMqls.length} net`);
     } else {
       await client.end();
       return new Response(
-        JSON.stringify({ error: 'Invalid action. Use: schema, preview, count, query_period, query_period_by_creation, query_period_by_signature, search, stats, or query_card_history' }),
+        JSON.stringify({ error: 'Invalid action. Use: schema, preview, count, query_period, query_period_by_creation, query_period_by_signature, search, stats, query_card_history, or mql_diagnosis' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
