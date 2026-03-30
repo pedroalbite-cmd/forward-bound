@@ -352,6 +352,10 @@ Deno.serve(async (req) => {
       const qualifyingFaixas = ['Entre R$ 200 mil e R$ 350 mil', 'Entre R$ 350 mil e R$ 500 mil',
         'Entre R$ 500 mil e R$ 1 milhão', 'Entre R$ 1 milhão e R$ 5 milhões', 'Acima de R$ 5 milhões'];
 
+      // Normalize: trim, lowercase, remove accents, collapse whitespace (same as system)
+      const normalize = (s: string) => s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+      const normalizedExcludedLosses = excludedLosses.map(normalize);
+
       const dataQuery = `
         SELECT "ID",
                MAX("Título") as titulo,
@@ -368,21 +372,22 @@ Deno.serve(async (req) => {
       
       const qualified = allCards.filter(c => (c.faixas || []).some(f => qualifyingFaixas.includes(f)));
       const testExcluded = qualified.filter(c => testIds.includes(c.ID));
-      const lossExcluded = qualified.filter(c => !testIds.includes(c.ID) && (c.motivos_perda || []).some(m => excludedLosses.includes(m)));
-      const netMqls = qualified.filter(c => !testIds.includes(c.ID) && !(c.motivos_perda || []).some(m => excludedLosses.includes(m)));
+      // Use normalized comparison for loss reasons (same as system)
+      const isExcludedByLoss = (motivos: string[] | null) => (motivos || []).some(m => normalizedExcludedLosses.includes(normalize(m)));
+      const lossExcluded = qualified.filter(c => !testIds.includes(c.ID) && isExcludedByLoss(c.motivos_perda));
+      const netMqls = qualified.filter(c => !testIds.includes(c.ID) && !isExcludedByLoss(c.motivos_perda));
 
-      // Compare with Pipefy titles if provided
+      // Compare with Pipefy titles if provided - use normalized comparison
       let comparison = null;
       if (pipefyTitles && Array.isArray(pipefyTitles)) {
-        const pipefySet = new Set(pipefyTitles.map((t: string) => t.trim()));
-        const systemTitles = netMqls.map(c => (c.titulo || '').trim());
-        const systemSet = new Set(systemTitles);
+        const pipefySet = new Set(pipefyTitles.map((t: string) => normalize(t)));
+        const systemSet = new Set(netMqls.map(c => normalize(c.titulo || '')));
         
-        const onlySystem = netMqls.filter(c => !pipefySet.has((c.titulo || '').trim()));
-        const onlyPipefy = pipefyTitles.filter((t: string) => !systemSet.has(t.trim()));
+        const onlySystem = netMqls.filter(c => !pipefySet.has(normalize(c.titulo || '')));
+        const onlyPipefy = pipefyTitles.filter((t: string) => !systemSet.has(normalize(t)));
         
         comparison = {
-          onlyInSystem: onlySystem.map(c => ({ id: c.ID, titulo: c.titulo, faixas: c.faixas, motivos: c.motivos_perda, fase: c.fase_atual })),
+          onlyInSystem: onlySystem.map(c => ({ id: c.ID, titulo: (c.titulo || '').trim(), faixas: c.faixas, motivos: c.motivos_perda, fase: c.fase_atual })),
           onlyInPipefy: onlyPipefy,
         };
       }
