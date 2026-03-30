@@ -341,10 +341,34 @@ Deno.serve(async (req) => {
         data: dataResult.rows,
       };
       console.log(`Creation date query for ${table}: ${result.previewRows} rows of ${result.totalRows} total in period`);
+    } else if (action === 'mql_diagnosis') {
+      const { startDate, endDate } = body;
+      const invalid = await validateTable(table);
+      if (invalid) return invalid;
+
+      console.log(`MQL diagnosis for ${table}: ${startDate} to ${endDate}`);
+
+      const dataQuery = `
+        SELECT "ID", "Título", "Faixa de faturamento mensal", "Motivo da perda", "Fase Atual", "Data Criação"
+        FROM ${table}
+        WHERE "Data Criação" >= $1::timestamp
+        AND "Data Criação" <= $2::timestamp
+      `;
+      const dataResult = await client.query(dataQuery, [startDate, endDate]);
+
+      result = {
+        action: 'mql_diagnosis',
+        table,
+        startDate,
+        endDate,
+        totalRows: dataResult.rows.length,
+        data: dataResult.rows,
+      };
+      console.log(`MQL diagnosis: ${result.totalRows} rows`);
     } else {
       await client.end();
       return new Response(
-        JSON.stringify({ error: 'Invalid action. Use: schema, preview, count, query_period, query_period_by_creation, query_period_by_signature, search, stats, or query_card_history' }),
+        JSON.stringify({ error: 'Invalid action. Use: schema, preview, count, query_period, query_period_by_creation, query_period_by_signature, search, stats, query_card_history, or mql_diagnosis' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
