@@ -348,11 +348,18 @@ Deno.serve(async (req) => {
 
       console.log(`MQL diagnosis for ${table}: ${startDate} to ${endDate}`);
 
+      // Aggregate: unique card IDs with their faixas and loss reasons
       const dataQuery = `
-        SELECT "ID", "Título", "Faixa de faturamento mensal", "Motivo da perda", "Fase Atual", "Data Criação"
+        SELECT "ID", 
+               MAX("Título") as "Título",
+               array_agg(DISTINCT "Faixa de faturamento mensal") FILTER (WHERE "Faixa de faturamento mensal" IS NOT NULL) as faixas,
+               array_agg(DISTINCT "Motivo da perda") FILTER (WHERE "Motivo da perda" IS NOT NULL) as motivos_perda,
+               MAX("Fase Atual") as "Fase Atual",
+               MIN("Data Criação") as "Data Criação"
         FROM ${table}
         WHERE "Data Criação" >= $1::timestamp
         AND "Data Criação" <= $2::timestamp
+        GROUP BY "ID"
       `;
       const dataResult = await client.query(dataQuery, [startDate, endDate]);
 
@@ -364,7 +371,7 @@ Deno.serve(async (req) => {
         totalRows: dataResult.rows.length,
         data: dataResult.rows,
       };
-      console.log(`MQL diagnosis: ${result.totalRows} rows`);
+      console.log(`MQL diagnosis: ${result.totalRows} unique cards`);
     } else {
       await client.end();
       return new Response(
