@@ -1,26 +1,45 @@
 
 
-## Limitar a 1 entrada por card por fase por mês
+## Bug: Cards não aparecem com filtro de SDR
 
-### O que muda
-Atualmente, após a mudança "Every Entry", o mesmo card pode aparecer N vezes na mesma fase se tiver N movimentações distintas no período. O pedido é: **no máximo 1 contagem por card por fase por mês**. Se o card entrou em RM duas vezes em março, conta só 1. Se entrou em março e abril, conta 1 em cada.
+### Diagnóstico
 
-### Alteração técnica
-Nos 3 hooks, trocar a chave de deduplicação de `card.id|card.fase|timestamp` para `card.id|card.fase|YYYY-MM`:
+Verifiquei no banco externo — os dois cards **têm** o campo `"SDR responsável"` preenchido com **"Amanda Teixeira Serafim"**. O campo NÃO está vazio.
 
-```typescript
-// ANTES
-const key = `${card.id}|${card.fase}|${entryTime}`;
+**Resumo dos dados no banco:**
 
-// DEPOIS
-const month = `${card.dataEntrada.getFullYear()}-${card.dataEntrada.getMonth()}`;
-const key = `${card.id}|${card.fase}|${month}`;
+| Card | SDR responsável | Closer responsável |
+|------|----------------|--------------------|
+| Balbúrdia Cervejeira (1271088855) | Amanda Teixeira Serafim | Daniel Trindade |
+| Working Capital (1316876736) | Amanda Teixeira Serafim | Daniel Trindade |
+
+O problema é um bug no código de conversão `toDetailItem` em `useModeloAtualAnalytics.ts`:
+
+```text
+// Linha 475 - BUG: "responsible" recebe o CLOSER primeiro
+responsible: card.closer || card.responsavel || undefined
 ```
 
-Isso garante que o mesmo card na mesma fase no mesmo mês só é contado uma vez, mas aparece em meses diferentes se tiver entradas em meses diferentes.
+Quando o filtro de SDR roda no `getItemsForIndicator`, ele verifica `item.responsible || item.sdr`. Como `item.responsible` = "Daniel Trindade" (o closer), o valor é truthy e o `item.sdr` nunca é consultado. O filtro procura "Amanda" em "Daniel Trindade" e falha.
 
-### Arquivos
-- `src/hooks/useModeloAtualAnalytics.ts` — `getCardsForIndicator`
-- `src/hooks/useO2TaxAnalytics.ts` — `getCardsForIndicator`
-- `src/hooks/useExpansaoAnalytics.ts` — `getCardsForIndicator`
+### Correção
+
+**Arquivo:** `src/components/planning/IndicatorsTab.tsx`
+
+Na função `getItemsForIndicator` (linha ~1146), mudar de:
+```typescript
+const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(item.responsible || item.sdr);
+```
+Para:
+```typescript
+const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(item.sdr || item.responsible);
+```
+
+Isso garante que o campo `sdr` (que contém o valor correto "Amanda Teixeira Serafim") seja verificado primeiro, em vez de `responsible` (que contém o closer "Daniel Trindade").
+
+A mesma correção deve ser aplicada em todas as ocorrências de `matchesSdrFilter(item.responsible || item.sdr)` dentro do `getItemsForIndicator`.
+
+### Nota adicional
+
+A fase "Enviar proposta" ainda não está no mapeamento `PHASE_TO_INDICATOR` do Modelo Atual (pendente da aprovação anterior). Esse é um fix separado.
 
