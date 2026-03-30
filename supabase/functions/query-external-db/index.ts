@@ -348,30 +348,52 @@ Deno.serve(async (req) => {
 
       console.log(`MQL diagnosis for ${table}: ${startDate} to ${endDate}`);
 
-      // Aggregate: unique card IDs with their faixas and loss reasons
+      // Get unique cards with qualifying faixas, their loss reasons, and title
       const dataQuery = `
-        SELECT "ID", 
-               MAX("Título") as "Título",
-               array_agg(DISTINCT "Faixa de faturamento mensal") FILTER (WHERE "Faixa de faturamento mensal" IS NOT NULL) as faixas,
-               array_agg(DISTINCT "Motivo da perda") FILTER (WHERE "Motivo da perda" IS NOT NULL) as motivos_perda,
-               MAX("Fase Atual") as "Fase Atual",
-               MIN("Data Criação") as "Data Criação"
-        FROM ${table}
-        WHERE "Data Criação" >= $1::timestamp
-        AND "Data Criação" <= $2::timestamp
-        GROUP BY "ID"
+        WITH card_data AS (
+          SELECT "ID",
+                 MAX("Título") as titulo,
+                 array_agg(DISTINCT "Faixa de faturamento mensal") FILTER (WHERE "Faixa de faturamento mensal" IS NOT NULL) as faixas,
+                 array_agg(DISTINCT "Motivo da perda") FILTER (WHERE "Motivo da perda" IS NOT NULL) as motivos_perda,
+                 MAX("Fase Atual") as fase_atual
+          FROM ${table}
+          WHERE "Data Criação" >= $1::timestamp
+          AND "Data Criação" <= $2::timestamp
+          GROUP BY "ID"
+        )
+        SELECT *,
+          CASE WHEN faixas && ARRAY[
+            'Entre R$ 200 mil e R$ 350 mil',
+            'Entre R$ 350 mil e R$ 500 mil',
+            'Entre R$ 500 mil e R$ 1 milhão',
+            'Entre R$ 1 milhão e R$ 5 milhões',
+            'Acima de R$ 5 milhões'
+          ] THEN true ELSE false END as is_qualified
+        FROM card_data
       `;
       const dataResult = await client.query(dataQuery, [startDate, endDate]);
+
+      // Separate qualified vs not
+      const qualified = dataResult.rows.filter((r: Record<string, unknown>) => r.is_qualified);
+      const notQualified = dataResult.rows.filter((r: Record<string, unknown>) => !r.is_qualified);
 
       result = {
         action: 'mql_diagnosis',
         table,
         startDate,
         endDate,
-        totalRows: dataResult.rows.length,
-        data: dataResult.rows,
+        totalUniqueCards: dataResult.rows.length,
+        qualifiedCount: qualified.length,
+        notQualifiedCount: notQualified.length,
+        qualified: qualified.map((r: Record<string, unknown>) => ({
+          id: r["ID"],
+          titulo: r.titulo,
+          faixas: r.faixas,
+          motivos_perda: r.motivos_perda,
+          fase_atual: r.fase_atual,
+        })),
       };
-      console.log(`MQL diagnosis: ${result.totalRows} unique cards`);
+      console.log(`MQL diagnosis: ${result.totalUniqueCards} total, ${result.qualifiedCount} qualified`);
     } else {
       await client.end();
       return new Response(
