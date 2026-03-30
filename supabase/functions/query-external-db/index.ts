@@ -342,58 +342,61 @@ Deno.serve(async (req) => {
       };
       console.log(`Creation date query for ${table}: ${result.previewRows} rows of ${result.totalRows} total in period`);
     } else if (action === 'mql_diagnosis') {
-      const { startDate, endDate } = body;
+      const { startDate, endDate, pipefyTitles } = body;
       const invalid = await validateTable(table);
       if (invalid) return invalid;
 
-      console.log(`MQL diagnosis for ${table}: ${startDate} to ${endDate}`);
+      const testIds = ['1320546949', '1320177174', '1308003007', '1320175421'];
+      const excludedLosses = ['Duplicado', 'Pessoa física, fora do ICP', 'Não é uma demanda real',
+        'Buscando parceria', 'Quer soluções para cliente', 'Não é MQL, mas entrou como MQL', 'Email/Telefone Inválido'];
+      const qualifyingFaixas = ['Entre R$ 200 mil e R$ 350 mil', 'Entre R$ 350 mil e R$ 500 mil',
+        'Entre R$ 500 mil e R$ 1 milhão', 'Entre R$ 1 milhão e R$ 5 milhões', 'Acima de R$ 5 milhões'];
 
-      // Get unique cards with qualifying faixas, their loss reasons, and title
       const dataQuery = `
-        WITH card_data AS (
-          SELECT "ID",
-                 MAX("Título") as titulo,
-                 array_agg(DISTINCT "Faixa de faturamento mensal") FILTER (WHERE "Faixa de faturamento mensal" IS NOT NULL) as faixas,
-                 array_agg(DISTINCT "Motivo da perda") FILTER (WHERE "Motivo da perda" IS NOT NULL) as motivos_perda,
-                 MAX("Fase Atual") as fase_atual
-          FROM ${table}
-          WHERE "Data Criação" >= $1::timestamp
-          AND "Data Criação" <= $2::timestamp
-          GROUP BY "ID"
-        )
-        SELECT *,
-          CASE WHEN faixas && ARRAY[
-            'Entre R$ 200 mil e R$ 350 mil',
-            'Entre R$ 350 mil e R$ 500 mil',
-            'Entre R$ 500 mil e R$ 1 milhão',
-            'Entre R$ 1 milhão e R$ 5 milhões',
-            'Acima de R$ 5 milhões'
-          ] THEN true ELSE false END as is_qualified
-        FROM card_data
+        SELECT "ID",
+               MAX("Título") as titulo,
+               array_agg(DISTINCT "Faixa de faturamento mensal") FILTER (WHERE "Faixa de faturamento mensal" IS NOT NULL) as faixas,
+               array_agg(DISTINCT "Motivo da perda") FILTER (WHERE "Motivo da perda" IS NOT NULL) as motivos_perda,
+               MAX("Fase Atual") as fase_atual
+        FROM ${table}
+        WHERE "Data Criação" >= $1::timestamp AND "Data Criação" <= $2::timestamp
+        GROUP BY "ID"
       `;
       const dataResult = await client.query(dataQuery, [startDate, endDate]);
 
-      // Separate qualified vs not
-      const qualified = dataResult.rows.filter((r: Record<string, unknown>) => r.is_qualified);
-      const notQualified = dataResult.rows.filter((r: Record<string, unknown>) => !r.is_qualified);
+      const allCards = dataResult.rows as Array<{ID: string; titulo: string; faixas: string[] | null; motivos_perda: string[] | null; fase_atual: string}>;
+      
+      const qualified = allCards.filter(c => (c.faixas || []).some(f => qualifyingFaixas.includes(f)));
+      const testExcluded = qualified.filter(c => testIds.includes(c.ID));
+      const lossExcluded = qualified.filter(c => !testIds.includes(c.ID) && (c.motivos_perda || []).some(m => excludedLosses.includes(m)));
+      const netMqls = qualified.filter(c => !testIds.includes(c.ID) && !(c.motivos_perda || []).some(m => excludedLosses.includes(m)));
+
+      // Compare with Pipefy titles if provided
+      let comparison = null;
+      if (pipefyTitles && Array.isArray(pipefyTitles)) {
+        const pipefySet = new Set(pipefyTitles.map((t: string) => t.trim()));
+        const systemTitles = netMqls.map(c => (c.titulo || '').trim());
+        const systemSet = new Set(systemTitles);
+        
+        const onlySystem = netMqls.filter(c => !pipefySet.has((c.titulo || '').trim()));
+        const onlyPipefy = pipefyTitles.filter((t: string) => !systemSet.has(t.trim()));
+        
+        comparison = {
+          onlyInSystem: onlySystem.map(c => ({ id: c.ID, titulo: c.titulo, faixas: c.faixas, motivos: c.motivos_perda, fase: c.fase_atual })),
+          onlyInPipefy: onlyPipefy,
+        };
+      }
 
       result = {
         action: 'mql_diagnosis',
-        table,
-        startDate,
-        endDate,
-        totalUniqueCards: dataResult.rows.length,
+        totalUniqueCards: allCards.length,
         qualifiedCount: qualified.length,
-        notQualifiedCount: notQualified.length,
-        qualified: qualified.map((r: Record<string, unknown>) => ({
-          id: r["ID"],
-          titulo: r.titulo,
-          faixas: r.faixas,
-          motivos_perda: r.motivos_perda,
-          fase_atual: r.fase_atual,
-        })),
+        testExcluded: testExcluded.map(c => ({ id: c.ID, titulo: c.titulo })),
+        lossExcluded: lossExcluded.map(c => ({ id: c.ID, titulo: c.titulo, motivos: c.motivos_perda })),
+        netMqlCount: netMqls.length,
+        comparison,
       };
-      console.log(`MQL diagnosis: ${result.totalUniqueCards} total, ${result.qualifiedCount} qualified`);
+      console.log(`MQL diagnosis: ${allCards.length} total, ${qualified.length} qualified, ${testExcluded.length} test, ${lossExcluded.length} loss-excluded, ${netMqls.length} net`);
     } else {
       await client.end();
       return new Response(
