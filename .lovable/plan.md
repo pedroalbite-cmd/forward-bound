@@ -1,36 +1,25 @@
 
 
-## Diagnóstico: 315 MQLs no sistema vs 307 no Pipefy
+## Diagnóstico: Replicar filtro exato do acelerômetro no banco
 
-### Análise do arquivo enviado
-O arquivo contém **307 cards** (todos com faturamento ≥ R$200k, criados em março/2026). O sistema mostra **315** — diferença de **8 cards a mais** no sistema.
+### Problema
+O sistema mostra 315 MQLs, o Pipefy exporta 307. Preciso executar no banco externo a **mesma lógica** do `useModeloAtualAnalytics.ts` para identificar exatamente quais cards compõem os 315.
 
-### Observações no arquivo
-
-**Cards de teste presentes no arquivo (devem ser excluídos pelo sistema):**
-- "Empresa Teste" (linha 106)
-- "TESTE" (linha 280, 282)
-- "teste" (linha 281)
-
-Se o sistema está excluindo estes 3-4 cards de teste, mas mostra 315, então o total bruto no sistema seria ~318-319, o que implica **11-12 cards a mais** no banco vs arquivo.
-
-**Cards duplicados no arquivo (mesmo título, datas diferentes):**
-- "Mais" aparece 2x (linhas 183-184, criados com 3 min de diferença)
-- "Green packing" 2x (linhas 139-140)
-- "Reboques e carretas bedeu Ltda" 2x (linhas 251-252)
-- "real papelaria" 2x (linhas 248-249)
-
-### Causa provável
-A query `query_period_by_creation` retorna TODAS as linhas da tabela `pipefy_moviment_cfos` onde `"Data Criação"` está no período. Um card com múltiplas movimentações tem múltiplas linhas — cada uma com um `"Faixa de faturamento mensal"` potencialmente diferente. Se o faturamento de um card foi alterado (ex: de "Até R$ 200 mil" para "Entre R$ 200 mil e R$ 350 mil"), pode haver linhas antigas com o valor antigo e linhas novas com o valor atualizado. O sistema conta se QUALQUER linha tem faturamento qualificado.
+### Lógica do sistema (código atual)
+1. **Fonte**: `pipefy_moviment_cfos` com `"Data Criação"` entre 2026-03-01 e 2026-03-31
+2. **Filtro faturamento**: `"Faixa de faturamento mensal"` IN ('Entre R$ 200 mil e R$ 350 mil', 'Entre R$ 350 mil e R$ 500 mil', 'Entre R$ 500 mil e R$ 1 milhão', 'Entre R$ 1 milhão e R$ 5 milhões', 'Acima de R$ 5 milhões')
+3. **Exclusão teste**: IDs NOT IN ('1320546949', '1320177174', '1308003007', '1320175421')
+4. **Exclusão motivo perda**: Qualquer row do card com motivo IN ('Duplicado', 'Pessoa física, fora do ICP', 'Não é uma demanda real', 'Buscando parceria', 'Quer soluções para cliente', 'Não é MQL, mas entrou como MQL', 'Email/Telefone Inválido') exclui o card inteiro
+5. **Dedup**: Por ID do card (unique cards)
 
 ### Plano de ação
-Executar uma query diagnóstica no banco externo para listar os IDs dos MQLs que o sistema conta, comparar com os títulos do arquivo, e identificar exatamente os 8 cards excedentes.
+Usar a action `mql_diagnosis` já existente na edge function `query-external-db` (criada na mensagem anterior) para executar exatamente essa lógica no banco e obter a lista de cards. Depois comparar com os 307 títulos do Excel para identificar:
+- Cards no sistema mas **não** no Pipefy (os 8+ extras)
+- Cards no Pipefy mas **não** no sistema (se houver)
 
-**Passo 1:** Chamar a edge function `query-external-db` com `action: query_period_by_creation` para março/2026 e processar localmente para gerar a lista de card IDs únicos com faturamento ≥ R$200k.
+### Execução
+1. Chamar `query-external-db` com `action: mql_diagnosis`, passando os títulos do Excel para comparação server-side
+2. Gerar relatório com a diferença exata
 
-**Passo 2:** Comparar os títulos da lista do sistema com os 307 títulos do arquivo Excel.
-
-**Passo 3:** Gerar relatório com os cards que estão no sistema mas não no arquivo (e vice-versa).
-
-Isso requer execução de scripts para fazer a comparação — preciso sair do modo read-only para executar.
+Sem alteração de código — apenas execução de query diagnóstica e processamento do Excel.
 
