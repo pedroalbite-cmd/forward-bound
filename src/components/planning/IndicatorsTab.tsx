@@ -1189,7 +1189,7 @@ export function IndicatorsTab() {
         const buItems = franquiaAnalytics.getDetailItemsForIndicator(indicatorKey);
         const filteredItems = buItems.filter(item => {
           const matchCloser = effectiveSelectedClosers.length === 0 || matchesCloserFilter(item.closer || item.responsible);
-          const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(item.responsible);
+          const matchSdr = effectiveSelectedSDRs.length === 0 || matchesSdrFilter(item.sdr || item.responsible);
           return matchCloser && matchSdr;
         });
         items = [...items, ...filteredItems];
